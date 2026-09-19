@@ -1,0 +1,35 @@
+# LeadHive V2 ドキュメント一覧（Codex開発版）
+
+LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を解析し、AIで営業適性を判定して優先順位付きリストを作成するBtoB営業リスト収集基盤です。
+
+## 開発前提
+
+- 開発主体: Codex
+- ソース管理: GitHub
+- 旧版: `stockbusiness/leadhive`
+- 新版: `team478a/leadhive_codex`
+- 旧版は参照専用とし、V2へ丸ごとコピーしない
+- CodexにはPhaseごとに実装を依頼し、各Phaseでテスト・差分確認を行う
+
+## 推奨読了順
+
+1. `01_VISION_AND_SCOPE.md`
+2. `02_FUNCTIONAL_REQUIREMENTS.md`
+3. `03_TARGET_PROFILE_DESIGN.md`
+4. `04_DATABASE_DESIGN.md`
+5. `05_COLLECTION_AND_ANALYSIS.md`
+6. `06_UI_AND_OPERATION_FLOW.md`
+7. `07_MIGRATION_FROM_LEADHIVE_V1.md`
+8. `08_DEVELOPMENT_ROADMAP.md`
+9. `09_CODEX_INITIAL_INSTRUCTION.md`
+10. `10_CODEX_DEVELOPMENT_RULES.md`
+
+## 基本原則
+
+- 業種固有ロジックをコードに埋め込まない
+- Target Profile と Sales Objective で条件を差し替える
+- 旧LeadHiveを丸ごとコピーしない
+- 必要なロジックだけ再利用する
+- V1は営業リスト完成までに集中する
+- DM自動送信、課金、複雑なCRMは後回し
+- Codexには一度に全機能を作らせず、Phase単位で進める
