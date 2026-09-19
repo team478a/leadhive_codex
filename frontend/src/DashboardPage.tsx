@@ -34,6 +34,7 @@ export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: numb
     ['対象外', data.ranks['対象外'] ?? 0], ['営業対象', data.statuses.target ?? 0],
     ['アプローチ済', data.statuses.approached ?? 0], ['返信あり', data.statuses.replied ?? 0],
     ['商談', data.statuses.meeting ?? 0], ['成約', data.statuses.won ?? 0],
+    ['フォロー期限超過', data.overdue_followups], ['本日フォロー', data.due_today_followups],
   ] as const
   return <>
     {data.unread_operation_failures > 0 && <p className="error" role="alert">

@@ -88,6 +88,7 @@ class CompanyOut(BaseModel):
     status: str
     notes: str
     next_followup_at: datetime | None
+    assignee: str
     prefecture: str
     city: str
     contact_url: str
@@ -200,6 +201,7 @@ class CompanyEditInput(Input):
     facebook_url: str = Field(default="", max_length=5000)
     youtube_url: str = Field(default="", max_length=5000)
     line_url: str = Field(default="", max_length=5000)
+    assignee: str = Field(default="", max_length=200)
 
 
 class CompanyBulkSalesInput(Input):
@@ -207,6 +209,11 @@ class CompanyBulkSalesInput(Input):
     status: Literal[
         "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
     ]
+
+
+class CompanyBulkAssigneeInput(Input):
+    company_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
+    assignee: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
 
 
 class CompanyPageOut(BaseModel):
@@ -307,6 +314,8 @@ class DashboardOut(BaseModel):
     operation_statuses: dict[str, int]
     unread_operation_failures: int
     recent_operations: list[OperationJobOut]
+    overdue_followups: int
+    due_today_followups: int
 
 
 class SearchScheduleInput(Input):

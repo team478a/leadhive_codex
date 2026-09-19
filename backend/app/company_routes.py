@@ -3,6 +3,7 @@ import io
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
@@ -15,6 +16,7 @@ from app.models import Activity, CollectionJob, Company, OperationJob, Project, 
 from app.schemas import (
     ActivityInput,
     ActivityOut,
+    CompanyBulkAssigneeInput,
     CompanyBulkSalesInput,
     CompanyEditInput,
     CompanyMergeInput,
@@ -30,6 +32,7 @@ from app.schemas import (
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
+JST = ZoneInfo("Asia/Tokyo")
 
 
 def duplicate_reasons(first: Company, second: Company) -> list[str]:
@@ -269,6 +272,8 @@ def company_query(
     status: str | None,
     source: str | None,
     keyword: str | None,
+    assignee: str | None,
+    followup: str | None,
     sort: str,
 ):
     query = select(Company).where(Company.project_id == project_id)
@@ -294,6 +299,21 @@ def company_query(
                 Company.source_keyword.ilike(pattern),
             )
         )
+    if assignee:
+        query = query.where(Company.assignee.ilike(f"%{assignee}%"))
+    now = datetime.now(timezone.utc)
+    if followup == "overdue":
+        query = query.where(Company.next_followup_at < now)
+    elif followup == "today":
+        day_start = now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.where(
+            Company.next_followup_at >= day_start,
+            Company.next_followup_at < day_start + timedelta(days=1),
+        )
+    elif followup == "upcoming":
+        query = query.where(Company.next_followup_at >= now)
+    elif followup == "unset":
+        query = query.where(Company.next_followup_at.is_(None))
     if sort == "score_desc":
         return query.order_by(Company.score.desc().nullslast(), Company.created_at.desc())
     if sort == "company_name":
@@ -315,12 +335,16 @@ def list_company_details(
     | None = None,
     source: Literal["serper", "google_places", "url", "csv"] | None = None,
     keyword: str | None = Query(None, max_length=200),
+    assignee: str | None = Query(None, max_length=200),
+    followup: Literal["overdue", "today", "upcoming", "unset"] | None = None,
     sort: Literal["score_desc", "newest", "company_name"] = "score_desc",
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     owned_project(project_id, db, user)
-    query = company_query(project_id, rank, min_score, region, status, source, keyword, sort)
+    query = company_query(
+        project_id, rank, min_score, region, status, source, keyword, assignee, followup, sort
+    )
     total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
     items = db.scalars(query.offset(offset).limit(limit)).all()
     return CompanyPageOut(items=items, total=total, offset=offset, limit=limit)
@@ -401,6 +425,36 @@ def bulk_update_sales(
     return companies
 
 
+@router.patch("/projects/{project_id}/companies/bulk-assignee", response_model=list[CompanyOut])
+def bulk_update_assignee(
+    project_id: UUID,
+    body: CompanyBulkAssigneeInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    companies = db.scalars(
+        select(Company).where(Company.project_id == project_id, Company.id.in_(body.company_ids))
+    ).all()
+    if len(companies) != len(set(body.company_ids)):
+        raise HTTPException(404, "指定された企業が見つかりません。")
+    for company in companies:
+        if company.assignee != body.assignee:
+            db.add(
+                Activity(
+                    company_id=company.id,
+                    activity_type="note",
+                    note=(
+                        f"担当者を「{company.assignee or '未設定'}」から"
+                        f"「{body.assignee or '未設定'}」へ変更"
+                    ),
+                )
+            )
+            company.assignee = body.assignee
+    db.commit()
+    return companies
+
+
 @router.get("/companies/{company_id}/activities", response_model=list[ActivityOut])
 def list_activities(
     company_id: UUID,
@@ -445,13 +499,17 @@ def export_companies(
     status: str | None = None,
     source: str | None = None,
     keyword: str | None = Query(None, max_length=200),
+    assignee: str | None = Query(None, max_length=200),
+    followup: Literal["overdue", "today", "upcoming", "unset"] | None = None,
     sort: Literal["score_desc", "newest", "company_name"] = "score_desc",
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
     owned_project(project_id, db, user)
     companies = db.scalars(
-        company_query(project_id, rank, min_score, region, status, source, keyword, sort)
+        company_query(
+            project_id, rank, min_score, region, status, source, keyword, assignee, followup, sort
+        )
     ).all()
     output = io.StringIO()
     writer = csv.writer(output, lineterminator="\n")
@@ -475,6 +533,8 @@ def export_companies(
         "ai_concerns",
         "ai_recommended_approach",
         "status",
+        "assignee",
+        "next_followup_at",
         "notes",
         "source",
         "source_keyword",
@@ -541,6 +601,28 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         .order_by(OperationJob.created_at.desc(), OperationJob.id)
         .limit(10)
     ).all()
+    now = datetime.now(timezone.utc)
+    today_start = now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    overdue_followups = (
+        db.scalar(
+            select(func.count())
+            .select_from(Company)
+            .where(Company.project_id.in_(owned_ids), Company.next_followup_at < now)
+        )
+        or 0
+    )
+    due_today_followups = (
+        db.scalar(
+            select(func.count())
+            .select_from(Company)
+            .where(
+                Company.project_id.in_(owned_ids),
+                Company.next_followup_at >= today_start,
+                Company.next_followup_at < today_start + timedelta(days=1),
+            )
+        )
+        or 0
+    )
     return DashboardOut(
         total_companies=total or 0,
         ranks={key: count for key, count in rank_rows},
@@ -549,4 +631,6 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         operation_statuses={key: count for key, count in operation_rows},
         unread_operation_failures=unread_failures or 0,
         recent_operations=operations,
+        overdue_followups=overdue_followups,
+        due_today_followups=due_today_followups,
     )

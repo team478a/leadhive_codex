@@ -32,7 +32,7 @@ export interface Company {
   id: string; project_id: string; company_name: string; website_url: string | null
   domain: string | null; address: string; phone: string; email: string
   source: CollectionSource; source_keyword: string; status: SalesStatus; notes: string
-  next_followup_at: string | null
+  next_followup_at: string | null; assignee: string
   prefecture: string; city: string; contact_url: string
   instagram_url: string; x_url: string; tiktok_url: string; facebook_url: string
   youtube_url: string; line_url: string; business_summary: string; website_text: string
@@ -55,6 +55,8 @@ export interface Dashboard {
   operation_statuses: Record<string, number>
   unread_operation_failures: number
   recent_operations: OperationJob[]
+  overdue_followups: number
+  due_today_followups: number
 }
 export interface CompanyPage { items: Company[]; total: number; offset: number; limit: number }
 export interface DataQuality {

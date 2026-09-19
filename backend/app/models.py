@@ -132,6 +132,7 @@ class Company(Timestamps, Base):
     status: Mapped[str] = mapped_column(String(30), default="unreviewed")
     notes: Mapped[str] = mapped_column(Text, default="")
     next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    assignee: Mapped[str] = mapped_column(String(200), default="", index=True)
     prefecture: Mapped[str] = mapped_column(String(20), default="")
     city: Mapped[str] = mapped_column(String(200), default="")
     contact_url: Mapped[str] = mapped_column(Text, default="")
