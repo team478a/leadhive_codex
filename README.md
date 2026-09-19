@@ -17,20 +17,24 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 最初の実装指示は `docs/09_CODEX_INITIAL_INSTRUCTION.md` です。
 
-## Phase 1 実装
+## Phase 1・2 実装
 
 React / TypeScript / Vite / Tailwind CSS、FastAPI / SQLAlchemy / PostgreSQLを使用。
-ログイン、Project CRUD、TargetProfile CRUD・複製、標準プロファイル2件まで実装しています。
-企業収集・Web解析・AI判定・営業リストは後続Phaseです。
+ログイン、Project CRUD、TargetProfile CRUD・複製、標準プロファイル2件、
+Serper / Google Places / URL / CSVからの企業収集とCollection Job管理まで実装しています。
+Web解析・AI判定・営業リストは後続Phaseです。
 
 実装範囲・判断・検証結果は[Phase 1実装記録](docs/11_PHASE1_IMPLEMENTATION.md)を参照してください。
+Phase 2の詳細は[Phase 2実装記録](docs/12_PHASE2_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
 - `backend/app`: 設定、DBモデル、認証、REST API、ユーザー作成CLI
+- `backend/app/services/collection.py`: 外部検索Provider、URL正規化、CSV解析
 - `backend/migrations`: Alembicスキーマと初期データMigration
 - `backend/tests`: 実PostgreSQLに対するAPI・権限テスト
 - `frontend/src`: ログイン、プロジェクト管理、プロファイル管理、共通APIクライアント
+- `frontend/src/CollectionPage.tsx`: 企業収集とCollection Job結果
 - `frontend/tests`: デスクトップ・モバイルのブラウザ操作テスト
 
 ## ローカル起動（PowerShell）
@@ -88,6 +92,9 @@ macOS / LinuxではPython実行パスを`backend/.venv/bin/python`に読み替�
 | `COOKIE_SECURE` | HTTPS運用では`true`。ローカルHTTPのみ`false` |
 | `SESSION_HOURS` | セッション有効時間（1〜168時間、既定12時間） |
 | `POSTGRES_PASSWORD` / `POSTGRES_PORT` | ローカルCompose用のDB設定 |
+| `SERPER_API_KEY` | Google検索に使用するSerper APIキー |
+| `GOOGLE_PLACES_API_KEY` | Places API (New)のAPIキー |
+| `EXTERNAL_API_TIMEOUT_SECONDS` | 外部APIのタイムアウト（1〜60秒、既定20秒） |
 
 パスワードはArgon2idでハッシュ化。認証はランダムな不透明トークンをHttpOnly / SameSite=Lax
 Cookieで保持し、DBにはそのSHA-256のみ保存します。JWTは使用しないため`JWT_SECRET`は不要です。
@@ -102,9 +109,10 @@ SQLはSQLAlchemyのパラメータ化クエリを使用。入力値・パスワ�
 
 ## DBとMigration
 
-Phase 1のテーブルは`users`、`projects`、`target_profiles`、`auth_sessions`。
+テーブルは`users`、`projects`、`target_profiles`、`auth_sessions`、`companies`、
+`collection_jobs`。
 Alembic管理用の`alembic_version`も作成されます。
-`companies`、`collection_jobs`、`activities`は利用する後続Phaseで追加します。
+`activities`は利用する後続Phaseで追加します。
 起動時のDDL実行や`create_all()`は行いません。
 
 ```powershell
@@ -134,6 +142,12 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | GET / POST | `/api/target-profiles` | 標準＋自分の一覧 / 作成 |
 | GET / PUT / DELETE | `/api/target-profiles/{id}` | 取得 / 全項目更新 / 削除 |
 | POST | `/api/target-profiles/{id}/clone` | 自分専用の複製を作成 |
+| GET | `/api/projects/{id}/companies` | プロジェクト内の収集済み企業 |
+| GET | `/api/projects/{id}/collection-jobs` | 収集ジョブ一覧 |
+| GET | `/api/collection-jobs/{id}` | 収集ジョブ詳細 |
+| POST | `/api/projects/{id}/collection-jobs/search` | Serper / Places検索 |
+| POST | `/api/projects/{id}/collection-jobs/urls` | URLを最大100件登録 |
+| POST | `/api/projects/{id}/collection-jobs/csv` | UTF-8 CSVを取込 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
@@ -141,6 +155,11 @@ Projectのstatusは`draft` / `active` / `archived`。
 非アクティブのプロファイルは新規選択できませんが、既存案件の編集はできます。
 使用中のプロファイル削除は409。所有者・is_systemはリクエストで指定できません。
 案件専用の上書きはプロファイルを複製し、そのプロジェクトへ割り当てる運用です。
+
+検索APIはキーワードごとにジョブを作り、`found_count`、`saved_count`、
+`duplicate_count`、`error_count`を記録します。外部API失敗もジョブを`failed`として保存します。
+CSVは5MB・1000行までで、`company_name, website_url, phone, email, address`列が必要です。
+同一プロジェクトではドメイン、URL、会社名＋住所で重複登録を防ぎます。
 
 ## 検証
 
@@ -179,5 +198,6 @@ npm test
 
 APIを18039、Viteを15173で自動起動・停止します。一時アカウントも自動作成・削除します。
 ログイン失敗・成功、標準プロファイル、複製・編集・新規作成・削除、JSON検証、
-Project作成・編集・永続化・削除、ログアウトをデスクトップとモバイルで確認します。
+Project作成・編集・永続化・削除、URL収集・重複・入力エラー・外部API設定エラー、
+ログアウトをデスクトップとモバイルで確認します。
 GitHub Actionsでも同じ検証とMigrationのupgrade / downgrade / upgradeを実行します。
