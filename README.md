@@ -239,3 +239,23 @@ APIを18039、Viteを15173で自動起動・停止します。一時アカウン
 Project作成・編集・永続化・削除、URL収集・重複・入力エラー・外部API設定エラー、
 ログアウトをデスクトップとモバイルで確認します。
 GitHub Actionsでも同じ検証とMigrationのupgrade / downgrade / upgradeを実行します。
+
+## Phase 6 実データ検証
+
+検索APIキー設定後、既存ユーザーを指定して再開可能な検証ランナーを実行できます。
+
+```powershell
+cd backend
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage all
+```
+
+SNS運用事業者100社、運送事業者100社を収集し、運送事業者は採用支援と車両販売の2つの
+Sales Objectiveで判定します。途中で停止した場合は `--stage collect`、`web`、`ai`、`export`
+を個別に再実行できます。出力先は既定で `backend/phase6-results` です。
+
+`phase6-review.csv` の `review_is_target` と `review_rank_correct` を人手で記入した後、
+次のコマンドで精度指標を再集計します。`report` はレビューCSVを上書きしません。
+
+```powershell
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage report
+```

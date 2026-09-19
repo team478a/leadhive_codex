@@ -1,0 +1,75 @@
+# Phase 6 実データ検証ランブック
+
+## 目的
+
+APIキー設定後に、次の検証を中断・再開可能な一連の処理として実行する。
+
+- SNS運用事業者100社
+- 運送事業者100社
+- 運送事業者を採用支援と車両販売の2つの営業目的で比較
+- Web解析、AI判定、レビューCSV、集計JSONの生成
+
+実データ収集には `SERPER_API_KEY` が必要である。キーは `.env` だけに保存し、Gitへ追加しない。
+
+## 実行
+
+```powershell
+cd backend
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage all
+```
+
+既存の標準Target Profileから次の3プロジェクトを作成または再利用する。
+
+1. Phase 6 SNS運用事業者
+2. Phase 6 運送事業者・採用支援
+3. Phase 6 運送事業者・車両販売
+
+車両販売プロジェクトには採用支援プロジェクトと同じ運送会社を複製し、Sales Objectiveだけを変えて判定する。別プロジェクト間の同一企業登録は仕様上許可されている。
+
+## 再開
+
+処理済み状態をDBから判断するため、次の段階を個別に再実行できる。
+
+```powershell
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage collect
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage web
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage ai
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage export
+```
+
+小規模な疎通確認には `--limit 5` を使用する。本番検証は既定値100で実行する。
+
+## 人手レビュー
+
+`phase6-results/phase6-review.csv` に次を記入する。
+
+- `review_is_target`: 実際に対象なら `true`、対象外なら `false`
+- `review_rank_correct`: AIランクが妥当なら `true`、不適切なら `false`
+- `review_notes`: 判断根拠や誤判定の内容
+
+記入後に再集計する。
+
+```powershell
+.venv/Scripts/python -m app.phase6 --user your-address@example.com --stage report
+```
+
+`report` はレビューCSVを上書きせず、`phase6-report.json` のみ更新する。
+
+## 集計指標
+
+- Web解析完了率
+- AI判定完了率
+- AI予測対象率
+- 問い合わせ先取得率
+- SNS取得率
+- 人手確認済み件数
+- 実対象企業率
+- Aランク精度
+- 対象外の誤判定率
+- 運送会社における営業目的別の判定差
+
+人手ラベルが未入力の場合、精度指標は `null` とし、取得率など自動算出可能な指標だけを出力する。
+
+## 現在の制約
+
+本ランブックとランナーは実装・自動テスト済みだが、現在のローカル環境には検索APIキーがないため200社の本実行結果はまだ生成していない。キー設定後にこの手順を実行してPhase 6を完了する。
