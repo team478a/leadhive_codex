@@ -57,6 +57,11 @@ export interface Dashboard {
   recent_operations: OperationJob[]
 }
 export interface CompanyPage { items: Company[]; total: number; offset: number; limit: number }
+export interface DataQuality {
+  total: number; missing_website: number; missing_address: number
+  missing_phone: number; missing_email: number; missing_contact: number
+  failed_analysis: number; stale_analysis: number; reanalyzable: number; stale_days: number
+}
 export interface Activity {
   id: string; company_id: string
   activity_type: 'note' | 'call' | 'email' | 'form' | 'sns' | 'meeting' | 'status_change'

@@ -216,6 +216,24 @@ class CompanyPageOut(BaseModel):
     limit: int
 
 
+class DataQualityOut(BaseModel):
+    total: int
+    missing_website: int
+    missing_address: int
+    missing_phone: int
+    missing_email: int
+    missing_contact: int
+    failed_analysis: int
+    stale_analysis: int
+    reanalyzable: int
+    stale_days: int
+
+
+class DataQualityReanalyzeInput(Input):
+    scope: Literal["failed", "stale", "failed_or_stale"] = "failed_or_stale"
+    stale_days: int = Field(default=90, ge=1, le=3650)
+
+
 class ActivityInput(Input):
     activity_type: Literal["note", "call", "email", "form", "sns", "meeting"]
     note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]

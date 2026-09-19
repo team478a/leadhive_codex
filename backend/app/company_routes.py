@@ -1,5 +1,6 @@
 import csv
 import io
+from datetime import datetime, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -20,10 +21,113 @@ from app.schemas import (
     CompanyPageOut,
     CompanySalesInput,
     DashboardOut,
+    DataQualityOut,
+    DataQualityReanalyzeInput,
+    OperationJobOut,
 )
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
+
+
+def stale_condition(cutoff: datetime):
+    return (Company.analysis_status == "completed") & (
+        Company.scraped_at.is_(None) | (Company.scraped_at < cutoff)
+    )
+
+
+@router.get("/projects/{project_id}/data-quality", response_model=DataQualityOut)
+def data_quality(
+    project_id: UUID,
+    stale_days: int = Query(90, ge=1, le=3650),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
+    base = Company.project_id == project_id
+    row = db.execute(
+        select(
+            func.count(),
+            func.count().filter(Company.website_url.is_(None)),
+            func.count().filter(Company.address == ""),
+            func.count().filter(Company.phone == ""),
+            func.count().filter(Company.email == ""),
+            func.count().filter(
+                (Company.phone == "") & (Company.email == "") & (Company.contact_url == "")
+            ),
+            func.count().filter(Company.analysis_status == "failed"),
+            func.count().filter(stale_condition(cutoff)),
+            func.count().filter(
+                Company.website_url.is_not(None)
+                & ((Company.analysis_status == "failed") | stale_condition(cutoff))
+            ),
+        ).where(base)
+    ).one()
+    return DataQualityOut(
+        total=row[0],
+        missing_website=row[1],
+        missing_address=row[2],
+        missing_phone=row[3],
+        missing_email=row[4],
+        missing_contact=row[5],
+        failed_analysis=row[6],
+        stale_analysis=row[7],
+        reanalyzable=row[8],
+        stale_days=stale_days,
+    )
+
+
+@router.post(
+    "/projects/{project_id}/data-quality/reanalyze",
+    response_model=OperationJobOut,
+    status_code=202,
+)
+def reanalyze_data_quality(
+    project_id: UUID,
+    body: DataQualityReanalyzeInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    active = db.scalar(
+        select(OperationJob.id).where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "web_analysis",
+            OperationJob.status.in_(("queued", "running")),
+        )
+    )
+    if active:
+        raise HTTPException(409, "Web解析がすでに実行待ちです。")
+    cutoff = datetime.now(timezone.utc) - timedelta(days=body.stale_days)
+    condition = Company.analysis_status == "failed"
+    if body.scope == "stale":
+        condition = stale_condition(cutoff)
+    elif body.scope == "failed_or_stale":
+        condition = condition | stale_condition(cutoff)
+    company_ids = list(
+        db.scalars(
+            select(Company.id)
+            .where(
+                Company.project_id == project_id,
+                Company.website_url.is_not(None),
+                condition,
+            )
+            .order_by(Company.updated_at, Company.id)
+            .limit(100)
+        ).all()
+    )
+    if not company_ids:
+        raise HTTPException(409, "再解析対象の企業はありません。")
+    job = OperationJob(
+        project_id=project_id,
+        operation_type="web_analysis",
+        payload={"company_ids": [str(item) for item in company_ids], "force": True},
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 def company_query(
