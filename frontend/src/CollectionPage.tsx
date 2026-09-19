@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { allPages, api, errorMessage, upload } from './api'
 import { Field } from './forms'
-import type { CollectionJob, CollectionSource, Company, OperationJob, Profile, Project } from './types'
+import type { CollectionJob, CollectionSource, Company, OperationJob, Profile, Project, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places',
@@ -32,6 +32,10 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [operations, setOperations] = useState<OperationJob[]>([])
+  const [schedules, setSchedules] = useState<SearchSchedule[]>([])
+  const [scheduleName, setScheduleName] = useState('定期検索')
+  const [intervalHours, setIntervalHours] = useState(168)
+  const [companyLimit, setCompanyLimit] = useState(10000)
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
@@ -44,13 +48,14 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const suggestedKeywordText = suggestedKeywords.join('\n')
 
   const reload = useCallback(async () => {
-    if (!projectId) { setJobs([]); setCompanies([]); return }
-    const [nextJobs, nextCompanies, nextOperations] = await Promise.all([
+    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); return }
+    const [nextJobs, nextCompanies, nextOperations, nextSchedules] = await Promise.all([
       allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
       api<OperationJob[]>(`/projects/${projectId}/operations`),
+      api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
     ])
-    setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations)
+    setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations); setSchedules(nextSchedules)
   }, [projectId])
 
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
@@ -133,12 +138,26 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
     finally { setAiAnalyzing(false) }
   }
 
+  async function createSchedule() {
+    setError(''); setNotice('')
+    try {
+      if (source !== 'serper' && source !== 'google_places') throw new Error('検索収集の条件を選択してください。')
+      await api(`/projects/${projectId}/search-schedules`, 'POST', {
+        name: scheduleName, source,
+        keywords: keywords.split('\n').map(value => value.trim()).filter(Boolean),
+        region, max_results: maxResults, interval_hours: intervalHours,
+        company_limit: companyLimit, active: true,
+      })
+      await reload(); setNotice('定期収集を保存しました。')
+    } catch (e) { setError(errorMessage(e)) }
+  }
+
   if (projects.length === 0) return <section className="panel empty">
     <h2>先にプロジェクトを作成してください</h2>
     <p className="muted">企業は営業プロジェクトごとに収集・保存されます。</p>
   </section>
 
-  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
+  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="space-y-6">
     <form className="panel form-panel max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
       {error && <p className="error" role="alert">{error}</p>}
@@ -168,6 +187,24 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         <div className="actions"><button type="submit">{loading ? (source === 'serper' || source === 'google_places' ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
       </fieldset>
     </form>
+    <div className="panel"><h2>定期収集テンプレート</h2><p className="muted mt-2 text-sm">現在の検索条件を保存し、ワーカーで定期実行します。</p>
+      <Field label="テンプレート名"><input maxLength={200} value={scheduleName} onChange={e => setScheduleName(e.target.value)} /></Field>
+      <div className="grid gap-4 sm:grid-cols-2"><Field label="実行間隔（時間）"><input type="number" min={1} max={720} value={intervalHours} onChange={e => setIntervalHours(Number(e.target.value))} /></Field>
+        <Field label="プロジェクト企業上限"><input type="number" min={1} max={100000} value={companyLimit} onChange={e => setCompanyLimit(Number(e.target.value))} /></Field></div>
+      <button type="button" disabled={source !== 'serper' && source !== 'google_places'} onClick={() => void createSchedule()}>現在の検索条件を保存</button>
+      {schedules.map(schedule => <article className="job-row block" key={schedule.id}><div className="flex justify-between gap-3"><strong>{schedule.name}</strong><span className="badge">{schedule.active ? '有効' : '停止中'}</span></div>
+        <p className="muted my-2 text-sm">{schedule.keywords.join(' / ')}・{schedule.interval_hours}時間ごと・上限{schedule.company_limit}社</p>
+        <p className="muted text-sm">次回 {new Date(schedule.next_run_at).toLocaleString('ja-JP')}</p>{schedule.last_error && <p className="error mt-2 mb-0">{schedule.last_error}</p>}
+        <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}/run`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>今すぐ実行</button>
+          <button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}`, 'PUT', {
+            name: schedule.name, source: schedule.source, keywords: schedule.keywords,
+            region: schedule.region, max_results: schedule.max_results,
+            interval_hours: schedule.interval_hours, company_limit: schedule.company_limit,
+            active: !schedule.active,
+          }).then(reload).catch(e => setError(errorMessage(e)))}>{schedule.active ? '停止' : '再開'}</button>
+          <button type="button" className="danger" onClick={() => void api(`/search-schedules/${schedule.id}`, 'DELETE').then(reload).catch(e => setError(errorMessage(e)))}>削除</button></div>
+      </article>)}
+    </div></section>
     <section className="space-y-6">
       <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
         <p className="muted mt-2 text-sm">Webサイトから企業情報・SNS・問い合わせ先を抽出します。</p></div>

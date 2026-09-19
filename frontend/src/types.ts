@@ -70,3 +70,10 @@ export interface OperationJob {
   cancel_requested: boolean; attempt_count: number; acknowledged_at: string | null; error_message: string
   created_at: string; started_at: string | null; finished_at: string | null
 }
+export interface SearchSchedule {
+  id: string; project_id: string; name: string
+  source: 'serper' | 'google_places'; keywords: string[]; region: string
+  max_results: number; interval_hours: number; company_limit: number; active: boolean
+  next_run_at: string; last_enqueued_at: string | null; last_error: string
+  created_at: string; updated_at: string
+}

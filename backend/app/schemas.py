@@ -278,3 +278,31 @@ class DashboardOut(BaseModel):
     operation_statuses: dict[str, int]
     unread_operation_failures: int
     recent_operations: list[OperationJobOut]
+
+
+class SearchScheduleInput(Input):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    source: Literal["serper", "google_places"]
+    keywords: list[Keyword] = Field(min_length=1, max_length=20)
+    region: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    max_results: int = Field(default=20, ge=1, le=100)
+    interval_hours: int = Field(default=168, ge=1, le=720)
+    company_limit: int = Field(default=10000, ge=1, le=100000)
+    active: bool = True
+
+    @model_validator(mode="after")
+    def validate_places_limit(self):
+        if self.source == "google_places" and self.max_results > 60:
+            raise ValueError("Google Places supports at most 60 results")
+        return self
+
+
+class SearchScheduleOut(SearchScheduleInput):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    next_run_at: datetime
+    last_enqueued_at: datetime | None
+    last_error: str
+    created_at: datetime
+    updated_at: datetime

@@ -251,3 +251,28 @@ class OperationJob(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SearchSchedule(Timestamps, Base):
+    __tablename__ = "search_schedules"
+    __table_args__ = (
+        CheckConstraint("source IN ('serper', 'google_places')", name="ck_search_schedule_source"),
+        CheckConstraint("max_results BETWEEN 1 AND 100", name="ck_search_schedule_max_results"),
+        CheckConstraint("interval_hours BETWEEN 1 AND 720", name="ck_search_schedule_interval"),
+        CheckConstraint("company_limit BETWEEN 1 AND 100000", name="ck_search_schedule_limit"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    source: Mapped[str] = mapped_column(String(30))
+    keywords: Mapped[list] = mapped_column(JSONB)
+    region: Mapped[str] = mapped_column(String(500))
+    max_results: Mapped[int] = mapped_column(Integer, default=20)
+    interval_hours: Mapped[int] = mapped_column(Integer, default=168)
+    company_limit: Mapped[int] = mapped_column(Integer, default=10000)
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    last_enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str] = mapped_column(String(500), default="")

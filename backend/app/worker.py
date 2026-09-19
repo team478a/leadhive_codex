@@ -4,14 +4,14 @@ import time
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.ai_routes import analyze_company_ai
 from app.analysis_routes import analyze
 from app.collection_routes import fail_job, save_candidates, start_job
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Company, OperationJob, Project, TargetProfile
+from app.models import Company, OperationJob, Project, SearchSchedule, TargetProfile
 from app.services.collection import ExternalServiceError, search_google_places, search_serper
 
 logger = logging.getLogger("leadhive")
@@ -56,6 +56,61 @@ def recover_stale_jobs(db) -> tuple[int, int]:
         db.commit()
         logger.warning("stale operations recovered: retried=%s failed=%s", retried, failed)
     return retried, failed
+
+
+def enqueue_due_schedules(db) -> int:
+    now = datetime.now(timezone.utc)
+    schedules = db.scalars(
+        select(SearchSchedule)
+        .where(SearchSchedule.active.is_(True), SearchSchedule.next_run_at <= now)
+        .order_by(SearchSchedule.next_run_at)
+        .with_for_update(skip_locked=True)
+        .limit(100)
+    ).all()
+    enqueued = 0
+    for schedule in schedules:
+        schedule.next_run_at = now + timedelta(hours=schedule.interval_hours)
+        active = db.scalar(
+            select(OperationJob.id).where(
+                OperationJob.project_id == schedule.project_id,
+                OperationJob.operation_type == "collect_search",
+                OperationJob.status.in_(("queued", "running")),
+            )
+        )
+        company_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(Company)
+                .where(Company.project_id == schedule.project_id)
+            )
+            or 0
+        )
+        if active:
+            schedule.last_error = "前回の検索収集が実行中のため、今回の定期実行を見送りました。"
+            continue
+        if company_count >= schedule.company_limit:
+            schedule.last_error = "企業保存上限に達したため、定期実行を見送りました。"
+            continue
+        db.add(
+            OperationJob(
+                project_id=schedule.project_id,
+                operation_type="collect_search",
+                payload={
+                    "source": schedule.source,
+                    "keywords": schedule.keywords,
+                    "region": schedule.region,
+                    "max_results": schedule.max_results,
+                    "company_limit": schedule.company_limit,
+                    "schedule_id": str(schedule.id),
+                },
+            )
+        )
+        schedule.last_enqueued_at = now
+        schedule.last_error = ""
+        enqueued += 1
+    if schedules:
+        db.commit()
+    return enqueued
 
 
 def claim_job(db) -> OperationJob | None:
@@ -114,10 +169,27 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     for keyword in keywords:
         if stop_requested(db, job, worker_id):
             return
+        company_limit = payload.get("company_limit")
+        if company_limit:
+            company_count = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(Company)
+                    .where(Company.project_id == job.project_id)
+                )
+                or 0
+            )
+            if company_count >= company_limit:
+                job.total_count = job.processed_count
+                db.commit()
+                break
+            max_results = min(payload["max_results"], company_limit - company_count)
+        else:
+            max_results = payload["max_results"]
         collection = start_job(db, job.project_id, payload["source"], keyword, payload["region"])
         try:
             search = search_serper if payload["source"] == "serper" else search_google_places
-            candidates = search(keyword, payload["region"], payload["max_results"])
+            candidates = search(keyword, payload["region"], max_results)
             save_candidates(db, collection, candidates, keyword)
             if not progress(db, job, worker_id, True):
                 return
@@ -169,6 +241,7 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 
 def run_once() -> bool:
     with SessionLocal() as db:
+        enqueue_due_schedules(db)
         recover_stale_jobs(db)
         job = claim_job(db)
         if job is None:

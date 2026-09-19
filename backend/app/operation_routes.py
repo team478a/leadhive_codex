@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -7,8 +7,8 @@ from sqlalchemy.orm import Session
 
 from app.analysis_routes import owned_project
 from app.database import get_db
-from app.models import OperationJob, Project, User
-from app.schemas import OperationJobInput, OperationJobOut
+from app.models import OperationJob, Project, SearchSchedule, User
+from app.schemas import OperationJobInput, OperationJobOut, SearchScheduleInput, SearchScheduleOut
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
@@ -22,6 +22,109 @@ def owned_operation(job_id: UUID, db: Session, user: User) -> OperationJob:
     )
     if job is None:
         raise HTTPException(404, "処理ジョブが見つかりません。")
+    return job
+
+
+def owned_schedule(schedule_id: UUID, db: Session, user: User) -> SearchSchedule:
+    schedule = db.scalar(
+        select(SearchSchedule)
+        .join(Project, Project.id == SearchSchedule.project_id)
+        .where(SearchSchedule.id == schedule_id, Project.user_id == user.id)
+    )
+    if schedule is None:
+        raise HTTPException(404, "定期収集が見つかりません。")
+    return schedule
+
+
+@router.get("/projects/{project_id}/search-schedules", response_model=list[SearchScheduleOut])
+def list_search_schedules(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    owned_project(project_id, db, user)
+    return db.scalars(
+        select(SearchSchedule)
+        .where(SearchSchedule.project_id == project_id)
+        .order_by(SearchSchedule.created_at.desc())
+    ).all()
+
+
+@router.post(
+    "/projects/{project_id}/search-schedules", response_model=SearchScheduleOut, status_code=201
+)
+def create_search_schedule(
+    project_id: UUID,
+    body: SearchScheduleInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    schedule = SearchSchedule(
+        project_id=project_id,
+        **body.model_dump(),
+        next_run_at=datetime.now(timezone.utc) + timedelta(hours=body.interval_hours),
+    )
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@router.put("/search-schedules/{schedule_id}", response_model=SearchScheduleOut)
+def update_search_schedule(
+    schedule_id: UUID,
+    body: SearchScheduleInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    schedule = owned_schedule(schedule_id, db, user)
+    for key, value in body.model_dump().items():
+        setattr(schedule, key, value)
+    schedule.next_run_at = datetime.now(timezone.utc) + timedelta(hours=body.interval_hours)
+    schedule.last_error = ""
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@router.delete("/search-schedules/{schedule_id}", status_code=204)
+def delete_search_schedule(
+    schedule_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    db.delete(owned_schedule(schedule_id, db, user))
+    db.commit()
+
+
+@router.post("/search-schedules/{schedule_id}/run", response_model=OperationJobOut, status_code=202)
+def run_search_schedule(
+    schedule_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    schedule = owned_schedule(schedule_id, db, user)
+    active = db.scalar(
+        select(OperationJob.id).where(
+            OperationJob.project_id == schedule.project_id,
+            OperationJob.operation_type == "collect_search",
+            OperationJob.status.in_(("queued", "running")),
+        )
+    )
+    if active:
+        raise HTTPException(409, "検索収集がすでに実行待ちです。")
+    job = OperationJob(
+        project_id=schedule.project_id,
+        operation_type="collect_search",
+        payload={
+            "source": schedule.source,
+            "keywords": schedule.keywords,
+            "region": schedule.region,
+            "max_results": schedule.max_results,
+            "company_limit": schedule.company_limit,
+            "schedule_id": str(schedule.id),
+        },
+    )
+    schedule.last_enqueued_at = datetime.now(timezone.utc)
+    schedule.next_run_at = schedule.last_enqueued_at + timedelta(hours=schedule.interval_hours)
+    db.add(job)
+    db.commit()
+    db.refresh(job)
     return job
 
 
