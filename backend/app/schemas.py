@@ -235,3 +235,41 @@ class DashboardOut(BaseModel):
     ranks: dict[str, int]
     statuses: dict[str, int]
     recent_jobs: list[CollectionJobOut]
+
+
+class OperationJobInput(Input):
+    operation_type: Literal["collect_search", "web_analysis", "ai_analysis"]
+    company_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    source: Literal["serper", "google_places"] | None = None
+    keywords: list[Keyword] = Field(default_factory=list, max_length=20)
+    region: str = Field(default="", max_length=500)
+    max_results: int = Field(default=20, ge=1, le=100)
+    force: bool = False
+
+    @model_validator(mode="after")
+    def validate_operation(self):
+        if self.operation_type == "collect_search":
+            if not self.source or not self.keywords or not self.region:
+                raise ValueError("Search collection requires source, keywords and region")
+            if self.source == "google_places" and self.max_results > 60:
+                raise ValueError("Google Places supports at most 60 results")
+        elif self.source or self.keywords or self.region:
+            raise ValueError("Analysis operations do not accept search conditions")
+        return self
+
+
+class OperationJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    operation_type: str
+    status: str
+    total_count: int
+    processed_count: int
+    success_count: int
+    failed_count: int
+    cancel_requested: bool
+    error_message: str
+    created_at: datetime
+    started_at: datetime | None
+    finished_at: datetime | None
