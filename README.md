@@ -34,6 +34,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 実データ検証手順は[Phase 6検証手順](docs/16_PHASE6_VALIDATION_RUNBOOK.md)、営業運用改善は
 [Operations 1実装記録](docs/17_OPERATIONS_1_IMPLEMENTATION.md)、バックグラウンド処理は
 [実装記録](docs/18_BACKGROUND_JOBS_IMPLEMENTATION.md)を参照してください。
+ワーカー停止時の自動回収は[実装記録](docs/19_JOB_RECOVERY_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -121,6 +122,8 @@ macOS / LinuxではPython実行パスを`backend/.venv/bin/python`に読み替�
 | `OPENAI_MODEL` | AI判定モデル（既定`gpt-5.6-luna`） |
 | `AI_TIMEOUT_SECONDS` | AI APIタイムアウト（1〜120秒、既定45秒） |
 | `AI_MAX_WEBSITE_CHARS` | AIへ渡すWeb本文の最大文字数（既定30000） |
+| `WORKER_LEASE_SECONDS` | 実行中ジョブのリース秒数（60〜3600、既定300） |
+| `WORKER_MAX_ATTEMPTS` | ワーカー停止時の最大試行回数（1〜10、既定3） |
 
 パスワードはArgon2idでハッシュ化。認証はランダムな不透明トークンをHttpOnly / SameSite=Lax
 Cookieで保持し、DBにはそのSHA-256のみ保存します。JWTは使用しないため`JWT_SECRET`は不要です。
