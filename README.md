@@ -36,6 +36,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 [実装記録](docs/18_BACKGROUND_JOBS_IMPLEMENTATION.md)を参照してください。
 ワーカー停止時の自動回収は[実装記録](docs/19_JOB_RECOVERY_IMPLEMENTATION.md)を参照してください。
 失敗通知と監視画面は[実装記録](docs/20_OPERATION_MONITORING_IMPLEMENTATION.md)を参照してください。
+検索画面の非同期化は[実装記録](docs/21_ASYNC_SEARCH_COLLECTION_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -202,7 +203,8 @@ Projectのstatusは`draft` / `active` / `archived`。
 使用中のプロファイル削除は409。所有者・is_systemはリクエストで指定できません。
 案件専用の上書きはプロファイルを複製し、そのプロジェクトへ割り当てる運用です。
 
-検索APIはキーワードごとにジョブを作り、`found_count`、`saved_count`、
+画面からのSerper・Places検索はバックグラウンド処理へ登録するため、登録後も他の画面を操作できます。
+ワーカーはキーワードごとに収集ジョブを作り、`found_count`、`saved_count`、
 `duplicate_count`、`error_count`を記録します。外部API失敗もジョブを`failed`として保存します。
 CSVは5MB・1000行までで、`company_name, website_url, phone, email, address`列が必要です。
 同一プロジェクトではドメイン、URL、会社名＋住所で重複登録を防ぎます。
