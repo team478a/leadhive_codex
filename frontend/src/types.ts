@@ -31,7 +31,7 @@ export interface CollectionJob {
 export interface Company {
   id: string; project_id: string; company_name: string; website_url: string | null
   domain: string | null; address: string; phone: string; email: string
-  source: CollectionSource; source_keyword: string; status: string
+  source: CollectionSource; source_keyword: string; status: SalesStatus; notes: string
   prefecture: string; city: string; contact_url: string
   instagram_url: string; x_url: string; tiktok_url: string; facebook_url: string
   youtube_url: string; line_url: string; business_summary: string; website_text: string
@@ -44,4 +44,11 @@ export interface Company {
   ai_status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
   ai_error: string; ai_provider: string; ai_model: string; ai_analyzed_at: string | null
   created_at: string; updated_at: string
+}
+export type SalesStatus = 'unreviewed' | 'target' | 'approached' | 'replied' | 'meeting' | 'won' | 'lost' | 'excluded'
+export interface Dashboard {
+  total_companies: number
+  ranks: Record<string, number>
+  statuses: Record<string, number>
+  recent_jobs: CollectionJob[]
 }

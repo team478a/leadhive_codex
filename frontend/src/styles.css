@@ -42,6 +42,18 @@
   .empty .muted { @apply mt-3 text-sm; }
   .job-row { @apply mt-4 flex items-start justify-between gap-4 border-t border-[#e8ece6] pt-4; }
   .job-stats { @apply flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#65776f]; }
+  .metric { @apply rounded-xl border border-[#e0e6df] bg-white p-5 shadow-xs; }
+  .metric span { @apply block text-sm text-[#65776f]; }
+  .metric strong { @apply mt-2 block text-3xl text-[#235c4c]; }
+  .filter-grid { @apply grid gap-x-4 sm:grid-cols-2 xl:grid-cols-4; }
+  .filter-grid .field { @apply mb-4; }
+  .company-table-wrap { @apply overflow-x-auto rounded-xl border border-[#e0e6df] bg-white; }
+  .company-table { @apply w-full min-w-[820px] border-collapse text-left text-sm; }
+  .company-table th { @apply bg-[#f2f5f1] px-4 py-3 text-xs font-semibold text-[#58705f]; }
+  .company-table td { @apply border-t border-[#e8ece6] px-4 py-4 align-top; }
+  .detail-grid { @apply mt-6 grid gap-6 border-t border-[#e8ece6] pt-6 lg:grid-cols-2; }
+  .detail-grid h3 { @apply mb-3 text-sm font-semibold text-[#45644e]; }
+  .detail-grid p { @apply mb-2 leading-relaxed; }
   .login-layout { @apply min-h-screen md:grid md:grid-cols-2; }
   .login-intro { @apply flex flex-col justify-between gap-12 bg-[#173c35] p-9 text-white lg:p-16; }
   .login-intro h1 { @apply mb-6 text-3xl leading-relaxed lg:text-4xl; }

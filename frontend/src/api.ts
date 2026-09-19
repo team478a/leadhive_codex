@@ -40,6 +40,20 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
   return response.json()
 }
 
+export async function download(path: string, filename: string) {
+  const response = await fetch(`/api${path}`, { credentials: 'include' })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}))
+    if (response.status === 401) window.dispatchEvent(new Event('session-expired'))
+    throw new ApiError(response.status,
+      typeof data.detail === 'string' ? data.detail : 'ダウンロードに失敗しました。')
+  }
+  const url = URL.createObjectURL(await response.blob())
+  const anchor = document.createElement('a')
+  anchor.href = url; anchor.download = filename; anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 export async function allPages<T>(path: string): Promise<T[]> {
   const result: T[] = []
   for (let offset = 0; ; offset += 100) {
