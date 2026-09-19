@@ -59,6 +59,7 @@ def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch)
     assert job["total_count"] == 1
     assert job["processed_count"] == 1 and job["success_count"] == 1
     assert job["attempt_count"] == 1
+    assert auth.post(f"/api/operations/{job['id']}/acknowledge").status_code == 409
 
 
 def test_stale_job_recovery_and_attempt_limit(auth, db, monkeypatch):
@@ -95,6 +96,14 @@ def test_stale_job_recovery_and_attempt_limit(auth, db, monkeypatch):
     assert retryable.worker_id is None and retryable.lease_expires_at is None
     assert exhausted.status == "failed"
     assert exhausted.finished_at is not None
+    dashboard = auth.get("/api/dashboard").json()
+    assert dashboard["operation_statuses"]["failed"] == 1
+    assert dashboard["unread_operation_failures"] == 1
+    assert dashboard["recent_operations"][0]["acknowledged_at"] is None
+    acknowledged = auth.post(f"/api/operations/{exhausted.id}/acknowledge")
+    assert acknowledged.status_code == 200
+    assert acknowledged.json()["acknowledged_at"] is not None
+    assert auth.get("/api/dashboard").json()["unread_operation_failures"] == 0
 
 
 def test_worker_stops_after_losing_lease(auth, db):
