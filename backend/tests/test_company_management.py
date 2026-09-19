@@ -1,7 +1,10 @@
 import csv
 import io
+from datetime import datetime, timedelta, timezone
 
-from app.models import Company
+from sqlalchemy import select
+
+from app.models import Company, OperationJob
 
 
 def make_project(auth, name="営業リストテスト"):
@@ -164,3 +167,41 @@ def test_dashboard_counts_and_recent_jobs(auth, db):
     assert data["ranks"] == {"A": 1, "B": 1}
     assert data["statuses"]["target"] == 1
     assert data["recent_jobs"][0]["source"] == "csv"
+
+
+def test_data_quality_summary_and_reanalysis_queue(auth, db):
+    project = make_project(auth)
+    alpha, beta = add_companies(auth, db, project["id"])
+    alpha.analysis_status = "failed"
+    alpha.analysis_error = "取得失敗"
+    alpha.address = ""
+    alpha.phone = ""
+    alpha.email = ""
+    alpha.contact_url = ""
+    beta.analysis_status = "completed"
+    beta.scraped_at = datetime.now(timezone.utc) - timedelta(days=120)
+    db.flush()
+
+    quality = auth.get(f"/api/projects/{project['id']}/data-quality", params={"stale_days": 90})
+    assert quality.status_code == 200
+    data = quality.json()
+    assert data["total"] == 2
+    assert data["missing_address"] == 1 and data["missing_contact"] == 1
+    assert data["failed_analysis"] == 1 and data["stale_analysis"] == 1
+    assert data["reanalyzable"] == 2
+
+    queued = auth.post(
+        f"/api/projects/{project['id']}/data-quality/reanalyze",
+        json={"scope": "failed_or_stale", "stale_days": 90},
+    )
+    assert queued.status_code == 202
+    job = db.scalar(select(OperationJob).where(OperationJob.id == queued.json()["id"]))
+    assert job.operation_type == "web_analysis" and job.payload["force"] is True
+    assert set(job.payload["company_ids"]) == {str(alpha.id), str(beta.id)}
+    assert (
+        auth.post(
+            f"/api/projects/{project['id']}/data-quality/reanalyze",
+            json={"scope": "failed", "stale_days": 90},
+        ).status_code
+        == 409
+    )
