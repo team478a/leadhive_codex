@@ -35,6 +35,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 [Operations 1実装記録](docs/17_OPERATIONS_1_IMPLEMENTATION.md)、バックグラウンド処理は
 [実装記録](docs/18_BACKGROUND_JOBS_IMPLEMENTATION.md)を参照してください。
 ワーカー停止時の自動回収は[実装記録](docs/19_JOB_RECOVERY_IMPLEMENTATION.md)を参照してください。
+失敗通知と監視画面は[実装記録](docs/20_OPERATION_MONITORING_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -192,6 +193,7 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | GET / POST | `/api/projects/{id}/operations` | バックグラウンド処理の一覧 / 登録 |
 | POST | `/api/operations/{id}/cancel` | 待機中・実行中処理のキャンセル |
 | POST | `/api/operations/{id}/retry` | 失敗・キャンセル済み処理の再登録 |
+| POST | `/api/operations/{id}/acknowledge` | 失敗通知を確認済みに更新 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
@@ -226,6 +228,7 @@ AI判定をスキップします。
 一括Web解析と一括AI判定はバックグラウンド処理として登録され、画面から進捗確認、キャンセル、
 失敗時の再実行ができます。検索収集も同じジョブAPIに対応しています。URL・CSV取込は入力検証と
 重複判定だけで完了するため同期処理のままです。同じプロジェクト・同じ処理種別の同時登録は拒否します。
+失敗ジョブはダッシュボードの未確認件数へ反映され、理由・進捗・試行回数を確認して既読化できます。
 
 ## 検証
 
