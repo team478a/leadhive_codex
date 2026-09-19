@@ -102,6 +102,20 @@ class CompanyOut(BaseModel):
     is_aggregator: bool
     duplicate_of_id: UUID | None
     scraped_at: datetime | None
+    score: int | None
+    rank: Literal["A", "B", "C", "対象外"] | None
+    is_target: bool | None
+    business_type: str
+    ai_summary: str
+    ai_reason: str
+    ai_strengths: list[str]
+    ai_concerns: list[str]
+    ai_recommended_approach: str
+    ai_status: Literal["pending", "running", "completed", "failed", "skipped"]
+    ai_error: str
+    ai_provider: str
+    ai_model: str
+    ai_analyzed_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -147,4 +161,14 @@ class WebAnalysisInput(Input):
 
 
 class CompanyAnalysisInput(Input):
+    force: bool = False
+
+
+class AiAnalysisInput(Input):
+    company_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    limit: int = Field(default=20, ge=1, le=20)
+    force: bool = False
+
+
+class CompanyAiAnalysisInput(Input):
     force: bool = False

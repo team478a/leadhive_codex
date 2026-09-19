@@ -103,6 +103,14 @@ class Company(Timestamps, Base):
             "'duplicate', 'excluded')",
             name="ck_company_analysis_status",
         ),
+        CheckConstraint(
+            "ai_status IN ('pending', 'running', 'completed', 'failed', 'skipped')",
+            name="ck_company_ai_status",
+        ),
+        CheckConstraint("score IS NULL OR (score >= 0 AND score <= 100)", name="ck_company_score"),
+        CheckConstraint(
+            "rank IS NULL OR rank IN ('A', 'B', 'C', '対象外')", name="ck_company_rank"
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -136,6 +144,20 @@ class Company(Timestamps, Base):
         index=True,
     )
     scraped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    score: Mapped[int | None] = mapped_column(Integer, index=True)
+    rank: Mapped[str | None] = mapped_column(String(20), index=True)
+    is_target: Mapped[bool | None] = mapped_column(Boolean)
+    business_type: Mapped[str] = mapped_column(String(300), default="")
+    ai_summary: Mapped[str] = mapped_column(Text, default="")
+    ai_reason: Mapped[str] = mapped_column(Text, default="")
+    ai_strengths: Mapped[list] = mapped_column(JSONB, default=list)
+    ai_concerns: Mapped[list] = mapped_column(JSONB, default=list)
+    ai_recommended_approach: Mapped[str] = mapped_column(Text, default="")
+    ai_status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    ai_error: Mapped[str] = mapped_column(String(500), default="")
+    ai_provider: Mapped[str] = mapped_column(String(50), default="")
+    ai_model: Mapped[str] = mapped_column(String(100), default="")
+    ai_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CollectionJob(Base):

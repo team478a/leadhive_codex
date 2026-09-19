@@ -18,6 +18,10 @@ class Settings(BaseSettings):
     scraper_timeout_seconds: float = 15.0
     scraper_max_bytes: int = 2_000_000
     scraper_user_agent: str = "LeadHiveBot/2.0 (+https://leadhive.work/bot)"
+    openai_api_key: str = ""
+    openai_model: str = "gpt-5.6-luna"
+    ai_timeout_seconds: float = 45.0
+    ai_max_website_chars: int = 30_000
 
     @field_validator("database_url")
     @classmethod
@@ -54,6 +58,20 @@ class Settings(BaseSettings):
     def valid_scraper_size(cls, value: int) -> int:
         if not 100_000 <= value <= 10_000_000:
             raise ValueError("scraper_max_bytes must be between 100000 and 10000000")
+        return value
+
+    @field_validator("ai_timeout_seconds")
+    @classmethod
+    def valid_ai_timeout(cls, value: float) -> float:
+        if not 1 <= value <= 120:
+            raise ValueError("ai_timeout_seconds must be between 1 and 120")
+        return value
+
+    @field_validator("ai_max_website_chars")
+    @classmethod
+    def valid_ai_input_size(cls, value: int) -> int:
+        if not 1_000 <= value <= 100_000:
+            raise ValueError("ai_max_website_chars must be between 1000 and 100000")
         return value
 
     @property
