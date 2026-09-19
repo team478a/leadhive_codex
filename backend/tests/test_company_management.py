@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.models import Company, OperationJob
+from app.models import Activity, Company, OperationJob
 
 
 def make_project(auth, name="営業リストテスト"):
@@ -205,3 +205,42 @@ def test_data_quality_summary_and_reanalysis_queue(auth, db):
         ).status_code
         == 409
     )
+
+
+def test_duplicate_candidates_and_safe_merge(auth, db):
+    project = make_project(auth)
+    alpha, beta = add_companies(auth, db, project["id"])
+    assert (
+        auth.post(
+            f"/api/projects/{project['id']}/companies/merge",
+            json={"target_id": str(alpha.id), "source_id": str(beta.id)},
+        ).status_code
+        == 409
+    )
+    beta.phone = alpha.phone
+    alpha.email = ""
+    alpha.notes = "残す企業のメモ"
+    beta.notes = "統合元のメモ"
+    db.add(Activity(company_id=beta.id, activity_type="call", note="統合前の電話履歴"))
+    db.flush()
+
+    candidates = auth.get(f"/api/projects/{project['id']}/duplicate-candidates")
+    assert candidates.status_code == 200
+    pair = candidates.json()[0]
+    assert "phone" in pair["reasons"]
+    assert {pair["left"]["id"], pair["right"]["id"]} == {str(alpha.id), str(beta.id)}
+
+    merged = auth.post(
+        f"/api/projects/{project['id']}/companies/merge",
+        json={"target_id": str(alpha.id), "source_id": str(beta.id)},
+    )
+    assert merged.status_code == 200
+    assert merged.json()["id"] == str(alpha.id)
+    assert merged.json()["email"] == "b@example.jp"
+    assert "残す企業のメモ" in merged.json()["notes"]
+    assert "統合元のメモ" in merged.json()["notes"]
+    assert auth.get(f"/api/companies/{beta.id}").status_code == 404
+    activities = auth.get(f"/api/companies/{alpha.id}/activities").json()
+    assert any(item["note"] == "統合前の電話履歴" for item in activities)
+    assert any("重複企業" in item["note"] for item in activities)
+    assert auth.get(f"/api/projects/{project['id']}/duplicate-candidates").json() == []

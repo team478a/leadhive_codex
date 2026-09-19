@@ -92,6 +92,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await page.getByRole('button', { name: '▤ 企業一覧' }).click()
   await expect(page.getByRole('heading', { name: '企業一覧', exact: true, level: 1 })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'データ品質' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '重複候補' })).toBeVisible()
   await expect(page.getByText('連絡先なし', { exact: true })).toBeVisible()
   const companyRow = page.getByRole('row').filter({ hasText: 'example.com' }).first()
   await companyRow.getByRole('button', { name: '詳細' }).click()
