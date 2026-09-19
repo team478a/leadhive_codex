@@ -37,6 +37,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 ワーカー停止時の自動回収は[実装記録](docs/19_JOB_RECOVERY_IMPLEMENTATION.md)を参照してください。
 失敗通知と監視画面は[実装記録](docs/20_OPERATION_MONITORING_IMPLEMENTATION.md)を参照してください。
 検索画面の非同期化は[実装記録](docs/21_ASYNC_SEARCH_COLLECTION_IMPLEMENTATION.md)を参照してください。
+検索テンプレートと定期実行は[実装記録](docs/22_SEARCH_SCHEDULES_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -195,6 +196,9 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | POST | `/api/operations/{id}/cancel` | 待機中・実行中処理のキャンセル |
 | POST | `/api/operations/{id}/retry` | 失敗・キャンセル済み処理の再登録 |
 | POST | `/api/operations/{id}/acknowledge` | 失敗通知を確認済みに更新 |
+| GET / POST | `/api/projects/{id}/search-schedules` | 定期検索の一覧 / 作成 |
+| PUT / DELETE | `/api/search-schedules/{id}` | 定期検索の更新 / 削除 |
+| POST | `/api/search-schedules/{id}/run` | 保存条件を今すぐ実行 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
