@@ -3,15 +3,24 @@ import io
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import String, asc, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.analysis_routes import owned_company, owned_project
 from app.database import get_db
-from app.models import CollectionJob, Company, Project, User
-from app.schemas import CompanyOut, CompanySalesInput, DashboardOut
+from app.models import Activity, CollectionJob, Company, Project, User
+from app.schemas import (
+    ActivityInput,
+    ActivityOut,
+    CompanyBulkSalesInput,
+    CompanyEditInput,
+    CompanyOut,
+    CompanyPageOut,
+    CompanySalesInput,
+    DashboardOut,
+)
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
@@ -57,7 +66,7 @@ def company_query(
     return query.order_by(desc(Company.created_at), Company.id)
 
 
-@router.get("/projects/{project_id}/company-list", response_model=list[CompanyOut])
+@router.get("/projects/{project_id}/company-list", response_model=CompanyPageOut)
 def list_company_details(
     project_id: UUID,
     offset: int = Query(0, ge=0),
@@ -77,7 +86,9 @@ def list_company_details(
 ):
     owned_project(project_id, db, user)
     query = company_query(project_id, rank, min_score, region, status, source, keyword, sort)
-    return db.scalars(query.offset(offset).limit(limit)).all()
+    total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+    items = db.scalars(query.offset(offset).limit(limit)).all()
+    return CompanyPageOut(items=items, total=total, offset=offset, limit=limit)
 
 
 @router.get("/companies/{company_id}", response_model=CompanyOut)
@@ -95,11 +106,94 @@ def update_company_sales(
     user: User = Depends(current_user),
 ):
     company = owned_company(company_id, db, user)
+    if company.status != body.status:
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="status_change",
+                note=f"営業状況を {company.status} から {body.status} に変更",
+            )
+        )
     company.status = body.status
     company.notes = body.notes
+    company.next_followup_at = body.next_followup_at
     db.commit()
     db.refresh(company)
     return company
+
+
+@router.put("/companies/{company_id}", response_model=CompanyOut)
+def edit_company(
+    company_id: UUID,
+    body: CompanyEditInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = owned_company(company_id, db, user)
+    for key, value in body.model_dump().items():
+        setattr(company, key, value)
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+@router.patch("/projects/{project_id}/companies/bulk-sales", response_model=list[CompanyOut])
+def bulk_update_sales(
+    project_id: UUID,
+    body: CompanyBulkSalesInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    companies = db.scalars(
+        select(Company).where(Company.project_id == project_id, Company.id.in_(body.company_ids))
+    ).all()
+    if len(companies) != len(set(body.company_ids)):
+        raise HTTPException(404, "指定された企業が見つかりません。")
+    for company in companies:
+        if company.status != body.status:
+            db.add(
+                Activity(
+                    company_id=company.id,
+                    activity_type="status_change",
+                    note=f"営業状況を {company.status} から {body.status} に変更",
+                )
+            )
+            company.status = body.status
+    db.commit()
+    for company in companies:
+        db.refresh(company)
+    return companies
+
+
+@router.get("/companies/{company_id}/activities", response_model=list[ActivityOut])
+def list_activities(
+    company_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_company(company_id, db, user)
+    return db.scalars(
+        select(Activity)
+        .where(Activity.company_id == company_id)
+        .order_by(Activity.created_at.desc(), Activity.id)
+        .limit(100)
+    ).all()
+
+
+@router.post("/companies/{company_id}/activities", response_model=ActivityOut, status_code=201)
+def add_activity(
+    company_id: UUID,
+    body: ActivityInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = owned_company(company_id, db, user)
+    activity = Activity(company_id=company.id, **body.model_dump())
+    db.add(activity)
+    db.commit()
+    db.refresh(activity)
+    return activity
 
 
 def csv_safe(value) -> str:

@@ -87,6 +87,7 @@ class CompanyOut(BaseModel):
     source_keyword: str
     status: str
     notes: str
+    next_followup_at: datetime | None
     prefecture: str
     city: str
     contact_url: str
@@ -180,6 +181,53 @@ class CompanySalesInput(Input):
         "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
     ]
     notes: str = Field(default="", max_length=20000)
+    next_followup_at: datetime | None = None
+
+
+class CompanyEditInput(Input):
+    company_name: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)
+    ]
+    address: str = Field(default="", max_length=5000)
+    prefecture: str = Field(default="", max_length=20)
+    city: str = Field(default="", max_length=200)
+    phone: str = Field(default="", max_length=100)
+    email: str = Field(default="", max_length=320)
+    contact_url: str = Field(default="", max_length=5000)
+    instagram_url: str = Field(default="", max_length=5000)
+    x_url: str = Field(default="", max_length=5000)
+    tiktok_url: str = Field(default="", max_length=5000)
+    facebook_url: str = Field(default="", max_length=5000)
+    youtube_url: str = Field(default="", max_length=5000)
+    line_url: str = Field(default="", max_length=5000)
+
+
+class CompanyBulkSalesInput(Input):
+    company_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
+    status: Literal[
+        "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
+    ]
+
+
+class CompanyPageOut(BaseModel):
+    items: list[CompanyOut]
+    total: int
+    offset: int
+    limit: int
+
+
+class ActivityInput(Input):
+    activity_type: Literal["note", "call", "email", "form", "sns", "meeting"]
+    note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+
+
+class ActivityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    company_id: UUID
+    activity_type: str
+    note: str
+    created_at: datetime
 
 
 class DashboardOut(BaseModel):

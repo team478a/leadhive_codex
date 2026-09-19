@@ -131,6 +131,7 @@ class Company(Timestamps, Base):
     source_keyword: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(30), default="unreviewed")
     notes: Mapped[str] = mapped_column(Text, default="")
+    next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     prefecture: Mapped[str] = mapped_column(String(20), default="")
     city: Mapped[str] = mapped_column(String(200), default="")
     contact_url: Mapped[str] = mapped_column(Text, default="")
@@ -164,6 +165,23 @@ class Company(Timestamps, Base):
     ai_provider: Mapped[str] = mapped_column(String(50), default="")
     ai_model: Mapped[str] = mapped_column(String(100), default="")
     ai_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+    __table_args__ = (
+        CheckConstraint(
+            "activity_type IN ('note', 'call', 'email', 'form', 'sns', 'meeting', 'status_change')",
+            name="ck_activity_type",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    activity_type: Mapped[str] = mapped_column(String(30))
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class CollectionJob(Base):
