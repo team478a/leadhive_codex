@@ -306,3 +306,15 @@ class SearchScheduleOut(SearchScheduleInput):
     last_error: str
     created_at: datetime
     updated_at: datetime
+
+
+class SearchAnalyticsOut(BaseModel):
+    schedule_id: UUID
+    name: str
+    run_count: int
+    found_count: int
+    saved_count: int
+    duplicate_count: int
+    error_count: int
+    save_rate: float
+    duplicate_rate: float

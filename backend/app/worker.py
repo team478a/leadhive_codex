@@ -186,7 +186,16 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             max_results = min(payload["max_results"], company_limit - company_count)
         else:
             max_results = payload["max_results"]
-        collection = start_job(db, job.project_id, payload["source"], keyword, payload["region"])
+        schedule_id = uuid.UUID(payload["schedule_id"]) if payload.get("schedule_id") else None
+        collection = start_job(
+            db,
+            job.project_id,
+            payload["source"],
+            keyword,
+            payload["region"],
+            operation_job_id=job.id,
+            search_schedule_id=schedule_id,
+        )
         try:
             search = search_serper if payload["source"] == "serper" else search_google_places
             candidates = search(keyword, payload["region"], max_results)

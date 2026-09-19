@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { allPages, api, errorMessage, upload } from './api'
 import { Field } from './forms'
-import type { CollectionJob, CollectionSource, Company, OperationJob, Profile, Project, SearchSchedule } from './types'
+import type { CollectionJob, CollectionSource, Company, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places',
@@ -33,6 +33,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [companies, setCompanies] = useState<Company[]>([])
   const [operations, setOperations] = useState<OperationJob[]>([])
   const [schedules, setSchedules] = useState<SearchSchedule[]>([])
+  const [analytics, setAnalytics] = useState<SearchAnalytics[]>([])
   const [scheduleName, setScheduleName] = useState('定期検索')
   const [intervalHours, setIntervalHours] = useState(168)
   const [companyLimit, setCompanyLimit] = useState(10000)
@@ -48,14 +49,16 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const suggestedKeywordText = suggestedKeywords.join('\n')
 
   const reload = useCallback(async () => {
-    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); return }
-    const [nextJobs, nextCompanies, nextOperations, nextSchedules] = await Promise.all([
+    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); setAnalytics([]); return }
+    const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics] = await Promise.all([
       allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
       api<OperationJob[]>(`/projects/${projectId}/operations`),
       api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
+      api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
     ])
     setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations); setSchedules(nextSchedules)
+    setAnalytics(nextAnalytics)
   }, [projectId])
 
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
@@ -204,6 +207,8 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
           }).then(reload).catch(e => setError(errorMessage(e)))}>{schedule.active ? '停止' : '再開'}</button>
           <button type="button" className="danger" onClick={() => void api(`/search-schedules/${schedule.id}`, 'DELETE').then(reload).catch(e => setError(errorMessage(e)))}>削除</button></div>
       </article>)}
+      {analytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-3">テンプレート別成果</h3><table><thead><tr><th>テンプレート</th><th>検索数</th><th>発見</th><th>保存</th><th>保存率</th><th>重複率</th><th>エラー</th></tr></thead>
+        <tbody>{analytics.map(item => <tr key={item.schedule_id}><td>{item.name}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.duplicate_rate}%</td><td>{item.error_count}</td></tr>)}</tbody></table></div>}
     </div></section>
     <section className="space-y-6">
       <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>

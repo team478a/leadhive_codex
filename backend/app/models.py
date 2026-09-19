@@ -200,6 +200,12 @@ class CollectionJob(Base):
     project_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
+    operation_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("operation_jobs.id", ondelete="SET NULL"), index=True
+    )
+    search_schedule_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("search_schedules.id", ondelete="SET NULL"), index=True
+    )
     source: Mapped[str] = mapped_column(String(30))
     keyword: Mapped[str] = mapped_column(String(500), default="")
     region: Mapped[str] = mapped_column(String(500), default="")

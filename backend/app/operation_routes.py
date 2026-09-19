@@ -2,13 +2,19 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.analysis_routes import owned_project
 from app.database import get_db
-from app.models import OperationJob, Project, SearchSchedule, User
-from app.schemas import OperationJobInput, OperationJobOut, SearchScheduleInput, SearchScheduleOut
+from app.models import CollectionJob, OperationJob, Project, SearchSchedule, User
+from app.schemas import (
+    OperationJobInput,
+    OperationJobOut,
+    SearchAnalyticsOut,
+    SearchScheduleInput,
+    SearchScheduleOut,
+)
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
@@ -46,6 +52,42 @@ def list_search_schedules(
         .where(SearchSchedule.project_id == project_id)
         .order_by(SearchSchedule.created_at.desc())
     ).all()
+
+
+@router.get("/projects/{project_id}/search-analytics", response_model=list[SearchAnalyticsOut])
+def search_analytics(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    owned_project(project_id, db, user)
+    rows = db.execute(
+        select(
+            SearchSchedule.id,
+            SearchSchedule.name,
+            func.count(CollectionJob.id),
+            func.coalesce(func.sum(CollectionJob.found_count), 0),
+            func.coalesce(func.sum(CollectionJob.saved_count), 0),
+            func.coalesce(func.sum(CollectionJob.duplicate_count), 0),
+            func.coalesce(func.sum(CollectionJob.error_count), 0),
+        )
+        .outerjoin(CollectionJob, CollectionJob.search_schedule_id == SearchSchedule.id)
+        .where(SearchSchedule.project_id == project_id)
+        .group_by(SearchSchedule.id, SearchSchedule.name)
+        .order_by(func.coalesce(func.sum(CollectionJob.saved_count), 0).desc(), SearchSchedule.name)
+    ).all()
+    return [
+        SearchAnalyticsOut(
+            schedule_id=schedule_id,
+            name=name,
+            run_count=run_count,
+            found_count=found,
+            saved_count=saved,
+            duplicate_count=duplicates,
+            error_count=errors,
+            save_rate=round(saved / found * 100, 1) if found else 0,
+            duplicate_rate=round(duplicates / found * 100, 1) if found else 0,
+        )
+        for schedule_id, name, run_count, found, saved, duplicates, errors in rows
+    ]
 
 
 @router.post(

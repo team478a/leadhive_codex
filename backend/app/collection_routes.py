@@ -48,9 +48,19 @@ def owned_job(job_id: UUID, db: Session, user: User) -> CollectionJob:
     return job
 
 
-def start_job(db: Session, project_id: UUID, source: str, keyword: str, region: str):
+def start_job(
+    db: Session,
+    project_id: UUID,
+    source: str,
+    keyword: str,
+    region: str,
+    operation_job_id: UUID | None = None,
+    search_schedule_id: UUID | None = None,
+):
     job = CollectionJob(
         project_id=project_id,
+        operation_job_id=operation_job_id,
+        search_schedule_id=search_schedule_id,
         source=source,
         keyword=keyword,
         region=region,
