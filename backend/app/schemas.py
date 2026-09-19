@@ -2,7 +2,15 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, JsonValue, StringConstraints
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    JsonValue,
+    StringConstraints,
+    model_validator,
+)
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Keyword = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
@@ -63,3 +71,54 @@ class ProjectOut(ProjectInput):
     user_id: UUID
     created_at: datetime
     updated_at: datetime
+
+
+class CompanyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    company_name: str
+    website_url: str | None
+    domain: str | None
+    address: str
+    phone: str
+    email: str
+    source: Literal["serper", "google_places", "url", "csv"]
+    source_keyword: str
+    status: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class CollectionJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    source: Literal["serper", "google_places", "url", "csv"]
+    keyword: str
+    region: str
+    status: Literal["running", "completed", "failed"]
+    found_count: int
+    saved_count: int
+    duplicate_count: int
+    error_count: int
+    error_message: str
+    created_at: datetime
+    finished_at: datetime | None
+
+
+class SearchCollectionInput(Input):
+    source: Literal["serper", "google_places"]
+    keywords: Annotated[list[Keyword], Field(min_length=1, max_length=20)]
+    region: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
+    max_results: int = Field(default=20, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def places_result_limit(self):
+        if self.source == "google_places" and self.max_results > 60:
+            raise ValueError("Google Places supports at most 60 results")
+        return self
+
+
+class UrlCollectionInput(Input):
+    urls: Annotated[list[str], Field(min_length=1, max_length=100)]

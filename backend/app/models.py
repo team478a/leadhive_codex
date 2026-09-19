@@ -1,7 +1,19 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import (
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -68,3 +80,64 @@ class AuthSession(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+class Company(Timestamps, Base):
+    __tablename__ = "companies"
+    __table_args__ = (
+        UniqueConstraint("project_id", "domain", name="uq_company_project_domain"),
+        UniqueConstraint("project_id", "website_url", name="uq_company_project_website"),
+        Index(
+            "uq_company_project_name_address",
+            "project_id",
+            "company_name",
+            "address",
+            unique=True,
+            postgresql_where=text("address <> ''"),
+        ),
+        CheckConstraint(
+            "source IN ('serper', 'google_places', 'url', 'csv')", name="ck_company_source"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    company_name: Mapped[str] = mapped_column(String(500))
+    website_url: Mapped[str | None] = mapped_column(Text)
+    domain: Mapped[str | None] = mapped_column(String(253))
+    address: Mapped[str] = mapped_column(Text, default="")
+    phone: Mapped[str] = mapped_column(String(100), default="")
+    email: Mapped[str] = mapped_column(String(320), default="")
+    source: Mapped[str] = mapped_column(String(30))
+    source_keyword: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(30), default="unreviewed")
+
+
+class CollectionJob(Base):
+    __tablename__ = "collection_jobs"
+    __table_args__ = (
+        CheckConstraint(
+            "source IN ('serper', 'google_places', 'url', 'csv')", name="ck_job_source"
+        ),
+        CheckConstraint("status IN ('running', 'completed', 'failed')", name="ck_job_status"),
+        CheckConstraint(
+            "found_count >= 0 AND saved_count >= 0 AND duplicate_count >= 0 AND error_count >= 0",
+            name="ck_job_counts",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    source: Mapped[str] = mapped_column(String(30))
+    keyword: Mapped[str] = mapped_column(String(500), default="")
+    region: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(20), default="running", index=True)
+    found_count: Mapped[int] = mapped_column(Integer, default=0)
+    saved_count: Mapped[int] = mapped_column(Integer, default=0)
+    duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_count: Mapped[int] = mapped_column(Integer, default=0)
+    error_message: Mapped[str] = mapped_column(String(500), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

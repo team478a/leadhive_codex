@@ -12,6 +12,9 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = False
     session_hours: int = 12
+    serper_api_key: str = ""
+    google_places_api_key: str = ""
+    external_api_timeout_seconds: float = 20.0
 
     @field_validator("database_url")
     @classmethod
@@ -27,6 +30,13 @@ class Settings(BaseSettings):
     def positive_lifetime(cls, value: int) -> int:
         if not 1 <= value <= 168:
             raise ValueError("session_hours must be between 1 and 168")
+        return value
+
+    @field_validator("external_api_timeout_seconds")
+    @classmethod
+    def valid_timeout(cls, value: float) -> float:
+        if not 1 <= value <= 60:
+            raise ValueError("external_api_timeout_seconds must be between 1 and 60")
         return value
 
     @property
