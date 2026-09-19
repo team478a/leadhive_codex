@@ -32,5 +32,11 @@ export interface Company {
   id: string; project_id: string; company_name: string; website_url: string | null
   domain: string | null; address: string; phone: string; email: string
   source: CollectionSource; source_keyword: string; status: string
+  prefecture: string; city: string; contact_url: string
+  instagram_url: string; x_url: string; tiktok_url: string; facebook_url: string
+  youtube_url: string; line_url: string; business_summary: string; website_text: string
+  analysis_status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'duplicate' | 'excluded'
+  analysis_error: string; is_aggregator: boolean; duplicate_of_id: string | null
+  scraped_at: string | null
   created_at: string; updated_at: string
 }

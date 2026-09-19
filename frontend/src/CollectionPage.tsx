@@ -8,6 +8,10 @@ const sourceNames: Record<CollectionSource, string> = {
   url: 'URL直接入力', csv: 'CSVインポート',
 }
 const statusNames = { running: '実行中', completed: '完了', failed: '失敗' }
+const analysisNames = {
+  pending: '未解析', running: '解析中', completed: '解析済み', failed: '解析失敗',
+  skipped: 'URLなし', duplicate: '重複', excluded: '対象外',
+}
 
 export function CollectionPage({ projects, profiles, initialProjectId }: {
   projects: Project[]; profiles: Profile[]; initialProjectId: string
@@ -21,6 +25,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [loading, setLoading] = useState(false)
+  const [analyzing, setAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const project = projects.find(item => item.id === projectId)
@@ -68,6 +73,20 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
     finally { setLoading(false) }
   }
 
+  async function analyze(companyIds: string[] = []) {
+    setAnalyzing(true); setError(''); setNotice('')
+    try {
+      const results = await api<Company[]>(`/projects/${projectId}/web-analysis`, 'POST', {
+        company_ids: companyIds, limit: companyIds.length || 20, force: false,
+      })
+      await reload()
+      setNotice(results.length
+        ? `${results.length}社のWeb解析を完了しました。`
+        : '解析対象の企業はありません。')
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setAnalyzing(false) }
+  }
+
   if (projects.length === 0) return <section className="panel empty">
     <h2>先にプロジェクトを作成してください</h2>
     <p className="muted">企業は営業プロジェクトごとに収集・保存されます。</p>
@@ -104,13 +123,27 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       </fieldset>
     </form>
     <section className="space-y-6">
-      <div className="panel"><div className="flex items-center justify-between gap-4"><h2>保存済み企業</h2>
-        <span className="badge">{companies.length} 社</span></div>
-        <p className="muted mt-3 text-sm">企業の解析・評価・営業リスト表示は後続Phaseで追加します。</p>
-        {companies.slice(0, 5).map(company => <div key={company.id} className="job-row">
-          <div><strong>{company.company_name}</strong><p className="muted text-sm">{company.domain || company.address || 'URL未登録'}</p></div>
-          <span className="badge">{sourceNames[company.source]}</span>
-        </div>)}
+      <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
+        <p className="muted mt-2 text-sm">Webサイトから企業情報・SNS・問い合わせ先を抽出します。</p></div>
+        <div className="flex items-center gap-2"><span className="badge">{companies.length} 社</span>
+          <button type="button" disabled={analyzing || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
+            onClick={() => void analyze()}>{analyzing ? '解析中…' : '未解析を解析'}</button></div></div>
+        {companies.slice(0, 5).map(company => <article key={company.id} className="job-row">
+          <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong>{company.company_name}</strong>
+            <span className="badge">{analysisNames[company.analysis_status]}</span></div>
+            <p className="muted text-sm break-all">{company.domain || company.address || 'URL未登録'}</p>
+            {company.business_summary && <p className="mt-2 text-sm">{company.business_summary}</p>}
+            {company.analysis_error && <p className="error mt-2 mb-0">{company.analysis_error}</p>}
+            <div className="mt-2 flex flex-wrap gap-3 text-sm">{company.contact_url && <a href={company.contact_url} target="_blank" rel="noreferrer">問い合わせ</a>}
+              {company.instagram_url && <a href={company.instagram_url} target="_blank" rel="noreferrer">Instagram</a>}
+              {company.x_url && <a href={company.x_url} target="_blank" rel="noreferrer">X</a>}
+              {company.line_url && <a href={company.line_url} target="_blank" rel="noreferrer">LINE</a>}</div>
+          </div>
+          <div className="flex shrink-0 flex-col items-end gap-2"><span className="badge">{sourceNames[company.source]}</span>
+            {company.website_url && !['duplicate', 'excluded'].includes(company.analysis_status) &&
+              <button type="button" className="secondary" disabled={analyzing}
+                onClick={() => void analyze([company.id])}>Web解析</button>}</div>
+        </article>)}
       </div>
       <div className="panel"><div className="flex items-center justify-between gap-4"><h2>最近の収集ジョブ</h2>
         <button type="button" className="secondary" disabled={loading} onClick={() => void reload()}>更新</button></div>
