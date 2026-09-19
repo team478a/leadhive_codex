@@ -17,19 +17,20 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 最初の実装指示は `docs/09_CODEX_INITIAL_INSTRUCTION.md` です。
 
-## Phase 1〜4 実装
+## Phase 1〜5 実装
 
 React / TypeScript / Vite / Tailwind CSS、FastAPI / SQLAlchemy / PostgreSQLを使用。
 ログイン、Project CRUD、TargetProfile CRUD・複製、標準プロファイル2件、
 Serper / Google Places / URL / CSVからの企業収集とCollection Job管理まで実装しています。
 Webサイト解析、企業情報・SNS・問い合わせ先抽出まで実装しています。
 Target ProfileとSales Objectiveを使った構造化AI判定まで実装しています。
-企業一覧専用画面・営業リストは後続Phaseです。
+企業一覧・詳細、フィルター、営業状況・メモ、CSV出力、簡易ダッシュボードまで実装しています。
 
 実装範囲・判断・検証結果は[Phase 1実装記録](docs/11_PHASE1_IMPLEMENTATION.md)を参照してください。
 Phase 2の詳細は[Phase 2実装記録](docs/12_PHASE2_IMPLEMENTATION.md)を参照してください。
 Phase 3の詳細は[Phase 3実装記録](docs/13_PHASE3_IMPLEMENTATION.md)を参照してください。
 Phase 4の詳細は[Phase 4実装記録](docs/14_PHASE4_IMPLEMENTATION.md)を参照してください。
+Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -37,6 +38,7 @@ Phase 4の詳細は[Phase 4実装記録](docs/14_PHASE4_IMPLEMENTATION.md)を参
 - `backend/app/services/collection.py`: 外部検索Provider、URL正規化、CSV解析
 - `backend/app/services/scraper.py`: 安全なHTML取得、企業情報・SNS・問い合わせ先抽出
 - `backend/app/services/ai.py`: AI Provider、構造化出力、ランク判定
+- `backend/app/company_routes.py`: 企業一覧・詳細・営業管理・CSV・ダッシュボードAPI
 - `backend/migrations`: Alembicスキーマと初期データMigration
 - `backend/tests`: 実PostgreSQLに対するAPI・権限テスト
 - `frontend/src`: ログイン、プロジェクト管理、プロファイル管理、共通APIクライアント
@@ -165,6 +167,11 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | POST | `/api/projects/{id}/web-analysis` | 未解析企業を最大20社解析 |
 | POST | `/api/companies/{id}/ai-analysis` | 企業1社のAI判定 |
 | POST | `/api/projects/{id}/ai-analysis` | 企業を最大20社AI判定 |
+| GET | `/api/projects/{id}/company-list` | フィルター・並び替え対応の企業一覧 |
+| GET | `/api/companies/{id}` | 企業詳細 |
+| PATCH | `/api/companies/{id}/sales` | 営業状況・メモ更新 |
+| GET | `/api/projects/{id}/companies.csv` | 現在の条件でCSV出力 |
+| GET | `/api/dashboard` | ランク・営業状況・直近収集の集計 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
@@ -187,6 +194,10 @@ AI判定はWeb情報、Target Profile、Sales Objectiveを入力とし、score�
 強み、懸念、推奨アプローチを構造化して保存します。rank境界はProfileの
 `scoring_rules.rank_thresholds`から読み込みます。Web情報がない企業、重複、対象外企業は
 AI判定をスキップします。
+
+企業一覧はrank、最低score、地域、営業状況、収集元、キーワードで絞り込み、score順・新着順・
+会社名順で並べ替えられます。CSVは同じ条件を反映し、UTF-8 BOMと数式インジェクション対策を
+適用します。営業状況は未確認、営業対象、アプローチ済、返信あり、商談、成約、失注、対象外です。
 
 ## 検証
 
