@@ -1,0 +1,61 @@
+import logging
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+
+from app.config import settings
+from app.routes import router
+
+logger = logging.getLogger("leadhive")
+app = FastAPI(title="LeadHive V2", version="0.1.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.allowed_origins,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Content-Type"],
+)
+
+
+@app.middleware("http")
+async def protect_browser_requests(request: Request, call_next):
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        origin = request.headers.get("origin")
+        if (origin is not None and origin not in settings.allowed_origins) or (
+            origin is None and request.headers.get("sec-fetch-site") == "cross-site"
+        ):
+            return JSONResponse(status_code=403, content={"detail": "許可されていない送信元です。"})
+    response = await call_next(request)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error(request: Request, exc: RequestValidationError):
+    # Do not echo submitted passwords or arbitrary input through validation responses.
+    return JSONResponse(status_code=422, content={"detail": "入力内容を確認してください。"})
+
+
+@app.exception_handler(IntegrityError)
+async def conflict_error(request: Request, exc: IntegrityError):
+    logger.warning("database error: integrity constraint")
+    return JSONResponse(status_code=409, content={"detail": "関連データと競合しています。"})
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_error(request: Request, exc: SQLAlchemyError):
+    logger.error("database error: request failed")
+    return JSONResponse(status_code=503, content={"detail": "データベースを利用できません。"})
+
+
+@app.exception_handler(Exception)
+async def internal_error(request: Request, exc: Exception):
+    logger.error("internal error: %s", type(exc).__name__)
+    return JSONResponse(status_code=500, content={"detail": "処理に失敗しました。"})
+
+
+app.include_router(router)
