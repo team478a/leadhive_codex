@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { allPages, api, errorMessage, upload } from './api'
 import { Field } from './forms'
-import type { CollectionJob, CollectionSource, Company, Profile, Project } from './types'
+import type { CollectionJob, CollectionSource, Company, OperationJob, Profile, Project } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places',
@@ -28,6 +28,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [file, setFile] = useState<File | null>(null)
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [operations, setOperations] = useState<OperationJob[]>([])
   const [loading, setLoading] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
@@ -35,22 +36,30 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [notice, setNotice] = useState('')
   const project = projects.find(item => item.id === projectId)
   const profile = profiles.find(item => item.id === project?.target_profile_id)
+  const projectRegion = project?.region
   const suggestedKeywords = useMemo(() => profile?.search_keywords ?? [], [profile])
+  const suggestedKeywordText = suggestedKeywords.join('\n')
 
   const reload = useCallback(async () => {
     if (!projectId) { setJobs([]); setCompanies([]); return }
-    const [nextJobs, nextCompanies] = await Promise.all([
+    const [nextJobs, nextCompanies, nextOperations] = await Promise.all([
       allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
+      api<OperationJob[]>(`/projects/${projectId}/operations`),
     ])
-    setJobs(nextJobs); setCompanies(nextCompanies)
+    setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations)
   }, [projectId])
 
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
   useEffect(() => {
-    if (project) setRegion(project.region)
-    if (suggestedKeywords.length) setKeywords(suggestedKeywords.join('\n'))
-  }, [projectId, project, suggestedKeywords])
+    if (!operations.some(job => ['queued', 'running'].includes(job.status))) return
+    const timer = window.setInterval(() => void reload().catch(e => setError(errorMessage(e))), 2000)
+    return () => window.clearInterval(timer)
+  }, [operations, reload])
+  useEffect(() => {
+    if (projectRegion) setRegion(projectRegion)
+    if (suggestedKeywordText) setKeywords(suggestedKeywordText)
+  }, [projectId, projectRegion, suggestedKeywordText])
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setNotice(''); setLoading(true)
@@ -81,8 +90,14 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   async function analyze(companyIds: string[] = []) {
     setAnalyzing(true); setError(''); setNotice('')
     try {
+      if (!companyIds.length) {
+        await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
+          operation_type: 'web_analysis', company_ids: [], force: false,
+        })
+        await reload(); setNotice('Web解析をバックグラウンド処理へ登録しました。'); return
+      }
       const results = await api<Company[]>(`/projects/${projectId}/web-analysis`, 'POST', {
-        company_ids: companyIds, limit: companyIds.length || 20, force: false,
+        company_ids: companyIds, limit: companyIds.length, force: false,
       })
       await reload()
       setNotice(results.length
@@ -95,8 +110,14 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   async function analyzeAi(companyIds: string[] = []) {
     setAiAnalyzing(true); setError(''); setNotice('')
     try {
+      if (!companyIds.length) {
+        await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
+          operation_type: 'ai_analysis', company_ids: [], force: false,
+        })
+        await reload(); setNotice('AI判定をバックグラウンド処理へ登録しました。'); return
+      }
       const results = await api<Company[]>(`/projects/${projectId}/ai-analysis`, 'POST', {
-        company_ids: companyIds, limit: companyIds.length || 20, force: false,
+        company_ids: companyIds, limit: companyIds.length, force: false,
       })
       await reload()
       setNotice(results.length
@@ -122,7 +143,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
           <option key={item.id} value={item.id}>{item.project_name}</option>)}</select></Field>
         <Field label="収集元"><select value={source} onChange={e => {
           const next = e.target.value as CollectionSource; setSource(next); setFile(null)
-          setKeywords(next === 'url' ? '' : suggestedKeywords.join('\n'))
+          setKeywords(next === 'url' ? '' : suggestedKeywordText)
         }}>{Object.entries(sourceNames).map(([value, label]) =>
           <option key={value} value={value}>{label}</option>)}</select></Field>
         {source === 'csv' ? <Field label="CSVファイル（UTF-8・最大5MB・1000行）">
@@ -184,6 +205,16 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             <div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
               <span>重複 {job.duplicate_count}</span><span>エラー {job.error_count}</span></div>
             {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
+          </article>)}
+      </div>
+      <div className="panel"><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
+        <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
+        {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
+          <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{job.status}</span></div>
+            <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}）</p>
+            {job.error_message && <p className="error mb-0">{job.error_message}</p>}
+            {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
+            {['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
           </article>)}
       </div>
     </section>

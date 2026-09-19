@@ -59,3 +59,11 @@ export interface Activity {
   activity_type: 'note' | 'call' | 'email' | 'form' | 'sns' | 'meeting' | 'status_change'
   note: string; created_at: string
 }
+export interface OperationJob {
+  id: string; project_id: string
+  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis'
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+  total_count: number; processed_count: number; success_count: number; failed_count: number
+  cancel_requested: boolean; error_message: string
+  created_at: string; started_at: string | null; finished_at: string | null
+}
