@@ -1,0 +1,129 @@
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { allPages, api, errorMessage, upload } from './api'
+import { Field } from './forms'
+import type { CollectionJob, CollectionSource, Company, Profile, Project } from './types'
+
+const sourceNames: Record<CollectionSource, string> = {
+  serper: 'Google検索（Serper）', google_places: 'Google Maps / Places',
+  url: 'URL直接入力', csv: 'CSVインポート',
+}
+const statusNames = { running: '実行中', completed: '完了', failed: '失敗' }
+
+export function CollectionPage({ projects, profiles, initialProjectId }: {
+  projects: Project[]; profiles: Profile[]; initialProjectId: string
+}) {
+  const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
+  const [source, setSource] = useState<CollectionSource>('serper')
+  const [keywords, setKeywords] = useState('')
+  const [region, setRegion] = useState('全国')
+  const [maxResults, setMaxResults] = useState(20)
+  const [file, setFile] = useState<File | null>(null)
+  const [jobs, setJobs] = useState<CollectionJob[]>([])
+  const [companies, setCompanies] = useState<Company[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
+  const project = projects.find(item => item.id === projectId)
+  const profile = profiles.find(item => item.id === project?.target_profile_id)
+  const suggestedKeywords = useMemo(() => profile?.search_keywords ?? [], [profile])
+
+  const reload = useCallback(async () => {
+    if (!projectId) { setJobs([]); setCompanies([]); return }
+    const [nextJobs, nextCompanies] = await Promise.all([
+      allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
+      allPages<Company>(`/projects/${projectId}/companies`),
+    ])
+    setJobs(nextJobs); setCompanies(nextCompanies)
+  }, [projectId])
+
+  useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
+  useEffect(() => {
+    if (project) setRegion(project.region)
+    if (suggestedKeywords.length) setKeywords(suggestedKeywords.join('\n'))
+  }, [projectId, project, suggestedKeywords])
+
+  async function submit(event: FormEvent) {
+    event.preventDefault(); setError(''); setNotice(''); setLoading(true)
+    try {
+      if (!projectId) throw new Error('プロジェクトを選択してください。')
+      let result: CollectionJob[]
+      if (source === 'csv') {
+        if (!file) { setError('CSVファイルを選択してください。'); return }
+        const form = new FormData(); form.append('file', file)
+        result = [await upload<CollectionJob>(`/projects/${projectId}/collection-jobs/csv`, form)]
+      } else if (source === 'url') {
+        const urls = keywords.split('\n').map(value => value.trim()).filter(Boolean)
+        result = [await api<CollectionJob>(`/projects/${projectId}/collection-jobs/urls`, 'POST', { urls })]
+      } else {
+        const values = keywords.split('\n').map(value => value.trim()).filter(Boolean)
+        result = await api<CollectionJob[]>(`/projects/${projectId}/collection-jobs/search`, 'POST', {
+          source, keywords: values, region, max_results: maxResults,
+        })
+      }
+      await reload()
+      setNotice(result.some(job => job.status === 'failed')
+        ? '収集処理を終了しました。失敗したジョブの内容を確認してください。'
+        : '収集処理が完了しました。結果を確認してください。')
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setLoading(false) }
+  }
+
+  if (projects.length === 0) return <section className="panel empty">
+    <h2>先にプロジェクトを作成してください</h2>
+    <p className="muted">企業は営業プロジェクトごとに収集・保存されます。</p>
+  </section>
+
+  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]">
+    <form className="panel form-panel max-w-none" onSubmit={submit}>
+      <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
+      {error && <p className="error" role="alert">{error}</p>}
+      {notice && <p className="notice" role="status">{notice}</p>}
+      <fieldset disabled={loading}>
+        <Field label="プロジェクト"><select required value={projectId}
+          onChange={e => setProjectId(e.target.value)}>{projects.map(item =>
+          <option key={item.id} value={item.id}>{item.project_name}</option>)}</select></Field>
+        <Field label="収集元"><select value={source} onChange={e => {
+          const next = e.target.value as CollectionSource; setSource(next); setFile(null)
+          setKeywords(next === 'url' ? '' : suggestedKeywords.join('\n'))
+        }}>{Object.entries(sourceNames).map(([value, label]) =>
+          <option key={value} value={value}>{label}</option>)}</select></Field>
+        {source === 'csv' ? <Field label="CSVファイル（UTF-8・最大5MB・1000行）">
+          <input type="file" accept=".csv,text/csv" required onChange={e => setFile(e.target.files?.[0] ?? null)} />
+        </Field> : <Field label={source === 'url' ? 'URL（1行に1件）' : '検索キーワード（1行に1件）'}>
+          <textarea required rows={8} value={keywords} onChange={e => setKeywords(e.target.value)}
+            placeholder={source === 'url' ? 'https://example.com' : '検索キーワード'} />
+        </Field>}
+        {(source === 'serper' || source === 'google_places') && <div className="grid gap-5 sm:grid-cols-2">
+          <Field label="地域"><input required maxLength={500} value={region} onChange={e => setRegion(e.target.value)} /></Field>
+          <Field label="キーワードごとの最大件数"><input type="number" min={1}
+            max={source === 'google_places' ? 60 : 100} value={maxResults}
+            onChange={e => setMaxResults(Number(e.target.value))} /></Field>
+        </div>}
+        {source === 'csv' && <p className="muted text-sm">必須列：company_name, website_url, phone, email, address</p>}
+        <div className="actions"><button type="submit">{loading ? '収集中…' : '収集を開始'}</button></div>
+      </fieldset>
+    </form>
+    <section className="space-y-6">
+      <div className="panel"><div className="flex items-center justify-between gap-4"><h2>保存済み企業</h2>
+        <span className="badge">{companies.length} 社</span></div>
+        <p className="muted mt-3 text-sm">企業の解析・評価・営業リスト表示は後続Phaseで追加します。</p>
+        {companies.slice(0, 5).map(company => <div key={company.id} className="job-row">
+          <div><strong>{company.company_name}</strong><p className="muted text-sm">{company.domain || company.address || 'URL未登録'}</p></div>
+          <span className="badge">{sourceNames[company.source]}</span>
+        </div>)}
+      </div>
+      <div className="panel"><div className="flex items-center justify-between gap-4"><h2>最近の収集ジョブ</h2>
+        <button type="button" className="secondary" disabled={loading} onClick={() => void reload()}>更新</button></div>
+        {jobs.length === 0 ? <p className="muted mt-4">収集履歴はまだありません。</p> : jobs.slice(0, 10).map(job =>
+          <article className="job-row block" key={job.id}>
+            <div className="flex justify-between gap-3"><strong>{sourceNames[job.source]}</strong>
+              <span className="badge">{statusNames[job.status]}</span></div>
+            {(job.keyword || job.region) && <p className="muted my-2 text-sm">{[job.keyword, job.region].filter(Boolean).join(' / ')}</p>}
+            <div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
+              <span>重複 {job.duplicate_count}</span><span>エラー {job.error_count}</span></div>
+            {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
+          </article>)}
+      </div>
+    </section>
+  </div>
+}

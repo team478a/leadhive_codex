@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { allPages, api, ApiError, errorMessage } from './api'
 import { Field, ProfileForm, ProjectForm } from './forms'
+import { CollectionPage } from './CollectionPage'
 import type { Profile, Project, User } from './types'
 
 function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: string }) {
@@ -40,7 +41,8 @@ type Editor = { type: 'project'; value?: Project } | { type: 'profile'; value?: 
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'projects' | 'profiles'>('projects')
+  const [tab, setTab] = useState<'projects' | 'collection' | 'profiles'>('projects')
+  const [collectionProjectId, setCollectionProjectId] = useState('')
   const [projects, setProjects] = useState<Project[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [editor, setEditor] = useState<Editor>(null)
@@ -77,6 +79,9 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         <button className={tab === 'profiles' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('profiles'); setEditor(null); setNotice('')
         }}>◎ ターゲットプロファイル</button>
+        <button className={tab === 'collection' ? 'nav-item selected' : 'nav-item'} onClick={() => {
+          setTab('collection'); setEditor(null); setNotice('')
+        }}>⌕ 企業収集</button>
       </nav>
       <div className="sidebar-footer"><p className="break-all">{user.email}</p>
         <button className="nav-item" disabled={busy} onClick={() => void action(async () => {
@@ -84,9 +89,9 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         })}>ログアウト</button></div>
     </aside>
     <main className="workspace"><header><p className="eyebrow">YOUR WORKSPACE</p>
-      <div className="page-heading"><div><h1>{tab === 'projects' ? 'プロジェクト' : 'ターゲットプロファイル'}</h1>
-        <p className="muted">{tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
-        {!editor && <button disabled={!loaded || loading || busy} onClick={() => {
+      <div className="page-heading"><div><h1>{tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : 'ターゲットプロファイル'}</h1>
+        <p className="muted">{tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
+        {!editor && tab !== 'collection' && <button disabled={!loaded || loading || busy} onClick={() => {
           setEditor({ type: tab === 'projects' ? 'project' : 'profile' }); setNotice('')
         }}>＋ {tab === 'projects' ? 'プロジェクトを作成' : 'プロファイルを作成'}</button>}
       </div></header>
@@ -106,14 +111,17 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
               <p className="muted mt-3">{profiles.find(p => p.id === project.target_profile_id)?.profile_name ?? 'プロファイル'}</p>
               <p className="my-5 whitespace-pre-wrap">{project.sales_objective}</p>
               <div className="card-footer"><span className="muted">地域：{project.region}</span>
-                <div className="flex gap-2"><button className="secondary" disabled={busy} onClick={() => setEditor({ type: 'project', value: project })}>編集</button>
+                <div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => {
+                  setCollectionProjectId(project.id); setTab('collection'); setNotice('')
+                }}>企業収集</button><button className="secondary" disabled={busy} onClick={() => setEditor({ type: 'project', value: project })}>編集</button>
                   <button className="danger" disabled={busy} onClick={() => {
                     if (window.confirm(`「${project.project_name}」を削除しますか？`)) void action(async () => {
                       await api(`/projects/${project.id}`, 'DELETE'); await reload(); setNotice('削除しました。')
                     })
                   }}>削除</button></div></div>
             </article>)}</div>}
-        </> : loaded && <>
+        </> : loaded && tab === 'collection' ? <CollectionPage projects={projects} profiles={profiles}
+          initialProjectId={collectionProjectId} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>
           <p className="muted mb-5">標準プロファイルは複製して編集できます。案件専用の条件も、複製して設定してください。</p>
           {profiles.length === 0 && <p className="panel empty">プロファイルがありません。新規作成してください。</p>}
