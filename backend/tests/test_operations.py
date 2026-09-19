@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from app import worker
 from app.models import Company, OperationJob
+from app.services.collection import Candidate, ExternalServiceError
 
 
 def make_project(auth):
@@ -60,6 +61,38 @@ def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch)
     assert job["processed_count"] == 1 and job["success_count"] == 1
     assert job["attempt_count"] == 1
     assert auth.post(f"/api/operations/{job['id']}/acknowledge").status_code == 409
+
+
+def test_search_collection_worker_records_partial_failure(auth, db, monkeypatch):
+    project = make_project(auth)
+    created = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json={
+            "operation_type": "collect_search",
+            "source": "serper",
+            "keywords": ["成功", "失敗"],
+            "region": "大阪",
+            "max_results": 10,
+        },
+    )
+    assert created.status_code == 202
+
+    def search(keyword, _region, _max_results):
+        if keyword == "失敗":
+            raise ExternalServiceError("検索サービスに接続できません。")
+        return [Candidate("検索成功企業", "https://async-search.example")]
+
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    monkeypatch.setattr(worker, "search_serper", search)
+    assert worker.run_once()
+
+    job = auth.get(f"/api/projects/{project['id']}/operations").json()[0]
+    assert job["status"] == "failed"
+    assert job["total_count"] == 2 and job["processed_count"] == 2
+    assert job["success_count"] == 1 and job["failed_count"] == 1
+    assert len(auth.get(f"/api/projects/{project['id']}/collection-jobs").json()) == 2
+    assert len(auth.get(f"/api/projects/{project['id']}/companies").json()) == 1
+    assert auth.get("/api/dashboard").json()["unread_operation_failures"] == 1
 
 
 def test_stale_job_recovery_and_attempt_limit(auth, db, monkeypatch):
