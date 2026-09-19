@@ -6,8 +6,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy import String, asc, cast, desc, func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import String, asc, cast, desc, func, or_, select, update
+from sqlalchemy.orm import Session, aliased
 
 from app.analysis_routes import owned_company, owned_project
 from app.database import get_db
@@ -17,17 +17,148 @@ from app.schemas import (
     ActivityOut,
     CompanyBulkSalesInput,
     CompanyEditInput,
+    CompanyMergeInput,
     CompanyOut,
     CompanyPageOut,
     CompanySalesInput,
     DashboardOut,
     DataQualityOut,
     DataQualityReanalyzeInput,
+    DuplicateCandidateOut,
     OperationJobOut,
 )
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
+
+
+def duplicate_reasons(first: Company, second: Company) -> list[str]:
+    reasons = []
+    if first.email and first.email.lower() == second.email.lower():
+        reasons.append("email")
+    if first.phone and first.phone == second.phone:
+        reasons.append("phone")
+    if (
+        first.address
+        and first.company_name.lower() == second.company_name.lower()
+        and first.address.lower() == second.address.lower()
+    ):
+        reasons.append("name_address")
+    return reasons
+
+
+@router.get(
+    "/projects/{project_id}/duplicate-candidates", response_model=list[DuplicateCandidateOut]
+)
+def duplicate_candidates(
+    project_id: UUID,
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    left = aliased(Company)
+    right = aliased(Company)
+    email_match = (left.email != "") & (func.lower(left.email) == func.lower(right.email))
+    phone_match = (left.phone != "") & (left.phone == right.phone)
+    name_address_match = (
+        (left.address != "")
+        & (func.lower(left.company_name) == func.lower(right.company_name))
+        & (func.lower(left.address) == func.lower(right.address))
+    )
+    rows = db.execute(
+        select(left, right)
+        .where(
+            left.project_id == project_id,
+            right.project_id == project_id,
+            left.id < right.id,
+            or_(email_match, phone_match, name_address_match),
+        )
+        .order_by(left.created_at, right.created_at)
+        .limit(limit)
+    ).all()
+    result = []
+    for first, second in rows:
+        result.append(
+            DuplicateCandidateOut(
+                left=first, right=second, reasons=duplicate_reasons(first, second)
+            )
+        )
+    return result
+
+
+@router.post("/projects/{project_id}/companies/merge", response_model=CompanyOut)
+def merge_companies(
+    project_id: UUID,
+    body: CompanyMergeInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    if body.target_id == body.source_id:
+        raise HTTPException(422, "異なる企業を指定してください。")
+    companies = db.scalars(
+        select(Company).where(
+            Company.project_id == project_id,
+            Company.id.in_((body.target_id, body.source_id)),
+        )
+    ).all()
+    if len(companies) != 2:
+        raise HTTPException(404, "統合対象の企業が見つかりません。")
+    by_id = {item.id: item for item in companies}
+    target, source = by_id[body.target_id], by_id[body.source_id]
+    if not duplicate_reasons(target, source):
+        raise HTTPException(409, "一致する重複根拠がないため統合できません。")
+    fill_fields = (
+        "address",
+        "phone",
+        "email",
+        "prefecture",
+        "city",
+        "contact_url",
+        "instagram_url",
+        "x_url",
+        "tiktok_url",
+        "facebook_url",
+        "youtube_url",
+        "line_url",
+        "business_summary",
+        "website_text",
+        "business_type",
+        "ai_summary",
+        "ai_reason",
+        "ai_recommended_approach",
+    )
+    for field in fill_fields:
+        if not getattr(target, field) and getattr(source, field):
+            setattr(target, field, getattr(source, field))
+    if source.notes and source.notes not in target.notes:
+        target.notes = "\n\n".join(value for value in (target.notes, source.notes) if value)
+    if target.next_followup_at is None:
+        target.next_followup_at = source.next_followup_at
+    website_url, domain = source.website_url, source.domain
+    db.execute(
+        update(Activity).where(Activity.company_id == source.id).values(company_id=target.id)
+    )
+    db.execute(
+        update(Company)
+        .where(Company.duplicate_of_id == source.id)
+        .values(duplicate_of_id=target.id)
+    )
+    db.delete(source)
+    db.flush()
+    if target.website_url is None and website_url:
+        target.website_url, target.domain = website_url, domain
+    db.add(
+        Activity(
+            company_id=target.id,
+            activity_type="note",
+            note=f"重複企業「{source.company_name}」を統合しました。",
+        )
+    )
+    db.commit()
+    db.refresh(target)
+    return target
 
 
 def stale_condition(cutoff: datetime):

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, CollectionSource, Company, CompanyPage, DataQuality, OperationJob, Project, SalesStatus } from './types'
+import type { Activity, CollectionSource, Company, CompanyPage, DataQuality, DuplicateCandidate, OperationJob, Project, SalesStatus } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -30,6 +30,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [companies, setCompanies] = useState<Company[]>([])
   const [total, setTotal] = useState(0)
   const [quality, setQuality] = useState<DataQuality | null>(null)
+  const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([])
   const [staleDays, setStaleDays] = useState(90)
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
@@ -47,11 +48,13 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const query = useMemo(() => queryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
     if (!projectId) { setCompanies([]); return }
-    const [result, nextQuality] = await Promise.all([
+    const [result, nextQuality, nextDuplicates] = await Promise.all([
       api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
+      api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
     ])
-    setCompanies(result.items); setTotal(result.total); setQuality(nextQuality); setChecked([])
+    setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
+    setDuplicates(nextDuplicates); setChecked([])
   }, [projectId, query, staleDays])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
   async function open(company: Company) {
@@ -111,6 +114,16 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       setNotice(`${job.total_count || quality?.reanalyzable || 0}社を再解析ジョブへ登録しました。`)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function mergeCompanies(target: Company, source: Company) {
+    if (!window.confirm(`「${source.company_name}」を「${target.company_name}」へ統合しますか？`)) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/projects/${projectId}/companies/merge`, 'POST', {
+        target_id: target.id, source_id: source.id,
+      })
+      setSelected(null); await reload(); setNotice('重複企業を統合しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   if (projects.length === 0) return <section className="panel empty"><h2>先にプロジェクトを作成してください</h2></section>
   return <>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
@@ -134,6 +147,10 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
         ['連絡先なし', quality.missing_contact], ['解析失敗', quality.failed_analysis],
         [`${quality.stale_days}日超過`, quality.stale_analysis], ['再解析対象', quality.reanalyzable],
       ].map(([label, value]) => <div className="metric" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div></section>}
+    <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>重複候補</h2><p className="muted mt-2 text-sm">メール・電話・会社名と住所の一致を確認して統合します。</p></div><span className="badge">{duplicates.length} 組</span></div>
+      {duplicates.length === 0 ? <p className="muted mt-4">重複候補はありません。</p> : duplicates.map(item => <article className="job-row block" key={`${item.left.id}-${item.right.id}`}><p className="muted text-sm">一致：{item.reasons.map(reason => reason === 'email' ? 'メール' : reason === 'phone' ? '電話' : '会社名＋住所').join(' / ')}</p>
+        <div className="grid gap-3 mt-3 sm:grid-cols-2"><div><strong>{item.left.company_name}</strong><p className="muted text-sm">{item.left.email || item.left.phone || item.left.address}</p><button disabled={busy} className="secondary mt-2" onClick={() => void mergeCompanies(item.left, item.right)}>こちらへ統合</button></div>
+          <div><strong>{item.right.company_name}</strong><p className="muted text-sm">{item.right.email || item.right.phone || item.right.address}</p><button disabled={busy} className="secondary mt-2" onClick={() => void mergeCompanies(item.right, item.left)}>こちらへ統合</button></div></div></article>)}</section>
     <div className="section-heading mt-7"><h2>企業一覧</h2><span className="badge">全 {total} 社</span></div>
     <div className="mb-3 flex flex-wrap items-center gap-2"><span className="muted text-sm">{checked.length}社を選択</span><select className="max-w-48" defaultValue="" onChange={e => { if (e.target.value) void bulkStatus(e.target.value as SalesStatus); e.target.value = '' }}><option value="">営業状況を一括変更</option>{Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></div>
     <section className="company-table-wrap"><table className="company-table"><thead><tr><th><input aria-label="このページをすべて選択" type="checkbox" checked={companies.length > 0 && checked.length === companies.length} onChange={e => setChecked(e.target.checked ? companies.map(c => c.id) : [])} /></th><th>ランク</th><th>企業</th><th>地域</th><th>連絡先</th><th>営業状況</th><th></th></tr></thead><tbody>

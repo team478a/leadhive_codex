@@ -234,6 +234,17 @@ class DataQualityReanalyzeInput(Input):
     stale_days: int = Field(default=90, ge=1, le=3650)
 
 
+class DuplicateCandidateOut(BaseModel):
+    left: CompanyOut
+    right: CompanyOut
+    reasons: list[Literal["email", "phone", "name_address"]]
+
+
+class CompanyMergeInput(Input):
+    target_id: UUID
+    source_id: UUID
+
+
 class ActivityInput(Input):
     activity_type: Literal["note", "call", "email", "form", "sns", "meeting"]
     note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]

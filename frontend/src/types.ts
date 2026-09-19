@@ -62,6 +62,9 @@ export interface DataQuality {
   missing_phone: number; missing_email: number; missing_contact: number
   failed_analysis: number; stale_analysis: number; reanalyzable: number; stale_days: number
 }
+export interface DuplicateCandidate {
+  left: Company; right: Company; reasons: Array<'email' | 'phone' | 'name_address'>
+}
 export interface Activity {
   id: string; company_id: string
   activity_type: 'note' | 'call' | 'email' | 'form' | 'sns' | 'meeting' | 'status_change'
