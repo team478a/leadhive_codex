@@ -38,5 +38,10 @@ export interface Company {
   analysis_status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'duplicate' | 'excluded'
   analysis_error: string; is_aggregator: boolean; duplicate_of_id: string | null
   scraped_at: string | null
+  score: number | null; rank: 'A' | 'B' | 'C' | '対象外' | null; is_target: boolean | null
+  business_type: string; ai_summary: string; ai_reason: string
+  ai_strengths: string[]; ai_concerns: string[]; ai_recommended_approach: string
+  ai_status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+  ai_error: string; ai_provider: string; ai_model: string; ai_analyzed_at: string | null
   created_at: string; updated_at: string
 }
