@@ -230,13 +230,6 @@ class ActivityOut(BaseModel):
     created_at: datetime
 
 
-class DashboardOut(BaseModel):
-    total_companies: int
-    ranks: dict[str, int]
-    statuses: dict[str, int]
-    recent_jobs: list[CollectionJobOut]
-
-
 class OperationJobInput(Input):
     operation_type: Literal["collect_search", "web_analysis", "ai_analysis"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
@@ -270,7 +263,18 @@ class OperationJobOut(BaseModel):
     failed_count: int
     cancel_requested: bool
     attempt_count: int
+    acknowledged_at: datetime | None
     error_message: str
     created_at: datetime
     started_at: datetime | None
     finished_at: datetime | None
+
+
+class DashboardOut(BaseModel):
+    total_companies: int
+    ranks: dict[str, int]
+    statuses: dict[str, int]
+    recent_jobs: list[CollectionJobOut]
+    operation_statuses: dict[str, int]
+    unread_operation_failures: int
+    recent_operations: list[OperationJobOut]

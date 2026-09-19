@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.analysis_routes import owned_company, owned_project
 from app.database import get_db
-from app.models import Activity, CollectionJob, Company, Project, User
+from app.models import Activity, CollectionJob, Company, OperationJob, Project, User
 from app.schemas import (
     ActivityInput,
     ActivityOut,
@@ -283,9 +283,35 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         .order_by(CollectionJob.created_at.desc(), CollectionJob.id)
         .limit(5)
     ).all()
+    operation_rows = db.execute(
+        select(OperationJob.status, func.count())
+        .join(Project, Project.id == OperationJob.project_id)
+        .where(Project.user_id == user.id)
+        .group_by(OperationJob.status)
+    ).all()
+    unread_failures = db.scalar(
+        select(func.count())
+        .select_from(OperationJob)
+        .join(Project, Project.id == OperationJob.project_id)
+        .where(
+            Project.user_id == user.id,
+            OperationJob.status == "failed",
+            OperationJob.acknowledged_at.is_(None),
+        )
+    )
+    operations = db.scalars(
+        select(OperationJob)
+        .join(Project, Project.id == OperationJob.project_id)
+        .where(Project.user_id == user.id)
+        .order_by(OperationJob.created_at.desc(), OperationJob.id)
+        .limit(10)
+    ).all()
     return DashboardOut(
         total_companies=total or 0,
         ranks={key: count for key, count in rank_rows},
         statuses={key: count for key, count in status_rows},
         recent_jobs=jobs,
+        operation_statuses={key: count for key, count in operation_rows},
+        unread_operation_failures=unread_failures or 0,
+        recent_operations=operations,
     )

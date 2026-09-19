@@ -102,7 +102,22 @@ def retry_operation(
         operation_type=source.operation_type,
         payload=source.payload,
     )
+    source.acknowledged_at = datetime.now(timezone.utc)
     db.add(job)
     db.commit()
     db.refresh(job)
+    return job
+
+
+@router.post("/operations/{job_id}/acknowledge", response_model=OperationJobOut)
+def acknowledge_operation(
+    job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    job = owned_operation(job_id, db, user)
+    if job.status != "failed":
+        raise HTTPException(409, "失敗したジョブだけ確認済みにできます。")
+    if job.acknowledged_at is None:
+        job.acknowledged_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(job)
     return job
