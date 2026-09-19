@@ -172,6 +172,9 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | PATCH | `/api/companies/{id}/sales` | 営業状況・メモ更新 |
 | GET | `/api/projects/{id}/companies.csv` | 現在の条件でCSV出力 |
 | GET | `/api/dashboard` | ランク・営業状況・直近収集の集計 |
+| PUT | `/api/companies/{id}` | 企業基本情報・連絡先の手動修正 |
+| PATCH | `/api/projects/{id}/companies/bulk-sales` | 最大100社の営業状況一括更新 |
+| GET / POST | `/api/companies/{id}/activities` | 営業活動履歴の一覧 / 追加 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
@@ -198,6 +201,10 @@ AI判定をスキップします。
 企業一覧はrank、最低score、地域、営業状況、収集元、キーワードで絞り込み、score順・新着順・
 会社名順で並べ替えられます。CSVは同じ条件を反映し、UTF-8 BOMと数式インジェクション対策を
 適用します。営業状況は未確認、営業対象、アプローチ済、返信あり、商談、成約、失注、対象外です。
+
+企業一覧は25社単位でページ移動でき、総件数を表示します。表示中企業の複数選択と営業状況の
+一括更新、基本情報・連絡先の手動修正、次回対応日時、電話・メール・フォーム・SNS・商談などの
+活動履歴を管理できます。営業状況の変更は活動履歴へ自動記録します。
 
 ## 検証
 
