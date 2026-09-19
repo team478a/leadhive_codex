@@ -53,14 +53,60 @@ def test_company_list_filters_sorts_and_detail(auth, db):
         params={"rank": "A", "region": "大阪", "keyword": "採用", "sort": "score_desc"},
     )
     assert response.status_code == 200
-    assert [item["id"] for item in response.json()] == [str(alpha.id)]
+    assert response.json()["total"] == 1
+    assert [item["id"] for item in response.json()["items"]] == [str(alpha.id)]
 
     by_name = auth.get(
         f"/api/projects/{project['id']}/company-list", params={"sort": "company_name"}
-    ).json()
+    ).json()["items"]
     assert len(by_name) == 2
     detail = auth.get(f"/api/companies/{beta.id}")
     assert detail.status_code == 200 and detail.json()["business_type"] == "物流会社"
+
+
+def test_pagination_edit_bulk_update_and_activity_history(auth, db):
+    project = make_project(auth)
+    alpha, beta = add_companies(auth, db, project["id"])
+    page = auth.get(
+        f"/api/projects/{project['id']}/company-list", params={"limit": 1, "offset": 1}
+    ).json()
+    assert page["total"] == 2 and len(page["items"]) == 1
+
+    original = auth.get(f"/api/companies/{alpha.id}").json()
+    editable = {
+        key: original[key]
+        for key in (
+            "company_name",
+            "address",
+            "prefecture",
+            "city",
+            "phone",
+            "email",
+            "contact_url",
+            "instagram_url",
+            "x_url",
+            "tiktok_url",
+            "facebook_url",
+            "youtube_url",
+            "line_url",
+        )
+    }
+    editable["phone"] = "06-9999-9999"
+    assert auth.put(f"/api/companies/{alpha.id}", json=editable).json()["phone"] == "06-9999-9999"
+
+    bulk = auth.patch(
+        f"/api/projects/{project['id']}/companies/bulk-sales",
+        json={"company_ids": [str(alpha.id), str(beta.id)], "status": "target"},
+    )
+    assert bulk.status_code == 200
+    assert {item["status"] for item in bulk.json()} == {"target"}
+    activity = auth.post(
+        f"/api/companies/{alpha.id}/activities",
+        json={"activity_type": "call", "note": "担当者へ電話、来週再連絡"},
+    )
+    assert activity.status_code == 201
+    history = auth.get(f"/api/companies/{alpha.id}/activities").json()
+    assert {item["activity_type"] for item in history} == {"status_change", "call"}
 
 
 def test_sales_status_update_and_access_isolation(auth, users, db):
