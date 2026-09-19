@@ -17,7 +17,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 最初の実装指示は `docs/09_CODEX_INITIAL_INSTRUCTION.md` です。
 
-## Phase 1〜5 実装
+## Phase 1〜6・運用改善 実装
 
 React / TypeScript / Vite / Tailwind CSS、FastAPI / SQLAlchemy / PostgreSQLを使用。
 ログイン、Project CRUD、TargetProfile CRUD・複製、標準プロファイル2件、
@@ -31,6 +31,9 @@ Phase 2の詳細は[Phase 2実装記録](docs/12_PHASE2_IMPLEMENTATION.md)を参
 Phase 3の詳細は[Phase 3実装記録](docs/13_PHASE3_IMPLEMENTATION.md)を参照してください。
 Phase 4の詳細は[Phase 4実装記録](docs/14_PHASE4_IMPLEMENTATION.md)を参照してください。
 Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参照してください。
+実データ検証手順は[Phase 6検証手順](docs/16_PHASE6_VALIDATION_RUNBOOK.md)、営業運用改善は
+[Operations 1実装記録](docs/17_OPERATIONS_1_IMPLEMENTATION.md)、バックグラウンド処理は
+[実装記録](docs/18_BACKGROUND_JOBS_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -76,6 +79,14 @@ CLIはパスワードを非表示で2回入力します（12文字以上）。�
 ```powershell
 backend/.venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
+
+検索収集・一括Web解析・一括AI判定を処理するワーカーも別ターミナルで起動します。
+
+```powershell
+backend/.venv/Scripts/python -m app.worker
+```
+
+ワーカーを起動していない間も登録済みジョブはDBに保持され、次回起動時に古いものから処理されます。
 
 別のターミナルでフロントエンド:
 
@@ -125,7 +136,7 @@ SQLはSQLAlchemyのパラメータ化クエリを使用。入力値・パスワ�
 ## DBとMigration
 
 テーブルは`users`、`projects`、`target_profiles`、`auth_sessions`、`companies`、
-`collection_jobs`。
+`collection_jobs`、`operation_jobs`、`activities`。
 Alembic管理用の`alembic_version`も作成されます。
 `activities`は利用する後続Phaseで追加します。
 起動時のDDL実行や`create_all()`は行いません。
@@ -175,6 +186,9 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | PUT | `/api/companies/{id}` | 企業基本情報・連絡先の手動修正 |
 | PATCH | `/api/projects/{id}/companies/bulk-sales` | 最大100社の営業状況一括更新 |
 | GET / POST | `/api/companies/{id}/activities` | 営業活動履歴の一覧 / 追加 |
+| GET / POST | `/api/projects/{id}/operations` | バックグラウンド処理の一覧 / 登録 |
+| POST | `/api/operations/{id}/cancel` | 待機中・実行中処理のキャンセル |
+| POST | `/api/operations/{id}/retry` | 失敗・キャンセル済み処理の再登録 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
@@ -205,6 +219,10 @@ AI判定をスキップします。
 企業一覧は25社単位でページ移動でき、総件数を表示します。表示中企業の複数選択と営業状況の
 一括更新、基本情報・連絡先の手動修正、次回対応日時、電話・メール・フォーム・SNS・商談などの
 活動履歴を管理できます。営業状況の変更は活動履歴へ自動記録します。
+
+一括Web解析と一括AI判定はバックグラウンド処理として登録され、画面から進捗確認、キャンセル、
+失敗時の再実行ができます。検索収集も同じジョブAPIに対応しています。URL・CSV取込は入力検証と
+重複判定だけで完了するため同期処理のままです。同じプロジェクト・同じ処理種別の同時登録は拒否します。
 
 ## 検証
 
