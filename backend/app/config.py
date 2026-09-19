@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     serper_api_key: str = ""
     google_places_api_key: str = ""
     external_api_timeout_seconds: float = 20.0
+    scraper_timeout_seconds: float = 15.0
+    scraper_max_bytes: int = 2_000_000
+    scraper_user_agent: str = "LeadHiveBot/2.0 (+https://leadhive.work/bot)"
 
     @field_validator("database_url")
     @classmethod
@@ -37,6 +40,20 @@ class Settings(BaseSettings):
     def valid_timeout(cls, value: float) -> float:
         if not 1 <= value <= 60:
             raise ValueError("external_api_timeout_seconds must be between 1 and 60")
+        return value
+
+    @field_validator("scraper_timeout_seconds")
+    @classmethod
+    def valid_scraper_timeout(cls, value: float) -> float:
+        if not 1 <= value <= 60:
+            raise ValueError("scraper_timeout_seconds must be between 1 and 60")
+        return value
+
+    @field_validator("scraper_max_bytes")
+    @classmethod
+    def valid_scraper_size(cls, value: int) -> int:
+        if not 100_000 <= value <= 10_000_000:
+            raise ValueError("scraper_max_bytes must be between 100000 and 10000000")
         return value
 
     @property

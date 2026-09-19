@@ -98,6 +98,11 @@ class Company(Timestamps, Base):
         CheckConstraint(
             "source IN ('serper', 'google_places', 'url', 'csv')", name="ck_company_source"
         ),
+        CheckConstraint(
+            "analysis_status IN ('pending', 'running', 'completed', 'failed', 'skipped', "
+            "'duplicate', 'excluded')",
+            name="ck_company_analysis_status",
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -112,6 +117,25 @@ class Company(Timestamps, Base):
     source: Mapped[str] = mapped_column(String(30))
     source_keyword: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(30), default="unreviewed")
+    prefecture: Mapped[str] = mapped_column(String(20), default="")
+    city: Mapped[str] = mapped_column(String(200), default="")
+    contact_url: Mapped[str] = mapped_column(Text, default="")
+    instagram_url: Mapped[str] = mapped_column(Text, default="")
+    x_url: Mapped[str] = mapped_column(Text, default="")
+    tiktok_url: Mapped[str] = mapped_column(Text, default="")
+    facebook_url: Mapped[str] = mapped_column(Text, default="")
+    youtube_url: Mapped[str] = mapped_column(Text, default="")
+    line_url: Mapped[str] = mapped_column(Text, default="")
+    business_summary: Mapped[str] = mapped_column(Text, default="")
+    website_text: Mapped[str] = mapped_column(Text, default="")
+    analysis_status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
+    analysis_error: Mapped[str] = mapped_column(String(500), default="")
+    is_aggregator: Mapped[bool] = mapped_column(Boolean, default=False)
+    duplicate_of_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("companies.id", name="fk_companies_duplicate_of_id", ondelete="SET NULL"),
+        index=True,
+    )
+    scraped_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class CollectionJob(Base):

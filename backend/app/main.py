@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
+from app.analysis_routes import router as analysis_router
 from app.collection_routes import router as collection_router
 from app.config import settings
 from app.routes import router
@@ -61,3 +62,4 @@ async def internal_error(request: Request, exc: Exception):
 
 app.include_router(router)
 app.include_router(collection_router)
+app.include_router(analysis_router)

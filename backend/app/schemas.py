@@ -86,6 +86,22 @@ class CompanyOut(BaseModel):
     source: Literal["serper", "google_places", "url", "csv"]
     source_keyword: str
     status: str
+    prefecture: str
+    city: str
+    contact_url: str
+    instagram_url: str
+    x_url: str
+    tiktok_url: str
+    facebook_url: str
+    youtube_url: str
+    line_url: str
+    business_summary: str
+    website_text: str
+    analysis_status: str
+    analysis_error: str
+    is_aggregator: bool
+    duplicate_of_id: UUID | None
+    scraped_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -122,3 +138,13 @@ class SearchCollectionInput(Input):
 
 class UrlCollectionInput(Input):
     urls: Annotated[list[str], Field(min_length=1, max_length=100)]
+
+
+class WebAnalysisInput(Input):
+    company_ids: list[UUID] = Field(default_factory=list, max_length=20)
+    limit: int = Field(default=20, ge=1, le=20)
+    force: bool = False
+
+
+class CompanyAnalysisInput(Input):
+    force: bool = False
