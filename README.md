@@ -17,20 +17,23 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 最初の実装指示は `docs/09_CODEX_INITIAL_INSTRUCTION.md` です。
 
-## Phase 1・2 実装
+## Phase 1〜3 実装
 
 React / TypeScript / Vite / Tailwind CSS、FastAPI / SQLAlchemy / PostgreSQLを使用。
 ログイン、Project CRUD、TargetProfile CRUD・複製、標準プロファイル2件、
 Serper / Google Places / URL / CSVからの企業収集とCollection Job管理まで実装しています。
-Web解析・AI判定・営業リストは後続Phaseです。
+Webサイト解析、企業情報・SNS・問い合わせ先抽出まで実装しています。
+AI判定・営業リストは後続Phaseです。
 
 実装範囲・判断・検証結果は[Phase 1実装記録](docs/11_PHASE1_IMPLEMENTATION.md)を参照してください。
 Phase 2の詳細は[Phase 2実装記録](docs/12_PHASE2_IMPLEMENTATION.md)を参照してください。
+Phase 3の詳細は[Phase 3実装記録](docs/13_PHASE3_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
 - `backend/app`: 設定、DBモデル、認証、REST API、ユーザー作成CLI
 - `backend/app/services/collection.py`: 外部検索Provider、URL正規化、CSV解析
+- `backend/app/services/scraper.py`: 安全なHTML取得、企業情報・SNS・問い合わせ先抽出
 - `backend/migrations`: Alembicスキーマと初期データMigration
 - `backend/tests`: 実PostgreSQLに対するAPI・権限テスト
 - `frontend/src`: ログイン、プロジェクト管理、プロファイル管理、共通APIクライアント
@@ -95,6 +98,9 @@ macOS / LinuxではPython実行パスを`backend/.venv/bin/python`に読み替�
 | `SERPER_API_KEY` | Google検索に使用するSerper APIキー |
 | `GOOGLE_PLACES_API_KEY` | Places API (New)のAPIキー |
 | `EXTERNAL_API_TIMEOUT_SECONDS` | 外部APIのタイムアウト（1〜60秒、既定20秒） |
+| `SCRAPER_TIMEOUT_SECONDS` | Webサイト取得タイムアウト（1〜60秒、既定15秒） |
+| `SCRAPER_MAX_BYTES` | 1ページの取得上限（既定2MB） |
+| `SCRAPER_USER_AGENT` | robots.txt判定とHTTP取得に使うUser-Agent |
 
 パスワードはArgon2idでハッシュ化。認証はランダムな不透明トークンをHttpOnly / SameSite=Lax
 Cookieで保持し、DBにはそのSHA-256のみ保存します。JWTは使用しないため`JWT_SECRET`は不要です。
@@ -148,6 +154,8 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | POST | `/api/projects/{id}/collection-jobs/search` | Serper / Places検索 |
 | POST | `/api/projects/{id}/collection-jobs/urls` | URLを最大100件登録 |
 | POST | `/api/projects/{id}/collection-jobs/csv` | UTF-8 CSVを取込 |
+| POST | `/api/companies/{id}/analyze` | 企業1社のWebサイト解析 |
+| POST | `/api/projects/{id}/web-analysis` | 未解析企業を最大20社解析 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
@@ -160,6 +168,11 @@ Projectのstatusは`draft` / `active` / `archived`。
 `duplicate_count`、`error_count`を記録します。外部API失敗もジョブを`failed`として保存します。
 CSVは5MB・1000行までで、`company_name, website_url, phone, email, address`列が必要です。
 同一プロジェクトではドメイン、URL、会社名＋住所で重複登録を防ぎます。
+
+Web解析は会社名、住所、都道府県、市区町村、電話、メール、問い合わせURL、
+Instagram、X、TikTok、Facebook、YouTube、LINE、事業概要、サイト本文を保存します。
+robots.txtを確認し、HTML以外・容量超過・標準外ポート・プライベートIPへの取得を拒否します。
+解析後のドメインや会社名＋住所が重複した場合は`duplicate`として既存企業へ関連付けます。
 
 ## 検証
 
