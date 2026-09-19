@@ -40,6 +40,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 検索テンプレートと定期実行は[実装記録](docs/22_SEARCH_SCHEDULES_IMPLEMENTATION.md)を参照してください。
 テンプレート別成果分析は[実装記録](docs/23_SEARCH_ANALYTICS_IMPLEMENTATION.md)を参照してください。
 企業データ品質管理は[実装記録](docs/24_DATA_QUALITY_IMPLEMENTATION.md)を参照してください。
+重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -204,6 +205,8 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | GET | `/api/projects/{id}/search-analytics` | テンプレート別の収集成果 |
 | GET | `/api/projects/{id}/data-quality` | 欠損情報・解析更新状況の集計 |
 | POST | `/api/projects/{id}/data-quality/reanalyze` | 失敗・期限切れ企業を再解析 |
+| GET | `/api/projects/{id}/duplicate-candidates` | 重複企業候補と一致理由 |
+| POST | `/api/projects/{id}/companies/merge` | 指定した企業へ重複企業を統合 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
