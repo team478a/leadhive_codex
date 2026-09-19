@@ -32,6 +32,7 @@ export interface Company {
   id: string; project_id: string; company_name: string; website_url: string | null
   domain: string | null; address: string; phone: string; email: string
   source: CollectionSource; source_keyword: string; status: SalesStatus; notes: string
+  next_followup_at: string | null
   prefecture: string; city: string; contact_url: string
   instagram_url: string; x_url: string; tiktok_url: string; facebook_url: string
   youtube_url: string; line_url: string; business_summary: string; website_text: string
@@ -51,4 +52,10 @@ export interface Dashboard {
   ranks: Record<string, number>
   statuses: Record<string, number>
   recent_jobs: CollectionJob[]
+}
+export interface CompanyPage { items: Company[]; total: number; offset: number; limit: number }
+export interface Activity {
+  id: string; company_id: string
+  activity_type: 'note' | 'call' | 'email' | 'form' | 'sns' | 'meeting' | 'status_change'
+  note: string; created_at: string
 }
