@@ -80,6 +80,8 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await page.getByRole('button', { name: '現在の検索条件を保存' }).click()
   const scheduleCard = page.getByRole('article').filter({ hasText: '大阪の定期検索' })
   await expect(scheduleCard.getByText('24時間ごと', { exact: false })).toBeVisible()
+  const analyticsRow = page.getByRole('row').filter({ hasText: '大阪の定期検索' })
+  await expect(analyticsRow).toContainText('0%')
   await scheduleCard.getByRole('button', { name: '今すぐ実行' }).click()
   const scheduledOperation = page.getByRole('article').filter({ hasText: '検索収集' }).first()
   await expect(scheduledOperation.getByText('待機中', { exact: true })).toBeVisible()
