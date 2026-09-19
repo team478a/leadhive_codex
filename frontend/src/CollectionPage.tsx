@@ -211,7 +211,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
         {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
           <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{job.status}</span></div>
-            <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}）</p>
+            <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
             {['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}

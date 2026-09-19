@@ -229,6 +229,7 @@ class OperationJob(Base):
             "AND failed_count >= 0",
             name="ck_operation_job_counts",
         ),
+        CheckConstraint("attempt_count >= 0", name="ck_operation_job_attempt_count"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -242,6 +243,9 @@ class OperationJob(Base):
     success_count: Mapped[int] = mapped_column(Integer, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, default=0)
     cancel_requested: Mapped[bool] = mapped_column(Boolean, default=False)
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    worker_id: Mapped[uuid.UUID | None] = mapped_column()
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     error_message: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

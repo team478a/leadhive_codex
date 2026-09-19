@@ -64,6 +64,6 @@ export interface OperationJob {
   operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis'
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_count: number; processed_count: number; success_count: number; failed_count: number
-  cancel_requested: boolean; error_message: string
+    cancel_requested: boolean; attempt_count: number; error_message: string
   created_at: string; started_at: string | null; finished_at: string | null
 }

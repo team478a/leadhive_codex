@@ -22,6 +22,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-5.6-luna"
     ai_timeout_seconds: float = 45.0
     ai_max_website_chars: int = 30_000
+    worker_lease_seconds: int = 300
+    worker_max_attempts: int = 3
 
     @field_validator("database_url")
     @classmethod
@@ -72,6 +74,20 @@ class Settings(BaseSettings):
     def valid_ai_input_size(cls, value: int) -> int:
         if not 1_000 <= value <= 100_000:
             raise ValueError("ai_max_website_chars must be between 1000 and 100000")
+        return value
+
+    @field_validator("worker_lease_seconds")
+    @classmethod
+    def valid_worker_lease(cls, value: int) -> int:
+        if not 60 <= value <= 3600:
+            raise ValueError("worker_lease_seconds must be between 60 and 3600")
+        return value
+
+    @field_validator("worker_max_attempts")
+    @classmethod
+    def valid_worker_attempts(cls, value: int) -> int:
+        if not 1 <= value <= 10:
+            raise ValueError("worker_max_attempts must be between 1 and 10")
         return value
 
     @property

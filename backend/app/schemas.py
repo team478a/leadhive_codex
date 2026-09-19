@@ -269,6 +269,7 @@ class OperationJobOut(BaseModel):
     success_count: int
     failed_count: int
     cancel_requested: bool
+    attempt_count: int
     error_message: str
     created_at: datetime
     started_at: datetime | None
