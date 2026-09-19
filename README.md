@@ -38,6 +38,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 失敗通知と監視画面は[実装記録](docs/20_OPERATION_MONITORING_IMPLEMENTATION.md)を参照してください。
 検索画面の非同期化は[実装記録](docs/21_ASYNC_SEARCH_COLLECTION_IMPLEMENTATION.md)を参照してください。
 検索テンプレートと定期実行は[実装記録](docs/22_SEARCH_SCHEDULES_IMPLEMENTATION.md)を参照してください。
+テンプレート別成果分析は[実装記録](docs/23_SEARCH_ANALYTICS_IMPLEMENTATION.md)を参照してください。
 
 構成:
 
@@ -199,6 +200,7 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | GET / POST | `/api/projects/{id}/search-schedules` | 定期検索の一覧 / 作成 |
 | PUT / DELETE | `/api/search-schedules/{id}` | 定期検索の更新 / 削除 |
 | POST | `/api/search-schedules/{id}/run` | 保存条件を今すぐ実行 |
+| GET | `/api/projects/{id}/search-analytics` | テンプレート別の収集成果 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
