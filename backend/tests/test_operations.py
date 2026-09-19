@@ -3,7 +3,7 @@ from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 
 from app import worker
-from app.models import Company, OperationJob
+from app.models import Company, OperationJob, SearchSchedule
 from app.services.collection import Candidate, ExternalServiceError
 
 
@@ -153,6 +153,49 @@ def test_worker_stops_after_losing_lease(auth, db):
     db.add(job)
     db.commit()
     assert worker.stop_requested(db, job, original_worker)
+
+
+def test_search_schedule_crud_due_enqueue_and_company_limit(auth, db):
+    project = make_project(auth)
+    body = {
+        "name": "大阪の週次検索",
+        "source": "serper",
+        "keywords": ["運送会社", "物流会社"],
+        "region": "大阪府",
+        "max_results": 20,
+        "interval_hours": 168,
+        "company_limit": 100,
+        "active": True,
+    }
+    created = auth.post(f"/api/projects/{project['id']}/search-schedules", json=body)
+    assert created.status_code == 201
+    schedule_id = created.json()["id"]
+    assert len(auth.get(f"/api/projects/{project['id']}/search-schedules").json()) == 1
+
+    immediate = auth.post(f"/api/search-schedules/{schedule_id}/run")
+    assert immediate.status_code == 202
+    auth.post(f"/api/operations/{immediate.json()['id']}/cancel")
+
+    schedule = db.get(SearchSchedule, schedule_id)
+    schedule.next_run_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+    assert worker.enqueue_due_schedules(db) == 1
+    assert db.get(SearchSchedule, schedule_id).last_enqueued_at is not None
+    queued = auth.get(f"/api/projects/{project['id']}/operations").json()[0]
+    auth.post(f"/api/operations/{queued['id']}/cancel")
+
+    add_company(auth, db, project["id"])
+    schedule = db.get(SearchSchedule, schedule_id)
+    schedule.company_limit = 1
+    schedule.next_run_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+    assert worker.enqueue_due_schedules(db) == 0
+    db.refresh(schedule)
+    assert "企業保存上限" in schedule.last_error
+
+    updated = auth.put(f"/api/search-schedules/{schedule_id}", json={**body, "active": False})
+    assert updated.status_code == 200 and not updated.json()["active"]
+    assert auth.delete(f"/api/search-schedules/{schedule_id}").status_code == 204
 
 
 def test_cancel_retry_validation_and_access_isolation(auth, users):
