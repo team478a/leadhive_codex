@@ -103,13 +103,27 @@ def test_pagination_edit_bulk_update_and_activity_history(auth, db):
     )
     assert bulk.status_code == 200
     assert {item["status"] for item in bulk.json()} == {"target"}
+    assigned = auth.patch(
+        f"/api/projects/{project['id']}/companies/bulk-assignee",
+        json={"company_ids": [str(alpha.id), str(beta.id)], "assignee": "佐藤"},
+    )
+    assert assigned.status_code == 200
+    assert {item["assignee"] for item in assigned.json()} == {"佐藤"}
+    alpha.next_followup_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    beta.next_followup_at = datetime.now(timezone.utc) + timedelta(days=2)
+    db.flush()
+    overdue = auth.get(
+        f"/api/projects/{project['id']}/company-list",
+        params={"assignee": "佐", "followup": "overdue"},
+    ).json()
+    assert overdue["total"] == 1 and overdue["items"][0]["id"] == str(alpha.id)
     activity = auth.post(
         f"/api/companies/{alpha.id}/activities",
         json={"activity_type": "call", "note": "担当者へ電話、来週再連絡"},
     )
     assert activity.status_code == 201
     history = auth.get(f"/api/companies/{alpha.id}/activities").json()
-    assert {item["activity_type"] for item in history} == {"status_change", "call"}
+    assert {item["activity_type"] for item in history} == {"status_change", "note", "call"}
 
 
 def test_sales_status_update_and_access_isolation(auth, users, db):
@@ -159,6 +173,7 @@ def test_dashboard_counts_and_recent_jobs(auth, db):
     project = make_project(auth)
     alpha, _ = add_companies(auth, db, project["id"])
     alpha.status = "target"
+    alpha.next_followup_at = datetime.now(timezone.utc) - timedelta(hours=1)
     db.flush()
     result = auth.get("/api/dashboard")
     assert result.status_code == 200
@@ -167,6 +182,7 @@ def test_dashboard_counts_and_recent_jobs(auth, db):
     assert data["ranks"] == {"A": 1, "B": 1}
     assert data["statuses"]["target"] == 1
     assert data["recent_jobs"][0]["source"] == "csv"
+    assert data["overdue_followups"] == 1
 
 
 def test_data_quality_summary_and_reanalysis_queue(auth, db):

@@ -99,6 +99,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   const detail = page.getByRole('region', { name: '企業詳細' })
   await expect(detail.getByRole('heading', { name: 'example.com' })).toBeVisible()
   await detail.getByLabel('電話').fill('03-1234-5678')
+  await detail.getByLabel('担当者').fill('佐藤')
   await detail.getByRole('button', { name: '企業情報を保存' }).click()
   await expect(page.getByText('企業情報を保存しました。')).toBeVisible()
   await detail.getByLabel('営業状況').selectOption('approached')
