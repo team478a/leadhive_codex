@@ -9,6 +9,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.ai_routes import router as ai_router
 from app.analysis_routes import router as analysis_router
 from app.collection_routes import router as collection_router
+from app.company_routes import router as company_router
 from app.config import settings
 from app.routes import router
 
@@ -65,3 +66,4 @@ app.include_router(router)
 app.include_router(collection_router)
 app.include_router(analysis_router)
 app.include_router(ai_router)
+app.include_router(company_router)

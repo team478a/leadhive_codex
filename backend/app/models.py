@@ -111,6 +111,11 @@ class Company(Timestamps, Base):
         CheckConstraint(
             "rank IS NULL OR rank IN ('A', 'B', 'C', '対象外')", name="ck_company_rank"
         ),
+        CheckConstraint(
+            "status IN ('unreviewed', 'target', 'approached', 'replied', 'meeting', "
+            "'won', 'lost', 'excluded')",
+            name="ck_company_sales_status",
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(
@@ -125,6 +130,7 @@ class Company(Timestamps, Base):
     source: Mapped[str] = mapped_column(String(30))
     source_keyword: Mapped[str] = mapped_column(String(500), default="")
     status: Mapped[str] = mapped_column(String(30), default="unreviewed")
+    notes: Mapped[str] = mapped_column(Text, default="")
     prefecture: Mapped[str] = mapped_column(String(20), default="")
     city: Mapped[str] = mapped_column(String(200), default="")
     contact_url: Mapped[str] = mapped_column(Text, default="")

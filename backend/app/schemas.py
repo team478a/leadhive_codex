@@ -86,6 +86,7 @@ class CompanyOut(BaseModel):
     source: Literal["serper", "google_places", "url", "csv"]
     source_keyword: str
     status: str
+    notes: str
     prefecture: str
     city: str
     contact_url: str
@@ -172,3 +173,17 @@ class AiAnalysisInput(Input):
 
 class CompanyAiAnalysisInput(Input):
     force: bool = False
+
+
+class CompanySalesInput(Input):
+    status: Literal[
+        "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
+    ]
+    notes: str = Field(default="", max_length=20000)
+
+
+class DashboardOut(BaseModel):
+    total_companies: int
+    ranks: dict[str, int]
+    statuses: dict[str, int]
+    recent_jobs: list[CollectionJobOut]
