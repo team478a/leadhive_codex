@@ -8,6 +8,9 @@ const sourceNames: Record<CollectionSource, string> = {
   url: 'URL直接入力', csv: 'CSVインポート',
 }
 const statusNames = { running: '実行中', completed: '完了', failed: '失敗' }
+const operationStatusNames: Record<OperationJob['status'], string> = {
+  queued: '待機中', running: '実行中', completed: '完了', failed: '失敗', cancelled: 'キャンセル',
+}
 const analysisNames = {
   pending: '未解析', running: '解析中', completed: '解析済み', failed: '解析失敗',
   skipped: 'URLなし', duplicate: '重複', excluded: '対象外',
@@ -75,9 +78,12 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         result = [await api<CollectionJob>(`/projects/${projectId}/collection-jobs/urls`, 'POST', { urls })]
       } else {
         const values = keywords.split('\n').map(value => value.trim()).filter(Boolean)
-        result = await api<CollectionJob[]>(`/projects/${projectId}/collection-jobs/search`, 'POST', {
-          source, keywords: values, region, max_results: maxResults,
+        await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
+          operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
         })
+        await reload()
+        setNotice('検索収集をバックグラウンド処理へ登録しました。')
+        return
       }
       await reload()
       setNotice(result.some(job => job.status === 'failed')
@@ -159,7 +165,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>
         </div>}
         {source === 'csv' && <p className="muted text-sm">必須列：company_name, website_url, phone, email, address</p>}
-        <div className="actions"><button type="submit">{loading ? '収集中…' : '収集を開始'}</button></div>
+        <div className="actions"><button type="submit">{loading ? (source === 'serper' || source === 'google_places' ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
       </fieldset>
     </form>
     <section className="space-y-6">
@@ -210,7 +216,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       <div className="panel"><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
         <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
         {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
-          <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{job.status}</span></div>
+            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
             <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
