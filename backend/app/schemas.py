@@ -635,7 +635,8 @@ class FollowupTaskResolveInput(Input):
 
 
 class ReplyResponseInput(Input):
-    outcome: Literal["replied", "meeting", "lost"]
+    inbound_email_id: UUID
+    outcome: Literal["replied", "meeting", "won", "lost"]
     note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
     next_followup_at: datetime | None = None
 

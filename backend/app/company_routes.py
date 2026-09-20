@@ -19,6 +19,7 @@ from app.models import (
     ContactPerson,
     InboundEmail,
     OperationJob,
+    OutreachConversion,
     OutreachDraft,
     OutreachDraftApproval,
     Project,
@@ -60,6 +61,7 @@ from app.schemas import (
     SavedCompanyFilterOut,
 )
 from app.security import current_user
+from app.services.outreach_attribution import record_outreach_conversion
 
 router = APIRouter(prefix="/api")
 JST = ZoneInfo("Asia/Tokyo")
@@ -180,14 +182,21 @@ def outreach_effectiveness_analytics(
     user: User = Depends(current_user),
 ):
     since = datetime.now(timezone.utc) - timedelta(days=days)
-    replied = func.count().filter(Company.status.in_(("replied", "meeting", "won")))
-    meetings = func.count().filter(Company.status.in_(("meeting", "won")))
-    won = func.count().filter(Company.status == "won")
+    approvals = func.count(OutreachDraftApproval.id)
+    replied = func.count(func.distinct(OutreachConversion.approval_id)).filter(
+        OutreachConversion.outcome == "replied"
+    )
+    meetings = func.count(func.distinct(OutreachConversion.approval_id)).filter(
+        OutreachConversion.outcome == "meeting"
+    )
+    won = func.count(func.distinct(OutreachConversion.approval_id)).filter(
+        OutreachConversion.outcome == "won"
+    )
     rows = db.execute(
         select(
             OutreachDraftApproval.approval_type,
             OutreachDraftApproval.subject,
-            func.count(),
+            approvals,
             replied,
             meetings,
             won,
@@ -196,12 +205,15 @@ def outreach_effectiveness_analytics(
         .join(OutreachDraft, OutreachDraft.id == OutreachDraftApproval.draft_id)
         .join(Company, Company.id == OutreachDraft.company_id)
         .join(Project, Project.id == Company.project_id)
+        .outerjoin(
+            OutreachConversion, OutreachConversion.approval_id == OutreachDraftApproval.id
+        )
         .where(
             accessible_project_condition(user.id),
             OutreachDraftApproval.approved_at >= since,
         )
         .group_by(OutreachDraftApproval.approval_type, OutreachDraftApproval.subject)
-        .order_by(func.count().desc(), OutreachDraftApproval.subject)
+        .order_by(approvals.desc(), OutreachDraftApproval.subject)
         .limit(100)
     ).all()
     return OutreachEffectivenessAnalyticsOut(
@@ -810,6 +822,13 @@ def record_reply_response(
     company = owned_company(company_id, db, user)
     if company.status != "replied" or company.do_not_contact:
         raise HTTPException(409, "この企業の返信対応は記録できません。")
+    inbound = db.get(InboundEmail, body.inbound_email_id)
+    if (
+        inbound is None
+        or inbound.company_id != company.id
+        or inbound.classification != "reply"
+    ):
+        raise HTTPException(422, "この企業に紐付いた受信返信を指定してください。")
     activity_type = "meeting" if body.outcome == "meeting" else "email"
     if company.status != body.outcome:
         db.add(
@@ -820,6 +839,12 @@ def record_reply_response(
             )
         )
     db.add(Activity(company_id=company.id, activity_type=activity_type, note=body.note))
+    if body.outcome in {"meeting", "won"} and inbound.outreach_approval_id:
+        approval = db.get(OutreachDraftApproval, inbound.outreach_approval_id)
+        if approval:
+            record_outreach_conversion(
+                db, approval, company, body.outcome, inbound_email=inbound
+            )
     company.status = body.outcome
     company.next_followup_at = body.next_followup_at
     db.commit()

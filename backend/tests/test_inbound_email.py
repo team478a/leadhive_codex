@@ -11,6 +11,9 @@ from app.models import (
     ContactPerson,
     InboundEmail,
     InboundMailSettings,
+    OutreachConversion,
+    OutreachDraft,
+    OutreachDraftApproval,
     SuppressionEntry,
 )
 from app.services import email_delivery, inbound_email
@@ -122,6 +125,64 @@ def test_inbound_sync_matches_contact_and_preserves_later_sales_status(auth, db,
     )
 
 
+def test_inbound_reply_attributes_to_the_latest_eligible_approval(auth, db, monkeypatch):
+    make_settings(db, monkeypatch)
+    company = make_company(auth, db, "contact@attribution.example")
+    older = OutreachDraft(
+        company_id=company.id,
+        channel="email",
+        subject="以前のご案内",
+        body="以前のご案内です。",
+    )
+    latest = OutreachDraft(
+        company_id=company.id,
+        channel="email",
+        subject="最新のご案内",
+        body="最新のご案内です。",
+    )
+    db.add_all((older, latest))
+    db.flush()
+    db.add_all(
+        (
+            OutreachDraftApproval(
+                draft_id=older.id,
+                approval_type="email",
+                subject=older.subject,
+                body=older.body,
+                approved_at=datetime.now(timezone.utc).replace(microsecond=0),
+            ),
+            OutreachDraftApproval(
+                draft_id=latest.id,
+                approval_type="email",
+                subject=latest.subject,
+                body=latest.body,
+                approved_at=datetime.now(timezone.utc),
+            ),
+        )
+    )
+    db.commit()
+    latest_approval = db.scalar(
+        select(OutreachDraftApproval).where(OutreachDraftApproval.draft_id == latest.id)
+    )
+    received = message("attribution-100", company.email)
+    monkeypatch.setattr(
+        inbound_email,
+        "fetch_unseen_messages",
+        lambda _config: ([received], [received.uid]),
+    )
+    monkeypatch.setattr(inbound_email, "mark_messages_seen", lambda *_args: None)
+
+    assert inbound_email.sync_inbound_mail(db, force=True) == 1
+    inbound = db.scalar(select(InboundEmail).where(InboundEmail.mailbox_uid == received.uid))
+    assert inbound.outreach_approval_id == latest_approval.id
+    assert db.scalar(
+        select(OutreachConversion).where(
+            OutreachConversion.approval_id == latest_approval.id,
+            OutreachConversion.outcome == "replied",
+        )
+    )
+
+
 def test_worker_runs_inbound_sync_before_other_work(db, monkeypatch):
     calls = []
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
@@ -214,6 +275,22 @@ def test_admin_can_search_and_manually_match_unmatched_inbound_email(auth, users
 def test_reply_queue_lists_received_replies_and_records_response(auth, db, monkeypatch):
     make_settings(db, monkeypatch)
     company = make_company(auth, db, "contact@queue.example")
+    draft = OutreachDraft(
+        company_id=company.id,
+        channel="email",
+        subject="商談のご相談",
+        body="短時間の情報交換をご相談させてください。",
+    )
+    db.add(draft)
+    db.flush()
+    approval = OutreachDraftApproval(
+        draft_id=draft.id,
+        approval_type="email",
+        subject=draft.subject,
+        body=draft.body,
+    )
+    db.add(approval)
+    db.commit()
     received = message("queue-100", company.email)
     monkeypatch.setattr(
         inbound_email,
@@ -227,11 +304,31 @@ def test_reply_queue_lists_received_replies_and_records_response(auth, db, monke
     assert queue.status_code == 200
     assert queue.json()[0]["company"]["id"] == str(company.id)
     assert queue.json()[0]["subject"] == received.subject
+    inbound_email_id = queue.json()[0]["inbound_email_id"]
+    inbound = db.get(InboundEmail, inbound_email_id)
+    assert inbound.outreach_approval_id == approval.id
+    assert db.scalar(
+        select(OutreachConversion).where(
+            OutreachConversion.approval_id == approval.id,
+            OutreachConversion.outcome == "replied",
+        )
+    )
     response = auth.post(
         f"/api/companies/{company.id}/reply-response",
-        json={"outcome": "meeting", "note": "オンライン商談の日程を確定", "next_followup_at": None},
+        json={
+            "inbound_email_id": inbound_email_id,
+            "outcome": "meeting",
+            "note": "オンライン商談の日程を確定",
+            "next_followup_at": None,
+        },
     )
     assert response.status_code == 200 and response.json()["status"] == "meeting"
     assert auth.get(f"/api/projects/{company.project_id}/reply-queue").json() == []
     notes = db.scalars(select(Activity.note).where(Activity.company_id == company.id)).all()
     assert "オンライン商談の日程を確定" in notes
+    assert db.scalar(
+        select(OutreachConversion).where(
+            OutreachConversion.approval_id == approval.id,
+            OutreachConversion.outcome == "meeting",
+        )
+    )

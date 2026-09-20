@@ -27,6 +27,7 @@ from app.services.inbound_email import (
     record_inbound_outcome,
     sync_inbound_mail,
 )
+from app.services.outreach_attribution import attribute_inbound_reply
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api/admin")
@@ -295,6 +296,7 @@ def match_inbound_email(
         raise HTTPException(404, "企業が見つかりません。")
     inbound.company_id = company.id
     inbound.match_type = "manual"
+    attribute_inbound_reply(db, inbound, company)
     record_inbound_outcome(
         db,
         company,

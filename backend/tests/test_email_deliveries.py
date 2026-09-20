@@ -9,6 +9,7 @@ from app.models import (
     Company,
     EmailDelivery,
     Notification,
+    OutreachConversion,
     OutreachDraft,
     OutreachDraftApproval,
     SmtpSettings,
@@ -87,7 +88,17 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
     assert sent[0][2] == company.email and sent[0][3] == "サービスのご相談"
     db.refresh(company)
     assert company.status == "approached"
-    company.status = "replied"
+    approval_record = db.scalar(
+        select(OutreachDraftApproval).where(OutreachDraftApproval.draft_id == draft.id)
+    )
+    db.add(
+        OutreachConversion(
+            approval_id=approval_record.id,
+            company_id=company.id,
+            outcome="replied",
+            occurred_at=datetime.now(timezone.utc),
+        )
+    )
     db.commit()
     effectiveness = auth.get("/api/outreach-effectiveness-analytics", params={"days": 30})
     assert effectiveness.status_code == 200
@@ -102,6 +113,19 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
             "reply_rate": 100.0,
         }
     ]
+    company.status = "won"
+    db.commit()
+    assert auth.get("/api/outreach-effectiveness-analytics", params={"days": 30}).json()[
+        "items"
+    ][0] == {
+        "approval_type": "email",
+        "subject": "サービスのご相談",
+        "approvals": 1,
+        "replied": 1,
+        "meetings": 0,
+        "won": 0,
+        "reply_rate": 100.0,
+    }
     activity = db.scalar(
         select(Activity).where(Activity.company_id == company.id, Activity.activity_type == "email")
     )

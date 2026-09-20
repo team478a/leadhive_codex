@@ -19,6 +19,7 @@ from app.models import (
     SuppressionEntry,
 )
 from app.services.email_delivery import EmailDeliveryError, decrypt_secret
+from app.services.outreach_attribution import attribute_inbound_reply
 
 logger = logging.getLogger("leadhive")
 EMAIL_PATTERN = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
@@ -357,7 +358,9 @@ def sync_inbound_mail(db, force: bool = False, raise_on_error: bool = False) -> 
                 classification=classification,
             )
             db.add(inbound)
+            db.flush()
             if company:
+                attribute_inbound_reply(db, inbound, company)
                 record_inbound_outcome(
                     db,
                     company,

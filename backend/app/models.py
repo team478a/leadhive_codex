@@ -295,6 +295,27 @@ class OutreachDraftApproval(Base):
     )
 
 
+class OutreachConversion(Base):
+    __tablename__ = "outreach_conversions"
+    __table_args__ = (
+        CheckConstraint(
+            "outcome IN ('replied', 'meeting', 'won')", name="ck_outreach_conversion_outcome"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    approval_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("outreach_draft_approvals.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    inbound_email_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("inbound_emails.id", ondelete="SET NULL"), index=True
+    )
+    outcome: Mapped[str] = mapped_column(String(20))
+    occurred_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
 class EmailDelivery(Timestamps, Base):
     __tablename__ = "email_deliveries"
     __table_args__ = (
@@ -435,6 +456,9 @@ class InboundEmail(Timestamps, Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     company_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("companies.id", ondelete="SET NULL"), index=True
+    )
+    outreach_approval_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("outreach_draft_approvals.id", ondelete="SET NULL"), index=True
     )
     match_type: Mapped[str] = mapped_column(String(30), default="unmatched")
     classification: Mapped[str] = mapped_column(String(20), default="reply")
