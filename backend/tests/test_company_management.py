@@ -260,3 +260,49 @@ def test_duplicate_candidates_and_safe_merge(auth, db):
     assert any(item["note"] == "統合前の電話履歴" for item in activities)
     assert any("重複企業" in item["note"] for item in activities)
     assert auth.get(f"/api/projects/{project['id']}/duplicate-candidates").json() == []
+
+
+def test_saved_filters_and_assignee_analytics(auth, db):
+    project = make_project(auth)
+    alpha, beta = add_companies(auth, db, project["id"])
+    filters = {
+        "rank": "A",
+        "minScore": "70",
+        "region": "大阪",
+        "status": "approached",
+        "source": "csv",
+        "keyword": "採用",
+        "assignee": "佐藤",
+        "followup": "overdue",
+        "sort": "score_desc",
+    }
+    created = auth.post(
+        f"/api/projects/{project['id']}/saved-company-filters",
+        json={"name": "佐藤担当の期限超過", "filters": filters},
+    )
+    assert created.status_code == 201
+    assert created.json()["filters"] == filters
+    listed = auth.get(f"/api/projects/{project['id']}/saved-company-filters")
+    assert [item["name"] for item in listed.json()] == ["佐藤担当の期限超過"]
+
+    alpha.assignee, alpha.status = "佐藤", "approached"
+    alpha.next_followup_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    beta.assignee, beta.status = "田中", "won"
+    db.flush()
+    analytics = auth.get(f"/api/projects/{project['id']}/assignee-analytics")
+    assert analytics.status_code == 200
+    by_assignee = {item["assignee"]: item for item in analytics.json()}
+    assert by_assignee["佐藤"] == {
+        "assignee": "佐藤",
+        "total": 1,
+        "approached": 1,
+        "replied": 0,
+        "meetings": 0,
+        "won": 0,
+        "overdue": 1,
+    }
+    assert by_assignee["田中"]["won"] == 1
+
+    deleted = auth.delete(f"/api/saved-company-filters/{created.json()['id']}")
+    assert deleted.status_code == 204
+    assert auth.get(f"/api/projects/{project['id']}/saved-company-filters").json() == []
