@@ -75,6 +75,25 @@ def test_generate_edit_list_delete_and_viewer_access(auth, users, db, monkeypatc
     assert updated.json()["subject"] == "編集した件名"
     assert len(auth.get(f"/api/companies/{company.id}/outreach-drafts").json()) == 1
 
+    template = auth.post(
+        f"/api/projects/{project['id']}/outreach-templates",
+        json={
+            "name": "初回メール",
+            "channel": "email",
+            "subject": "テンプレート件名",
+            "body": "テンプレート本文です。",
+        },
+    )
+    assert template.status_code == 201
+    templates = auth.get(f"/api/projects/{project['id']}/outreach-templates").json()
+    assert templates[0]["name"] == "初回メール"
+    applied = auth.post(
+        f"/api/outreach-drafts/{draft['id']}/apply-template",
+        json={"template_id": template.json()["id"]},
+    )
+    assert applied.status_code == 200
+    assert applied.json()["subject"] == "テンプレート件名"
+
     auth.post(
         f"/api/projects/{project['id']}/members",
         json={"email": users[1].email, "role": "viewer"},
@@ -97,6 +116,7 @@ def test_generate_edit_list_delete_and_viewer_access(auth, users, db, monkeypatc
         "/api/auth/login",
         json={"email": users[0].email, "password": "test-only-long-password"},
     )
+    assert auth.delete(f"/api/outreach-templates/{template.json()['id']}").status_code == 204
     assert auth.delete(f"/api/outreach-drafts/{draft['id']}").status_code == 204
     assert auth.get(f"/api/companies/{company.id}/outreach-drafts").json() == []
 

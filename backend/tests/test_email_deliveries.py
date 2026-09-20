@@ -4,7 +4,15 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import select
 
 from app import worker
-from app.models import Activity, Company, EmailDelivery, Notification, OutreachDraft, SmtpSettings
+from app.models import (
+    Activity,
+    Company,
+    EmailDelivery,
+    Notification,
+    OutreachDraft,
+    OutreachDraftApproval,
+    SmtpSettings,
+)
 from app.services.email_delivery import EmailDeliveryError
 
 
@@ -57,6 +65,11 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
     delivery = created.json()
     assert delivery["status"] == "queued"
     assert delivery["subject"] == draft.subject
+    approval = auth.get(f"/api/outreach-drafts/{draft.id}/approvals").json()
+    assert approval[0]["approval_type"] == "email" and approval[0]["body"] == draft.body
+    assert db.scalar(
+        select(OutreachDraftApproval).where(OutreachDraftApproval.draft_id == draft.id)
+    )
     overview = auth.get(f"/api/projects/{company.project_id}/email-deliveries").json()
     assert overview["queued_count"] == 1
     assert overview["items"][0]["company_name"] == company.company_name
