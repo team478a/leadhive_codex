@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -39,6 +39,11 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [savedFilters, setSavedFilters] = useState<SavedCompanyFilter[]>([])
   const [assigneeAnalytics, setAssigneeAnalytics] = useState<AssigneeAnalytics[]>([])
   const [outreachQueue, setOutreachQueue] = useState<OutreachQueueItem[]>([])
+  const [followupTasks, setFollowupTasks] = useState<FollowupTask[]>([])
+  const [followupTarget, setFollowupTarget] = useState<FollowupTask | null>(null)
+  const [followupAction, setFollowupAction] = useState<'completed' | 'rescheduled'>('completed')
+  const [followupTaskNote, setFollowupTaskNote] = useState('')
+  const [followupTaskDate, setFollowupTaskDate] = useState('')
   const [outreachTarget, setOutreachTarget] = useState<OutreachQueueItem | null>(null)
   const [outreachChannel, setOutreachChannel] = useState<OutreachChannel>('email')
   const [outreachOutcome, setOutreachOutcome] = useState<SalesStatus>('approached')
@@ -91,19 +96,20 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [notice, setNotice] = useState('')
   const query = useMemo(() => queryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
-    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); return }
-    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextRefreshSchedule] = await Promise.all([
+    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); return }
+    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextRefreshSchedule] = await Promise.all([
       api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
       api<SavedCompanyFilter[]>(`/projects/${projectId}/saved-company-filters`),
       api<AssigneeAnalytics[]>(`/projects/${projectId}/assignee-analytics`),
       api<OutreachQueueItem[]>(`/projects/${projectId}/outreach-queue?limit=25`),
+      api<FollowupTask[]>(`/projects/${projectId}/followup-tasks?limit=25`),
       api<AnalysisRefreshSchedule | null>(`/projects/${projectId}/analysis-refresh-schedule`),
     ])
     setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
     setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
-    setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setChecked([])
+    setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setFollowupTasks(nextFollowupTasks); setChecked([])
     setRefreshSchedule(nextRefreshSchedule)
     if (nextRefreshSchedule) {
       setRefreshInterval(nextRefreshSchedule.interval_hours)
@@ -361,6 +367,24 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       setOutreachTarget(null); await reload(); setNotice('アプローチと次回対応を記録しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  function startFollowupTask(task: FollowupTask) {
+    setFollowupTarget(task); setFollowupAction('completed'); setFollowupTaskNote('')
+    setFollowupTaskDate(task.company.next_followup_at?.slice(0, 16) ?? '')
+  }
+  async function resolveFollowupTask() {
+    if (!followupTarget || !followupTaskNote.trim()) return
+    if (!window.confirm(followupAction === 'completed' ? 'この追客タスクを完了しますか？' : 'この追客タスクを延期しますか？')) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const updated = await api<Company>(`/companies/${followupTarget.company.id}/followup-task`, 'POST', {
+        action: followupAction, note: followupTaskNote,
+        next_followup_at: followupAction === 'rescheduled' && followupTaskDate ? new Date(followupTaskDate).toISOString() : null,
+      })
+      setFollowupTarget(null); await reload()
+      if (selected?.id === updated.id) await open(updated)
+      setNotice(followupAction === 'completed' ? '追客タスクを完了しました。' : '追客タスクを延期しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   async function saveContactControl() {
     if (!selected) return
     setBusy(true); setError('')
@@ -457,6 +481,10 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       <label className="field">並び順<select value={draft.sort} onChange={e => setDraft({ ...draft, sort: e.target.value })}><option value="score_desc">スコア順</option><option value="newest">新しい順</option><option value="company_name">会社名順</option></select></label>
     </div><div className="flex flex-wrap justify-end gap-2"><button className="secondary" onClick={() => { setDraft(defaults); setFilters(defaults); setPage(0) }}>リセット</button><button onClick={() => { setFilters(draft); setPage(0) }}>絞り込む</button>
       <button className="secondary" onClick={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div></section>
+    <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>追客タスク</h2><p className="muted mt-2 text-sm">期限がある次回対応を完了または延期します。</p></div><span className="badge">{followupTasks.length} 件</span></div>
+      <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>担当</th><th>期限</th><th>営業状況</th><th></th></tr></thead><tbody>{followupTasks.map(task => <tr key={task.company.id}><td><strong>{task.company.company_name}</strong><p className="muted text-xs">{task.company.rank ?? '—'} / {task.company.score ?? '—'}点</p></td><td>{task.company.assignee || '未設定'}</td><td><span className="badge">{dueNames[task.due_state]}</span><p className="muted text-xs">{task.company.next_followup_at ? new Date(task.company.next_followup_at).toLocaleString('ja-JP') : '—'}</p></td><td>{statusNames[task.company.status]}</td><td><button className="secondary" onClick={() => startFollowupTask(task)}>完了・延期</button></td></tr>)}{followupTasks.length === 0 && <tr><td colSpan={5} className="text-center muted">期限が設定された追客タスクはありません。</td></tr>}</tbody></table></div>
+      {followupTarget && <div className="mt-5"><h3>{followupTarget.company.company_name}の追客タスク</h3><div className="detail-grid"><div><label className="field">処理<select value={followupAction} onChange={e => setFollowupAction(e.target.value as 'completed' | 'rescheduled')}><option value="completed">完了</option><option value="rescheduled">延期</option></select></label>{followupAction === 'rescheduled' && <label className="field">次回対応日時<input type="datetime-local" value={followupTaskDate} onChange={e => setFollowupTaskDate(e.target.value)} /></label>}</div><label className="field">対応メモ<textarea rows={4} maxLength={10000} value={followupTaskNote} onChange={e => setFollowupTaskNote(e.target.value)} placeholder="例：先方都合により来週へ延期" /></label></div><div className="actions"><button disabled={busy || !followupTaskNote.trim() || (followupAction === 'rescheduled' && !followupTaskDate)} onClick={() => void resolveFollowupTask()}>{followupAction === 'completed' ? 'タスクを完了' : 'タスクを延期'}</button><button className="secondary" onClick={() => setFollowupTarget(null)}>キャンセル</button></div></div>}
+    </section>
     <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>営業アプローチキュー</h2><p className="muted mt-2 text-sm">期限超過を優先し、連絡可能な営業対象を処理します。</p></div><span className="badge">{outreachQueue.length} 社</span></div>
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>推奨経路</th><th>担当者</th><th>期限</th><th>状況</th><th></th></tr></thead><tbody>{outreachQueue.map(item => <tr key={item.company.id}><td><strong>{item.company.company_name}</strong><p className="muted text-xs">{item.company.rank ?? '—'} / {item.company.score ?? '—'}点</p></td><td>{channelNames[item.recommended_channel]}<p className="muted text-xs">{item.available_channels.map(channel => channelNames[channel]).join(' / ')}</p></td><td>{item.company.assignee || '未設定'}</td><td><span className="badge">{dueNames[item.due_state]}</span><p className="muted text-xs">{item.company.next_followup_at ? new Date(item.company.next_followup_at).toLocaleString('ja-JP') : '—'}</p></td><td>{statusNames[item.company.status]}</td><td><button className="secondary" onClick={() => startOutreach(item)}>対応する</button></td></tr>)}{outreachQueue.length === 0 && <tr><td colSpan={6} className="text-center muted">連絡可能な営業対象はありません。</td></tr>}</tbody></table></div>
       {outreachTarget && <div className="mt-5"><h3>{outreachTarget.company.company_name}への対応記録</h3><div className="detail-grid"><div><label className="field">連絡経路<select value={outreachChannel} onChange={e => setOutreachChannel(e.target.value as OutreachChannel)}>{outreachTarget.available_channels.map(channel => <option key={channel} value={channel}>{channelNames[channel]}</option>)}</select></label><label className="field">結果<select value={outreachOutcome} onChange={e => setOutreachOutcome(e.target.value as SalesStatus)}><option value="approached">アプローチ済</option><option value="replied">返信あり</option><option value="meeting">商談</option><option value="lost">失注</option></select></label><label className="field">次回対応日時<input type="datetime-local" value={outreachFollowup} onChange={e => setOutreachFollowup(e.target.value)} /></label></div><label className="field">対応内容<textarea rows={5} maxLength={10000} value={outreachNote} onChange={e => setOutreachNote(e.target.value)} placeholder="送信内容、通話結果、次回確認事項" /></label></div><div className="actions"><button disabled={busy || !outreachNote.trim()} onClick={() => void recordOutreach()}>対応を記録</button><button className="secondary" onClick={() => setOutreachTarget(null)}>キャンセル</button></div></div>}

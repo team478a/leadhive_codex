@@ -526,6 +526,25 @@ class OutreachRecordInput(Input):
     next_followup_at: datetime | None = None
 
 
+class FollowupTaskOut(BaseModel):
+    company: CompanyOut
+    due_state: Literal["overdue", "today", "upcoming"]
+
+
+class FollowupTaskResolveInput(Input):
+    action: Literal["completed", "rescheduled"]
+    note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+    next_followup_at: datetime | None = None
+
+    @model_validator(mode="after")
+    def check_next_followup_at(self):
+        if self.action == "rescheduled" and self.next_followup_at is None:
+            raise ValueError("延期する場合は次回対応日時を指定してください。")
+        if self.action == "completed" and self.next_followup_at is not None:
+            raise ValueError("完了の場合は次回対応日時を指定できません。")
+        return self
+
+
 class OperationJobInput(Input):
     operation_type: Literal["collect_search", "web_analysis", "ai_analysis"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)

@@ -125,6 +125,7 @@ export interface Notification {
   notification_type: 'followup_overdue' | 'operation_failed' | 'email_delivery_failed'
   title: string; message: string; read_at: string | null; created_at: string
 }
+export interface FollowupTask { company: Company; due_state: 'overdue' | 'today' | 'upcoming' }
 export type OutreachChannel = 'email' | 'form' | 'call' | 'sns'
 export interface OutreachQueueItem {
   company: Company

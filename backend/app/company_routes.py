@@ -42,6 +42,8 @@ from app.schemas import (
     DataQualityOut,
     DataQualityReanalyzeInput,
     DuplicateCandidateOut,
+    FollowupTaskOut,
+    FollowupTaskResolveInput,
     OperationJobOut,
     OutreachQueueItemOut,
     OutreachRecordInput,
@@ -622,6 +624,83 @@ def outreach_queue(
         for company in companies
         if (channels := outreach_channels(company))
     ]
+
+
+@router.get("/projects/{project_id}/followup-tasks", response_model=list[FollowupTaskOut])
+def list_followup_tasks(
+    project_id: UUID,
+    assignee: str | None = Query(None, max_length=200),
+    due: Literal["overdue", "today", "upcoming"] | None = None,
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user, write=False)
+    now = datetime.now(timezone.utc)
+    query = select(Company).where(
+        Company.project_id == project_id,
+        Company.status.in_(("target", "approached", "replied", "meeting")),
+        Company.do_not_contact.is_(False),
+        Company.next_followup_at.is_not(None),
+    )
+    if assignee:
+        query = query.where(Company.assignee.ilike(f"%{assignee}%"))
+    if due == "overdue":
+        query = query.where(Company.next_followup_at < now)
+    elif due == "today":
+        day_start = now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.where(
+            Company.next_followup_at >= now,
+            Company.next_followup_at < day_start + timedelta(days=1),
+        )
+    elif due == "upcoming":
+        query = query.where(Company.next_followup_at >= now)
+    priority = case((Company.next_followup_at < now, 0), else_=1)
+    companies = db.scalars(
+        query.order_by(
+            priority,
+            Company.next_followup_at.asc(),
+            Company.score.desc().nullslast(),
+            Company.id,
+        ).limit(limit)
+    ).all()
+    return [
+        FollowupTaskOut(company=company, due_state=outreach_due_state(company, now))
+        for company in companies
+    ]
+
+
+@router.post("/companies/{company_id}/followup-task", response_model=CompanyOut)
+def resolve_followup_task(
+    company_id: UUID,
+    body: FollowupTaskResolveInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = owned_company(company_id, db, user)
+    if (
+        company.status not in {"target", "approached", "replied", "meeting"}
+        or company.do_not_contact
+    ):
+        raise HTTPException(409, "この企業の追客タスクは処理できません。")
+    if company.next_followup_at is None:
+        raise HTTPException(409, "処理する追客タスクがありません。")
+    previous_due = company.next_followup_at
+    if body.action == "rescheduled":
+        if body.next_followup_at is None or body.next_followup_at <= datetime.now(timezone.utc):
+            raise HTTPException(422, "延期する次回対応日時は現在より後にしてください。")
+        company.next_followup_at = body.next_followup_at
+        activity_note = (
+            f"追客タスクを延期: {previous_due.isoformat()} から "
+            f"{body.next_followup_at.isoformat()}（{body.note}）"
+        )
+    else:
+        company.next_followup_at = None
+        activity_note = f"追客タスクを完了: 期限 {previous_due.isoformat()}（{body.note}）"
+    db.add(Activity(company_id=company.id, activity_type="note", note=activity_note))
+    db.commit()
+    db.refresh(company)
+    return company
 
 
 @router.post("/companies/{company_id}/outreach", response_model=CompanyOut)
