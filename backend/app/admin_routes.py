@@ -24,7 +24,7 @@ from app.services.inbound_email import (
     InboundMailError,
     inbound_configuration,
     open_mailbox,
-    record_company_reply,
+    record_inbound_outcome,
     sync_inbound_mail,
 )
 
@@ -75,6 +75,7 @@ def inbound_email_out(value: InboundEmail, company_name: str = "") -> InboundEma
         company_id=value.company_id,
         company_name=company_name,
         match_type=value.match_type,
+        classification=value.classification,
     )
 
 
@@ -294,7 +295,14 @@ def match_inbound_email(
         raise HTTPException(404, "企業が見つかりません。")
     inbound.company_id = company.id
     inbound.match_type = "manual"
-    record_company_reply(db, company, inbound.sender_email, inbound.subject, manual=True)
+    record_inbound_outcome(
+        db,
+        company,
+        inbound.sender_email,
+        inbound.subject,
+        inbound.classification,
+        manual=True,
+    )
     db.commit()
     db.refresh(inbound)
     logger.info(

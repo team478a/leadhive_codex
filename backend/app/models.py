@@ -421,6 +421,10 @@ class InboundEmail(Timestamps, Base):
             "match_type IN ('company_email', 'contact_person', 'manual', 'unmatched')",
             name="ck_inbound_email_match_type",
         ),
+        CheckConstraint(
+            "classification IN ('reply', 'bounce', 'unsubscribe', 'other')",
+            name="ck_inbound_email_classification",
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     mailbox_uid: Mapped[str] = mapped_column(String(100))
@@ -433,6 +437,7 @@ class InboundEmail(Timestamps, Base):
         ForeignKey("companies.id", ondelete="SET NULL"), index=True
     )
     match_type: Mapped[str] = mapped_column(String(30), default="unmatched")
+    classification: Mapped[str] = mapped_column(String(20), default="reply")
 
 
 class Notification(Base):

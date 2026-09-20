@@ -568,6 +568,7 @@ class InboundEmailOut(BaseModel):
     company_id: UUID | None
     company_name: str = ""
     match_type: Literal["company_email", "contact_person", "manual", "unmatched"]
+    classification: Literal["reply", "bounce", "unsubscribe", "other"]
 
 
 class InboundEmailMatchInput(Input):

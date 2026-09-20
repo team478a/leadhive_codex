@@ -1,18 +1,51 @@
 import email
 import imaplib
 import logging
+import re
 import ssl
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
-from app.models import Activity, Company, ContactPerson, InboundEmail, InboundMailSettings
+from app.models import (
+    Activity,
+    Company,
+    ContactPerson,
+    InboundEmail,
+    InboundMailSettings,
+    SuppressionEntry,
+)
 from app.services.email_delivery import EmailDeliveryError, decrypt_secret
 
 logger = logging.getLogger("leadhive")
+EMAIL_PATTERN = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
+BOUNCE_SUBJECTS = (
+    "undelivered",
+    "delivery status notification",
+    "delivery failure",
+    "mail delivery failed",
+    "failure notice",
+    "配信不能",
+    "配信失敗",
+    "送信失敗",
+    "不達",
+)
+UNSUBSCRIBE_PHRASES = (
+    "配信停止",
+    "配信を停止",
+    "送信停止",
+    "送信を停止",
+    "メールを停止",
+    "今後の連絡を停止",
+    "連絡を停止",
+    "unsubscribe",
+    "opt out",
+    "opt-out",
+    "remove me",
+)
 
 
 class InboundMailError(Exception):
@@ -40,6 +73,7 @@ class FetchedInboundMessage:
     subject: str
     preview: str
     received_at: datetime
+    related_emails: tuple[str, ...] = ()
 
 
 def decode_value(value: str | None) -> str:
@@ -52,6 +86,18 @@ def decode_value(value: str | None) -> str:
         else:
             parts.append(fragment)
     return "".join(parts).strip()
+
+
+def classify_message(sender_email: str, subject: str, preview: str) -> str:
+    text = f"{subject}\n{preview}".lower()
+    sender_local = sender_email.partition("@")[0]
+    if sender_local in {"mailer-daemon", "postmaster"} or any(
+        phrase in text for phrase in BOUNCE_SUBJECTS
+    ):
+        return "bounce"
+    if any(phrase in text for phrase in UNSUBSCRIBE_PHRASES):
+        return "unsubscribe"
+    return "reply"
 
 
 def inbound_configuration(saved: InboundMailSettings) -> InboundMailConfiguration:
@@ -128,6 +174,14 @@ def fetch_unseen_messages(
             preview = " ".join(
                 raw.split(b"\r\n\r\n", 1)[-1].decode("utf-8", errors="replace").split()
             )[:1000]
+            related_emails = tuple(
+                sorted(
+                    {
+                        value.lower()
+                        for value in EMAIL_PATTERN.findall(raw.decode("utf-8", errors="replace"))
+                    }
+                )
+            )
             messages.append(
                 FetchedInboundMessage(
                     uid=uid.decode(),
@@ -136,6 +190,7 @@ def fetch_unseen_messages(
                     subject=decode_value(message.get("Subject"))[:500],
                     preview=preview,
                     received_at=received_at(message),
+                    related_emails=related_emails,
                 )
             )
         return messages, [uid.decode() for uid in uids]
@@ -200,6 +255,72 @@ def record_company_reply(
         )
 
 
+def suppress_company(db, company: Company, reason: str) -> None:
+    match = or_(
+        (SuppressionEntry.domain != "") & (SuppressionEntry.domain == company.domain),
+        (SuppressionEntry.email != "")
+        & (func.lower(SuppressionEntry.email) == company.email.lower()),
+        (SuppressionEntry.phone != "") & (SuppressionEntry.phone == company.phone),
+    )
+    entries = db.scalars(
+        select(SuppressionEntry).where(SuppressionEntry.project_id == company.project_id, match)
+    ).all()
+    if entries:
+        for entry in entries:
+            entry.reason = reason
+    else:
+        db.add(
+            SuppressionEntry(
+                project_id=company.project_id,
+                domain=company.domain or "",
+                email=company.email.lower(),
+                phone=company.phone,
+                reason=reason,
+            )
+        )
+    company.do_not_contact = True
+    company.exclusion_reason = reason
+    company.status = "excluded"
+
+
+def record_inbound_outcome(
+    db, company: Company, sender_email: str, subject: str, classification: str, *, manual: bool
+) -> None:
+    if classification == "bounce":
+        reason = "メール不達通知（受信メール）"
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="email",
+                note=f"{reason}: {sender_email} / 件名: {subject}"[:10000],
+            )
+        )
+        suppress_company(db, company, reason)
+        return
+    if classification == "unsubscribe":
+        reason = "配信停止依頼（受信メール）"
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="email",
+                note=f"{reason}: {sender_email} / 件名: {subject}"[:10000],
+            )
+        )
+        suppress_company(db, company, reason)
+        return
+    record_company_reply(db, company, sender_email, subject, manual=manual)
+
+
+def match_bounce_company(db, related_emails: tuple[str, ...]) -> tuple[Company | None, str]:
+    candidates = []
+    for email_address in related_emails:
+        company, match_type = match_company(db, email_address)
+        if company:
+            candidates.append((company, match_type))
+    unique = {company.id: (company, match_type) for company, match_type in candidates}
+    return next(iter(unique.values())) if len(unique) == 1 else (None, "unmatched")
+
+
 def sync_inbound_mail(db, force: bool = False, raise_on_error: bool = False) -> int:
     saved = db.get(InboundMailSettings, 1)
     if saved is None or not saved.active:
@@ -218,7 +339,12 @@ def sync_inbound_mail(db, force: bool = False, raise_on_error: bool = False) -> 
         for message in messages:
             if db.scalar(select(InboundEmail.id).where(InboundEmail.mailbox_uid == message.uid)):
                 continue
+            classification = classify_message(
+                message.sender_email, message.subject, message.preview
+            )
             company, match_type = match_company(db, message.sender_email)
+            if classification == "bounce":
+                company, match_type = match_bounce_company(db, message.related_emails)
             inbound = InboundEmail(
                 mailbox_uid=message.uid,
                 message_id=message.message_id,
@@ -228,11 +354,17 @@ def sync_inbound_mail(db, force: bool = False, raise_on_error: bool = False) -> 
                 received_at=message.received_at,
                 company_id=company.id if company else None,
                 match_type=match_type,
+                classification=classification,
             )
             db.add(inbound)
             if company:
-                record_company_reply(
-                    db, company, message.sender_email, message.subject, manual=False
+                record_inbound_outcome(
+                    db,
+                    company,
+                    message.sender_email,
+                    message.subject,
+                    classification,
+                    manual=False,
                 )
             processed += 1
         saved.last_polled_at = now
