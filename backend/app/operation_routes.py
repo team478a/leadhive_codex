@@ -67,6 +67,7 @@ def search_analytics(
             func.coalesce(func.sum(CollectionJob.found_count), 0),
             func.coalesce(func.sum(CollectionJob.saved_count), 0),
             func.coalesce(func.sum(CollectionJob.duplicate_count), 0),
+            func.coalesce(func.sum(CollectionJob.excluded_count), 0),
             func.coalesce(func.sum(CollectionJob.error_count), 0),
         )
         .outerjoin(CollectionJob, CollectionJob.search_schedule_id == SearchSchedule.id)
@@ -82,11 +83,12 @@ def search_analytics(
             found_count=found,
             saved_count=saved,
             duplicate_count=duplicates,
+            excluded_count=excluded,
             error_count=errors,
             save_rate=round(saved / found * 100, 1) if found else 0,
             duplicate_rate=round(duplicates / found * 100, 1) if found else 0,
         )
-        for schedule_id, name, run_count, found, saved, duplicates, errors in rows
+        for schedule_id, name, run_count, found, saved, duplicates, excluded, errors in rows
     ]
 
 

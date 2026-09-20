@@ -211,7 +211,8 @@ class CollectionJob(Base):
         ),
         CheckConstraint("status IN ('running', 'completed', 'failed')", name="ck_job_status"),
         CheckConstraint(
-            "found_count >= 0 AND saved_count >= 0 AND duplicate_count >= 0 AND error_count >= 0",
+            "found_count >= 0 AND saved_count >= 0 AND duplicate_count >= 0 AND "
+            "excluded_count >= 0 AND error_count >= 0 AND processing_ms >= 0",
             name="ck_job_counts",
         ),
     )
@@ -232,7 +233,9 @@ class CollectionJob(Base):
     found_count: Mapped[int] = mapped_column(Integer, default=0)
     saved_count: Mapped[int] = mapped_column(Integer, default=0)
     duplicate_count: Mapped[int] = mapped_column(Integer, default=0)
+    excluded_count: Mapped[int] = mapped_column(Integer, default=0)
     error_count: Mapped[int] = mapped_column(Integer, default=0)
+    processing_ms: Mapped[int] = mapped_column(Integer, default=0)
     error_message: Mapped[str] = mapped_column(String(500), default="")
     import_errors: Mapped[list] = mapped_column(JSONB, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

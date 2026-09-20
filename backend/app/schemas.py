@@ -140,7 +140,9 @@ class CollectionJobOut(BaseModel):
     found_count: int
     saved_count: int
     duplicate_count: int
+    excluded_count: int
     error_count: int
+    processing_ms: int
     error_message: str
     created_at: datetime
     finished_at: datetime | None
@@ -395,6 +397,7 @@ class SearchAnalyticsOut(BaseModel):
     found_count: int
     saved_count: int
     duplicate_count: int
+    excluded_count: int
     error_count: int
     save_rate: float
     duplicate_rate: float

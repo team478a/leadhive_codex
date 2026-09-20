@@ -32,6 +32,7 @@ from app.services.collection import (
     search_google_places,
     search_serper,
 )
+from app.services.scraper import is_aggregator_domain
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
@@ -140,6 +141,11 @@ def save_candidates(
     job.error_count = error_count
     job.import_errors = error_details
     for candidate in candidates:
+        if candidate.website_url:
+            _, candidate_domain = canonicalize_url(candidate.website_url)
+            if is_aggregator_domain(candidate_domain):
+                job.excluded_count += 1
+                continue
         if is_duplicate(db, job.project_id, candidate) or is_suppressed(
             db, job.project_id, candidate
         ):
@@ -169,6 +175,7 @@ def save_candidates(
             job.saved_count += 1
     job.status = "completed"
     job.finished_at = datetime.now(timezone.utc)
+    job.processing_ms = max(0, int((job.finished_at - job.created_at).total_seconds() * 1000))
     db.commit()
     db.refresh(job)
     logger.info(

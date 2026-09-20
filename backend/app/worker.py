@@ -2,6 +2,7 @@ import argparse
 import logging
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -166,6 +167,42 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     keywords = payload["keywords"]
     job.total_count = len(keywords)
     db.commit()
+    if not payload.get("company_limit"):
+        search = search_serper if payload["source"] == "serper" else search_google_places
+        collections = [
+            start_job(
+                db,
+                job.project_id,
+                payload["source"],
+                keyword,
+                payload["region"],
+                operation_job_id=job.id,
+            )
+            for keyword in keywords
+        ]
+
+        def fetch(keyword):
+            try:
+                return search(keyword, payload["region"], payload["max_results"]), None
+            except ExternalServiceError as exc:
+                return [], exc
+
+        with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
+            results = list(executor.map(fetch, keywords))
+        for keyword, collection, (candidates, error) in zip(
+            keywords, collections, results, strict=True
+        ):
+            if stop_requested(db, job, worker_id):
+                return
+            if error:
+                fail_job(db, collection, error.public_message)
+                if not progress(db, job, worker_id, False):
+                    return
+            else:
+                save_candidates(db, collection, candidates, keyword)
+                if not progress(db, job, worker_id, True):
+                    return
+        return
     for keyword in keywords:
         if stop_requested(db, job, worker_id):
             return

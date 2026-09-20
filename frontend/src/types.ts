@@ -25,7 +25,8 @@ export type CollectionSource = 'serper' | 'google_places' | 'url' | 'csv'
 export interface CollectionJob {
   id: string; project_id: string; source: CollectionSource; keyword: string; region: string
   status: 'running' | 'completed' | 'failed'; found_count: number; saved_count: number
-  duplicate_count: number; error_count: number; error_message: string
+  duplicate_count: number; excluded_count: number; error_count: number; processing_ms: number
+  error_message: string
   created_at: string; finished_at: string | null
 }
 export interface CsvPreview {
@@ -97,7 +98,7 @@ export interface SearchSchedule {
 }
 export interface SearchAnalytics {
   schedule_id: string; name: string; run_count: number
-  found_count: number; saved_count: number; duplicate_count: number; error_count: number
+  found_count: number; saved_count: number; duplicate_count: number; excluded_count: number; error_count: number
   save_rate: number; duplicate_rate: number
 }
 export interface CompanyFilterValues {

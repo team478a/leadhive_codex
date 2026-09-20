@@ -220,8 +220,8 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
           }).then(reload).catch(e => setError(errorMessage(e)))}>{schedule.active ? '停止' : '再開'}</button>
           <button type="button" className="danger" onClick={() => void api(`/search-schedules/${schedule.id}`, 'DELETE').then(reload).catch(e => setError(errorMessage(e)))}>削除</button></div>
       </article>)}
-      {analytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-3">テンプレート別成果</h3><table><thead><tr><th>テンプレート</th><th>検索数</th><th>発見</th><th>保存</th><th>保存率</th><th>重複率</th><th>エラー</th></tr></thead>
-        <tbody>{analytics.map(item => <tr key={item.schedule_id}><td>{item.name}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.duplicate_rate}%</td><td>{item.error_count}</td></tr>)}</tbody></table></div>}
+      {analytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-3">テンプレート別成果</h3><table><thead><tr><th>テンプレート</th><th>検索数</th><th>発見</th><th>保存</th><th>保存率</th><th>重複率</th><th>公式外</th><th>エラー</th></tr></thead>
+        <tbody>{analytics.map(item => <tr key={item.schedule_id}><td>{item.name}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.duplicate_rate}%</td><td>{item.excluded_count}</td><td>{item.error_count}</td></tr>)}</tbody></table></div>}
     </div></section>
     <section className="space-y-6">
       <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
@@ -264,7 +264,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
               <span className="badge">{statusNames[job.status]}</span></div>
             {(job.keyword || job.region) && <p className="muted my-2 text-sm">{[job.keyword, job.region].filter(Boolean).join(' / ')}</p>}
             <div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
-              <span>重複 {job.duplicate_count}</span><span>エラー {job.error_count}</span></div>
+              <span>重複 {job.duplicate_count}</span><span>公式外 {job.excluded_count}</span><span>エラー {job.error_count}</span><span>{job.processing_ms}ms</span></div>
             {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
             {job.source === 'csv' && job.error_count > 0 && <button type="button" className="secondary mt-3" onClick={() => void download(`/collection-jobs/${job.id}/errors.csv`, 'csv-import-errors.csv').catch(e => setError(errorMessage(e)))}>行別エラーをダウンロード</button>}
           </article>)}
