@@ -42,6 +42,10 @@ def preview():
 
 def test_form_preview_and_confirmed_delivery(auth, db, monkeypatch):
     company, draft = make_form_draft(auth, db)
+    assist = auth.get(f"/api/outreach-drafts/{draft.id}/form-assist")
+    assert assist.status_code == 200
+    assert assist.json()["form_url"] == company.contact_url
+    assert draft.body in assist.json()["instructions"] or assist.json()["body"] == draft.body
     monkeypatch.setattr(outreach_draft_routes, "inspect_form", lambda _url: preview())
     shown = auth.get(f"/api/outreach-drafts/{draft.id}/form-preview")
     assert shown.status_code == 200 and shown.json()["fields"][0]["name"] == "name"
