@@ -130,6 +130,55 @@ def test_company_analysis_success(auth, monkeypatch):
     assert result["scraped_at"]
 
 
+def test_company_analysis_preserves_and_releases_protected_fields(auth, monkeypatch):
+    project = make_project(auth)
+    company = add_url(auth, project["id"], "https://protected.example")
+    editable = {
+        "company_name": "手動の会社名",
+        "address": "",
+        "prefecture": "",
+        "city": "",
+        "phone": "03-0000-0000",
+        "email": "",
+        "contact_url": "https://manual.example/contact",
+        "instagram_url": "",
+        "x_url": "",
+        "tiktok_url": "",
+        "facebook_url": "",
+        "youtube_url": "",
+        "line_url": "",
+        "assignee": "",
+        "protected_fields": ["company_name", "contact_url"],
+    }
+    saved = auth.put(f"/api/companies/{company['id']}", json=editable)
+    assert saved.status_code == 200
+    assert saved.json()["protected_fields"] == ["company_name", "contact_url"]
+    invalid = {**editable, "protected_fields": ["website_text"]}
+    assert auth.put(f"/api/companies/{company['id']}", json=invalid).status_code == 422
+    monkeypatch.setattr(
+        analysis_routes,
+        "scrape_company",
+        lambda url: (
+            FetchedPage(url, HTML),
+            PageData(
+                company_name="解析された会社名",
+                phone="03-9999-9999",
+                contact_url="https://protected.example/contact",
+            ),
+        ),
+    )
+    protected = auth.post(f"/api/companies/{company['id']}/analyze", json={"force": True})
+    assert protected.json()["company_name"] == "手動の会社名"
+    assert protected.json()["contact_url"] == "https://manual.example/contact"
+    assert protected.json()["phone"] == "03-9999-9999"
+
+    editable["protected_fields"] = []
+    auth.put(f"/api/companies/{company['id']}", json=editable)
+    released = auth.post(f"/api/companies/{company['id']}/analyze", json={"force": True})
+    assert released.json()["company_name"] == "解析された会社名"
+    assert released.json()["contact_url"] == "https://protected.example/contact"
+
+
 def test_analysis_failure_missing_url_and_aggregator(auth, monkeypatch):
     project = make_project(auth)
     csv_content = b"company_name,website_url,phone,email,address\nNo URL,,,,\n"
