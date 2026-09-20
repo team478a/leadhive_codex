@@ -124,6 +124,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await companyRow.getByRole('button', { name: '詳細' }).click()
   const detail = page.getByRole('region', { name: '企業詳細' })
   await expect(detail.getByRole('heading', { name: 'example.com' })).toBeVisible()
+  await expect(detail.getByRole('heading', { name: 'Web解析ページ' })).toBeVisible()
   await detail.getByRole('textbox', { name: '電話', exact: true }).fill('03-1234-5678')
   await detail.getByLabel('電話をWeb再解析から保護').check()
   await detail.getByLabel('担当者').fill('佐藤')

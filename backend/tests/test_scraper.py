@@ -107,6 +107,41 @@ def test_robots_rules_are_respected(monkeypatch):
     assert fetcher.robots_allowed("https://example.com/public")
 
 
+def test_multipage_analysis_discovers_and_merges_important_pages(monkeypatch):
+    pages = {
+        "https://example.com": """
+            <html><head><title>Example</title></head><body>
+            <a href="/contact">お問い合わせ</a><a href="/company">会社概要</a>
+            <a href="/services">サービス</a><a href="/recruit">採用情報</a>
+            <a href="/brochure.pdf">会社案内PDF</a><a href="https://outside.example/about">外部</a>
+            </body></html>
+        """,
+        "https://example.com/contact": (
+            "<p>TEL: 03-1111-2222</p>" + "<a href='mailto:sales@example.com'>Mail</a>"
+        ),
+        "https://example.com/company": "<p>東京都千代田区丸の内1-1-1</p>",
+        "https://example.com/services": "<p>法人向け物流支援サービスを提供しています。</p>",
+        "https://example.com/recruit": "<a href='https://instagram.com/example'>Instagram</a>",
+    }
+
+    class FakeFetcher:
+        def fetch_html(self, url):
+            return FetchedPage(url, pages[url])
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(scraper, "SafeFetcher", FakeFetcher)
+    page, data = scraper.scrape_company("https://example.com")
+    assert page.url == "https://example.com"
+    assert data.scraped_urls == list(pages)
+    assert data.phone == "03-1111-2222" and data.email == "sales@example.com"
+    assert data.prefecture == "東京都" and data.city == "千代田区"
+    assert data.instagram_url == "https://instagram.com/example"
+    assert "法人向け物流支援サービス" in data.website_text
+    assert "outside.example" not in data.scraped_urls
+
+
 def test_company_analysis_success(auth, monkeypatch):
     project = make_project(auth)
     company = add_url(auth, project["id"], "https://original.example")
@@ -128,6 +163,7 @@ def test_company_analysis_success(auth, monkeypatch):
     assert result["contact_url"] == "https://final.example/contact"
     assert result["instagram_url"] == "https://instagram.com/sample"
     assert result["website_text"]
+    assert result["scraped_urls"] == ["https://final.example/"]
     assert result["scraped_at"]
     assert result["contact_quality_status"] == "observed"
     assert result["contact_source_url"] == "https://final.example/contact"
