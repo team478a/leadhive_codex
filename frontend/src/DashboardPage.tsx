@@ -14,7 +14,10 @@ const operationStatuses: Record<string, string> = {
   queued: '待機中', running: '実行中', completed: '完了', failed: '失敗', cancelled: 'キャンセル',
 }
 
-export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: number) => void }) {
+export function DashboardPage({ onUnreadChange, onOpenInboundReply }: {
+  onUnreadChange: (count: number) => void
+  onOpenInboundReply: (projectId: string, inboundEmailId: string) => void
+}) {
   const [data, setData] = useState<Dashboard | null>(null)
   const [sales, setSales] = useState<SalesActivityAnalytics | null>(null)
   const [effectiveness, setEffectiveness] = useState<OutreachEffectivenessAnalytics | null>(null)
@@ -43,6 +46,16 @@ export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: numb
     try { await api('/notifications/read-all', 'POST'); await load() }
     catch (e) { setError(errorMessage(e)) }
   }
+  async function openInboundReply(item: Notification) {
+    if (!item.inbound_email_id) return
+    try {
+      if (!item.read_at) {
+        await api(`/notifications/${item.id}/read`, 'POST')
+        onUnreadChange(notifications.filter(notification => !notification.read_at && notification.id !== item.id).length)
+      }
+      onOpenInboundReply(item.project_id, item.inbound_email_id)
+    } catch (e) { setError(errorMessage(e)) }
+  }
   if (error) return <p className="error" role="alert">{error}</p>
   if (!data) return <p role="status">読み込み中…</p>
   const cards = [
@@ -54,8 +67,8 @@ export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: numb
     ['フォロー期限超過', data.overdue_followups], ['本日フォロー', data.due_today_followups],
   ] as const
   return <>
-    <section className="panel mb-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>通知</h2><p className="muted mt-2 text-sm">期限超過と処理失敗を確認します。</p></div>{notifications.some(item => !item.read_at) && <button className="secondary" onClick={() => void readAllNotifications()}>すべて既読</button>}</div>
-      {notifications.length === 0 ? <p className="muted mt-4">新しい通知はありません。</p> : notifications.map(item => <article className="job-row" key={item.id}><div><strong>{item.title}</strong><p className="muted text-sm">{item.message}</p><time className="muted text-xs">{new Date(item.created_at).toLocaleString('ja-JP')}</time></div><div className="text-right"><span className="badge">{item.read_at ? '既読' : '未読'}</span>{!item.read_at && <button className="secondary mt-2" onClick={() => void readNotification(item.id)}>既読にする</button>}</div></article>)}
+    <section className="panel mb-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>通知</h2><p className="muted mt-2 text-sm">期限超過、処理失敗、受信返信を確認します。</p></div>{notifications.some(item => !item.read_at) && <button className="secondary" onClick={() => void readAllNotifications()}>すべて既読</button>}</div>
+      {notifications.length === 0 ? <p className="muted mt-4">新しい通知はありません。</p> : notifications.map(item => <article className="job-row" key={item.id}><div><strong>{item.title}</strong><p className="muted text-sm">{item.message}</p><time className="muted text-xs">{new Date(item.created_at).toLocaleString('ja-JP')}</time></div><div className="text-right"><span className="badge">{item.read_at ? '既読' : '未読'}</span>{item.notification_type === 'inbound_reply_received' && item.inbound_email_id && <button className="secondary mt-2" onClick={() => void openInboundReply(item)}>返信対応を開く</button>}{!item.read_at && <button className="secondary mt-2" onClick={() => void readNotification(item.id)}>既読にする</button>}</div></article>)}
     </section>
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label, value]) =>
       <article className="metric" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>

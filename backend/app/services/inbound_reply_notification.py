@@ -38,6 +38,7 @@ def notify_inbound_reply(db, company: Company, inbound: InboundEmail) -> None:
                 user_id=user_id,
                 project_id=project.id,
                 company_id=company.id,
+                inbound_email_id=inbound.id,
                 notification_type="inbound_reply_received",
                 title=f"営業返信を受信しました: {company.company_name}",
                 message=f"{project.project_name} / {inbound.sender_email} / 件名: {subject}"[:1000],

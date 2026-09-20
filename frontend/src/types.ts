@@ -123,7 +123,7 @@ export interface FormDelivery { id: string; draft_id: string; company_id: string
 export interface FormAssist { company_name: string; form_url: string; body: string; instructions: string }
 export interface Notification {
   id: string; project_id: string; company_id: string | null; operation_job_id: string | null
-  email_delivery_id: string | null
+  email_delivery_id: string | null; inbound_email_id: string | null
   notification_type: 'followup_overdue' | 'operation_failed' | 'email_delivery_failed' | 'inbound_reply_received'
   title: string; message: string; read_at: string | null; created_at: string
 }

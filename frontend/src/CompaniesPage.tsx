@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, download, errorMessage } from './api'
 import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
@@ -28,7 +28,11 @@ function queryString(filters: Filters, page: number) {
   return params.toString()
 }
 
-export function CompaniesPage({ projects, initialProjectId }: { projects: Project[]; initialProjectId: string }) {
+export function CompaniesPage({ projects, initialProjectId, initialReplyInboundEmailId }: {
+  projects: Project[]
+  initialProjectId: string
+  initialReplyInboundEmailId: string | null
+}) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
   const [draft, setDraft] = useState<Filters>(defaults)
   const [filters, setFilters] = useState<Filters>(defaults)
@@ -102,6 +106,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const openedReplyInboundEmailId = useRef<string | null>(null)
   const query = useMemo(() => queryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
     if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); return }
@@ -127,6 +132,18 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
     }
   }, [projectId, query, staleDays])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
+  useEffect(() => {
+    if (
+      initialReplyInboundEmailId
+      && initialReplyInboundEmailId !== openedReplyInboundEmailId.current
+    ) {
+      const item = replyQueue.find(reply => reply.inbound_email_id === initialReplyInboundEmailId)
+      if (item) {
+        setReplyTarget(item); setReplyOutcome('replied'); setReplyNote(''); setReplyFollowup('')
+        openedReplyInboundEmailId.current = initialReplyInboundEmailId
+      }
+    }
+  }, [initialReplyInboundEmailId, replyQueue])
   async function open(company: Company) {
     setSelected(company); setStatus(company.status); setNotes(company.notes); setNotice('')
     setCompanyEdit(Object.fromEntries([

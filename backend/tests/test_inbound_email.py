@@ -123,7 +123,14 @@ def test_inbound_reply_notifies_project_owner_and_editors(auth, users, db, monke
     ).all()
     assert {item.user_id for item in notifications} == {users[0].id, users[1].id}
     assert all(item.company_id == company.id for item in notifications)
+    assert all(item.inbound_email_id is not None for item in notifications)
     assert all(received.subject in item.message for item in notifications)
+    notification_response = auth.get("/api/notifications").json()
+    assert next(
+        item
+        for item in notification_response
+        if item["notification_type"] == "inbound_reply_received"
+    )["inbound_email_id"] == str(notifications[0].inbound_email_id)
     assert inbound_email.sync_inbound_mail(db, force=True) == 0
     assert db.scalar(
         select(func.count())

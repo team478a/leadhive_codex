@@ -491,6 +491,9 @@ class Notification(Base):
     email_delivery_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("email_deliveries.id", ondelete="CASCADE"), index=True
     )
+    inbound_email_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("inbound_emails.id", ondelete="CASCADE"), index=True
+    )
     notification_type: Mapped[str] = mapped_column(String(30))
     title: Mapped[str] = mapped_column(String(300))
     message: Mapped[str] = mapped_column(String(1000))
