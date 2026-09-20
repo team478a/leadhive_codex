@@ -567,7 +567,19 @@ class InboundEmailOut(BaseModel):
     received_at: datetime
     company_id: UUID | None
     company_name: str = ""
-    match_type: Literal["company_email", "contact_person", "unmatched"]
+    match_type: Literal["company_email", "contact_person", "manual", "unmatched"]
+
+
+class InboundEmailMatchInput(Input):
+    company_id: UUID
+
+
+class InboundEmailCompanyCandidateOut(BaseModel):
+    id: UUID
+    company_name: str
+    domain: str | None
+    email: str
+    project_name: str
 
 
 class InboundMailSyncOut(BaseModel):

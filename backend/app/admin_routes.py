@@ -1,12 +1,15 @@
 import logging
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Company, InboundEmail, InboundMailSettings, SmtpSettings, User
+from app.models import Company, InboundEmail, InboundMailSettings, Project, SmtpSettings, User
 from app.schemas import (
+    InboundEmailCompanyCandidateOut,
+    InboundEmailMatchInput,
     InboundEmailOut,
     InboundMailSettingsInput,
     InboundMailSettingsOut,
@@ -21,6 +24,7 @@ from app.services.inbound_email import (
     InboundMailError,
     inbound_configuration,
     open_mailbox,
+    record_company_reply,
     sync_inbound_mail,
 )
 
@@ -58,6 +62,19 @@ def inbound_mail_out(value: InboundMailSettings) -> InboundMailSettingsOut:
         last_polled_at=value.last_polled_at,
         last_error=value.last_error,
         updated_at=value.updated_at,
+    )
+
+
+def inbound_email_out(value: InboundEmail, company_name: str = "") -> InboundEmailOut:
+    return InboundEmailOut(
+        id=value.id,
+        sender_email=value.sender_email,
+        subject=value.subject,
+        preview=value.preview,
+        received_at=value.received_at,
+        company_id=value.company_id,
+        company_name=company_name,
+        match_type=value.match_type,
     )
 
 
@@ -221,16 +238,66 @@ def list_inbound_emails(
         .order_by(InboundEmail.received_at.desc(), InboundEmail.id)
         .limit(min(max(limit, 1), 100))
     ).all()
-    return [
-        InboundEmailOut(
-            id=item.id,
-            sender_email=item.sender_email,
-            subject=item.subject,
-            preview=item.preview,
-            received_at=item.received_at,
-            company_id=item.company_id,
-            company_name=company_name or "",
-            match_type=item.match_type,
+    return [inbound_email_out(item, company_name or "") for item, company_name in rows]
+
+
+@router.get("/inbound-email-companies", response_model=list[InboundEmailCompanyCandidateOut])
+def find_inbound_email_companies(
+    query: str = Query(min_length=1, max_length=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
+):
+    text = query.strip().lower()
+    if not text:
+        raise HTTPException(422, "企業名、ドメイン、またはメールアドレスを入力してください。")
+    rows = db.execute(
+        select(
+            Company.id, Company.company_name, Company.domain, Company.email, Project.project_name
         )
-        for item, company_name in rows
+        .join(Project, Project.id == Company.project_id)
+        .where(
+            or_(
+                Company.company_name.ilike(f"%{text}%"),
+                Company.domain.ilike(f"%{text}%"),
+                Company.email.ilike(f"%{text}%"),
+            )
+        )
+        .order_by(Company.company_name, Company.id)
+        .limit(20)
+    ).all()
+    return [
+        InboundEmailCompanyCandidateOut(
+            id=company_id,
+            company_name=company_name,
+            domain=domain,
+            email=email,
+            project_name=project_name,
+        )
+        for company_id, company_name, domain, email, project_name in rows
     ]
+
+
+@router.post("/inbound-emails/{inbound_email_id}/match", response_model=InboundEmailOut)
+def match_inbound_email(
+    inbound_email_id: UUID,
+    body: InboundEmailMatchInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
+):
+    inbound = db.get(InboundEmail, inbound_email_id)
+    if inbound is None:
+        raise HTTPException(404, "受信メールが見つかりません。")
+    if inbound.company_id is not None:
+        raise HTTPException(409, "この受信メールはすでに企業へ紐付いています。")
+    company = db.get(Company, body.company_id)
+    if company is None:
+        raise HTTPException(404, "企業が見つかりません。")
+    inbound.company_id = company.id
+    inbound.match_type = "manual"
+    record_company_reply(db, company, inbound.sender_email, inbound.subject, manual=True)
+    db.commit()
+    db.refresh(inbound)
+    logger.info(
+        "inbound email manually matched: inbound_id=%s company_id=%s", inbound.id, company.id
+    )
+    return inbound_email_out(inbound, company.company_name)

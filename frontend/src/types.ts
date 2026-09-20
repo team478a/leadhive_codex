@@ -185,7 +185,10 @@ export interface InboundMailSettings {
 export interface InboundEmail {
   id: string; sender_email: string; subject: string; preview: string; received_at: string
   company_id: string | null; company_name: string
-  match_type: 'company_email' | 'contact_person' | 'unmatched'
+  match_type: 'company_email' | 'contact_person' | 'manual' | 'unmatched'
+}
+export interface InboundEmailCompanyCandidate {
+  id: string; company_name: string; domain: string | null; email: string; project_name: string
 }
 export interface OutreachEffectivenessAnalytics {
   days: number

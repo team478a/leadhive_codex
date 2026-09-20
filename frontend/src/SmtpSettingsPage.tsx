@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
-import type { InboundEmail, InboundMailSettings, SmtpSettings } from './types'
+import type { InboundEmail, InboundEmailCompanyCandidate, InboundMailSettings, SmtpSettings } from './types'
 
 const empty = {
   host: '', port: 587, username: '', from_email: '', from_name: 'LeadHive',
@@ -21,6 +21,8 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
   const [inboundPassword, setInboundPassword] = useState('')
   const [inboundConfigured, setInboundConfigured] = useState(false)
   const [inboundEmails, setInboundEmails] = useState<InboundEmail[]>([])
+  const [matchQueries, setMatchQueries] = useState<Record<string, string>>({})
+  const [matchCandidates, setMatchCandidates] = useState<Record<string, InboundEmailCompanyCandidate[]>>({})
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -90,6 +92,25 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
       setNotice(`受信メールを${result.processed}件取り込みました。`)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function findMatchCandidates(inboundEmail: InboundEmail) {
+    const query = (matchQueries[inboundEmail.id] || inboundEmail.sender_email).trim()
+    if (!query) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const candidates = await api<InboundEmailCompanyCandidate[]>(`/admin/inbound-email-companies?query=${encodeURIComponent(query)}`)
+      setMatchCandidates({ ...matchCandidates, [inboundEmail.id]: candidates })
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function matchInbound(inboundEmail: InboundEmail, company: InboundEmailCompanyCandidate) {
+    if (!window.confirm(`「${inboundEmail.subject || inboundEmail.sender_email}」を${company.company_name}へ紐付けますか？`)) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const matched = await api<InboundEmail>(`/admin/inbound-emails/${inboundEmail.id}/match`, 'POST', { company_id: company.id })
+      setInboundEmails(inboundEmails.map(item => item.id === matched.id ? matched : item))
+      setMatchCandidates({ ...matchCandidates, [inboundEmail.id]: [] })
+      setNotice(`${company.company_name}へ返信メールを紐付けました。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   return <section className="panel max-w-3xl" aria-label="SMTP設定"><p className="eyebrow">ADMIN SETTINGS</p><h2>メール送信設定</h2>
     <p className="muted mt-2">承認済みメールとテストメールに使うSMTPサーバーを設定します。パスワードは暗号化して保存され、画面には再表示されません。</p>
     {error && <p className="error mt-4" role="alert">{error}</p>}{notice && <p className="notice mt-4" role="status">{notice}</p>}
@@ -99,7 +120,7 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
     <div className="mt-7 border-t pt-5"><h3>受信メール・返信取込</h3><p className="muted text-sm mt-2">IMAP受信箱の未読メールを定期的に確認します。企業または担当者のメールアドレスに一意に一致した返信だけを自動で紐付けます。</p>
       <div className="detail-grid mt-4"><label className="field">IMAPホスト<input value={inboundForm.host} onChange={e => setInboundForm({ ...inboundForm, host: e.target.value })} placeholder="imap.example.com" /></label><label className="field">ポート<input type="number" min={1} max={65535} value={inboundForm.port} onChange={e => setInboundForm({ ...inboundForm, port: Number(e.target.value) })} /></label><label className="field">受信ユーザー名<input type="email" value={inboundForm.username} onChange={e => setInboundForm({ ...inboundForm, username: e.target.value })} autoComplete="username" /></label><label className="field">受信パスワード{inboundConfigured && <span className="muted text-xs">（設定済み。変更時だけ入力）</span>}<input type="password" value={inboundPassword} onChange={e => setInboundPassword(e.target.value)} autoComplete="new-password" /></label><label className="field">メールボックス<input value={inboundForm.mailbox} onChange={e => setInboundForm({ ...inboundForm, mailbox: e.target.value })} /></label><label className="field">接続タイムアウト（秒）<input type="number" min={1} max={120} value={inboundForm.timeout_seconds} onChange={e => setInboundForm({ ...inboundForm, timeout_seconds: Number(e.target.value) })} /></label><label className="field">確認間隔（秒）<input type="number" min={60} max={86400} value={inboundForm.poll_interval_seconds} onChange={e => setInboundForm({ ...inboundForm, poll_interval_seconds: Number(e.target.value) })} /></label><label className="checkbox-row mt-7"><input type="checkbox" checked={inboundForm.use_ssl} onChange={e => setInboundForm({ ...inboundForm, use_ssl: e.target.checked })} />SSLを使用する</label><label className="checkbox-row mt-7"><input type="checkbox" checked={inboundForm.active} onChange={e => setInboundForm({ ...inboundForm, active: e.target.checked })} />自動取込を有効にする</label></div>
       <div className="actions"><button disabled={busy || !inboundForm.host || !inboundForm.username} onClick={() => void saveInbound()}>受信設定を保存</button><button className="secondary" disabled={busy || !inboundConfigured} onClick={() => void testInbound()}>接続をテスト</button><button className="secondary" disabled={busy || !inboundConfigured || !inboundForm.active} onClick={() => void syncInbound()}>今すぐ確認</button></div>
-      {inboundEmails.length > 0 && <div className="company-table-wrap mt-5"><table className="company-table"><thead><tr><th>受信日時</th><th>送信者</th><th>件名</th><th>紐付け</th></tr></thead><tbody>{inboundEmails.map(item => <tr key={item.id}><td>{new Date(item.received_at).toLocaleString('ja-JP')}</td><td>{item.sender_email}</td><td><strong>{item.subject || '件名なし'}</strong><p className="muted text-xs">{item.preview}</p></td><td>{item.company_name || '未照合'}<p className="muted text-xs">{item.match_type === 'contact_person' ? '担当者メール' : item.match_type === 'company_email' ? '企業メール' : '確認が必要'}</p></td></tr>)}</tbody></table></div>}
+      {inboundEmails.length > 0 && <div className="company-table-wrap mt-5"><table className="company-table"><thead><tr><th>受信日時</th><th>送信者</th><th>件名</th><th>紐付け</th></tr></thead><tbody>{inboundEmails.map(item => <tr key={item.id}><td>{new Date(item.received_at).toLocaleString('ja-JP')}</td><td>{item.sender_email}</td><td><strong>{item.subject || '件名なし'}</strong><p className="muted text-xs">{item.preview}</p></td><td>{item.company_name || '未照合'}<p className="muted text-xs">{item.match_type === 'contact_person' ? '担当者メール' : item.match_type === 'company_email' ? '企業メール' : item.match_type === 'manual' ? '手動紐付け' : '確認が必要'}</p>{item.match_type === 'unmatched' && <div className="mt-3"><label className="field mb-2">紐付け先を検索<input aria-label={`${item.subject || item.sender_email}の紐付け先`} value={matchQueries[item.id] ?? item.sender_email} onChange={e => setMatchQueries({ ...matchQueries, [item.id]: e.target.value })} /></label><button className="secondary" disabled={busy} onClick={() => void findMatchCandidates(item)}>企業を検索</button>{matchCandidates[item.id]?.map(company => <button className="secondary mt-2 mr-2" disabled={busy} key={company.id} onClick={() => void matchInbound(item, company)}>{company.company_name}へ紐付け</button>)}</div>}</td></tr>)}</tbody></table></div>}
     </div>
   </section>
 }

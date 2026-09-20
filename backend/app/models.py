@@ -418,7 +418,7 @@ class InboundEmail(Timestamps, Base):
     __table_args__ = (
         UniqueConstraint("mailbox_uid", name="uq_inbound_email_mailbox_uid"),
         CheckConstraint(
-            "match_type IN ('company_email', 'contact_person', 'unmatched')",
+            "match_type IN ('company_email', 'contact_person', 'manual', 'unmatched')",
             name="ck_inbound_email_match_type",
         ),
     )

@@ -178,6 +178,28 @@ def match_company(db, sender_email: str) -> tuple[Company | None, str]:
     return company, "company_email" if company.id in direct_ids else "contact_person"
 
 
+def record_company_reply(
+    db, company: Company, sender_email: str, subject: str, *, manual: bool
+) -> None:
+    prefix = "受信メールを手動紐付け" if manual else "受信メール"
+    db.add(
+        Activity(
+            company_id=company.id,
+            activity_type="email",
+            note=f"{prefix}: {sender_email} / 件名: {subject}"[:10000],
+        )
+    )
+    if company.status in {"unreviewed", "target", "approached"}:
+        company.status = "replied"
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="status_change",
+                note="営業状況を更新: 返信あり（受信メール）",
+            )
+        )
+
+
 def sync_inbound_mail(db, force: bool = False, raise_on_error: bool = False) -> int:
     saved = db.get(InboundMailSettings, 1)
     if saved is None or not saved.active:
@@ -209,24 +231,9 @@ def sync_inbound_mail(db, force: bool = False, raise_on_error: bool = False) -> 
             )
             db.add(inbound)
             if company:
-                db.add(
-                    Activity(
-                        company_id=company.id,
-                        activity_type="email",
-                        note=f"受信メール: {message.sender_email} / 件名: {message.subject}"[
-                            :10000
-                        ],
-                    )
+                record_company_reply(
+                    db, company, message.sender_email, message.subject, manual=False
                 )
-                if company.status in {"unreviewed", "target", "approached"}:
-                    company.status = "replied"
-                    db.add(
-                        Activity(
-                            company_id=company.id,
-                            activity_type="status_change",
-                            note="営業状況を更新: 返信あり（受信メール）",
-                        )
-                    )
             processed += 1
         saved.last_polled_at = now
         saved.last_error = ""
