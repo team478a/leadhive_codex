@@ -87,6 +87,11 @@ export interface ContactPerson {
   verification_status: 'unknown' | 'verified' | 'invalid'
   verified_at: string | null; notes: string; created_at: string; updated_at: string
 }
+export interface Notification {
+  id: string; project_id: string; company_id: string | null; operation_job_id: string | null
+  notification_type: 'followup_overdue' | 'operation_failed'
+  title: string; message: string; read_at: string | null; created_at: string
+}
 export type OutreachChannel = 'email' | 'form' | 'call' | 'sns'
 export interface OutreachQueueItem {
   company: Company

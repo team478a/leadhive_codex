@@ -330,6 +330,19 @@ class ContactPersonOut(ContactPersonInput):
     updated_at: datetime
 
 
+class NotificationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    company_id: UUID | None
+    operation_job_id: UUID | None
+    notification_type: Literal["followup_overdue", "operation_failed"]
+    title: str
+    message: str
+    read_at: datetime | None
+    created_at: datetime
+
+
 class OutreachQueueItemOut(BaseModel):
     company: CompanyOut
     available_channels: list[Literal["email", "form", "call", "sns"]]

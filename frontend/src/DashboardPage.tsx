@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
-import type { Dashboard, SalesActivityAnalytics } from './types'
+import type { Dashboard, Notification, SalesActivityAnalytics } from './types'
 
 const labels: Record<string, string> = {
   target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -17,18 +17,28 @@ const operationStatuses: Record<string, string> = {
 export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: number) => void }) {
   const [data, setData] = useState<Dashboard | null>(null)
   const [sales, setSales] = useState<SalesActivityAnalytics | null>(null)
+  const [notifications, setNotifications] = useState<Notification[]>([])
   const [salesDays, setSalesDays] = useState(30)
   const [error, setError] = useState('')
   const load = useCallback(async () => {
-    const [next, nextSales] = await Promise.all([
+    const [next, nextSales, nextNotifications] = await Promise.all([
       api<Dashboard>('/dashboard'), api<SalesActivityAnalytics>(`/sales-activity-analytics?days=${salesDays}`),
+      api<Notification[]>('/notifications?limit=50'),
     ])
-    setData(next); onUnreadChange(next.unread_operation_failures)
-    setSales(nextSales)
+    setData(next); setSales(nextSales); setNotifications(nextNotifications)
+    onUnreadChange(nextNotifications.filter(item => !item.read_at).length)
   }, [onUnreadChange, salesDays])
   useEffect(() => { load().catch(e => setError(errorMessage(e))) }, [load])
   async function acknowledge(id: string) {
     try { await api(`/operations/${id}/acknowledge`, 'POST'); await load() }
+    catch (e) { setError(errorMessage(e)) }
+  }
+  async function readNotification(id: string) {
+    try { await api(`/notifications/${id}/read`, 'POST'); await load() }
+    catch (e) { setError(errorMessage(e)) }
+  }
+  async function readAllNotifications() {
+    try { await api('/notifications/read-all', 'POST'); await load() }
     catch (e) { setError(errorMessage(e)) }
   }
   if (error) return <p className="error" role="alert">{error}</p>
@@ -42,9 +52,9 @@ export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: numb
     ['フォロー期限超過', data.overdue_followups], ['本日フォロー', data.due_today_followups],
   ] as const
   return <>
-    {data.unread_operation_failures > 0 && <p className="error" role="alert">
-      未確認のバックグラウンド処理失敗が {data.unread_operation_failures} 件あります。
-    </p>}
+    <section className="panel mb-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>通知</h2><p className="muted mt-2 text-sm">期限超過と処理失敗を確認します。</p></div>{notifications.some(item => !item.read_at) && <button className="secondary" onClick={() => void readAllNotifications()}>すべて既読</button>}</div>
+      {notifications.length === 0 ? <p className="muted mt-4">新しい通知はありません。</p> : notifications.map(item => <article className="job-row" key={item.id}><div><strong>{item.title}</strong><p className="muted text-sm">{item.message}</p><time className="muted text-xs">{new Date(item.created_at).toLocaleString('ja-JP')}</time></div><div className="text-right"><span className="badge">{item.read_at ? '既読' : '未読'}</span>{!item.read_at && <button className="secondary mt-2" onClick={() => void readNotification(item.id)}>既読にする</button>}</div></article>)}
+    </section>
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{cards.map(([label, value]) =>
       <article className="metric" key={label}><span>{label}</span><strong>{value}</strong></article>)}</section>
     <section className="panel mt-6"><h2>直近の収集結果</h2>

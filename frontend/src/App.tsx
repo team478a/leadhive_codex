@@ -4,7 +4,7 @@ import { Field, ProfileForm, ProjectForm } from './forms'
 import { CollectionPage } from './CollectionPage'
 import { CompaniesPage } from './CompaniesPage'
 import { DashboardPage } from './DashboardPage'
-import type { Dashboard, Profile, Project, User } from './types'
+import type { Notification, Profile, Project, User } from './types'
 
 function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: string }) {
   const [email, setEmail] = useState('')
@@ -53,13 +53,14 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
-  const [unreadFailures, setUnreadFailures] = useState(0)
+  const [unreadNotifications, setUnreadNotifications] = useState(0)
   const reload = useCallback(async () => {
-    const [nextProjects, nextProfiles, dashboard] = await Promise.all([
-      allPages<Project>('/projects'), allPages<Profile>('/target-profiles'), api<Dashboard>('/dashboard'),
+    const [nextProjects, nextProfiles, notifications] = await Promise.all([
+      allPages<Project>('/projects'), allPages<Profile>('/target-profiles'),
+      api<Notification[]>('/notifications?unread_only=true&limit=100'),
     ])
     setProjects(nextProjects); setProfiles(nextProfiles)
-    setUnreadFailures(dashboard.unread_operation_failures); setLoaded(true)
+    setUnreadNotifications(notifications.length); setLoaded(true)
   }, [])
   useEffect(() => {
     reload().catch(e => setError(errorMessage(e))).finally(() => setLoading(false))
@@ -79,7 +80,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       <nav aria-label="メインナビゲーション">
         <button className={tab === 'dashboard' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('dashboard'); setEditor(null); setNotice('')
-        }}>⌂ ダッシュボード{unreadFailures > 0 && ` (${unreadFailures})`}</button>
+        }}>⌂ ダッシュボード{unreadNotifications > 0 && ` (${unreadNotifications})`}</button>
         <button className={tab === 'projects' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('projects'); setEditor(null); setNotice('')
         }}>▦ プロジェクト</button>
@@ -135,7 +136,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         </> : loaded && tab === 'collection' ? <CollectionPage projects={projects} profiles={profiles}
           initialProjectId={collectionProjectId} /> : loaded && tab === 'companies' ?
           <CompaniesPage projects={projects} initialProjectId={collectionProjectId} /> : loaded && tab === 'dashboard' ?
-          <DashboardPage onUnreadChange={setUnreadFailures} /> : loaded && <>
+          <DashboardPage onUnreadChange={setUnreadNotifications} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>
           <p className="muted mb-5">標準プロファイルは複製して編集できます。案件専用の条件も、複製して設定してください。</p>
           {profiles.length === 0 && <p className="panel empty">プロファイルがありません。新規作成してください。</p>}
