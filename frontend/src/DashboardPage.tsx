@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
-import type { Dashboard, Notification, SalesActivityAnalytics } from './types'
+import type { Dashboard, Notification, OutreachEffectivenessAnalytics, SalesActivityAnalytics } from './types'
 
 const labels: Record<string, string> = {
   target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -17,15 +17,17 @@ const operationStatuses: Record<string, string> = {
 export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: number) => void }) {
   const [data, setData] = useState<Dashboard | null>(null)
   const [sales, setSales] = useState<SalesActivityAnalytics | null>(null)
+  const [effectiveness, setEffectiveness] = useState<OutreachEffectivenessAnalytics | null>(null)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [salesDays, setSalesDays] = useState(30)
   const [error, setError] = useState('')
   const load = useCallback(async () => {
-    const [next, nextSales, nextNotifications] = await Promise.all([
+    const [next, nextSales, nextEffectiveness, nextNotifications] = await Promise.all([
       api<Dashboard>('/dashboard'), api<SalesActivityAnalytics>(`/sales-activity-analytics?days=${salesDays}`),
+      api<OutreachEffectivenessAnalytics>(`/outreach-effectiveness-analytics?days=${salesDays}`),
       api<Notification[]>('/notifications?limit=50'),
     ])
-    setData(next); setSales(nextSales); setNotifications(nextNotifications)
+    setData(next); setSales(nextSales); setEffectiveness(nextEffectiveness); setNotifications(nextNotifications)
     onUnreadChange(nextNotifications.filter(item => !item.read_at).length)
   }, [onUnreadChange, salesDays])
   useEffect(() => { load().catch(e => setError(errorMessage(e))) }, [load])
@@ -67,6 +69,7 @@ export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: numb
     {sales && <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>営業活動成果</h2><p className="muted mt-2 text-sm">ステータス変更履歴から期間内の成果率を集計します。</p></div><label className="field mb-0">集計期間<select value={salesDays} onChange={e => setSalesDays(Number(e.target.value))}><option value={7}>7日</option><option value={30}>30日</option><option value={90}>90日</option><option value={365}>365日</option></select></label></div>
       <div className="grid gap-3 mt-5 sm:grid-cols-2 xl:grid-cols-4">{[['アプローチ', sales.approached], ['返信率', `${sales.reply_rate}%`], ['商談率', `${sales.meeting_rate}%`], ['成約率', `${sales.win_rate}%`]].map(([label, value]) => <div className="metric" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
       <div className="company-table-wrap mt-5"><table className="company-table"><thead><tr><th>担当者</th><th>アプローチ</th><th>返信</th><th>商談</th><th>成約</th></tr></thead><tbody>{sales.by_assignee.map(item => <tr key={item.assignee}><td>{item.assignee}</td><td>{item.approached}</td><td>{item.replied}</td><td>{item.meetings}</td><td>{item.won}</td></tr>)}{sales.by_assignee.length === 0 && <tr><td colSpan={5} className="text-center muted">期間内の営業活動はありません。</td></tr>}</tbody></table></div></section>}
+    {effectiveness && <section className="panel mt-6"><h2>送信方法・文面別の成果</h2><p className="muted mt-2 text-sm">承認済み送信を基準に、現在の営業状況を集計します。</p><div className="company-table-wrap mt-5"><table className="company-table"><thead><tr><th>送信方法</th><th>件名・文面</th><th>承認</th><th>返信</th><th>商談</th><th>成約</th><th>返信率</th></tr></thead><tbody>{effectiveness.items.map(item => <tr key={`${item.approval_type}-${item.subject}`}><td>{item.approval_type === 'email' ? 'メール' : item.approval_type === 'form_direct' ? '通常フォーム' : 'Codex支援フォーム'}</td><td>{item.subject || '件名なし'}</td><td>{item.approvals}</td><td>{item.replied}</td><td>{item.meetings}</td><td>{item.won}</td><td>{item.reply_rate}%</td></tr>)}{effectiveness.items.length === 0 && <tr><td colSpan={7} className="text-center muted">期間内の承認済み送信はありません。</td></tr>}</tbody></table></div></section>}
     <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3">
       <h2>バックグラウンド処理監視</h2>
       <p className="muted text-sm">{Object.entries(data.operation_statuses).map(([key, value]) => `${operationStatuses[key] ?? key} ${value}`).join(' / ') || '処理なし'}</p>

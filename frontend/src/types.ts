@@ -177,3 +177,7 @@ export interface SalesActivityAnalytics {
   meetings: number; won: number; reply_rate: number; meeting_rate: number; win_rate: number
   by_assignee: Array<{ assignee: string; approached: number; replied: number; meetings: number; won: number }>
 }
+export interface OutreachEffectivenessAnalytics {
+  days: number
+  items: Array<{ approval_type: 'email' | 'form_direct' | 'form_codex'; subject: string; approvals: number; replied: number; meetings: number; won: number; reply_rate: number }>
+}

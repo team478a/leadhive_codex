@@ -18,6 +18,8 @@ from app.models import (
     Company,
     ContactPerson,
     OperationJob,
+    OutreachDraft,
+    OutreachDraftApproval,
     Project,
     SavedCompanyFilter,
     SuppressionEntry,
@@ -45,6 +47,8 @@ from app.schemas import (
     FollowupTaskOut,
     FollowupTaskResolveInput,
     OperationJobOut,
+    OutreachEffectivenessAnalyticsOut,
+    OutreachEffectivenessItemOut,
     OutreachQueueItemOut,
     OutreachRecordInput,
     SalesActivityAnalyticsOut,
@@ -125,6 +129,7 @@ def sales_activity_analytics(
         .join(Project, Project.id == Company.project_id)
         .where(accessible_project_condition(user.id), Activity.created_at >= since)
     )
+
     activities, approached, replied, meetings, won = db.execute(base).one()
     rows = db.execute(
         select(
@@ -161,6 +166,54 @@ def sales_activity_analytics(
                 won=row_won,
             )
             for assignee, row_approached, row_replied, row_meetings, row_won in rows
+        ],
+    )
+
+
+@router.get("/outreach-effectiveness-analytics", response_model=OutreachEffectivenessAnalyticsOut)
+def outreach_effectiveness_analytics(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    replied = func.count().filter(Company.status.in_(("replied", "meeting", "won")))
+    meetings = func.count().filter(Company.status.in_(("meeting", "won")))
+    won = func.count().filter(Company.status == "won")
+    rows = db.execute(
+        select(
+            OutreachDraftApproval.approval_type,
+            OutreachDraftApproval.subject,
+            func.count(),
+            replied,
+            meetings,
+            won,
+        )
+        .select_from(OutreachDraftApproval)
+        .join(OutreachDraft, OutreachDraft.id == OutreachDraftApproval.draft_id)
+        .join(Company, Company.id == OutreachDraft.company_id)
+        .join(Project, Project.id == Company.project_id)
+        .where(
+            accessible_project_condition(user.id),
+            OutreachDraftApproval.approved_at >= since,
+        )
+        .group_by(OutreachDraftApproval.approval_type, OutreachDraftApproval.subject)
+        .order_by(func.count().desc(), OutreachDraftApproval.subject)
+        .limit(100)
+    ).all()
+    return OutreachEffectivenessAnalyticsOut(
+        days=days,
+        items=[
+            OutreachEffectivenessItemOut(
+                approval_type=approval_type,
+                subject=subject,
+                approvals=approvals,
+                replied=row_replied,
+                meetings=meetings,
+                won=won,
+                reply_rate=round(row_replied / approvals * 100, 1) if approvals else 0,
+            )
+            for approval_type, subject, approvals, row_replied, meetings, won in rows
         ],
     )
 

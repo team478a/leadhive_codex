@@ -743,3 +743,18 @@ class SalesActivityAnalyticsOut(BaseModel):
     meeting_rate: float
     win_rate: float
     by_assignee: list[SalesAnalyticsAssigneeOut]
+
+
+class OutreachEffectivenessItemOut(BaseModel):
+    approval_type: Literal["email", "form_direct", "form_codex"]
+    subject: str
+    approvals: int
+    replied: int
+    meetings: int
+    won: int
+    reply_rate: float
+
+
+class OutreachEffectivenessAnalyticsOut(BaseModel):
+    days: int
+    items: list[OutreachEffectivenessItemOut]
