@@ -32,6 +32,7 @@ class User(Timestamps, Base):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     email: Mapped[str] = mapped_column(String(320), unique=True)
     password_hash: Mapped[str] = mapped_column(Text)
+    is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
 class TargetProfile(Timestamps, Base):
@@ -287,6 +288,22 @@ class EmailDelivery(Timestamps, Base):
     worker_id: Mapped[uuid.UUID | None] = mapped_column()
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     error_message: Mapped[str] = mapped_column(String(500), default="")
+
+
+class SmtpSettings(Timestamps, Base):
+    __tablename__ = "smtp_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer)
+    username: Mapped[str] = mapped_column(String(320), default="")
+    password_ciphertext: Mapped[str] = mapped_column(Text, default="")
+    from_email: Mapped[str] = mapped_column(String(320))
+    from_name: Mapped[str] = mapped_column(String(200), default="LeadHive")
+    use_starttls: Mapped[bool] = mapped_column(Boolean, default=True)
+    timeout_seconds: Mapped[float] = mapped_column()
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
 
 
 class Notification(Base):

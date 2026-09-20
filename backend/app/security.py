@@ -26,3 +26,9 @@ def current_user(request: Request, db: Session = Depends(get_db)) -> User:
     if user is None:
         raise HTTPException(401, "ログインしてください。")
     return user
+
+
+def current_admin(user: User = Depends(current_user)) -> User:
+    if not user.is_admin:
+        raise HTTPException(404, "設定が見つかりません。")
+    return user

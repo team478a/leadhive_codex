@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     smtp_from_name: str = "LeadHive"
     smtp_use_starttls: bool = True
     smtp_timeout_seconds: float = 20.0
+    settings_encryption_key: str = ""
 
     @field_validator("database_url")
     @classmethod

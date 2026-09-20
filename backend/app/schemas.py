@@ -30,6 +30,7 @@ class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     email: str
+    is_admin: bool
     created_at: datetime
 
 
@@ -402,6 +403,34 @@ class EmailDeliveryOut(BaseModel):
     error_message: str
     created_at: datetime
     updated_at: datetime
+
+
+class SmtpSettingsInput(Input):
+    host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+    port: int = Field(ge=1, le=65535)
+    username: str = Field(default="", max_length=320)
+    password: str | None = Field(default=None, max_length=1024)
+    from_email: EmailStr
+    from_name: str = Field(default="LeadHive", max_length=200)
+    use_starttls: bool = True
+    timeout_seconds: float = Field(default=20, ge=1, le=120)
+
+
+class SmtpSettingsOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    host: str
+    port: int
+    username: str
+    from_email: str
+    from_name: str
+    use_starttls: bool
+    timeout_seconds: float
+    password_configured: bool
+    updated_at: datetime
+
+
+class SmtpTestInput(Input):
+    recipient_email: EmailStr
 
 
 class NotificationOut(BaseModel):

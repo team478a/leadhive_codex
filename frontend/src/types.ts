@@ -1,4 +1,8 @@
-export interface User { id: string; email: string; created_at: string }
+export interface User { id: string; email: string; is_admin: boolean; created_at: string }
+export interface SmtpSettings {
+  host: string; port: number; username: string; from_email: string; from_name: string
+  use_starttls: boolean; timeout_seconds: number; password_configured: boolean; updated_at: string
+}
 export interface ProfileInput {
   profile_name: string
   description: string

@@ -119,7 +119,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
     worker_id = delivery.worker_id
     logger.info("email delivery start: id=%s", delivery.id)
     try:
-        send_email(str(delivery.id), delivery.recipient_email, delivery.subject, delivery.body)
+        send_email(db, str(delivery.id), delivery.recipient_email, delivery.subject, delivery.body)
         db.refresh(delivery)
         if delivery.status != "running" or delivery.worker_id != worker_id:
             return

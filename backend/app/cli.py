@@ -22,7 +22,13 @@ def main():
     with SessionLocal() as db:
         if db.scalar(select(User.id).where(User.email == email)):
             parser.error("User already exists")
-        db.add(User(email=email, password_hash=password_hasher.hash(password)))
+        db.add(
+            User(
+                email=email,
+                password_hash=password_hasher.hash(password),
+                is_admin=db.scalar(select(User.id).limit(1)) is None,
+            )
+        )
         db.commit()
     print("User created.")
 
