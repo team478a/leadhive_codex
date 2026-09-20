@@ -57,6 +57,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `43_EMAIL_DELIVERY_RATE_LIMITS.md`
 - `44_EMAIL_DELIVERY_STATUS.md`
 - `45_EMAIL_DELIVERY_SALES_STATUS.md`
+- `46_APPROVED_FORM_DELIVERY.md`
 
 ## 基本原則
 
