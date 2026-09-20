@@ -15,6 +15,8 @@ def smtp_body(password="smtp-password"):
         "from_name": "LeadHive Test",
         "use_starttls": True,
         "timeout_seconds": 15,
+        "max_emails_per_day": 80,
+        "minimum_interval_seconds": 45,
     }
 
 
@@ -31,6 +33,8 @@ def test_admin_can_store_encrypted_smtp_settings_and_send_test(auth, users, db, 
     assert saved.status_code == 200
     result = saved.json()
     assert result["password_configured"] is True
+    assert result["max_emails_per_day"] == 80
+    assert result["minimum_interval_seconds"] == 45
     assert "password" not in result
     row = db.get(SmtpSettings, 1)
     assert row.password_ciphertext != "smtp-password"

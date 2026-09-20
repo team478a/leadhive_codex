@@ -1,9 +1,10 @@
 from contextlib import nullcontext
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
 from app import worker
-from app.models import Activity, Company, Notification, OutreachDraft
+from app.models import Activity, Company, EmailDelivery, Notification, OutreachDraft, SmtpSettings
 from app.services.email_delivery import EmailDeliveryError
 
 
@@ -149,3 +150,64 @@ def test_email_delivery_rejects_unknown_recipient_and_contact_suppression(auth, 
         ).status_code
         == 409
     )
+
+
+def test_email_delivery_respects_daily_limit_and_minimum_interval(auth, db):
+    _, company, draft = make_draft(auth, db)
+    now = datetime.now(timezone.utc)
+    sent = EmailDelivery(
+        draft_id=draft.id,
+        company_id=company.id,
+        recipient_email=company.email,
+        recipient_name=company.company_name,
+        subject=draft.subject,
+        body=draft.body,
+        status="sent",
+        scheduled_for=now - timedelta(minutes=2),
+        confirmed_at=now - timedelta(minutes=2),
+        sent_at=now - timedelta(seconds=30),
+    )
+    next_draft = OutreachDraft(
+        company_id=company.id,
+        channel="email",
+        subject="次のご案内",
+        body="次の営業メールです。",
+    )
+    db.add_all((sent, next_draft))
+    db.flush()
+    queued = EmailDelivery(
+        draft_id=next_draft.id,
+        company_id=company.id,
+        recipient_email=company.email,
+        recipient_name=company.company_name,
+        subject=next_draft.subject,
+        body=next_draft.body,
+        scheduled_for=now - timedelta(minutes=1),
+        confirmed_at=now - timedelta(minutes=1),
+    )
+    db.add_all(
+        (
+            queued,
+            SmtpSettings(
+                id=1,
+                host="smtp.example.com",
+                port=587,
+                from_email="mailer@example.com",
+                timeout_seconds=20,
+                max_emails_per_day=1,
+                minimum_interval_seconds=60,
+            ),
+        )
+    )
+    db.commit()
+    assert worker.claim_email_delivery(db) is None
+
+    settings = db.get(SmtpSettings, 1)
+    settings.max_emails_per_day = 2
+    db.commit()
+    assert worker.claim_email_delivery(db) is None
+
+    sent.sent_at = datetime.now(timezone.utc) - timedelta(seconds=61)
+    db.commit()
+    claimed = worker.claim_email_delivery(db)
+    assert claimed is not None and claimed.id == queued.id and claimed.status == "running"
