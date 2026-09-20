@@ -283,3 +283,13 @@ class SearchSchedule(Timestamps, Base):
     next_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     last_enqueued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_error: Mapped[str] = mapped_column(String(500), default="")
+
+
+class SavedCompanyFilter(Timestamps, Base):
+    __tablename__ = "saved_company_filters"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    filters: Mapped[dict] = mapped_column(JSONB)

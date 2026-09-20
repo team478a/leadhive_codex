@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, CollectionSource, Company, CompanyPage, DataQuality, DuplicateCandidate, OperationJob, Project, SalesStatus } from './types'
+import type { Activity, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, DataQuality, DuplicateCandidate, OperationJob, Project, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -9,7 +9,7 @@ const statusNames: Record<SalesStatus, string> = {
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索', google_places: 'Google Maps', url: 'URL', csv: 'CSV',
 }
-type Filters = { rank: string; minScore: string; region: string; status: string; source: string; keyword: string; assignee: string; followup: string; sort: string }
+type Filters = CompanyFilterValues
 const defaults: Filters = { rank: '', minScore: '', region: '', status: '', source: '', keyword: '', assignee: '', followup: '', sort: 'score_desc' }
 
 function queryString(filters: Filters, page: number) {
@@ -33,6 +33,9 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [total, setTotal] = useState(0)
   const [quality, setQuality] = useState<DataQuality | null>(null)
   const [duplicates, setDuplicates] = useState<DuplicateCandidate[]>([])
+  const [savedFilters, setSavedFilters] = useState<SavedCompanyFilter[]>([])
+  const [assigneeAnalytics, setAssigneeAnalytics] = useState<AssigneeAnalytics[]>([])
+  const [filterName, setFilterName] = useState('')
   const [staleDays, setStaleDays] = useState(90)
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
@@ -50,14 +53,17 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [notice, setNotice] = useState('')
   const query = useMemo(() => queryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
-    if (!projectId) { setCompanies([]); return }
-    const [result, nextQuality, nextDuplicates] = await Promise.all([
+    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); return }
+    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics] = await Promise.all([
       api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
+      api<SavedCompanyFilter[]>(`/projects/${projectId}/saved-company-filters`),
+      api<AssigneeAnalytics[]>(`/projects/${projectId}/assignee-analytics`),
     ])
     setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
-    setDuplicates(nextDuplicates); setChecked([])
+    setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
+    setAssigneeAnalytics(nextAssigneeAnalytics); setChecked([])
   }, [projectId, query, staleDays])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
   async function open(company: Company) {
@@ -137,6 +143,23 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       setSelected(null); await reload(); setNotice('重複企業を統合しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function saveFilter() {
+    if (!filterName.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/projects/${projectId}/saved-company-filters`, 'POST', {
+        name: filterName, filters,
+      })
+      setFilterName(''); await reload(); setNotice('現在の絞り込み条件を保存しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function deleteFilter(filterId: string) {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/saved-company-filters/${filterId}`, 'DELETE')
+      await reload(); setNotice('保存フィルターを削除しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   if (projects.length === 0) return <section className="panel empty"><h2>先にプロジェクトを作成してください</h2></section>
   return <>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
@@ -153,6 +176,11 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       <label className="field">並び順<select value={draft.sort} onChange={e => setDraft({ ...draft, sort: e.target.value })}><option value="score_desc">スコア順</option><option value="newest">新しい順</option><option value="company_name">会社名順</option></select></label>
     </div><div className="flex flex-wrap justify-end gap-2"><button className="secondary" onClick={() => { setDraft(defaults); setFilters(defaults); setPage(0) }}>リセット</button><button onClick={() => { setFilters(draft); setPage(0) }}>絞り込む</button>
       <button className="secondary" onClick={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div></section>
+    <section className="panel mt-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2>保存フィルター</h2><p className="muted mt-2 text-sm">適用中の絞り込み条件を名前付きで保存します。</p></div>
+      <div className="flex flex-wrap items-end gap-2"><label className="field mb-0">フィルター名<input value={filterName} maxLength={200} onChange={e => setFilterName(e.target.value)} placeholder="例：佐藤担当の期限超過" /></label><button disabled={busy || !filterName.trim()} onClick={() => void saveFilter()}>現在の条件を保存</button></div></div>
+      {savedFilters.length === 0 ? <p className="muted mt-4">保存済みフィルターはありません。</p> : <div className="grid gap-3 mt-4 sm:grid-cols-2 xl:grid-cols-3">{savedFilters.map(item => <article className="job-row block" key={item.id}><strong>{item.name}</strong><div className="flex gap-2 mt-3"><button className="secondary" onClick={() => { setDraft(item.filters); setFilters(item.filters); setPage(0) }}>適用</button><button className="danger" disabled={busy} onClick={() => void deleteFilter(item.id)}>削除</button></div></article>)}</div>}</section>
+    <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>担当者別営業成果</h2><p className="muted mt-2 text-sm">担当企業数と現在の営業状況、期限超過を比較します。</p></div><span className="badge">{assigneeAnalytics.length} 人</span></div>
+      <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>担当者</th><th>担当企業</th><th>アプローチ</th><th>返信</th><th>商談</th><th>成約</th><th>期限超過</th></tr></thead><tbody>{assigneeAnalytics.map(item => <tr key={item.assignee}><td><strong>{item.assignee}</strong></td><td>{item.total}</td><td>{item.approached}</td><td>{item.replied}</td><td>{item.meetings}</td><td>{item.won}</td><td>{item.overdue}</td></tr>)}{assigneeAnalytics.length === 0 && <tr><td colSpan={7} className="text-center muted">集計対象の企業はありません。</td></tr>}</tbody></table></div></section>
     {quality && <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>データ品質</h2><p className="muted mt-2 text-sm">欠損情報とWeb解析の更新状況を確認します。</p></div>
       <div className="flex flex-wrap items-end gap-2"><label className="field mb-0">再解析期限（日）<input className="max-w-32" type="number" min={1} max={3650} value={staleDays} onChange={e => setStaleDays(Number(e.target.value))} /></label>
         <button disabled={busy || quality.reanalyzable === 0} onClick={() => void reanalyzeQuality()}>失敗・期限切れを再解析</button></div></div>

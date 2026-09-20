@@ -356,3 +356,40 @@ class SearchAnalyticsOut(BaseModel):
     error_count: int
     save_rate: float
     duplicate_rate: float
+
+
+class CompanyFilterValues(Input):
+    rank: str = Field(default="", max_length=20)
+    minScore: str = Field(default="", max_length=3)
+    region: str = Field(default="", max_length=100)
+    status: str = Field(default="", max_length=30)
+    source: str = Field(default="", max_length=30)
+    keyword: str = Field(default="", max_length=200)
+    assignee: str = Field(default="", max_length=200)
+    followup: str = Field(default="", max_length=20)
+    sort: str = Field(default="score_desc", max_length=30)
+
+
+class SavedCompanyFilterInput(Input):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    filters: CompanyFilterValues
+
+
+class SavedCompanyFilterOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    name: str
+    filters: dict
+    created_at: datetime
+    updated_at: datetime
+
+
+class AssigneeAnalyticsOut(BaseModel):
+    assignee: str
+    total: int
+    approached: int
+    replied: int
+    meetings: int
+    won: int
+    overdue: int

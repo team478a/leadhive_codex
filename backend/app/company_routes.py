@@ -12,10 +12,19 @@ from sqlalchemy.orm import Session, aliased
 
 from app.analysis_routes import owned_company, owned_project
 from app.database import get_db
-from app.models import Activity, CollectionJob, Company, OperationJob, Project, User
+from app.models import (
+    Activity,
+    CollectionJob,
+    Company,
+    OperationJob,
+    Project,
+    SavedCompanyFilter,
+    User,
+)
 from app.schemas import (
     ActivityInput,
     ActivityOut,
+    AssigneeAnalyticsOut,
     CompanyBulkAssigneeInput,
     CompanyBulkSalesInput,
     CompanyEditInput,
@@ -28,11 +37,97 @@ from app.schemas import (
     DataQualityReanalyzeInput,
     DuplicateCandidateOut,
     OperationJobOut,
+    SavedCompanyFilterInput,
+    SavedCompanyFilterOut,
 )
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
 JST = ZoneInfo("Asia/Tokyo")
+
+
+@router.get(
+    "/projects/{project_id}/saved-company-filters", response_model=list[SavedCompanyFilterOut]
+)
+def list_saved_company_filters(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    owned_project(project_id, db, user)
+    return db.scalars(
+        select(SavedCompanyFilter)
+        .where(SavedCompanyFilter.project_id == project_id)
+        .order_by(SavedCompanyFilter.created_at, SavedCompanyFilter.id)
+    ).all()
+
+
+@router.post(
+    "/projects/{project_id}/saved-company-filters",
+    response_model=SavedCompanyFilterOut,
+    status_code=201,
+)
+def create_saved_company_filter(
+    project_id: UUID,
+    body: SavedCompanyFilterInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    item = SavedCompanyFilter(
+        project_id=project_id, name=body.name, filters=body.filters.model_dump()
+    )
+    db.add(item)
+    db.commit()
+    db.refresh(item)
+    return item
+
+
+@router.delete("/saved-company-filters/{filter_id}", status_code=204)
+def delete_saved_company_filter(
+    filter_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    item = db.scalar(
+        select(SavedCompanyFilter)
+        .join(Project, Project.id == SavedCompanyFilter.project_id)
+        .where(SavedCompanyFilter.id == filter_id, Project.user_id == user.id)
+    )
+    if item is None:
+        raise HTTPException(404, "保存フィルターが見つかりません。")
+    db.delete(item)
+    db.commit()
+
+
+@router.get("/projects/{project_id}/assignee-analytics", response_model=list[AssigneeAnalyticsOut])
+def assignee_analytics(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    owned_project(project_id, db, user)
+    now = datetime.now(timezone.utc)
+    rows = db.execute(
+        select(
+            Company.assignee,
+            func.count(),
+            func.count().filter(Company.status == "approached"),
+            func.count().filter(Company.status == "replied"),
+            func.count().filter(Company.status == "meeting"),
+            func.count().filter(Company.status == "won"),
+            func.count().filter(Company.next_followup_at < now),
+        )
+        .where(Company.project_id == project_id)
+        .group_by(Company.assignee)
+        .order_by(func.count().desc(), Company.assignee)
+    ).all()
+    return [
+        AssigneeAnalyticsOut(
+            assignee=assignee or "未設定",
+            total=total,
+            approached=approached,
+            replied=replied,
+            meetings=meetings,
+            won=won,
+            overdue=overdue,
+        )
+        for assignee, total, approached, replied, meetings, won, overdue in rows
+    ]
 
 
 def duplicate_reasons(first: Company, second: Company) -> list[str]:

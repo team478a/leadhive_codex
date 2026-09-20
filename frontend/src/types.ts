@@ -92,3 +92,15 @@ export interface SearchAnalytics {
   found_count: number; saved_count: number; duplicate_count: number; error_count: number
   save_rate: number; duplicate_rate: number
 }
+export interface CompanyFilterValues {
+  rank: string; minScore: string; region: string; status: string; source: string
+  keyword: string; assignee: string; followup: string; sort: string
+}
+export interface SavedCompanyFilter {
+  id: string; project_id: string; name: string; filters: CompanyFilterValues
+  created_at: string; updated_at: string
+}
+export interface AssigneeAnalytics {
+  assignee: string; total: number; approached: number; replied: number
+  meetings: number; won: number; overdue: number
+}
