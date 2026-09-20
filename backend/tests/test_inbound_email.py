@@ -5,7 +5,14 @@ from cryptography.fernet import Fernet
 from sqlalchemy import select
 
 from app import worker
-from app.models import Activity, Company, ContactPerson, InboundEmail, InboundMailSettings
+from app.models import (
+    Activity,
+    Company,
+    ContactPerson,
+    InboundEmail,
+    InboundMailSettings,
+    SuppressionEntry,
+)
 from app.services import email_delivery, inbound_email
 from app.services.inbound_email import FetchedInboundMessage
 
@@ -121,6 +128,48 @@ def test_worker_runs_inbound_sync_before_other_work(db, monkeypatch):
     monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: calls.append(True) or 1)
     assert worker.run_once() is True
     assert calls == [True]
+
+
+def test_inbound_unsubscribe_and_bounce_suppress_matched_companies(auth, db, monkeypatch):
+    make_settings(db, monkeypatch)
+    unsubscribe_company = make_company(auth, db, "contact@unsubscribe.example")
+    bounce_company = make_company(auth, db, "contact@bounce.example")
+    unsubscribe = FetchedInboundMessage(
+        uid="unsubscribe-100",
+        message_id="<unsubscribe-100@example.com>",
+        sender_email=unsubscribe_company.email,
+        subject="今後の連絡を停止してください",
+        preview="配信停止をお願いします。",
+        received_at=datetime.now(timezone.utc),
+    )
+    bounce = FetchedInboundMessage(
+        uid="bounce-100",
+        message_id="<bounce-100@example.com>",
+        sender_email="mailer-daemon@example.net",
+        subject="Undelivered Mail Returned to Sender",
+        preview="Delivery failed for contact@bounce.example",
+        received_at=datetime.now(timezone.utc),
+        related_emails=("contact@bounce.example",),
+    )
+    monkeypatch.setattr(
+        inbound_email,
+        "fetch_unseen_messages",
+        lambda _config: ([unsubscribe, bounce], [unsubscribe.uid, bounce.uid]),
+    )
+    monkeypatch.setattr(inbound_email, "mark_messages_seen", lambda *_args: None)
+
+    assert inbound_email.sync_inbound_mail(db, force=True) == 2
+    db.refresh(unsubscribe_company)
+    db.refresh(bounce_company)
+    assert unsubscribe_company.do_not_contact and unsubscribe_company.status == "excluded"
+    assert bounce_company.do_not_contact and bounce_company.status == "excluded"
+    classifications = dict(
+        db.execute(select(InboundEmail.mailbox_uid, InboundEmail.classification)).all()
+    )
+    assert classifications == {"unsubscribe-100": "unsubscribe", "bounce-100": "bounce"}
+    reasons = db.scalars(select(SuppressionEntry.reason)).all()
+    assert "配信停止依頼（受信メール）" in reasons
+    assert "メール不達通知（受信メール）" in reasons
 
 
 def test_admin_can_search_and_manually_match_unmatched_inbound_email(auth, users, db):
