@@ -41,6 +41,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 テンプレート別成果分析は[実装記録](docs/23_SEARCH_ANALYTICS_IMPLEMENTATION.md)を参照してください。
 企業データ品質管理は[実装記録](docs/24_DATA_QUALITY_IMPLEMENTATION.md)を参照してください。
 保存フィルターと担当者別営業成果は[実装記録](docs/27_SAVED_FILTERS_ASSIGNEE_ANALYTICS.md)を参照してください。
+手動修正項目の再解析保護は[実装記録](docs/28_MANUAL_FIELD_PROTECTION.md)を参照してください。
 重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 担当者とフォロー期限管理は[実装記録](docs/26_ASSIGNEE_FOLLOWUP_IMPLEMENTATION.md)を参照してください。
 
