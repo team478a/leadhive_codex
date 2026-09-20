@@ -371,6 +371,39 @@ class OutreachDraftOut(BaseModel):
     updated_at: datetime
 
 
+class EmailDeliveryCreateInput(Input):
+    recipient_email: EmailStr
+    scheduled_for: datetime | None = None
+    confirmed: bool = False
+
+
+class EmailDeliveryRetryInput(Input):
+    scheduled_for: datetime | None = None
+    confirmed: bool = False
+
+
+class EmailDeliveryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    draft_id: UUID
+    company_id: UUID
+    created_by_user_id: UUID | None
+    recipient_email: str
+    recipient_name: str
+    subject: str
+    body: str
+    status: Literal["queued", "running", "sent", "failed", "cancelled"]
+    scheduled_for: datetime
+    confirmed_at: datetime
+    sent_at: datetime | None
+    started_at: datetime | None
+    finished_at: datetime | None
+    attempt_count: int
+    error_message: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class NotificationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID

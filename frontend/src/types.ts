@@ -97,6 +97,14 @@ export interface OutreachDraft {
   channel: 'email' | 'form' | 'sns'; subject: string; body: string
   ai_provider: string; ai_model: string; created_at: string; updated_at: string
 }
+export interface EmailDelivery {
+  id: string; draft_id: string; company_id: string; created_by_user_id: string | null
+  recipient_email: string; recipient_name: string; subject: string; body: string
+  status: 'queued' | 'running' | 'sent' | 'failed' | 'cancelled'
+  scheduled_for: string; confirmed_at: string; sent_at: string | null
+  started_at: string | null; finished_at: string | null; attempt_count: number
+  error_message: string; created_at: string; updated_at: string
+}
 export interface Notification {
   id: string; project_id: string; company_id: string | null; operation_job_id: string | null
   notification_type: 'followup_overdue' | 'operation_failed'

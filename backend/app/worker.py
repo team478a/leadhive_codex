@@ -13,8 +13,10 @@ from app.collection_routes import fail_job, save_candidates, start_job
 from app.config import settings
 from app.database import SessionLocal
 from app.models import (
+    Activity,
     AnalysisRefreshSchedule,
     Company,
+    EmailDelivery,
     OperationJob,
     Project,
     SearchSchedule,
@@ -22,6 +24,7 @@ from app.models import (
 )
 from app.operation_routes import refresh_company_ids
 from app.services.collection import ExternalServiceError, search_google_places, search_serper
+from app.services.email_delivery import EmailDeliveryError, send_email
 
 logger = logging.getLogger("leadhive")
 
@@ -65,6 +68,98 @@ def recover_stale_jobs(db) -> tuple[int, int]:
         db.commit()
         logger.warning("stale operations recovered: retried=%s failed=%s", retried, failed)
     return retried, failed
+
+
+def recover_stale_email_deliveries(db) -> int:
+    deliveries = db.scalars(
+        select(EmailDelivery)
+        .where(
+            EmailDelivery.status == "running",
+            EmailDelivery.lease_expires_at < datetime.now(timezone.utc),
+        )
+        .with_for_update(skip_locked=True)
+        .limit(100)
+    ).all()
+    for delivery in deliveries:
+        delivery.status = "failed"
+        delivery.worker_id = None
+        delivery.lease_expires_at = None
+        delivery.error_message = "送信中断を検出しました。内容を確認してから再送してください。"
+        delivery.finished_at = datetime.now(timezone.utc)
+    if deliveries:
+        db.commit()
+        logger.warning("stale email deliveries marked failed: count=%s", len(deliveries))
+    return len(deliveries)
+
+
+def claim_email_delivery(db) -> EmailDelivery | None:
+    delivery = db.scalar(
+        select(EmailDelivery)
+        .where(
+            EmailDelivery.status == "queued",
+            EmailDelivery.scheduled_for <= datetime.now(timezone.utc),
+        )
+        .order_by(EmailDelivery.scheduled_for, EmailDelivery.created_at, EmailDelivery.id)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if delivery:
+        delivery.status = "running"
+        delivery.attempt_count += 1
+        delivery.worker_id = uuid.uuid4()
+        delivery.lease_expires_at = lease_deadline()
+        delivery.started_at = datetime.now(timezone.utc)
+        delivery.finished_at = None
+        db.commit()
+        db.refresh(delivery)
+    return delivery
+
+
+def run_email_delivery(db, delivery: EmailDelivery) -> None:
+    worker_id = delivery.worker_id
+    logger.info("email delivery start: id=%s", delivery.id)
+    try:
+        send_email(str(delivery.id), delivery.recipient_email, delivery.subject, delivery.body)
+        db.refresh(delivery)
+        if delivery.status != "running" or delivery.worker_id != worker_id:
+            return
+        delivery.status = "sent"
+        delivery.sent_at = datetime.now(timezone.utc)
+        delivery.finished_at = delivery.sent_at
+        delivery.worker_id = None
+        delivery.lease_expires_at = None
+        delivery.error_message = ""
+        db.add(
+            Activity(
+                company_id=delivery.company_id,
+                activity_type="email",
+                note=f"メール送信: {delivery.recipient_email} / 件名: {delivery.subject}",
+            )
+        )
+        db.commit()
+        logger.info("email delivery end: id=%s status=sent", delivery.id)
+    except EmailDeliveryError as exc:
+        db.rollback()
+        delivery = db.get(EmailDelivery, delivery.id)
+        if delivery.status == "running" and delivery.worker_id == worker_id:
+            delivery.status = "failed"
+            delivery.error_message = exc.public_message[:500]
+            delivery.worker_id = None
+            delivery.lease_expires_at = None
+            delivery.finished_at = datetime.now(timezone.utc)
+            db.commit()
+        logger.warning("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
+    except Exception as exc:
+        db.rollback()
+        delivery = db.get(EmailDelivery, delivery.id)
+        if delivery.status == "running" and delivery.worker_id == worker_id:
+            delivery.status = "failed"
+            delivery.error_message = "メール送信処理に失敗しました。"
+            delivery.worker_id = None
+            delivery.lease_expires_at = None
+            delivery.finished_at = datetime.now(timezone.utc)
+            db.commit()
+        logger.error("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
 
 
 def enqueue_due_schedules(db) -> int:
@@ -342,6 +437,11 @@ def run_once() -> bool:
         enqueue_due_schedules(db)
         enqueue_due_refresh_schedules(db)
         recover_stale_jobs(db)
+        recover_stale_email_deliveries(db)
+        delivery = claim_email_delivery(db)
+        if delivery is not None:
+            run_email_delivery(db, delivery)
+            return True
         job = claim_job(db)
         if job is None:
             return False

@@ -24,6 +24,14 @@ class Settings(BaseSettings):
     ai_max_website_chars: int = 30_000
     worker_lease_seconds: int = 300
     worker_max_attempts: int = 3
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_username: str = ""
+    smtp_password: str = ""
+    smtp_from_email: str = ""
+    smtp_from_name: str = "LeadHive"
+    smtp_use_starttls: bool = True
+    smtp_timeout_seconds: float = 20.0
 
     @field_validator("database_url")
     @classmethod
@@ -88,6 +96,20 @@ class Settings(BaseSettings):
     def valid_worker_attempts(cls, value: int) -> int:
         if not 1 <= value <= 10:
             raise ValueError("worker_max_attempts must be between 1 and 10")
+        return value
+
+    @field_validator("smtp_port")
+    @classmethod
+    def valid_smtp_port(cls, value: int) -> int:
+        if not 1 <= value <= 65535:
+            raise ValueError("smtp_port must be between 1 and 65535")
+        return value
+
+    @field_validator("smtp_timeout_seconds")
+    @classmethod
+    def valid_smtp_timeout(cls, value: float) -> float:
+        if not 1 <= value <= 120:
+            raise ValueError("smtp_timeout_seconds must be between 1 and 120")
         return value
 
     @property

@@ -253,6 +253,42 @@ class OutreachDraft(Timestamps, Base):
     ai_model: Mapped[str] = mapped_column(String(100), default="")
 
 
+class EmailDelivery(Timestamps, Base):
+    __tablename__ = "email_deliveries"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'sent', 'failed', 'cancelled')",
+            name="ck_email_delivery_status",
+        ),
+        CheckConstraint("attempt_count >= 0", name="ck_email_delivery_attempt_count"),
+        UniqueConstraint("draft_id", name="uq_email_delivery_draft"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("outreach_drafts.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    recipient_email: Mapped[str] = mapped_column(String(320))
+    recipient_name: Mapped[str] = mapped_column(String(200), default="")
+    subject: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    confirmed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    attempt_count: Mapped[int] = mapped_column(Integer, default=0)
+    worker_id: Mapped[uuid.UUID | None] = mapped_column()
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    error_message: Mapped[str] = mapped_column(String(500), default="")
+
+
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
