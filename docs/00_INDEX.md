@@ -43,6 +43,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `29_CSV_IMPORT_WORKFLOW.md`
 - `30_SALES_ACTIVITY_ANALYTICS.md`
 - `31_CONTACT_SUPPRESSION_QUALITY.md`
+- `32_COLLECTION_ACCURACY_SPEED.md`
 
 ## 基本原則
 
