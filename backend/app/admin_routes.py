@@ -27,6 +27,7 @@ from app.services.inbound_email import (
     record_inbound_outcome,
     sync_inbound_mail,
 )
+from app.services.inbound_reply_notification import notify_inbound_reply
 from app.services.outreach_attribution import attribute_inbound_reply
 
 logger = logging.getLogger("leadhive")
@@ -305,6 +306,7 @@ def match_inbound_email(
         inbound.classification,
         manual=True,
     )
+    notify_inbound_reply(db, company, inbound)
     db.commit()
     db.refresh(inbound)
     logger.info(

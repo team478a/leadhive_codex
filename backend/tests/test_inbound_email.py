@@ -2,7 +2,7 @@ from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 
 from cryptography.fernet import Fernet
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app import worker
 from app.models import (
@@ -11,9 +11,11 @@ from app.models import (
     ContactPerson,
     InboundEmail,
     InboundMailSettings,
+    Notification,
     OutreachConversion,
     OutreachDraft,
     OutreachDraftApproval,
+    ProjectMember,
     SuppressionEntry,
 )
 from app.services import email_delivery, inbound_email
@@ -100,6 +102,34 @@ def test_inbound_sync_matches_company_updates_reply_and_is_idempotent(auth, db, 
 
     assert inbound_email.sync_inbound_mail(db, force=True) == 0
     assert db.scalar(select(InboundEmail).where(InboundEmail.mailbox_uid == "100"))
+
+
+def test_inbound_reply_notifies_project_owner_and_editors(auth, users, db, monkeypatch):
+    make_settings(db, monkeypatch)
+    company = make_company(auth, db, "contact@reply-notification.example")
+    db.add(ProjectMember(project_id=company.project_id, user_id=users[1].id, role="editor"))
+    db.commit()
+    received = message("reply-notification-100", company.email)
+    monkeypatch.setattr(
+        inbound_email,
+        "fetch_unseen_messages",
+        lambda _config: ([received], [received.uid]),
+    )
+    monkeypatch.setattr(inbound_email, "mark_messages_seen", lambda *_args: None)
+
+    assert inbound_email.sync_inbound_mail(db, force=True) == 1
+    notifications = db.scalars(
+        select(Notification).where(Notification.notification_type == "inbound_reply_received")
+    ).all()
+    assert {item.user_id for item in notifications} == {users[0].id, users[1].id}
+    assert all(item.company_id == company.id for item in notifications)
+    assert all(received.subject in item.message for item in notifications)
+    assert inbound_email.sync_inbound_mail(db, force=True) == 0
+    assert db.scalar(
+        select(func.count())
+        .select_from(Notification)
+        .where(Notification.notification_type == "inbound_reply_received")
+    ) == 2
 
 
 def test_inbound_sync_matches_contact_and_preserves_later_sales_status(auth, db, monkeypatch):
@@ -316,6 +346,12 @@ def test_admin_can_search_and_manually_match_unmatched_inbound_email(auth, users
     assert company.status == "replied"
     notes = db.scalars(select(Activity.note).where(Activity.company_id == company.id)).all()
     assert any("受信メールを手動紐付け" in note for note in notes)
+    assert db.scalar(
+        select(Notification).where(
+            Notification.company_id == company.id,
+            Notification.notification_type == "inbound_reply_received",
+        )
+    )
     assert (
         auth.post(
             f"/api/admin/inbound-emails/{inbound.id}/match", json={"company_id": str(company.id)}

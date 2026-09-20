@@ -595,7 +595,9 @@ class NotificationOut(BaseModel):
     company_id: UUID | None
     operation_job_id: UUID | None
     email_delivery_id: UUID | None
-    notification_type: Literal["followup_overdue", "operation_failed", "email_delivery_failed"]
+    notification_type: Literal[
+        "followup_overdue", "operation_failed", "email_delivery_failed", "inbound_reply_received"
+    ]
     title: str
     message: str
     read_at: datetime | None

@@ -19,6 +19,7 @@ from app.models import (
     SuppressionEntry,
 )
 from app.services.email_delivery import EmailDeliveryError, decrypt_secret
+from app.services.inbound_reply_notification import notify_inbound_reply
 from app.services.outreach_attribution import attribute_inbound_reply
 
 logger = logging.getLogger("leadhive")
@@ -369,6 +370,7 @@ def sync_inbound_mail(db, force: bool = False, raise_on_error: bool = False) -> 
                     classification,
                     manual=False,
                 )
+                notify_inbound_reply(db, company, inbound)
             processed += 1
         saved.last_polled_at = now
         saved.last_error = ""

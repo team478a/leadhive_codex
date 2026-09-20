@@ -470,7 +470,8 @@ class Notification(Base):
     __table_args__ = (
         CheckConstraint(
             "notification_type IN "
-            "('followup_overdue', 'operation_failed', 'email_delivery_failed')",
+            "('followup_overdue', 'operation_failed', 'email_delivery_failed', "
+            "'inbound_reply_received')",
             name="ck_notification_type",
         ),
     )
