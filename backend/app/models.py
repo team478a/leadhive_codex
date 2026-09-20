@@ -191,6 +191,29 @@ class Activity(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
+class ContactPerson(Timestamps, Base):
+    __tablename__ = "contact_people"
+    __table_args__ = (
+        CheckConstraint(
+            "verification_status IN ('unknown', 'verified', 'invalid')",
+            name="ck_contact_person_verification_status",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    department: Mapped[str] = mapped_column(String(200), default="")
+    title: Mapped[str] = mapped_column(String(200), default="")
+    email: Mapped[str] = mapped_column(String(320), default="")
+    phone: Mapped[str] = mapped_column(String(100), default="")
+    source_url: Mapped[str] = mapped_column(Text, default="")
+    verification_status: Mapped[str] = mapped_column(String(20), default="unknown")
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    notes: Mapped[str] = mapped_column(Text, default="")
+
+
 class SuppressionEntry(Timestamps, Base):
     __tablename__ = "suppression_entries"
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)

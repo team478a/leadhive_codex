@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, DataQuality, DuplicateCandidate, OperationJob, OutreachChannel, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, OperationJob, OutreachChannel, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -11,6 +11,7 @@ const sourceNames: Record<CollectionSource, string> = {
 }
 const channelNames: Record<OutreachChannel, string> = { email: 'メール', form: 'フォーム', call: '電話', sns: 'SNS' }
 const dueNames = { overdue: '期限超過', today: '本日', upcoming: '今後', unset: '期限なし' }
+const emptyContact = { name: '', department: '', title: '', email: '', phone: '', source_url: '', verification_status: 'unknown', notes: '' }
 type Filters = CompanyFilterValues
 const defaults: Filters = { rank: '', minScore: '', region: '', status: '', source: '', keyword: '', assignee: '', followup: '', sort: 'score_desc' }
 
@@ -60,6 +61,9 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [followup, setFollowup] = useState('')
   const [bulkAssignee, setBulkAssignee] = useState('')
   const [activities, setActivities] = useState<Activity[]>([])
+  const [contacts, setContacts] = useState<ContactPerson[]>([])
+  const [contactDraft, setContactDraft] = useState<Record<string, string>>(emptyContact)
+  const [editingContactId, setEditingContactId] = useState('')
   const [activityType, setActivityType] = useState('note')
   const [activityNote, setActivityNote] = useState('')
   const [busy, setBusy] = useState(false)
@@ -91,7 +95,11 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
     setProtectedFields(company.protected_fields)
     setDoNotContact(company.do_not_contact); setExclusionReason(company.exclusion_reason)
     setContactQuality(company.contact_quality_status)
-    setActivities(await api<Activity[]>(`/companies/${company.id}/activities`))
+    const [nextActivities, nextContacts] = await Promise.all([
+      api<Activity[]>(`/companies/${company.id}/activities`),
+      api<ContactPerson[]>(`/companies/${company.id}/contacts`),
+    ])
+    setActivities(nextActivities); setContacts(nextContacts)
   }
   async function save() {
     if (!selected) return
@@ -142,6 +150,31 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       })
       setActivityNote(''); setActivities(await api<Activity[]>(`/companies/${selected.id}/activities`))
       setNotice('活動履歴を追加しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  function editContact(contact: ContactPerson) {
+    setEditingContactId(contact.id)
+    setContactDraft(Object.fromEntries(Object.keys(emptyContact).map(key => [key, String(contact[key as keyof ContactPerson] ?? '')])))
+  }
+  async function saveContactPerson() {
+    if (!selected || !contactDraft.name?.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const path = editingContactId ? `/contacts/${editingContactId}` : `/companies/${selected.id}/contacts`
+      await api(path, editingContactId ? 'PUT' : 'POST', contactDraft)
+      setContacts(await api<ContactPerson[]>(`/companies/${selected.id}/contacts`))
+      setEditingContactId(''); setContactDraft(emptyContact)
+      setNotice(editingContactId ? '先方担当者を更新しました。' : '先方担当者を追加しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function deleteContactPerson(contact: ContactPerson) {
+    if (!window.confirm(`「${contact.name}」を削除しますか？`)) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/contacts/${contact.id}`, 'DELETE')
+      if (selected) setContacts(await api<ContactPerson[]>(`/companies/${selected.id}/contacts`))
+      if (editingContactId === contact.id) { setEditingContactId(''); setContactDraft(emptyContact) }
+      setNotice('先方担当者を削除しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   function startOutreach(item: OutreachQueueItem) {
@@ -267,6 +300,10 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       <div className="detail-grid"><div><h3>AI分析</h3><p><strong>{selected.rank ?? '未判定'} / {selected.score ?? '—'}点</strong> {selected.business_type}</p><p>{selected.ai_summary || 'AI要約はありません。'}</p><p className="muted">{selected.ai_reason}</p></div><div><h3>強み・懸念</h3><p>{selected.ai_strengths.join(' / ') || '—'}</p><p className="muted">{selected.ai_concerns.join(' / ') || '—'}</p><p>推奨：{selected.ai_recommended_approach || '—'}</p></div></div>
       <div className="detail-grid"><div><label className="field">営業状況<select value={status} onChange={e => setStatus(e.target.value as SalesStatus)}>{Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="field">次回対応日時<input type="datetime-local" value={followup} onChange={e => setFollowup(e.target.value)} /></label></div><label className="field">メモ<textarea rows={5} maxLength={20000} value={notes} onChange={e => setNotes(e.target.value)} /></label></div>
       <div className="actions"><button disabled={busy} onClick={() => void save()}>{busy ? '保存中…' : '営業状況を保存'}</button></div></section>}
+    {selected && <section className="panel mt-7" aria-label="先方担当者"><div className="flex items-center justify-between gap-3"><div><h2>先方担当者</h2><p className="muted mt-2 text-sm">相手企業の担当者・責任者と連絡先を管理します。</p></div><span className="badge">{contacts.length} 人</span></div>
+      <div className="grid gap-3 mt-4 sm:grid-cols-2">{contacts.map(contact => <article className="job-row block" key={contact.id}><div className="flex items-start justify-between gap-3"><div><strong>{contact.name}</strong><p className="muted text-sm">{[contact.department, contact.title].filter(Boolean).join(' / ') || '部署・役職未設定'}</p></div><span className="badge">{contact.verification_status === 'verified' ? '確認済み' : contact.verification_status === 'invalid' ? '無効' : '未確認'}</span></div><p className="mt-2 text-sm">{contact.email || 'メールなし'} / {contact.phone || '電話なし'}</p>{contact.notes && <p className="muted text-sm">{contact.notes}</p>}<div className="flex gap-2 mt-3"><button className="secondary" onClick={() => editContact(contact)}>編集</button><button className="danger" disabled={busy} onClick={() => void deleteContactPerson(contact)}>削除</button></div></article>)}{contacts.length === 0 && <p className="muted">登録済みの先方担当者はいません。</p>}</div>
+      <div className="mt-5"><h3>{editingContactId ? '先方担当者を編集' : '先方担当者を追加'}</h3><div className="detail-grid"><div><label className="field">担当者氏名<input maxLength={200} value={contactDraft.name} onChange={e => setContactDraft({ ...contactDraft, name: e.target.value })} /></label><label className="field">部署<input maxLength={200} value={contactDraft.department} onChange={e => setContactDraft({ ...contactDraft, department: e.target.value })} /></label><label className="field">役職<input maxLength={200} value={contactDraft.title} onChange={e => setContactDraft({ ...contactDraft, title: e.target.value })} /></label><label className="field">確認状態<select value={contactDraft.verification_status} onChange={e => setContactDraft({ ...contactDraft, verification_status: e.target.value })}><option value="unknown">未確認</option><option value="verified">確認済み</option><option value="invalid">無効</option></select></label></div><div><label className="field">担当者メール<input maxLength={320} value={contactDraft.email} onChange={e => setContactDraft({ ...contactDraft, email: e.target.value })} /></label><label className="field">担当者電話<input maxLength={100} value={contactDraft.phone} onChange={e => setContactDraft({ ...contactDraft, phone: e.target.value })} /></label><label className="field">取得元URL<input maxLength={5000} value={contactDraft.source_url} onChange={e => setContactDraft({ ...contactDraft, source_url: e.target.value })} /></label><label className="field">担当者メモ<textarea rows={3} maxLength={10000} value={contactDraft.notes} onChange={e => setContactDraft({ ...contactDraft, notes: e.target.value })} /></label></div></div><div className="actions"><button disabled={busy || !contactDraft.name?.trim()} onClick={() => void saveContactPerson()}>{editingContactId ? '担当者情報を更新' : '担当者を追加'}</button>{editingContactId && <button className="secondary" onClick={() => { setEditingContactId(''); setContactDraft(emptyContact) }}>キャンセル</button>}</div></div>
+    </section>}
     {selected && <section className="panel mt-7"><h2>活動履歴</h2><div className="detail-grid"><label className="field">活動種別<select value={activityType} onChange={e => setActivityType(e.target.value)}><option value="note">メモ</option><option value="call">電話</option><option value="email">メール</option><option value="form">フォーム</option><option value="sns">SNS</option><option value="meeting">商談</option></select></label><label className="field">活動内容<textarea rows={3} value={activityNote} onChange={e => setActivityNote(e.target.value)} /></label></div><div className="actions"><button disabled={busy || !activityNote.trim()} onClick={() => void addActivity()}>履歴を追加</button></div>{activities.map(item => <article className="job-row" key={item.id}><div><strong>{item.activity_type}</strong><p>{item.note}</p></div><time className="muted text-sm">{new Date(item.created_at).toLocaleString('ja-JP')}</time></article>)}</section>}
   </>
 }

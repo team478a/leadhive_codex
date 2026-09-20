@@ -81,6 +81,12 @@ export interface Activity {
   activity_type: 'note' | 'call' | 'email' | 'form' | 'sns' | 'meeting' | 'status_change'
   note: string; created_at: string
 }
+export interface ContactPerson {
+  id: string; company_id: string; name: string; department: string; title: string
+  email: string; phone: string; source_url: string
+  verification_status: 'unknown' | 'verified' | 'invalid'
+  verified_at: string | null; notes: string; created_at: string; updated_at: string
+}
 export type OutreachChannel = 'email' | 'form' | 'call' | 'sns'
 export interface OutreachQueueItem {
   company: Company

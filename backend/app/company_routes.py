@@ -16,6 +16,7 @@ from app.models import (
     Activity,
     CollectionJob,
     Company,
+    ContactPerson,
     OperationJob,
     Project,
     SavedCompanyFilter,
@@ -34,6 +35,8 @@ from app.schemas import (
     CompanyOut,
     CompanyPageOut,
     CompanySalesInput,
+    ContactPersonInput,
+    ContactPersonOut,
     DashboardOut,
     DataQualityOut,
     DataQualityReanalyzeInput,
@@ -82,6 +85,18 @@ def outreach_due_state(company: Company, now: datetime) -> str:
     if company.next_followup_at < day_start + timedelta(days=1):
         return "today"
     return "upcoming"
+
+
+def owned_contact_person(contact_id: UUID, db: Session, user: User) -> ContactPerson:
+    contact = db.scalar(
+        select(ContactPerson)
+        .join(Company, Company.id == ContactPerson.company_id)
+        .join(Project, Project.id == Company.project_id)
+        .where(ContactPerson.id == contact_id, Project.user_id == user.id)
+    )
+    if contact is None:
+        raise HTTPException(404, "担当者情報が見つかりません。")
+    return contact
 
 
 def status_transition_count(status: str):
@@ -363,6 +378,11 @@ def merge_companies(
     website_url, domain = source.website_url, source.domain
     db.execute(
         update(Activity).where(Activity.company_id == source.id).values(company_id=target.id)
+    )
+    db.execute(
+        update(ContactPerson)
+        .where(ContactPerson.company_id == source.id)
+        .values(company_id=target.id)
     )
     db.execute(
         update(Company)
@@ -846,6 +866,94 @@ def list_activities(
         .order_by(Activity.created_at.desc(), Activity.id)
         .limit(100)
     ).all()
+
+
+@router.get("/companies/{company_id}/contacts", response_model=list[ContactPersonOut])
+def list_contact_people(
+    company_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_company(company_id, db, user)
+    return db.scalars(
+        select(ContactPerson)
+        .where(ContactPerson.company_id == company_id)
+        .order_by(ContactPerson.name, ContactPerson.created_at, ContactPerson.id)
+    ).all()
+
+
+@router.post("/companies/{company_id}/contacts", response_model=ContactPersonOut, status_code=201)
+def create_contact_person(
+    company_id: UUID,
+    body: ContactPersonInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = owned_company(company_id, db, user)
+    values = body.model_dump()
+    contact = ContactPerson(
+        company_id=company.id,
+        **values,
+        verified_at=(
+            datetime.now(timezone.utc) if body.verification_status == "verified" else None
+        ),
+    )
+    db.add(contact)
+    db.add(
+        Activity(
+            company_id=company.id,
+            activity_type="note",
+            note=f"先方担当者を追加: {body.name}",
+        )
+    )
+    db.commit()
+    db.refresh(contact)
+    return contact
+
+
+@router.put("/contacts/{contact_id}", response_model=ContactPersonOut)
+def update_contact_person(
+    contact_id: UUID,
+    body: ContactPersonInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    contact = owned_contact_person(contact_id, db, user)
+    was_verified = contact.verification_status == "verified"
+    for key, value in body.model_dump().items():
+        setattr(contact, key, value)
+    if body.verification_status == "verified" and not was_verified:
+        contact.verified_at = datetime.now(timezone.utc)
+    elif body.verification_status != "verified":
+        contact.verified_at = None
+    db.add(
+        Activity(
+            company_id=contact.company_id,
+            activity_type="note",
+            note=f"先方担当者を更新: {body.name}",
+        )
+    )
+    db.commit()
+    db.refresh(contact)
+    return contact
+
+
+@router.delete("/contacts/{contact_id}", status_code=204)
+def delete_contact_person(
+    contact_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    contact = owned_contact_person(contact_id, db, user)
+    db.add(
+        Activity(
+            company_id=contact.company_id,
+            activity_type="note",
+            note=f"先方担当者を削除: {contact.name}",
+        )
+    )
+    db.delete(contact)
+    db.commit()
 
 
 @router.post("/companies/{company_id}/activities", response_model=ActivityOut, status_code=201)

@@ -310,6 +310,26 @@ class ActivityOut(BaseModel):
     created_at: datetime
 
 
+class ContactPersonInput(Input):
+    name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+    department: str = Field(default="", max_length=200)
+    title: str = Field(default="", max_length=200)
+    email: str = Field(default="", max_length=320)
+    phone: str = Field(default="", max_length=100)
+    source_url: str = Field(default="", max_length=5000)
+    verification_status: Literal["unknown", "verified", "invalid"] = "unknown"
+    notes: str = Field(default="", max_length=10000)
+
+
+class ContactPersonOut(ContactPersonInput):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    company_id: UUID
+    verified_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class OutreachQueueItemOut(BaseModel):
     company: CompanyOut
     available_channels: list[Literal["email", "form", "call", "sns"]]
