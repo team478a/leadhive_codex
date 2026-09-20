@@ -54,6 +54,7 @@ CSV取込プレビューと列対応付けは[実装記録](docs/29_CSV_IMPORT_W
 プロジェクトメンバーと権限は[実装記録](docs/38_PROJECT_MEMBERS.md)を参照してください。
 AI営業文面は[実装記録](docs/39_OUTREACH_DRAFTS.md)を参照してください。
 承認付きメール送信は[実装記録](docs/40_APPROVED_EMAIL_DELIVERY.md)を参照してください。
+SMTP設定の管理画面とテスト送信は[実装記録](docs/41_SMTP_SETTINGS_MANAGEMENT.md)を参照してください。
 重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 担当者とフォロー期限管理は[実装記録](docs/26_ASSIGNEE_FOLLOWUP_IMPLEMENTATION.md)を参照してください。
 

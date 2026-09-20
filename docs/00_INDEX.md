@@ -52,6 +52,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `38_PROJECT_MEMBERS.md`
 - `39_OUTREACH_DRAFTS.md`
 - `40_APPROVED_EMAIL_DELIVERY.md`
+- `41_SMTP_SETTINGS_MANAGEMENT.md`
 
 ## 基本原則
 
