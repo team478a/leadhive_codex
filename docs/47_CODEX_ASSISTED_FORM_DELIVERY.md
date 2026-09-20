@@ -10,6 +10,8 @@
 
 Codexはフォームを開き、項目確認・入力・画面上の送信内容確認を補助する。送信ボタンを押す外部操作は、利用者が内容を確認した上で一社ずつ行う。
 
+送信後はLeadHiveで結果を「保留」「失敗」「送信済み」として記録する。送信済みだけを営業状況の「アプローチ済」に反映し、保留・失敗は後続の確認や再対応に残す。
+
 ## 対象
 
 - CAPTCHAや複数画面を含むフォーム
@@ -23,5 +25,7 @@ Codex Skillはデスクトップの操作機能であり、LeadHiveバックエ�
 ## API
 
 - `GET /api/outreach-drafts/{draft_id}/form-assist`
+- `GET /api/outreach-drafts/{draft_id}/form-delivery`
+- `POST /api/outreach-drafts/{draft_id}/form-assist-delivery`
 
-フォームURL・本文・操作指示を返す。閲覧権限を持つ利用者は取得できるが、実際の送信はCodex上での確認操作に従う。
+フォームURL・本文・操作指示、または記録済みの送信結果を返す。結果記録には、Codex上で確認したことを示す承認が必要である。実際の送信はCodex上での確認操作に従う。
