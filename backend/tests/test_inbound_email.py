@@ -209,3 +209,29 @@ def test_admin_can_search_and_manually_match_unmatched_inbound_email(auth, users
         ).status_code
         == 409
     )
+
+
+def test_reply_queue_lists_received_replies_and_records_response(auth, db, monkeypatch):
+    make_settings(db, monkeypatch)
+    company = make_company(auth, db, "contact@queue.example")
+    received = message("queue-100", company.email)
+    monkeypatch.setattr(
+        inbound_email,
+        "fetch_unseen_messages",
+        lambda _config: ([received], [received.uid]),
+    )
+    monkeypatch.setattr(inbound_email, "mark_messages_seen", lambda *_args: None)
+    assert inbound_email.sync_inbound_mail(db, force=True) == 1
+
+    queue = auth.get(f"/api/projects/{company.project_id}/reply-queue")
+    assert queue.status_code == 200
+    assert queue.json()[0]["company"]["id"] == str(company.id)
+    assert queue.json()[0]["subject"] == received.subject
+    response = auth.post(
+        f"/api/companies/{company.id}/reply-response",
+        json={"outcome": "meeting", "note": "オンライン商談の日程を確定", "next_followup_at": None},
+    )
+    assert response.status_code == 200 and response.json()["status"] == "meeting"
+    assert auth.get(f"/api/projects/{company.project_id}/reply-queue").json() == []
+    notes = db.scalars(select(Activity.note).where(Activity.company_id == company.id)).all()
+    assert "オンライン商談の日程を確定" in notes
