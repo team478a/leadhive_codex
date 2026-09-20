@@ -25,7 +25,7 @@ from app.models import (
 )
 from app.operation_routes import refresh_company_ids
 from app.services.collection import ExternalServiceError, search_google_places, search_serper
-from app.services.email_delivery import EmailDeliveryError, send_email
+from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
 
 logger = logging.getLogger("leadhive")
 
@@ -122,11 +122,32 @@ def recover_stale_email_deliveries(db) -> int:
 
 
 def claim_email_delivery(db) -> EmailDelivery | None:
+    now = datetime.now(timezone.utc)
+    limits = email_delivery_limits(db)
+    sent_today = db.scalar(
+        select(func.count())
+        .select_from(EmailDelivery)
+        .where(
+            EmailDelivery.status == "sent",
+            EmailDelivery.sent_at >= now - timedelta(days=1),
+        )
+    )
+    if sent_today >= limits.max_emails_per_day:
+        return None
+    if limits.minimum_interval_seconds:
+        last_sent_at = db.scalar(
+            select(EmailDelivery.sent_at)
+            .where(EmailDelivery.status == "sent", EmailDelivery.sent_at.is_not(None))
+            .order_by(EmailDelivery.sent_at.desc())
+            .limit(1)
+        )
+        if last_sent_at and last_sent_at > now - timedelta(seconds=limits.minimum_interval_seconds):
+            return None
     delivery = db.scalar(
         select(EmailDelivery)
         .where(
             EmailDelivery.status == "queued",
-            EmailDelivery.scheduled_for <= datetime.now(timezone.utc),
+            EmailDelivery.scheduled_for <= now,
         )
         .order_by(EmailDelivery.scheduled_for, EmailDelivery.created_at, EmailDelivery.id)
         .with_for_update(skip_locked=True)

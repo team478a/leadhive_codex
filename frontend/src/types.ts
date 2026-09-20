@@ -2,6 +2,7 @@ export interface User { id: string; email: string; is_admin: boolean; created_at
 export interface SmtpSettings {
   host: string; port: number; username: string; from_email: string; from_name: string
   use_starttls: boolean; timeout_seconds: number; password_configured: boolean; updated_at: string
+  max_emails_per_day: number; minimum_interval_seconds: number
 }
 export interface ProfileInput {
   profile_name: string

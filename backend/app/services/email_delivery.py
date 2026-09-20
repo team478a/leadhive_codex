@@ -27,6 +27,12 @@ class SmtpConfiguration:
     timeout_seconds: float
 
 
+@dataclass(frozen=True)
+class EmailDeliveryLimits:
+    max_emails_per_day: int
+    minimum_interval_seconds: int
+
+
 def cipher() -> Fernet:
     if not settings.settings_encryption_key:
         raise EmailDeliveryError("設定データ暗号化キーが未設定です。")
@@ -69,6 +75,19 @@ def smtp_configuration(db) -> SmtpConfiguration:
         from_name=settings.smtp_from_name,
         use_starttls=settings.smtp_use_starttls,
         timeout_seconds=settings.smtp_timeout_seconds,
+    )
+
+
+def email_delivery_limits(db) -> EmailDeliveryLimits:
+    saved = db.get(SmtpSettings, 1)
+    if saved:
+        return EmailDeliveryLimits(
+            max_emails_per_day=saved.max_emails_per_day,
+            minimum_interval_seconds=saved.minimum_interval_seconds,
+        )
+    return EmailDeliveryLimits(
+        max_emails_per_day=settings.smtp_max_emails_per_day,
+        minimum_interval_seconds=settings.smtp_minimum_interval_seconds,
     )
 
 

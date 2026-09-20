@@ -414,6 +414,8 @@ class SmtpSettingsInput(Input):
     from_name: str = Field(default="LeadHive", max_length=200)
     use_starttls: bool = True
     timeout_seconds: float = Field(default=20, ge=1, le=120)
+    max_emails_per_day: int = Field(default=100, ge=1, le=10_000)
+    minimum_interval_seconds: int = Field(default=60, ge=0, le=3600)
 
 
 class SmtpSettingsOut(BaseModel):
@@ -425,6 +427,8 @@ class SmtpSettingsOut(BaseModel):
     from_name: str
     use_starttls: bool
     timeout_seconds: float
+    max_emails_per_day: int
+    minimum_interval_seconds: int
     password_configured: bool
     updated_at: datetime
 

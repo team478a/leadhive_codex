@@ -32,6 +32,8 @@ class Settings(BaseSettings):
     smtp_from_name: str = "LeadHive"
     smtp_use_starttls: bool = True
     smtp_timeout_seconds: float = 20.0
+    smtp_max_emails_per_day: int = 100
+    smtp_minimum_interval_seconds: int = 60
     settings_encryption_key: str = ""
 
     @field_validator("database_url")
@@ -111,6 +113,20 @@ class Settings(BaseSettings):
     def valid_smtp_timeout(cls, value: float) -> float:
         if not 1 <= value <= 120:
             raise ValueError("smtp_timeout_seconds must be between 1 and 120")
+        return value
+
+    @field_validator("smtp_max_emails_per_day")
+    @classmethod
+    def valid_smtp_daily_limit(cls, value: int) -> int:
+        if not 1 <= value <= 10_000:
+            raise ValueError("smtp_max_emails_per_day must be between 1 and 10000")
+        return value
+
+    @field_validator("smtp_minimum_interval_seconds")
+    @classmethod
+    def valid_smtp_interval(cls, value: int) -> int:
+        if not 0 <= value <= 3600:
+            raise ValueError("smtp_minimum_interval_seconds must be between 0 and 3600")
         return value
 
     @property

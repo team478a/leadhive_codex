@@ -292,6 +292,14 @@ class EmailDelivery(Timestamps, Base):
 
 class SmtpSettings(Timestamps, Base):
     __tablename__ = "smtp_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "max_emails_per_day BETWEEN 1 AND 10000", name="ck_smtp_settings_daily_limit"
+        ),
+        CheckConstraint(
+            "minimum_interval_seconds BETWEEN 0 AND 3600", name="ck_smtp_settings_interval"
+        ),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     host: Mapped[str] = mapped_column(String(255))
     port: Mapped[int] = mapped_column(Integer)
@@ -301,6 +309,8 @@ class SmtpSettings(Timestamps, Base):
     from_name: Mapped[str] = mapped_column(String(200), default="LeadHive")
     use_starttls: Mapped[bool] = mapped_column(Boolean, default=True)
     timeout_seconds: Mapped[float] = mapped_column()
+    max_emails_per_day: Mapped[int] = mapped_column(Integer, default=100)
+    minimum_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
     updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

@@ -22,6 +22,8 @@ def smtp_out(value: SmtpSettings) -> SmtpSettingsOut:
         from_name=value.from_name,
         use_starttls=value.use_starttls,
         timeout_seconds=value.timeout_seconds,
+        max_emails_per_day=value.max_emails_per_day,
+        minimum_interval_seconds=value.minimum_interval_seconds,
         password_configured=bool(value.password_ciphertext),
         updated_at=value.updated_at,
     )
@@ -58,6 +60,8 @@ def update_smtp_settings(
             from_name=body.from_name,
             use_starttls=body.use_starttls,
             timeout_seconds=body.timeout_seconds,
+            max_emails_per_day=body.max_emails_per_day,
+            minimum_interval_seconds=body.minimum_interval_seconds,
             updated_by_user_id=user.id,
         )
         db.add(saved)
@@ -69,6 +73,8 @@ def update_smtp_settings(
         saved.from_name = body.from_name
         saved.use_starttls = body.use_starttls
         saved.timeout_seconds = body.timeout_seconds
+        saved.max_emails_per_day = body.max_emails_per_day
+        saved.minimum_interval_seconds = body.minimum_interval_seconds
         saved.updated_by_user_id = user.id
         if password_ciphertext is not None:
             saved.password_ciphertext = password_ciphertext
