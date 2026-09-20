@@ -124,6 +124,11 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             update_unprotected_fields(company, data)
             company.business_summary = data.business_summary
             company.website_text = data.website_text
+            company.contact_quality_status = (
+                "observed" if company.phone or company.email or company.contact_url else "unknown"
+            )
+            company.contact_source_url = company.contact_url or page.url
+            company.contact_checked_at = datetime.now(timezone.utc)
             company.analysis_status = "completed"
             company.analysis_error = ""
             company.duplicate_of_id = None

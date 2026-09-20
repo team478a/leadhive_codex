@@ -19,6 +19,7 @@ from app.models import (
     OperationJob,
     Project,
     SavedCompanyFilter,
+    SuppressionEntry,
     User,
 )
 from app.schemas import (
@@ -27,6 +28,7 @@ from app.schemas import (
     AssigneeAnalyticsOut,
     CompanyBulkAssigneeInput,
     CompanyBulkSalesInput,
+    CompanyContactControlInput,
     CompanyEditInput,
     CompanyMergeInput,
     CompanyOut,
@@ -550,6 +552,8 @@ def update_company_sales(
     user: User = Depends(current_user),
 ):
     company = owned_company(company_id, db, user)
+    if company.do_not_contact and body.status != "excluded":
+        raise HTTPException(409, "連絡禁止を解除してから営業状況を変更してください。")
     if company.status != body.status:
         db.add(
             Activity(
@@ -584,6 +588,61 @@ def edit_company(
     return company
 
 
+@router.patch("/companies/{company_id}/contact-control", response_model=CompanyOut)
+def update_contact_control(
+    company_id: UUID,
+    body: CompanyContactControlInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = owned_company(company_id, db, user)
+    match = or_(
+        (SuppressionEntry.domain != "") & (SuppressionEntry.domain == company.domain),
+        (SuppressionEntry.email != "")
+        & (func.lower(SuppressionEntry.email) == company.email.lower()),
+        (SuppressionEntry.phone != "") & (SuppressionEntry.phone == company.phone),
+    )
+    entries = db.scalars(
+        select(SuppressionEntry).where(SuppressionEntry.project_id == company.project_id, match)
+    ).all()
+    if body.do_not_contact:
+        if entries:
+            for entry in entries:
+                entry.reason = body.exclusion_reason
+        else:
+            db.add(
+                SuppressionEntry(
+                    project_id=company.project_id,
+                    domain=company.domain or "",
+                    email=company.email.lower(),
+                    phone=company.phone,
+                    reason=body.exclusion_reason,
+                )
+            )
+        company.status = "excluded"
+    else:
+        for entry in entries:
+            db.delete(entry)
+    company.do_not_contact = body.do_not_contact
+    company.exclusion_reason = body.exclusion_reason
+    company.contact_quality_status = body.contact_quality_status
+    company.contact_checked_at = datetime.now(timezone.utc)
+    db.add(
+        Activity(
+            company_id=company.id,
+            activity_type="note",
+            note=(
+                f"連絡禁止に設定: {body.exclusion_reason}"
+                if body.do_not_contact
+                else f"連絡禁止を解除・連絡先品質を{body.contact_quality_status}に更新"
+            ),
+        )
+    )
+    db.commit()
+    db.refresh(company)
+    return company
+
+
 @router.patch("/projects/{project_id}/companies/bulk-sales", response_model=list[CompanyOut])
 def bulk_update_sales(
     project_id: UUID,
@@ -597,6 +656,8 @@ def bulk_update_sales(
     ).all()
     if len(companies) != len(set(body.company_ids)):
         raise HTTPException(404, "指定された企業が見つかりません。")
+    if body.status != "excluded" and any(company.do_not_contact for company in companies):
+        raise HTTPException(409, "連絡禁止企業が含まれています。")
     for company in companies:
         if company.status != body.status:
             db.add(

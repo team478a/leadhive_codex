@@ -38,6 +38,9 @@ export interface Company {
   source: CollectionSource; source_keyword: string; status: SalesStatus; notes: string
   next_followup_at: string | null; assignee: string
   protected_fields: string[]
+  do_not_contact: boolean; exclusion_reason: string
+  contact_quality_status: 'unknown' | 'observed' | 'verified' | 'invalid'
+  contact_source_url: string; contact_checked_at: string | null
   prefecture: string; city: string; contact_url: string
   instagram_url: string; x_url: string; tiktok_url: string; facebook_url: string
   youtube_url: string; line_url: string; business_summary: string; website_text: string

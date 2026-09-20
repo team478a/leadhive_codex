@@ -90,6 +90,11 @@ class CompanyOut(BaseModel):
     next_followup_at: datetime | None
     assignee: str
     protected_fields: list[str]
+    do_not_contact: bool
+    exclusion_reason: str
+    contact_quality_status: Literal["unknown", "observed", "verified", "invalid"]
+    contact_source_url: str
+    contact_checked_at: datetime | None
     prefecture: str
     city: str
     contact_url: str
@@ -239,6 +244,18 @@ class CompanyBulkSalesInput(Input):
 class CompanyBulkAssigneeInput(Input):
     company_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
     assignee: Annotated[str, StringConstraints(strip_whitespace=True, max_length=200)]
+
+
+class CompanyContactControlInput(Input):
+    do_not_contact: bool
+    exclusion_reason: Annotated[str, StringConstraints(strip_whitespace=True, max_length=500)] = ""
+    contact_quality_status: Literal["unknown", "observed", "verified", "invalid"] = "unknown"
+
+    @model_validator(mode="after")
+    def require_exclusion_reason(self):
+        if self.do_not_contact and not self.exclusion_reason:
+            raise ValueError("Do-not-contact companies require a reason")
+        return self
 
 
 class CompanyPageOut(BaseModel):

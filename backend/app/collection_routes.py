@@ -7,12 +7,12 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import CollectionJob, Company, Project, User
+from app.models import CollectionJob, Company, Project, SuppressionEntry, User
 from app.schemas import (
     CollectionJobOut,
     CompanyOut,
@@ -101,6 +101,32 @@ def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
     )
 
 
+def is_suppressed(db: Session, project_id: UUID, candidate: Candidate) -> bool:
+    conditions = []
+    if candidate.website_url:
+        _, domain = canonicalize_url(candidate.website_url)
+        conditions.append((SuppressionEntry.domain != "") & (SuppressionEntry.domain == domain))
+    if candidate.email:
+        conditions.append(
+            (SuppressionEntry.email != "")
+            & (func.lower(SuppressionEntry.email) == candidate.email.lower())
+        )
+    if candidate.phone:
+        conditions.append(
+            (SuppressionEntry.phone != "") & (SuppressionEntry.phone == candidate.phone)
+        )
+    if not conditions:
+        return False
+    return (
+        db.scalar(
+            select(SuppressionEntry.id)
+            .where(SuppressionEntry.project_id == project_id, or_(*conditions))
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def save_candidates(
     db: Session,
     job: CollectionJob,
@@ -114,7 +140,9 @@ def save_candidates(
     job.error_count = error_count
     job.import_errors = error_details
     for candidate in candidates:
-        if is_duplicate(db, job.project_id, candidate):
+        if is_duplicate(db, job.project_id, candidate) or is_suppressed(
+            db, job.project_id, candidate
+        ):
             job.duplicate_count += 1
             continue
         domain = None

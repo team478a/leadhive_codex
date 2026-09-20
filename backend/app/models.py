@@ -134,6 +134,11 @@ class Company(Timestamps, Base):
     next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     assignee: Mapped[str] = mapped_column(String(200), default="", index=True)
     protected_fields: Mapped[list] = mapped_column(JSONB, default=list)
+    do_not_contact: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    exclusion_reason: Mapped[str] = mapped_column(String(500), default="")
+    contact_quality_status: Mapped[str] = mapped_column(String(20), default="unknown")
+    contact_source_url: Mapped[str] = mapped_column(Text, default="")
+    contact_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     prefecture: Mapped[str] = mapped_column(String(20), default="")
     city: Mapped[str] = mapped_column(String(200), default="")
     contact_url: Mapped[str] = mapped_column(Text, default="")
@@ -184,6 +189,18 @@ class Activity(Base):
     activity_type: Mapped[str] = mapped_column(String(30))
     note: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class SuppressionEntry(Timestamps, Base):
+    __tablename__ = "suppression_entries"
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    domain: Mapped[str] = mapped_column(String(253), default="", index=True)
+    email: Mapped[str] = mapped_column(String(320), default="", index=True)
+    phone: Mapped[str] = mapped_column(String(100), default="", index=True)
+    reason: Mapped[str] = mapped_column(String(500))
 
 
 class CollectionJob(Base):

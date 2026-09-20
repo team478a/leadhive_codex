@@ -44,6 +44,9 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [selected, setSelected] = useState<Company | null>(null)
   const [companyEdit, setCompanyEdit] = useState<Record<string, string>>({})
   const [protectedFields, setProtectedFields] = useState<string[]>([])
+  const [doNotContact, setDoNotContact] = useState(false)
+  const [exclusionReason, setExclusionReason] = useState('')
+  const [contactQuality, setContactQuality] = useState<Company['contact_quality_status']>('unknown')
   const [status, setStatus] = useState<SalesStatus>('unreviewed')
   const [notes, setNotes] = useState('')
   const [followup, setFollowup] = useState('')
@@ -77,6 +80,8 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
     ].map(key => [key, String(company[key as keyof Company] ?? '')])))
     setFollowup(company.next_followup_at?.slice(0, 16) ?? '')
     setProtectedFields(company.protected_fields)
+    setDoNotContact(company.do_not_contact); setExclusionReason(company.exclusion_reason)
+    setContactQuality(company.contact_quality_status)
     setActivities(await api<Activity[]>(`/companies/${company.id}/activities`))
   }
   async function save() {
@@ -128,6 +133,17 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       })
       setActivityNote(''); setActivities(await api<Activity[]>(`/companies/${selected.id}/activities`))
       setNotice('活動履歴を追加しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function saveContactControl() {
+    if (!selected) return
+    setBusy(true); setError('')
+    try {
+      const updated = await api<Company>(`/companies/${selected.id}/contact-control`, 'PATCH', {
+        do_not_contact: doNotContact, exclusion_reason: exclusionReason,
+        contact_quality_status: contactQuality,
+      })
+      setSelected(updated); await reload(); setNotice('連絡制御と連絡先品質を保存しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function reanalyzeQuality() {
@@ -219,6 +235,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       <div className="detail-grid"><div><h3>基本情報を編集</h3>{[['company_name', '会社名'], ['address', '住所'], ['prefecture', '都道府県'], ['city', '市区町村'], ['phone', '電話'], ['email', 'メール'], ['assignee', '担当者']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label>{key !== 'assignee' && <label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label>}</div>)}</div>
         <div><h3>問い合わせ先を編集</h3>{[['contact_url', 'フォーム'], ['instagram_url', 'Instagram'], ['x_url', 'X'], ['tiktok_url', 'TikTok'], ['facebook_url', 'Facebook'], ['youtube_url', 'YouTube'], ['line_url', 'LINE']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label><label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label></div>)}</div></div>
       <div className="actions"><button disabled={busy} onClick={() => void saveCompany()}>企業情報を保存</button></div>
+      <div className="detail-grid"><div><h3>連絡禁止・除外</h3><label className="checkbox-row"><input type="checkbox" checked={doNotContact} onChange={e => setDoNotContact(e.target.checked)} />この企業への連絡を禁止</label><label className="field">除外理由<input maxLength={500} required={doNotContact} value={exclusionReason} onChange={e => setExclusionReason(e.target.value)} placeholder="例：連絡拒否、既存顧客、競合" /></label></div><div><h3>連絡先品質</h3><label className="field">確認状態<select value={contactQuality} onChange={e => setContactQuality(e.target.value as Company['contact_quality_status'])}><option value="unknown">未確認</option><option value="observed">Web取得済み</option><option value="verified">人手確認済み</option><option value="invalid">無効</option></select></label><p className="muted text-sm">取得元：{selected.contact_source_url || '未記録'}</p><p className="muted text-sm">最終確認：{selected.contact_checked_at ? new Date(selected.contact_checked_at).toLocaleString('ja-JP') : '未確認'}</p></div></div><div className="actions"><button disabled={busy || (doNotContact && !exclusionReason.trim())} onClick={() => void saveContactControl()}>連絡制御を保存</button></div>
       <div className="detail-grid"><div><h3>AI分析</h3><p><strong>{selected.rank ?? '未判定'} / {selected.score ?? '—'}点</strong> {selected.business_type}</p><p>{selected.ai_summary || 'AI要約はありません。'}</p><p className="muted">{selected.ai_reason}</p></div><div><h3>強み・懸念</h3><p>{selected.ai_strengths.join(' / ') || '—'}</p><p className="muted">{selected.ai_concerns.join(' / ') || '—'}</p><p>推奨：{selected.ai_recommended_approach || '—'}</p></div></div>
       <div className="detail-grid"><div><label className="field">営業状況<select value={status} onChange={e => setStatus(e.target.value as SalesStatus)}>{Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="field">次回対応日時<input type="datetime-local" value={followup} onChange={e => setFollowup(e.target.value)} /></label></div><label className="field">メモ<textarea rows={5} maxLength={20000} value={notes} onChange={e => setNotes(e.target.value)} /></label></div>
       <div className="actions"><button disabled={busy} onClick={() => void save()}>{busy ? '保存中…' : '営業状況を保存'}</button></div></section>}
