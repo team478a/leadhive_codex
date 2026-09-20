@@ -310,7 +310,8 @@ class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
         CheckConstraint(
-            "notification_type IN ('followup_overdue', 'operation_failed')",
+            "notification_type IN "
+            "('followup_overdue', 'operation_failed', 'email_delivery_failed')",
             name="ck_notification_type",
         ),
     )
@@ -326,6 +327,9 @@ class Notification(Base):
     )
     operation_job_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("operation_jobs.id", ondelete="CASCADE"), index=True
+    )
+    email_delivery_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("email_deliveries.id", ondelete="CASCADE"), index=True
     )
     notification_type: Mapped[str] = mapped_column(String(30))
     title: Mapped[str] = mapped_column(String(300))

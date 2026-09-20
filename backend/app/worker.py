@@ -17,6 +17,7 @@ from app.models import (
     AnalysisRefreshSchedule,
     Company,
     EmailDelivery,
+    Notification,
     OperationJob,
     Project,
     SearchSchedule,
@@ -31,6 +32,33 @@ logger = logging.getLogger("leadhive")
 
 def lease_deadline() -> datetime:
     return datetime.now(timezone.utc) + timedelta(seconds=settings.worker_lease_seconds)
+
+
+def notify_email_delivery_failure(db, delivery: EmailDelivery) -> None:
+    """Create one actionable in-app notification for each failed send attempt."""
+    if delivery.created_by_user_id is None:
+        return
+    company = db.get(Company, delivery.company_id)
+    if company is None:
+        return
+    dedupe_key = f"email-delivery:{delivery.id}:{delivery.attempt_count}"
+    if db.scalar(select(Notification.id).where(Notification.dedupe_key == dedupe_key)):
+        return
+    db.add(
+        Notification(
+            user_id=delivery.created_by_user_id,
+            project_id=company.project_id,
+            company_id=company.id,
+            email_delivery_id=delivery.id,
+            notification_type="email_delivery_failed",
+            title=f"メール送信に失敗しました: {company.company_name}",
+            message=(
+                f"{delivery.recipient_email} / "
+                f"{delivery.error_message or '企業詳細で内容を確認して再送してください。'}"
+            )[:1000],
+            dedupe_key=dedupe_key,
+        )
+    )
 
 
 def recover_stale_jobs(db) -> tuple[int, int]:
@@ -86,6 +114,7 @@ def recover_stale_email_deliveries(db) -> int:
         delivery.lease_expires_at = None
         delivery.error_message = "送信中断を検出しました。内容を確認してから再送してください。"
         delivery.finished_at = datetime.now(timezone.utc)
+        notify_email_delivery_failure(db, delivery)
     if deliveries:
         db.commit()
         logger.warning("stale email deliveries marked failed: count=%s", len(deliveries))
@@ -147,6 +176,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
             delivery.worker_id = None
             delivery.lease_expires_at = None
             delivery.finished_at = datetime.now(timezone.utc)
+            notify_email_delivery_failure(db, delivery)
             db.commit()
         logger.warning("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
     except Exception as exc:
@@ -158,6 +188,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
             delivery.worker_id = None
             delivery.lease_expires_at = None
             delivery.finished_at = datetime.now(timezone.utc)
+            notify_email_delivery_failure(db, delivery)
             db.commit()
         logger.error("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
 
