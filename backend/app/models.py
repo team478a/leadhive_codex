@@ -475,7 +475,7 @@ class Notification(Base):
         CheckConstraint(
             "notification_type IN "
             "('followup_overdue', 'operation_failed', 'email_delivery_failed', "
-            "'inbound_reply_received')",
+            "'inbound_reply_received', 'followup_due_today')",
             name="ck_notification_type",
         ),
     )

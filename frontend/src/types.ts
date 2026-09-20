@@ -124,7 +124,7 @@ export interface FormAssist { company_name: string; form_url: string; body: stri
 export interface Notification {
   id: string; project_id: string; company_id: string | null; operation_job_id: string | null
   email_delivery_id: string | null; inbound_email_id: string | null
-  notification_type: 'followup_overdue' | 'operation_failed' | 'email_delivery_failed' | 'inbound_reply_received'
+  notification_type: 'followup_overdue' | 'operation_failed' | 'email_delivery_failed' | 'inbound_reply_received' | 'followup_due_today'
   title: string; message: string; read_at: string | null; created_at: string
 }
 export interface FollowupTask { company: Company; due_state: 'overdue' | 'today' | 'upcoming' }

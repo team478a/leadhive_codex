@@ -1,5 +1,6 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, update
@@ -12,6 +13,7 @@ from app.schemas import NotificationOut
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
+JST = ZoneInfo("Asia/Tokyo")
 
 
 def sync_notifications(db: Session, user: User) -> None:
@@ -22,6 +24,22 @@ def sync_notifications(db: Session, user: User) -> None:
         .where(
             accessible_project_condition(user.id),
             Company.next_followup_at < now,
+            Company.status.in_(("target", "approached", "replied", "meeting")),
+            Company.do_not_contact.is_(False),
+        )
+        .order_by(Company.next_followup_at)
+        .limit(500)
+    ).all()
+    today_end = now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(
+        days=1
+    )
+    due_today = db.execute(
+        select(Company, Project.project_name)
+        .join(Project, Project.id == Company.project_id)
+        .where(
+            accessible_project_condition(user.id),
+            Company.next_followup_at >= now,
+            Company.next_followup_at < today_end,
             Company.status.in_(("target", "approached", "replied", "meeting")),
             Company.do_not_contact.is_(False),
         )
@@ -50,7 +68,24 @@ def sync_notifications(db: Session, user: User) -> None:
                 notification_type="followup_overdue",
                 title=f"フォロー期限超過: {company.company_name}",
                 message=f"{project_name} / 担当: {company.assignee or '未設定'}",
-                dedupe_key=f"followup:{company.id}:{due_key}",
+                dedupe_key=f"followup-overdue:{company.id}:{due_key}:{user.id}",
+            )
+        )
+    for company, project_name in due_today:
+        due_key = company.next_followup_at.isoformat()
+        candidates.append(
+            Notification(
+                user_id=user.id,
+                project_id=company.project_id,
+                company_id=company.id,
+                notification_type="followup_due_today",
+                title=f"本日のフォロー予定: {company.company_name}",
+                message=(
+                    f"{project_name} / "
+                    f"{company.next_followup_at.astimezone(JST).strftime('%H:%M')} "
+                    f"/ 担当: {company.assignee or '未設定'}"
+                ),
+                dedupe_key=f"followup-today:{company.id}:{due_key}:{user.id}",
             )
         )
     for job, project_name in failed:
@@ -62,7 +97,7 @@ def sync_notifications(db: Session, user: User) -> None:
                 notification_type="operation_failed",
                 title="バックグラウンド処理が失敗しました",
                 message=f"{project_name} / {job.error_message or '処理結果を確認してください。'}",
-                dedupe_key=f"operation:{job.id}",
+                dedupe_key=f"operation:{job.id}:{user.id}",
             )
         )
     if not candidates:
