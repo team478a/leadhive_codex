@@ -312,6 +312,14 @@ def test_saved_filters_and_assignee_analytics(auth, db):
     assert created.json()["filters"] == filters
     listed = auth.get(f"/api/projects/{project['id']}/saved-company-filters")
     assert [item["name"] for item in listed.json()] == ["佐藤担当の期限超過"]
+    filters["rank"] = "B"
+    updated = auth.put(
+        f"/api/saved-company-filters/{created.json()['id']}",
+        json={"name": "田中担当のBランク", "filters": filters},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["name"] == "田中担当のBランク"
+    assert updated.json()["filters"]["rank"] == "B"
 
     alpha.assignee, alpha.status = "佐藤", "approached"
     alpha.next_followup_at = datetime.now(timezone.utc) - timedelta(hours=1)
