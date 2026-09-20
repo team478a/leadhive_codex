@@ -293,7 +293,12 @@ class EmailDelivery(Timestamps, Base):
 class FormDelivery(Timestamps, Base):
     __tablename__ = "form_deliveries"
     __table_args__ = (
-        CheckConstraint("status IN ('submitted', 'failed')", name="ck_form_delivery_status"),
+        CheckConstraint(
+            "status IN ('pending', 'submitted', 'failed')", name="ck_form_delivery_status"
+        ),
+        CheckConstraint(
+            "delivery_method IN ('direct', 'codex_assisted')", name="ck_form_delivery_method"
+        ),
         UniqueConstraint("draft_id", name="uq_form_delivery_draft"),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
@@ -308,10 +313,12 @@ class FormDelivery(Timestamps, Base):
     )
     form_url: Mapped[str] = mapped_column(Text)
     action_url: Mapped[str] = mapped_column(Text, default="")
+    delivery_method: Mapped[str] = mapped_column(String(30), default="direct", index=True)
     status: Mapped[str] = mapped_column(String(20), default="submitted", index=True)
     response_status: Mapped[int | None] = mapped_column(Integer)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str] = mapped_column(String(500), default="")
+    result_note: Mapped[str] = mapped_column(String(500), default="")
 
 
 class SmtpSettings(Timestamps, Base):

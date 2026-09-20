@@ -438,16 +438,24 @@ class FormDeliveryCreateInput(Input):
     confirmed: bool = False
 
 
+class FormAssistDeliveryInput(Input):
+    status: Literal["pending", "submitted", "failed"]
+    note: str = Field(default="", max_length=500)
+    confirmed: bool = False
+
+
 class FormDeliveryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     draft_id: UUID
     company_id: UUID
-    status: Literal["submitted", "failed"]
+    delivery_method: Literal["direct", "codex_assisted"]
+    status: Literal["pending", "submitted", "failed"]
     action_url: str
     response_status: int | None
     submitted_at: datetime | None
     error_message: str
+    result_note: str
     created_at: datetime
 
 

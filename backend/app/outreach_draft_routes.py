@@ -25,6 +25,7 @@ from app.schemas import (
     EmailDeliveryListOut,
     EmailDeliveryOut,
     EmailDeliveryRetryInput,
+    FormAssistDeliveryInput,
     FormAssistOut,
     FormDeliveryCreateInput,
     FormDeliveryOut,
@@ -223,6 +224,84 @@ def get_form_assist(
     )
 
 
+@router.get("/outreach-drafts/{draft_id}/form-delivery", response_model=FormDeliveryOut | None)
+def get_form_delivery(
+    draft_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    draft = owned_draft(draft_id, db, user, write=False)
+    return db.scalar(select(FormDelivery).where(FormDelivery.draft_id == draft.id))
+
+
+@router.post(
+    "/outreach-drafts/{draft_id}/form-assist-delivery",
+    response_model=FormDeliveryOut,
+    status_code=201,
+)
+def record_form_assist_delivery(
+    draft_id: UUID,
+    body: FormAssistDeliveryInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if not body.confirmed:
+        raise HTTPException(422, "Codex上で確認した送信結果を承認してください。")
+    draft = owned_draft(draft_id, db, user)
+    if draft.channel != "form":
+        raise HTTPException(409, "フォーム文面だけをCodex支援送信として記録できます。")
+    company = db.get(Company, draft.company_id)
+    if company is None or not company.contact_url:
+        raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
+    if company.do_not_contact:
+        raise HTTPException(409, "連絡禁止の企業にはフォーム送信を記録できません。")
+    delivery = db.scalar(select(FormDelivery).where(FormDelivery.draft_id == draft.id))
+    if delivery is not None and delivery.delivery_method != "codex_assisted":
+        raise HTTPException(409, "この文面はLeadHiveから既にフォーム送信済みです。")
+    if delivery is not None and delivery.status == "submitted":
+        raise HTTPException(409, "この文面は既にフォーム送信済みです。")
+    submitted_at = datetime.now(timezone.utc) if body.status == "submitted" else None
+    if delivery is None:
+        delivery = FormDelivery(
+            draft_id=draft.id,
+            company_id=company.id,
+            created_by_user_id=user.id,
+            form_url=company.contact_url,
+            delivery_method="codex_assisted",
+            status=body.status,
+            submitted_at=submitted_at,
+            result_note=body.note,
+        )
+        db.add(delivery)
+    else:
+        delivery.status = body.status
+        delivery.submitted_at = submitted_at
+        delivery.result_note = body.note
+    outcome_label = {"pending": "保留", "submitted": "送信済み", "failed": "失敗"}[body.status]
+    note = f"Codex支援フォーム送信を{outcome_label}として記録: {company.contact_url}"
+    if body.note:
+        note = f"{note}（{body.note}）"
+    db.add(Activity(company_id=company.id, activity_type="form", note=note))
+    if body.status == "submitted" and company.status in {"unreviewed", "target"}:
+        company.status = "approached"
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="status_change",
+                note="営業状況を更新: アプローチ済（Codex支援フォーム送信）",
+            )
+        )
+    db.commit()
+    db.refresh(delivery)
+    logger.info(
+        "Codex-assisted form delivery recorded: id=%s company_id=%s status=%s",
+        delivery.id,
+        company.id,
+        delivery.status,
+    )
+    return delivery
+
+
 @router.post(
     "/outreach-drafts/{draft_id}/form-delivery", response_model=FormDeliveryOut, status_code=201
 )
@@ -257,6 +336,7 @@ def create_form_delivery(
         created_by_user_id=user.id,
         form_url=preview.form_url,
         action_url=preview.action_url,
+        delivery_method="direct",
         response_status=response_status,
         submitted_at=datetime.now(timezone.utc),
     )
