@@ -73,6 +73,20 @@ class ProjectOut(ProjectInput):
     updated_at: datetime
 
 
+class ProjectMemberInput(Input):
+    email: EmailStr
+    role: Literal["editor", "viewer"]
+
+
+class ProjectMemberOut(BaseModel):
+    id: UUID
+    project_id: UUID
+    user_id: UUID
+    email: str
+    role: Literal["owner", "editor", "viewer"]
+    created_at: datetime
+
+
 class CompanyOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID

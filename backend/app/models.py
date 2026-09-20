@@ -73,6 +73,22 @@ class Project(Timestamps, Base):
     status: Mapped[str] = mapped_column(String(20), default="draft")
 
 
+class ProjectMember(Timestamps, Base):
+    __tablename__ = "project_members"
+    __table_args__ = (
+        UniqueConstraint("project_id", "user_id", name="uq_project_member"),
+        CheckConstraint("role IN ('editor', 'viewer')", name="ck_project_member_role"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), index=True
+    )
+    role: Mapped[str] = mapped_column(String(20))
+
+
 class AuthSession(Base):
     __tablename__ = "auth_sessions"
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Company, Notification, OperationJob, Project, User
+from app.project_access import accessible_project_condition
 from app.schemas import NotificationOut
 from app.security import current_user
 
@@ -19,7 +20,7 @@ def sync_notifications(db: Session, user: User) -> None:
         select(Company, Project.project_name)
         .join(Project, Project.id == Company.project_id)
         .where(
-            Project.user_id == user.id,
+            accessible_project_condition(user.id),
             Company.next_followup_at < now,
             Company.status.in_(("target", "approached", "replied", "meeting")),
             Company.do_not_contact.is_(False),
@@ -31,7 +32,7 @@ def sync_notifications(db: Session, user: User) -> None:
         select(OperationJob, Project.project_name)
         .join(Project, Project.id == OperationJob.project_id)
         .where(
-            Project.user_id == user.id,
+            accessible_project_condition(user.id),
             OperationJob.status == "failed",
             OperationJob.acknowledged_at.is_(None),
         )

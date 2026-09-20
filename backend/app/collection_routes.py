@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import CollectionJob, Company, Project, SuppressionEntry, User
+from app.project_access import project_access
 from app.schemas import (
     CollectionJobOut,
     CompanyOut,
@@ -38,21 +39,15 @@ logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
 
 
-def owned_project(project_id: UUID, db: Session, user: User) -> Project:
-    project = db.scalar(select(Project).where(Project.id == project_id, Project.user_id == user.id))
-    if project is None:
-        raise HTTPException(404, "プロジェクトが見つかりません。")
-    return project
+def owned_project(project_id: UUID, db: Session, user: User, *, write: bool = True) -> Project:
+    return project_access(project_id, db, user, write=write)
 
 
 def owned_job(job_id: UUID, db: Session, user: User) -> CollectionJob:
-    job = db.scalar(
-        select(CollectionJob)
-        .join(Project, Project.id == CollectionJob.project_id)
-        .where(CollectionJob.id == job_id, Project.user_id == user.id)
-    )
+    job = db.get(CollectionJob, job_id)
     if job is None:
         raise HTTPException(404, "収集ジョブが見つかりません。")
+    project_access(job.project_id, db, user, write=False)
     return job
 
 
@@ -208,7 +203,7 @@ def list_companies(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     return db.scalars(
         select(Company)
         .where(Company.project_id == project_id)
@@ -226,7 +221,7 @@ def list_jobs(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     return db.scalars(
         select(CollectionJob)
         .where(CollectionJob.project_id == project_id)

@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Company, Project, User
+from app.project_access import company_access, project_access
 from app.schemas import CompanyAnalysisInput, CompanyOut, WebAnalysisInput
 from app.security import current_user
 from app.services.collection import canonicalize_url
@@ -40,22 +41,12 @@ def update_unprotected_fields(company: Company, data) -> None:
             setattr(company, field, value)
 
 
-def owned_project(project_id: UUID, db: Session, user: User) -> Project:
-    project = db.scalar(select(Project).where(Project.id == project_id, Project.user_id == user.id))
-    if project is None:
-        raise HTTPException(404, "プロジェクトが見つかりません。")
-    return project
+def owned_project(project_id: UUID, db: Session, user: User, *, write: bool = True) -> Project:
+    return project_access(project_id, db, user, write=write)
 
 
-def owned_company(company_id: UUID, db: Session, user: User) -> Company:
-    company = db.scalar(
-        select(Company)
-        .join(Project, Project.id == Company.project_id)
-        .where(Company.id == company_id, Project.user_id == user.id)
-    )
-    if company is None:
-        raise HTTPException(404, "企業が見つかりません。")
-    return company
+def owned_company(company_id: UUID, db: Session, user: User, *, write: bool = True) -> Company:
+    return company_access(company_id, db, user, write=write)
 
 
 def find_duplicate(

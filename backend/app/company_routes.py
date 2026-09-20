@@ -23,6 +23,7 @@ from app.models import (
     SuppressionEntry,
     User,
 )
+from app.project_access import accessible_project_condition
 from app.schemas import (
     ActivityInput,
     ActivityOut,
@@ -88,14 +89,10 @@ def outreach_due_state(company: Company, now: datetime) -> str:
 
 
 def owned_contact_person(contact_id: UUID, db: Session, user: User) -> ContactPerson:
-    contact = db.scalar(
-        select(ContactPerson)
-        .join(Company, Company.id == ContactPerson.company_id)
-        .join(Project, Project.id == Company.project_id)
-        .where(ContactPerson.id == contact_id, Project.user_id == user.id)
-    )
+    contact = db.get(ContactPerson, contact_id)
     if contact is None:
         raise HTTPException(404, "担当者情報が見つかりません。")
+    owned_company(contact.company_id, db, user)
     return contact
 
 
@@ -124,7 +121,7 @@ def sales_activity_analytics(
         .select_from(Activity)
         .join(Company, Company.id == Activity.company_id)
         .join(Project, Project.id == Company.project_id)
-        .where(Project.user_id == user.id, Activity.created_at >= since)
+        .where(accessible_project_condition(user.id), Activity.created_at >= since)
     )
     activities, approached, replied, meetings, won = db.execute(base).one()
     rows = db.execute(
@@ -138,7 +135,7 @@ def sales_activity_analytics(
         .select_from(Activity)
         .join(Company, Company.id == Activity.company_id)
         .join(Project, Project.id == Company.project_id)
-        .where(Project.user_id == user.id, Activity.created_at >= since)
+        .where(accessible_project_condition(user.id), Activity.created_at >= since)
         .group_by(Company.assignee)
         .order_by(status_transition_count("won").desc(), Company.assignee)
     ).all()
@@ -172,7 +169,7 @@ def sales_activity_analytics(
 def list_saved_company_filters(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     return db.scalars(
         select(SavedCompanyFilter)
         .where(SavedCompanyFilter.project_id == project_id)
@@ -241,7 +238,7 @@ def delete_saved_company_filter(
 def assignee_analytics(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     now = datetime.now(timezone.utc)
     rows = db.execute(
         select(
@@ -295,7 +292,7 @@ def duplicate_candidates(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     left = aliased(Company)
     right = aliased(Company)
     email_match = (left.email != "") & (func.lower(left.email) == func.lower(right.email))
@@ -418,7 +415,7 @@ def data_quality(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
     base = Company.project_id == project_id
     row = db.execute(
@@ -571,7 +568,7 @@ def outreach_queue(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     now = datetime.now(timezone.utc)
     query = select(Company).where(
         Company.project_id == project_id,
@@ -677,7 +674,7 @@ def list_company_details(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     query = company_query(
         project_id, rank, min_score, region, status, source, keyword, assignee, followup, sort
     )
@@ -690,7 +687,7 @@ def list_company_details(
 def get_company(
     company_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    return owned_company(company_id, db, user)
+    return owned_company(company_id, db, user, write=False)
 
 
 @router.patch("/companies/{company_id}/sales", response_model=CompanyOut)
@@ -859,7 +856,7 @@ def list_activities(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_company(company_id, db, user)
+    owned_company(company_id, db, user, write=False)
     return db.scalars(
         select(Activity)
         .where(Activity.company_id == company_id)
@@ -874,7 +871,7 @@ def list_contact_people(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_company(company_id, db, user)
+    owned_company(company_id, db, user, write=False)
     return db.scalars(
         select(ContactPerson)
         .where(ContactPerson.company_id == company_id)
@@ -991,7 +988,7 @@ def export_companies(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     companies = db.scalars(
         company_query(
             project_id, rank, min_score, region, status, source, keyword, assignee, followup, sort
@@ -1043,7 +1040,7 @@ def export_companies(
 
 @router.get("/dashboard", response_model=DashboardOut)
 def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user)):
-    owned_ids = select(Project.id).where(Project.user_id == user.id)
+    owned_ids = select(Project.id).where(accessible_project_condition(user.id))
     total = db.scalar(
         select(func.count()).select_from(Company).where(Company.project_id.in_(owned_ids))
     )
@@ -1060,14 +1057,14 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
     jobs = db.scalars(
         select(CollectionJob)
         .join(Project, Project.id == CollectionJob.project_id)
-        .where(Project.user_id == user.id)
+        .where(accessible_project_condition(user.id))
         .order_by(CollectionJob.created_at.desc(), CollectionJob.id)
         .limit(5)
     ).all()
     operation_rows = db.execute(
         select(OperationJob.status, func.count())
         .join(Project, Project.id == OperationJob.project_id)
-        .where(Project.user_id == user.id)
+        .where(accessible_project_condition(user.id))
         .group_by(OperationJob.status)
     ).all()
     unread_failures = db.scalar(
@@ -1075,7 +1072,7 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         .select_from(OperationJob)
         .join(Project, Project.id == OperationJob.project_id)
         .where(
-            Project.user_id == user.id,
+            accessible_project_condition(user.id),
             OperationJob.status == "failed",
             OperationJob.acknowledged_at.is_(None),
         )
@@ -1083,7 +1080,7 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
     operations = db.scalars(
         select(OperationJob)
         .join(Project, Project.id == OperationJob.project_id)
-        .where(Project.user_id == user.id)
+        .where(accessible_project_condition(user.id))
         .order_by(OperationJob.created_at.desc(), OperationJob.id)
         .limit(10)
     ).all()

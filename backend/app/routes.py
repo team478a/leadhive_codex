@@ -10,8 +10,18 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import AuthSession, Project, TargetProfile, User
-from app.schemas import Login, ProfileInput, ProfileOut, ProjectInput, ProjectOut, UserOut
+from app.models import AuthSession, Project, ProjectMember, TargetProfile, User
+from app.project_access import accessible_project_condition, project_access
+from app.schemas import (
+    Login,
+    ProfileInput,
+    ProfileOut,
+    ProjectInput,
+    ProjectMemberInput,
+    ProjectMemberOut,
+    ProjectOut,
+    UserOut,
+)
 from app.security import COOKIE_NAME, DUMMY_HASH, current_user, password_hasher, token_digest
 
 logger = logging.getLogger("leadhive")
@@ -86,11 +96,15 @@ def visible_profile(profile_id: UUID, db: Session, user: User) -> TargetProfile:
     return profile
 
 
-def owned_project(project_id: UUID, db: Session, user: User) -> Project:
-    project = db.scalar(select(Project).where(Project.id == project_id, Project.user_id == user.id))
-    if project is None:
-        raise HTTPException(404, "プロジェクトが見つかりません。")
-    return project
+def owned_project(
+    project_id: UUID,
+    db: Session,
+    user: User,
+    *,
+    write: bool = True,
+    owner: bool = False,
+) -> Project:
+    return project_access(project_id, db, user, write=write, owner=owner)
 
 
 def editable_profile(profile_id: UUID, db: Session, user: User) -> TargetProfile:
@@ -198,7 +212,7 @@ def list_projects(
 ):
     return db.scalars(
         select(Project)
-        .where(Project.user_id == user.id)
+        .where(accessible_project_condition(user.id))
         .order_by(
             Project.created_at.desc(),
             Project.id,
@@ -226,7 +240,7 @@ def create_project(
 def get_project(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    return owned_project(project_id, db, user)
+    return owned_project(project_id, db, user, write=False)
 
 
 @router.put("/projects/{project_id}", response_model=ProjectOut)
@@ -236,7 +250,7 @@ def update_project(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    project = owned_project(project_id, db, user)
+    project = owned_project(project_id, db, user, owner=True)
     if body.target_profile_id != project.target_profile_id:
         validate_project_profile(body, db, user)
     for key, value in body.model_dump().items():
@@ -252,5 +266,95 @@ def delete_project(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    db.delete(owned_project(project_id, db, user))
+    db.delete(owned_project(project_id, db, user, owner=True))
+    db.commit()
+
+
+@router.get("/projects/{project_id}/members", response_model=list[ProjectMemberOut])
+def list_project_members(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    project = owned_project(project_id, db, user, write=False)
+    owner_user = db.get(User, project.user_id)
+    result = [
+        ProjectMemberOut(
+            id=project.id,
+            project_id=project.id,
+            user_id=owner_user.id,
+            email=owner_user.email,
+            role="owner",
+            created_at=project.created_at,
+        )
+    ]
+    rows = db.execute(
+        select(ProjectMember, User.email)
+        .join(User, User.id == ProjectMember.user_id)
+        .where(ProjectMember.project_id == project_id)
+        .order_by(User.email)
+    ).all()
+    result.extend(
+        ProjectMemberOut(
+            id=member.id,
+            project_id=member.project_id,
+            user_id=member.user_id,
+            email=email,
+            role=member.role,
+            created_at=member.created_at,
+        )
+        for member, email in rows
+    )
+    return result
+
+
+@router.post("/projects/{project_id}/members", response_model=ProjectMemberOut, status_code=201)
+def add_project_member(
+    project_id: UUID,
+    body: ProjectMemberInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project = owned_project(project_id, db, user, owner=True)
+    member_user = db.scalar(select(User).where(User.email == str(body.email).lower()))
+    if member_user is None:
+        raise HTTPException(404, "指定したユーザーが見つかりません。")
+    if member_user.id == project.user_id:
+        raise HTTPException(409, "所有者はメンバーとして追加できません。")
+    member = db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.project_id == project_id, ProjectMember.user_id == member_user.id
+        )
+    )
+    if member is None:
+        member = ProjectMember(project_id=project_id, user_id=member_user.id, role=body.role)
+        db.add(member)
+    else:
+        member.role = body.role
+    db.commit()
+    db.refresh(member)
+    return ProjectMemberOut(
+        id=member.id,
+        project_id=member.project_id,
+        user_id=member.user_id,
+        email=member_user.email,
+        role=member.role,
+        created_at=member.created_at,
+    )
+
+
+@router.delete("/projects/{project_id}/members/{member_id}", status_code=204)
+def remove_project_member(
+    project_id: UUID,
+    member_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user, owner=True)
+    member = db.scalar(
+        select(ProjectMember).where(
+            ProjectMember.id == member_id, ProjectMember.project_id == project_id
+        )
+    )
+    if member is None:
+        raise HTTPException(404, "プロジェクトメンバーが見つかりません。")
+    db.delete(member)
     db.commit()

@@ -4,7 +4,7 @@ import { Field, ProfileForm, ProjectForm } from './forms'
 import { CollectionPage } from './CollectionPage'
 import { CompaniesPage } from './CompaniesPage'
 import { DashboardPage } from './DashboardPage'
-import type { Notification, Profile, Project, User } from './types'
+import type { Notification, Profile, Project, ProjectMember, User } from './types'
 
 function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: string }) {
   const [email, setEmail] = useState('')
@@ -54,14 +54,21 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [projectRoles, setProjectRoles] = useState<Record<string, ProjectMember['role']>>({})
+  const [memberProject, setMemberProject] = useState<Project | null>(null)
+  const [members, setMembers] = useState<ProjectMember[]>([])
+  const [memberEmail, setMemberEmail] = useState('')
+  const [memberRole, setMemberRole] = useState<'editor' | 'viewer'>('editor')
   const reload = useCallback(async () => {
     const [nextProjects, nextProfiles, notifications] = await Promise.all([
       allPages<Project>('/projects'), allPages<Profile>('/target-profiles'),
       api<Notification[]>('/notifications?unread_only=true&limit=100'),
     ])
+    const memberLists = await Promise.all(nextProjects.map(project => api<ProjectMember[]>(`/projects/${project.id}/members`)))
     setProjects(nextProjects); setProfiles(nextProfiles)
+    setProjectRoles(Object.fromEntries(nextProjects.map((project, index) => [project.id, memberLists[index].find(member => member.email === user.email)?.role ?? 'viewer'])))
     setUnreadNotifications(notifications.length); setLoaded(true)
-  }, [])
+  }, [user.email])
   useEffect(() => {
     reload().catch(e => setError(errorMessage(e))).finally(() => setLoading(false))
   }, [reload])
@@ -73,6 +80,26 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   async function saved() {
     setEditor(null); setNotice('保存しました。')
     try { await reload() } catch (e) { setError(errorMessage(e)) }
+  }
+  async function openMembers(project: Project) {
+    setMemberProject(project); setMemberEmail(''); setMemberRole('editor')
+    setMembers(await api<ProjectMember[]>(`/projects/${project.id}/members`))
+  }
+  async function saveMember() {
+    if (!memberProject || !memberEmail.trim()) return
+    await action(async () => {
+      await api(`/projects/${memberProject.id}/members`, 'POST', { email: memberEmail, role: memberRole })
+      setMembers(await api<ProjectMember[]>(`/projects/${memberProject.id}/members`)); setMemberEmail('')
+      setNotice('プロジェクトメンバーを保存しました。')
+    })
+  }
+  async function removeMember(member: ProjectMember) {
+    if (!memberProject) return
+    await action(async () => {
+      await api(`/projects/${memberProject.id}/members/${member.id}`, 'DELETE')
+      setMembers(await api<ProjectMember[]>(`/projects/${memberProject.id}/members`))
+      setNotice('プロジェクトメンバーを削除しました。')
+    })
   }
   return <div className="app-layout">
     <aside className="sidebar"><div className="brand">⬡ LeadHive</div>
@@ -122,18 +149,19 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
               <p className="muted mt-3">{profiles.find(p => p.id === project.target_profile_id)?.profile_name ?? 'プロファイル'}</p>
               <p className="my-5 whitespace-pre-wrap">{project.sales_objective}</p>
               <div className="card-footer"><span className="muted">地域：{project.region}</span>
-                <div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => {
+                <div className="flex flex-wrap gap-2">{projectRoles[project.id] !== 'viewer' && <button disabled={busy} onClick={() => {
                   setCollectionProjectId(project.id); setTab('collection'); setNotice('')
-                }}>企業収集</button><button className="secondary" disabled={busy} onClick={() => {
+                }}>企業収集</button>}<button className="secondary" disabled={busy} onClick={() => {
                   setCollectionProjectId(project.id); setTab('companies'); setNotice('')
-                }}>企業一覧</button><button className="secondary" disabled={busy} onClick={() => setEditor({ type: 'project', value: project })}>編集</button>
+                }}>企業一覧</button>{projectRoles[project.id] === 'owner' && <><button className="secondary" disabled={busy} onClick={() => void openMembers(project).catch(e => setError(errorMessage(e)))}>メンバー</button><button className="secondary" disabled={busy} onClick={() => setEditor({ type: 'project', value: project })}>編集</button>
                   <button className="danger" disabled={busy} onClick={() => {
                     if (window.confirm(`「${project.project_name}」を削除しますか？`)) void action(async () => {
                       await api(`/projects/${project.id}`, 'DELETE'); await reload(); setNotice('削除しました。')
                     })
-                  }}>削除</button></div></div>
+                  }}>削除</button></>}</div></div>
             </article>)}</div>}
-        </> : loaded && tab === 'collection' ? <CollectionPage projects={projects} profiles={profiles}
+          {memberProject && <section className="panel mt-6" aria-label="プロジェクトメンバー"><div className="flex justify-between gap-3"><div><h2>{memberProject.project_name}のメンバー</h2><p className="muted mt-2 text-sm">編集者は操作可能、閲覧者は参照のみです。</p></div><button className="secondary" onClick={() => setMemberProject(null)}>閉じる</button></div><div className="detail-grid mt-4"><label className="field">メンバーのメール<input type="email" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} /></label><label className="field">権限<select value={memberRole} onChange={e => setMemberRole(e.target.value as 'editor' | 'viewer')}><option value="editor">編集者</option><option value="viewer">閲覧者</option></select></label></div><div className="actions"><button disabled={busy || !memberEmail.trim()} onClick={() => void saveMember()}>メンバーを保存</button></div>{members.map(member => <article className="job-row" key={member.id}><div><strong>{member.email}</strong><p className="muted text-sm">{member.role === 'owner' ? '所有者' : member.role === 'editor' ? '編集者' : '閲覧者'}</p></div>{member.role !== 'owner' && <button className="danger" disabled={busy} onClick={() => void removeMember(member)}>削除</button>}</article>)}</section>}
+        </> : loaded && tab === 'collection' ? <CollectionPage projects={projects.filter(project => projectRoles[project.id] !== 'viewer')} profiles={profiles}
           initialProjectId={collectionProjectId} /> : loaded && tab === 'companies' ?
           <CompaniesPage projects={projects} initialProjectId={collectionProjectId} /> : loaded && tab === 'dashboard' ?
           <DashboardPage onUnreadChange={setUnreadNotifications} /> : loaded && <>

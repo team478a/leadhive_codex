@@ -21,6 +21,10 @@ export interface ProjectInput {
 export interface Project extends ProjectInput {
   id: string; user_id: string; created_at: string; updated_at: string
 }
+export interface ProjectMember {
+  id: string; project_id: string; user_id: string; email: string
+  role: 'owner' | 'editor' | 'viewer'; created_at: string
+}
 export type CollectionSource = 'serper' | 'google_places' | 'url' | 'csv'
 export interface CollectionJob {
   id: string; project_id: string; source: CollectionSource; keyword: string; region: string

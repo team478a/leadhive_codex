@@ -12,10 +12,10 @@ from app.models import (
     CollectionJob,
     Company,
     OperationJob,
-    Project,
     SearchSchedule,
     User,
 )
+from app.project_access import project_access
 from app.schemas import (
     AnalysisRefreshScheduleInput,
     AnalysisRefreshScheduleOut,
@@ -52,24 +52,18 @@ def refresh_company_ids(db: Session, schedule: AnalysisRefreshSchedule) -> list[
 
 
 def owned_operation(job_id: UUID, db: Session, user: User) -> OperationJob:
-    job = db.scalar(
-        select(OperationJob)
-        .join(Project, Project.id == OperationJob.project_id)
-        .where(OperationJob.id == job_id, Project.user_id == user.id)
-    )
+    job = db.get(OperationJob, job_id)
     if job is None:
         raise HTTPException(404, "処理ジョブが見つかりません。")
+    project_access(job.project_id, db, user)
     return job
 
 
 def owned_schedule(schedule_id: UUID, db: Session, user: User) -> SearchSchedule:
-    schedule = db.scalar(
-        select(SearchSchedule)
-        .join(Project, Project.id == SearchSchedule.project_id)
-        .where(SearchSchedule.id == schedule_id, Project.user_id == user.id)
-    )
+    schedule = db.get(SearchSchedule, schedule_id)
     if schedule is None:
         raise HTTPException(404, "定期収集が見つかりません。")
+    project_access(schedule.project_id, db, user)
     return schedule
 
 
@@ -80,7 +74,7 @@ def owned_schedule(schedule_id: UUID, db: Session, user: User) -> SearchSchedule
 def get_analysis_refresh_schedule(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     return db.scalar(
         select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
     )
@@ -171,7 +165,7 @@ def run_analysis_refresh_schedule(
 def list_search_schedules(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     return db.scalars(
         select(SearchSchedule)
         .where(SearchSchedule.project_id == project_id)
@@ -183,7 +177,7 @@ def list_search_schedules(
 def search_analytics(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     rows = db.execute(
         select(
             SearchSchedule.id,
@@ -329,7 +323,7 @@ def list_operations(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    owned_project(project_id, db, user, write=False)
     return db.scalars(
         select(OperationJob)
         .where(OperationJob.project_id == project_id)
