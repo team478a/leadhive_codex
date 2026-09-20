@@ -1,3 +1,4 @@
+import json
 from io import BytesIO
 
 import pytest
@@ -194,21 +195,42 @@ def test_url_collection_counts_and_project_scope(auth, db):
 def test_csv_collection_and_duplicate_name_address(auth):
     project = make_project(auth)
     content = (
-        "company_name,website_url,phone,email,address\n"
+        "会社名,Webサイト,電話番号,メールアドレス,所在地\n"
         "株式会社A,,06-1,a@example.com,大阪府大阪市\n"
         "株式会社A,,06-2,b@example.com,大阪府大阪市\n"
         "株式会社B,https://b.example,03-1,b@example.com,東京都\n"
         ",https://invalid-row.example,,,\n"
     ).encode()
+    preview = auth.post(
+        f"/api/projects/{project['id']}/collection-jobs/csv/preview",
+        files={"file": ("companies.csv", BytesIO(content), "text/csv")},
+    )
+    assert preview.status_code == 200
+    assert preview.json()["row_count"] == 4
+    assert preview.json()["suggested_mapping"]["company_name"] == "会社名"
     response = auth.post(
         f"/api/projects/{project['id']}/collection-jobs/csv",
         files={"file": ("companies.csv", BytesIO(content), "text/csv")},
+        data={
+            "column_mapping": json.dumps(
+                {
+                    "company_name": "会社名",
+                    "website_url": "Webサイト",
+                    "phone": "電話番号",
+                    "email": "メールアドレス",
+                    "address": "所在地",
+                }
+            )
+        },
     )
     assert response.status_code == 201
     assert response.json()["found_count"] == 4
     assert response.json()["saved_count"] == 2
     assert response.json()["duplicate_count"] == 1
     assert response.json()["error_count"] == 1
+    errors = auth.get(f"/api/collection-jobs/{response.json()['id']}/errors.csv")
+    assert errors.status_code == 200
+    assert "会社名が空です" in errors.content.decode("utf-8-sig")
     assert len(auth.get(f"/api/projects/{project['id']}/companies").json()) == 2
     assert (
         auth.post(

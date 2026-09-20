@@ -66,6 +66,16 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await aggregatorCard.getByRole('button', { name: 'Web解析' }).click()
   await expect(aggregatorCard.getByText('対象外', { exact: true })).toBeVisible()
   await expect(aggregatorCard.getByText('企業公式サイトではない可能性')).toBeVisible()
+  await page.getByLabel('収集元').selectOption('csv')
+  await page.getByLabel('CSVファイル（UTF-8・最大5MB・1000行）').setInputFiles({
+    name: 'companies.csv', mimeType: 'text/csv',
+    buffer: Buffer.from('会社名,Webサイト,電話番号,メールアドレス,所在地\nCSV確認会社,https://csv.example,03-0000-0000,,東京都'),
+  })
+  await expect(page.getByText('1行を検出しました。', { exact: false })).toBeVisible()
+  await expect(page.getByLabel('会社名')).toHaveValue('会社名')
+  await page.getByRole('button', { name: '収集を開始' }).click()
+  await expect(page.getByText('収集処理が完了しました。結果を確認してください。')).toBeVisible()
+  await expect(page.getByRole('article').filter({ hasText: 'CSV確認会社' })).toBeVisible()
   await page.getByLabel('収集元').selectOption('serper')
   await page.getByLabel('検索キーワード（1行に1件）').fill('APIキー未設定の確認')
   await page.getByRole('button', { name: '収集を開始' }).click()
