@@ -40,6 +40,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 検索テンプレートと定期実行は[実装記録](docs/22_SEARCH_SCHEDULES_IMPLEMENTATION.md)を参照してください。
 テンプレート別成果分析は[実装記録](docs/23_SEARCH_ANALYTICS_IMPLEMENTATION.md)を参照してください。
 企業データ品質管理は[実装記録](docs/24_DATA_QUALITY_IMPLEMENTATION.md)を参照してください。
+保存フィルターと担当者別営業成果は[実装記録](docs/27_SAVED_FILTERS_ASSIGNEE_ANALYTICS.md)を参照してください。
 重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 担当者とフォロー期限管理は[実装記録](docs/26_ASSIGNEE_FOLLOWUP_IMPLEMENTATION.md)を参照してください。
 
@@ -209,6 +210,9 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | GET | `/api/projects/{id}/duplicate-candidates` | 重複企業候補と一致理由 |
 | POST | `/api/projects/{id}/companies/merge` | 指定した企業へ重複企業を統合 |
 | PATCH | `/api/projects/{id}/companies/bulk-assignee` | 最大100社の担当者を一括更新 |
+| GET / POST | `/api/projects/{id}/saved-company-filters` | 企業一覧の保存フィルター一覧 / 作成 |
+| DELETE | `/api/saved-company-filters/{id}` | 保存フィルターを削除 |
+| GET | `/api/projects/{id}/assignee-analytics` | 担当者別の営業状況・期限超過集計 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。
 一覧は`offset`（0以上）と`limit`（1〜100）を受け付けます。
