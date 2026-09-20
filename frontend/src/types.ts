@@ -33,6 +33,7 @@ export interface Company {
   domain: string | null; address: string; phone: string; email: string
   source: CollectionSource; source_keyword: string; status: SalesStatus; notes: string
   next_followup_at: string | null; assignee: string
+  protected_fields: string[]
   prefecture: string; city: string; contact_url: string
   instagram_url: string; x_url: string; tiktok_url: string; facebook_url: string
   youtube_url: string; line_url: string; business_summary: string; website_text: string

@@ -484,8 +484,11 @@ def edit_company(
     user: User = Depends(current_user),
 ):
     company = owned_company(company_id, db, user)
-    for key, value in body.model_dump().items():
+    values = body.model_dump()
+    protected_fields = values.pop("protected_fields")
+    for key, value in values.items():
         setattr(company, key, value)
+    company.protected_fields = list(dict.fromkeys(protected_fields))
     db.commit()
     db.refresh(company)
     return company

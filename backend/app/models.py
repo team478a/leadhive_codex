@@ -133,6 +133,7 @@ class Company(Timestamps, Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     next_followup_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     assignee: Mapped[str] = mapped_column(String(200), default="", index=True)
+    protected_fields: Mapped[list] = mapped_column(JSONB, default=list)
     prefecture: Mapped[str] = mapped_column(String(20), default="")
     city: Mapped[str] = mapped_column(String(200), default="")
     contact_url: Mapped[str] = mapped_column(Text, default="")

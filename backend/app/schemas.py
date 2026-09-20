@@ -89,6 +89,7 @@ class CompanyOut(BaseModel):
     notes: str
     next_followup_at: datetime | None
     assignee: str
+    protected_fields: list[str]
     prefecture: str
     city: str
     contact_url: str
@@ -202,6 +203,23 @@ class CompanyEditInput(Input):
     youtube_url: str = Field(default="", max_length=5000)
     line_url: str = Field(default="", max_length=5000)
     assignee: str = Field(default="", max_length=200)
+    protected_fields: list[
+        Literal[
+            "company_name",
+            "address",
+            "prefecture",
+            "city",
+            "phone",
+            "email",
+            "contact_url",
+            "instagram_url",
+            "x_url",
+            "tiktok_url",
+            "facebook_url",
+            "youtube_url",
+            "line_url",
+        ]
+    ] = Field(default_factory=list, max_length=13)
 
 
 class CompanyBulkSalesInput(Input):

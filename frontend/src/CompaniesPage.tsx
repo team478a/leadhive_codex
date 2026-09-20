@@ -41,6 +41,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [checked, setChecked] = useState<string[]>([])
   const [selected, setSelected] = useState<Company | null>(null)
   const [companyEdit, setCompanyEdit] = useState<Record<string, string>>({})
+  const [protectedFields, setProtectedFields] = useState<string[]>([])
   const [status, setStatus] = useState<SalesStatus>('unreviewed')
   const [notes, setNotes] = useState('')
   const [followup, setFollowup] = useState('')
@@ -73,6 +74,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       'instagram_url', 'x_url', 'tiktok_url', 'facebook_url', 'youtube_url', 'line_url', 'assignee',
     ].map(key => [key, String(company[key as keyof Company] ?? '')])))
     setFollowup(company.next_followup_at?.slice(0, 16) ?? '')
+    setProtectedFields(company.protected_fields)
     setActivities(await api<Activity[]>(`/companies/${company.id}/activities`))
   }
   async function save() {
@@ -99,7 +101,9 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
     if (!selected) return
     setBusy(true); setError('')
     try {
-      const updated = await api<Company>(`/companies/${selected.id}`, 'PUT', companyEdit)
+      const updated = await api<Company>(`/companies/${selected.id}`, 'PUT', {
+        ...companyEdit, protected_fields: protectedFields,
+      })
       setSelected(updated); await reload(); setNotice('企業情報を保存しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
@@ -201,8 +205,8 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       {companies.length === 0 && <tr><td colSpan={8} className="text-center muted">条件に一致する企業はありません。</td></tr>}</tbody></table></section>
     <div className="mt-4 flex items-center justify-between"><button className="secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>前へ</button><span className="muted text-sm">{page + 1} / {Math.max(1, Math.ceil(total / 25))} ページ</span><button className="secondary" disabled={(page + 1) * 25 >= total} onClick={() => setPage(page + 1)}>次へ</button></div>
     {selected && <section className="panel mt-7" aria-label="企業詳細"><div className="flex justify-between gap-4"><div><p className="eyebrow">COMPANY DETAIL</p><h2>{selected.company_name}</h2></div><button className="secondary" onClick={() => setSelected(null)}>閉じる</button></div>
-      <div className="detail-grid"><div><h3>基本情報を編集</h3>{[['company_name', '会社名'], ['address', '住所'], ['prefecture', '都道府県'], ['city', '市区町村'], ['phone', '電話'], ['email', 'メール'], ['assignee', '担当者']].map(([key, label]) => <label className="field" key={key}>{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label>)}</div>
-        <div><h3>問い合わせ先を編集</h3>{[['contact_url', 'フォーム'], ['instagram_url', 'Instagram'], ['x_url', 'X'], ['tiktok_url', 'TikTok'], ['facebook_url', 'Facebook'], ['youtube_url', 'YouTube'], ['line_url', 'LINE']].map(([key, label]) => <label className="field" key={key}>{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label>)}</div></div>
+      <div className="detail-grid"><div><h3>基本情報を編集</h3>{[['company_name', '会社名'], ['address', '住所'], ['prefecture', '都道府県'], ['city', '市区町村'], ['phone', '電話'], ['email', 'メール'], ['assignee', '担当者']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label>{key !== 'assignee' && <label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label>}</div>)}</div>
+        <div><h3>問い合わせ先を編集</h3>{[['contact_url', 'フォーム'], ['instagram_url', 'Instagram'], ['x_url', 'X'], ['tiktok_url', 'TikTok'], ['facebook_url', 'Facebook'], ['youtube_url', 'YouTube'], ['line_url', 'LINE']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label><label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label></div>)}</div></div>
       <div className="actions"><button disabled={busy} onClick={() => void saveCompany()}>企業情報を保存</button></div>
       <div className="detail-grid"><div><h3>AI分析</h3><p><strong>{selected.rank ?? '未判定'} / {selected.score ?? '—'}点</strong> {selected.business_type}</p><p>{selected.ai_summary || 'AI要約はありません。'}</p><p className="muted">{selected.ai_reason}</p></div><div><h3>強み・懸念</h3><p>{selected.ai_strengths.join(' / ') || '—'}</p><p className="muted">{selected.ai_concerns.join(' / ') || '—'}</p><p>推奨：{selected.ai_recommended_approach || '—'}</p></div></div>
       <div className="detail-grid"><div><label className="field">営業状況<select value={status} onChange={e => setStatus(e.target.value as SalesStatus)}>{Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="field">次回対応日時<input type="datetime-local" value={followup} onChange={e => setFollowup(e.target.value)} /></label></div><label className="field">メモ<textarea rows={5} maxLength={20000} value={notes} onChange={e => setNotes(e.target.value)} /></label></div>

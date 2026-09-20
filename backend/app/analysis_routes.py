@@ -15,6 +15,29 @@ from app.services.scraper import ScrapeError, is_aggregator_domain, scrape_compa
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
+PROTECTABLE_WEB_FIELDS = (
+    "company_name",
+    "address",
+    "prefecture",
+    "city",
+    "phone",
+    "email",
+    "contact_url",
+    "instagram_url",
+    "x_url",
+    "tiktok_url",
+    "facebook_url",
+    "youtube_url",
+    "line_url",
+)
+
+
+def update_unprotected_fields(company: Company, data) -> None:
+    protected = set(company.protected_fields or [])
+    for field in PROTECTABLE_WEB_FIELDS:
+        value = getattr(data, field)
+        if field not in protected and value:
+            setattr(company, field, value)
 
 
 def owned_project(project_id: UUID, db: Session, user: User) -> Project:
@@ -83,8 +106,13 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
     try:
         page, data = scrape_company(company.website_url)
         website_url, domain = canonicalize_url(page.url)
-        name = data.company_name or company.company_name
-        address = company.address or data.address
+        protected = set(company.protected_fields or [])
+        name = (
+            company.company_name
+            if "company_name" in protected
+            else (data.company_name or company.company_name)
+        )
+        address = company.address if "address" in protected else (data.address or company.address)
         duplicate = find_duplicate(db, company, website_url, domain, name, address)
         if duplicate:
             company.analysis_status = "duplicate"
@@ -93,19 +121,7 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
         else:
             company.website_url = website_url
             company.domain = domain
-            company.company_name = name
-            company.address = address
-            company.prefecture = company.prefecture or data.prefecture
-            company.city = company.city or data.city
-            company.phone = company.phone or data.phone
-            company.email = company.email or data.email
-            company.contact_url = data.contact_url
-            company.instagram_url = data.instagram_url
-            company.x_url = data.x_url
-            company.tiktok_url = data.tiktok_url
-            company.facebook_url = data.facebook_url
-            company.youtube_url = data.youtube_url
-            company.line_url = data.line_url
+            update_unprotected_fields(company, data)
             company.business_summary = data.business_summary
             company.website_text = data.website_text
             company.analysis_status = "completed"
