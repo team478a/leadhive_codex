@@ -293,6 +293,7 @@ class OutreachDraftApproval(Base):
     approved_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
 
 
 class OutreachConversion(Base):

@@ -82,6 +82,7 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
     assert worker.run_once()
     result = auth.get(f"/api/outreach-drafts/{draft.id}/email-delivery").json()
     assert result["status"] == "sent" and result["sent_at"]
+    assert auth.get(f"/api/outreach-drafts/{draft.id}/approvals").json()[0]["delivered_at"]
     assert (
         auth.get(f"/api/projects/{company.project_id}/email-deliveries").json()["sent_count"] == 1
     )

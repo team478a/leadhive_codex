@@ -19,6 +19,7 @@ from app.models import (
     EmailDelivery,
     Notification,
     OperationJob,
+    OutreachDraftApproval,
     Project,
     SearchSchedule,
     TargetProfile,
@@ -180,6 +181,14 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
         delivery.worker_id = None
         delivery.lease_expires_at = None
         delivery.error_message = ""
+        approval = db.scalar(
+            select(OutreachDraftApproval).where(
+                OutreachDraftApproval.draft_id == delivery.draft_id,
+                OutreachDraftApproval.approval_type == "email",
+            )
+        )
+        if approval:
+            approval.delivered_at = delivery.sent_at
         db.add(
             Activity(
                 company_id=delivery.company_id,

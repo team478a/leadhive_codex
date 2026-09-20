@@ -401,6 +401,7 @@ class OutreachDraftApprovalOut(BaseModel):
     subject: str
     body: str
     approved_at: datetime
+    delivered_at: datetime | None
 
 
 class EmailDeliveryCreateInput(Input):

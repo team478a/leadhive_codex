@@ -1,5 +1,5 @@
 from contextlib import nullcontext
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from cryptography.fernet import Fernet
 from sqlalchemy import select
@@ -140,8 +140,15 @@ def test_inbound_reply_attributes_to_the_latest_eligible_approval(auth, db, monk
         subject="最新のご案内",
         body="最新のご案内です。",
     )
-    db.add_all((older, latest))
+    queued = OutreachDraft(
+        company_id=company.id,
+        channel="email",
+        subject="未送信のご案内",
+        body="まだ送信していないご案内です。",
+    )
+    db.add_all((older, latest, queued))
     db.flush()
+    now = datetime.now(timezone.utc)
     db.add_all(
         (
             OutreachDraftApproval(
@@ -149,14 +156,23 @@ def test_inbound_reply_attributes_to_the_latest_eligible_approval(auth, db, monk
                 approval_type="email",
                 subject=older.subject,
                 body=older.body,
-                approved_at=datetime.now(timezone.utc).replace(microsecond=0),
+                approved_at=now - timedelta(days=2),
+                delivered_at=now - timedelta(days=2),
             ),
             OutreachDraftApproval(
                 draft_id=latest.id,
                 approval_type="email",
                 subject=latest.subject,
                 body=latest.body,
-                approved_at=datetime.now(timezone.utc),
+                approved_at=now - timedelta(days=1),
+                delivered_at=now - timedelta(days=1),
+            ),
+            OutreachDraftApproval(
+                draft_id=queued.id,
+                approval_type="email",
+                subject=queued.subject,
+                body=queued.body,
+                approved_at=now,
             ),
         )
     )
@@ -180,6 +196,42 @@ def test_inbound_reply_attributes_to_the_latest_eligible_approval(auth, db, monk
             OutreachConversion.approval_id == latest_approval.id,
             OutreachConversion.outcome == "replied",
         )
+    )
+
+
+def test_inbound_reply_does_not_attribute_an_unsent_approval(auth, db, monkeypatch):
+    make_settings(db, monkeypatch)
+    company = make_company(auth, db, "contact@unsent-attribution.example")
+    draft = OutreachDraft(
+        company_id=company.id,
+        channel="email",
+        subject="未送信のご案内",
+        body="まだ送信していないご案内です。",
+    )
+    db.add(draft)
+    db.flush()
+    db.add(
+        OutreachDraftApproval(
+            draft_id=draft.id,
+            approval_type="email",
+            subject=draft.subject,
+            body=draft.body,
+        )
+    )
+    db.commit()
+    received = message("unsent-attribution-100", company.email)
+    monkeypatch.setattr(
+        inbound_email,
+        "fetch_unseen_messages",
+        lambda _config: ([received], [received.uid]),
+    )
+    monkeypatch.setattr(inbound_email, "mark_messages_seen", lambda *_args: None)
+
+    assert inbound_email.sync_inbound_mail(db, force=True) == 1
+    inbound = db.scalar(select(InboundEmail).where(InboundEmail.mailbox_uid == received.uid))
+    assert inbound.outreach_approval_id is None
+    assert not db.scalar(
+        select(OutreachConversion).where(OutreachConversion.company_id == company.id)
     )
 
 
@@ -288,6 +340,7 @@ def test_reply_queue_lists_received_replies_and_records_response(auth, db, monke
         approval_type="email",
         subject=draft.subject,
         body=draft.body,
+        delivered_at=datetime.now(timezone.utc),
     )
     db.add(approval)
     db.commit()

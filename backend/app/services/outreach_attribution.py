@@ -19,9 +19,10 @@ def latest_eligible_approval(
         .join(OutreachDraft, OutreachDraft.id == OutreachDraftApproval.draft_id)
         .where(
             OutreachDraft.company_id == company_id,
-            OutreachDraftApproval.approved_at <= occurred_at,
+            OutreachDraftApproval.delivered_at.is_not(None),
+            OutreachDraftApproval.delivered_at <= occurred_at,
         )
-        .order_by(OutreachDraftApproval.approved_at.desc(), OutreachDraftApproval.id.desc())
+        .order_by(OutreachDraftApproval.delivered_at.desc(), OutreachDraftApproval.id.desc())
         .limit(1)
     )
 

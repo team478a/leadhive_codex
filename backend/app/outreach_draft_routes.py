@@ -68,7 +68,12 @@ def owned_email_delivery(
 
 
 def record_draft_approval(
-    db: Session, draft: OutreachDraft, user: User, approval_type: str
+    db: Session,
+    draft: OutreachDraft,
+    user: User,
+    approval_type: str,
+    *,
+    delivered_at: datetime | None = None,
 ) -> OutreachDraftApproval:
     approval = OutreachDraftApproval(
         draft_id=draft.id,
@@ -76,6 +81,7 @@ def record_draft_approval(
         approval_type=approval_type,
         subject=draft.subject,
         body=draft.body,
+        delivered_at=delivered_at,
     )
     db.add(approval)
     return approval
@@ -383,7 +389,7 @@ def record_form_assist_delivery(
         delivery.submitted_at = submitted_at
         delivery.result_note = body.note
     if body.status == "submitted":
-        record_draft_approval(db, draft, user, "form_codex")
+        record_draft_approval(db, draft, user, "form_codex", delivered_at=submitted_at)
     outcome_label = {"pending": "保留", "submitted": "送信済み", "failed": "失敗"}[body.status]
     note = f"Codex支援フォーム送信を{outcome_label}として記録: {company.contact_url}"
     if body.note:
@@ -448,7 +454,7 @@ def create_form_delivery(
         submitted_at=datetime.now(timezone.utc),
     )
     db.add(delivery)
-    record_draft_approval(db, draft, user, "form_direct")
+    record_draft_approval(db, draft, user, "form_direct", delivered_at=delivery.submitted_at)
     db.add(
         Activity(
             company_id=company.id,

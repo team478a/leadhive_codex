@@ -210,7 +210,7 @@ def outreach_effectiveness_analytics(
         )
         .where(
             accessible_project_condition(user.id),
-            OutreachDraftApproval.approved_at >= since,
+            OutreachDraftApproval.delivered_at >= since,
         )
         .group_by(OutreachDraftApproval.approval_type, OutreachDraftApproval.subject)
         .order_by(approvals.desc(), OutreachDraftApproval.subject)
