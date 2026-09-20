@@ -150,6 +150,7 @@ class Company(Timestamps, Base):
     line_url: Mapped[str] = mapped_column(Text, default="")
     business_summary: Mapped[str] = mapped_column(Text, default="")
     website_text: Mapped[str] = mapped_column(Text, default="")
+    scraped_urls: Mapped[list] = mapped_column(JSONB, default=list)
     analysis_status: Mapped[str] = mapped_column(String(30), default="pending", index=True)
     analysis_error: Mapped[str] = mapped_column(String(500), default="")
     is_aggregator: Mapped[bool] = mapped_column(Boolean, default=False)

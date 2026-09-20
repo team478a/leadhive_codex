@@ -106,6 +106,7 @@ class CompanyOut(BaseModel):
     line_url: str
     business_summary: str
     website_text: str
+    scraped_urls: list[str]
     analysis_status: str
     analysis_error: str
     is_aggregator: bool

@@ -91,6 +91,13 @@ CONTACT_HINTS = (
     "お問合せ",
     "ご相談",
 )
+IMPORTANT_PAGE_HINTS = (
+    (100, CONTACT_HINTS),
+    (80, ("company", "corporate", "profile", "about", "会社概要", "企業情報")),
+    (60, ("service", "business", "solution", "事業", "サービス")),
+    (40, ("recruit", "career", "採用", "求人")),
+)
+MAX_SECONDARY_PAGES = 4
 
 
 class ScrapeError(Exception):
@@ -122,6 +129,7 @@ class PageData:
     line_url: str = ""
     business_summary: str = ""
     website_text: str = ""
+    scraped_urls: list[str] | None = None
 
 
 def is_aggregator_domain(domain: str) -> bool:
@@ -172,6 +180,7 @@ class SafeFetcher:
                 "Accept": "text/html,application/xhtml+xml",
             },
         )
+        self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
 
     def close(self):
         self.client.close()
@@ -223,6 +232,10 @@ class SafeFetcher:
 
     def robots_allowed(self, url: str) -> bool:
         parsed = urlsplit(url)
+        origin = urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+        cached = getattr(self, "_robots", {}).get(origin)
+        if cached:
+            return cached.can_fetch(settings.scraper_user_agent, url)
         robots_url = urlunsplit((parsed.scheme, parsed.netloc, "/robots.txt", "", ""))
         try:
             page = self._request(robots_url, 256_000, robots_request=True)
@@ -231,6 +244,9 @@ class SafeFetcher:
         parser = urllib.robotparser.RobotFileParser()
         parser.set_url(robots_url)
         parser.parse(page.html.splitlines())
+        if not hasattr(self, "_robots"):
+            self._robots = {}
+        self._robots[origin] = parser
         return parser.can_fetch(settings.scraper_user_agent, url)
 
     def fetch_html(self, url: str) -> FetchedPage:
@@ -368,6 +384,66 @@ def _contact_url(soup: BeautifulSoup, base_url: str) -> str:
     return max(scored, default=(0, ""))[1]
 
 
+def discover_important_urls(html: str, base_url: str) -> list[str]:
+    soup = BeautifulSoup(html, "html.parser")
+    base_host = (urlsplit(base_url).hostname or "").lower().removeprefix("www.")
+    base_path = urlsplit(base_url).path.rstrip("/") or "/"
+    scored: dict[str, int] = {}
+    for anchor in soup.select("a[href]"):
+        url = _clean_url(str(anchor.get("href", "")), base_url)
+        parsed = urlsplit(url)
+        host = (parsed.hostname or "").lower().removeprefix("www.")
+        if not url or host != base_host:
+            continue
+        path = parsed.path.rstrip("/") or "/"
+        if path == base_path or re.search(r"\.(?:pdf|jpe?g|png|gif|zip)$", path, re.IGNORECASE):
+            continue
+        label = anchor.get_text(" ", strip=True).lower()
+        combined = f"{label} {path.lower()}"
+        score = max(
+            (
+                priority
+                for priority, hints in IMPORTANT_PAGE_HINTS
+                if any(hint in combined for hint in hints)
+            ),
+            default=0,
+        )
+        if score:
+            normalized = urlunsplit((parsed.scheme, parsed.netloc, parsed.path, "", ""))
+            scored[normalized] = max(score, scored.get(normalized, 0))
+    return [
+        url
+        for url, _ in sorted(scored.items(), key=lambda item: (-item[1], item[0]))[
+            :MAX_SECONDARY_PAGES
+        ]
+    ]
+
+
+def merge_page_data(target: PageData, source: PageData, source_url: str) -> None:
+    for field in (
+        "company_name",
+        "phone",
+        "email",
+        "address",
+        "prefecture",
+        "city",
+        "contact_url",
+        "instagram_url",
+        "x_url",
+        "tiktok_url",
+        "facebook_url",
+        "youtube_url",
+        "line_url",
+        "business_summary",
+    ):
+        if not getattr(target, field) and getattr(source, field):
+            setattr(target, field, getattr(source, field))
+    if source.website_text and source.website_text not in target.website_text:
+        target.website_text = (f"{target.website_text}\n\n[{source_url}]\n{source.website_text}")[
+            :100_000
+        ]
+
+
 def extract_page(html: str, base_url: str) -> PageData:
     soup = BeautifulSoup(html, "html.parser")
     summary_tag = soup.select_one("meta[name='description'], meta[property='og:description']")
@@ -398,14 +474,25 @@ def scrape_company(url: str) -> tuple[FetchedPage, PageData]:
     try:
         page = fetcher.fetch_html(url)
         data = extract_page(page.html, page.url)
-        if data.contact_url and (not data.email or not data.phone):
+        data.scraped_urls = [page.url]
+        primary_host = (urlsplit(page.url).hostname or "").lower().removeprefix("www.")
+        for secondary_url in discover_important_urls(page.html, page.url):
             try:
-                contact_page = fetcher.fetch_html(data.contact_url)
-                contact_data = extract_page(contact_page.html, contact_page.url)
-                data.email = data.email or contact_data.email
-                data.phone = data.phone or contact_data.phone
+                secondary_page = fetcher.fetch_html(secondary_url)
             except ScrapeError:
-                pass
+                continue
+            secondary_host = (
+                (urlsplit(secondary_page.url).hostname or "").lower().removeprefix("www.")
+            )
+            if secondary_host != primary_host:
+                continue
+            merge_page_data(
+                data,
+                extract_page(secondary_page.html, secondary_page.url),
+                secondary_page.url,
+            )
+            if secondary_page.url not in data.scraped_urls:
+                data.scraped_urls.append(secondary_page.url)
         return page, data
     finally:
         fetcher.close()

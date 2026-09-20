@@ -45,6 +45,7 @@ export interface Company {
   prefecture: string; city: string; contact_url: string
   instagram_url: string; x_url: string; tiktok_url: string; facebook_url: string
   youtube_url: string; line_url: string; business_summary: string; website_text: string
+  scraped_urls: string[]
   analysis_status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped' | 'duplicate' | 'excluded'
   analysis_error: string; is_aggregator: boolean; duplicate_of_id: string | null
   scraped_at: string | null
