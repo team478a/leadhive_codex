@@ -3,7 +3,7 @@ from contextlib import nullcontext
 from sqlalchemy import select
 
 from app import worker
-from app.models import Activity, Company, OutreachDraft
+from app.models import Activity, Company, Notification, OutreachDraft
 from app.services.email_delivery import EmailDeliveryError
 
 
@@ -95,6 +95,14 @@ def test_email_delivery_failure_retry_cancel_and_access(auth, users, db, monkeyp
     assert worker.run_once()
     failed = auth.get(f"/api/outreach-drafts/{draft.id}/email-delivery").json()
     assert failed["status"] == "failed" and failed["error_message"] == "メール送信に失敗しました。"
+    notifications = auth.get("/api/notifications", params={"unread_only": True}).json()
+    email_notifications = [
+        item for item in notifications if item["notification_type"] == "email_delivery_failed"
+    ]
+    assert len(email_notifications) == 1
+    assert email_notifications[0]["email_delivery_id"] == delivery_id
+    assert email_notifications[0]["company_id"] == str(company.id)
+    assert db.scalar(select(Notification).where(Notification.email_delivery_id == delivery_id))
     assert (
         auth.post(
             f"/api/email-deliveries/{delivery_id}/retry", json={"confirmed": False}
