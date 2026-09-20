@@ -126,6 +126,48 @@ def test_pagination_edit_bulk_update_and_activity_history(auth, db):
     assert {item["activity_type"] for item in history} == {"status_change", "note", "call"}
 
 
+def test_outreach_queue_prioritizes_due_work_and_records_result(auth, db):
+    project = make_project(auth)
+    alpha, beta = add_companies(auth, db, project["id"])
+    alpha.status, alpha.assignee = "target", "佐藤"
+    alpha.next_followup_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    beta.status = "target"
+    db.flush()
+
+    queue = auth.get(f"/api/projects/{project['id']}/outreach-queue").json()
+    assert [item["company"]["id"] for item in queue] == [str(alpha.id), str(beta.id)]
+    assert queue[0]["due_state"] == "overdue"
+    assert queue[0]["recommended_channel"] == "email"
+    assert set(queue[0]["available_channels"]) == {"email", "call"}
+
+    followup = datetime.now(timezone.utc) + timedelta(days=3)
+    response = auth.post(
+        f"/api/companies/{alpha.id}/outreach",
+        json={
+            "channel": "email",
+            "outcome": "replied",
+            "note": "資料を送付し、担当者から返信あり",
+            "next_followup_at": followup.isoformat(),
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["status"] == "replied"
+    history = auth.get(f"/api/companies/{alpha.id}/activities").json()
+    assert {item["activity_type"] for item in history} == {"status_change", "email"}
+
+    assert (
+        auth.post(
+            f"/api/companies/{beta.id}/outreach",
+            json={"channel": "sns", "outcome": "approached", "note": "DM送信"},
+        ).status_code
+        == 409
+    )
+    beta.do_not_contact = True
+    db.flush()
+    queue = auth.get(f"/api/projects/{project['id']}/outreach-queue").json()
+    assert [item["company"]["id"] for item in queue] == [str(alpha.id)]
+
+
 def test_sales_status_update_and_access_isolation(auth, users, db):
     project = make_project(auth)
     alpha, _ = add_companies(auth, db, project["id"])
