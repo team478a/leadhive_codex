@@ -342,3 +342,48 @@ def test_saved_filters_and_assignee_analytics(auth, db):
     deleted = auth.delete(f"/api/saved-company-filters/{created.json()['id']}")
     assert deleted.status_code == 204
     assert auth.get(f"/api/projects/{project['id']}/saved-company-filters").json() == []
+
+
+def test_contact_suppression_blocks_recollection_and_tracks_quality(auth, db):
+    project = make_project(auth)
+    alpha, _ = add_companies(auth, db, project["id"])
+    assert (
+        auth.patch(
+            f"/api/companies/{alpha.id}/contact-control",
+            json={
+                "do_not_contact": True,
+                "exclusion_reason": "",
+                "contact_quality_status": "verified",
+            },
+        ).status_code
+        == 422
+    )
+    response = auth.patch(
+        f"/api/companies/{alpha.id}/contact-control",
+        json={
+            "do_not_contact": True,
+            "exclusion_reason": "連絡拒否",
+            "contact_quality_status": "verified",
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["do_not_contact"] is True
+    assert response.json()["status"] == "excluded"
+    assert response.json()["contact_quality_status"] == "verified"
+    assert (
+        auth.patch(
+            f"/api/companies/{alpha.id}/sales",
+            json={"status": "approached", "notes": "", "next_followup_at": None},
+        ).status_code
+        == 409
+    )
+
+    db.delete(alpha)
+    db.commit()
+    recollected = auth.post(
+        f"/api/projects/{project['id']}/collection-jobs/urls",
+        json={"urls": ["https://alpha.example"]},
+    )
+    assert recollected.status_code == 201
+    assert recollected.json()["saved_count"] == 0
+    assert recollected.json()["duplicate_count"] == 1

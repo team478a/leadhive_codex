@@ -128,6 +128,9 @@ def test_company_analysis_success(auth, monkeypatch):
     assert result["instagram_url"] == "https://instagram.com/sample"
     assert result["website_text"]
     assert result["scraped_at"]
+    assert result["contact_quality_status"] == "observed"
+    assert result["contact_source_url"] == "https://final.example/contact"
+    assert result["contact_checked_at"]
 
 
 def test_company_analysis_preserves_and_releases_protected_fields(auth, monkeypatch):
