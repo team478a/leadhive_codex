@@ -37,6 +37,8 @@ from app.schemas import (
     DataQualityReanalyzeInput,
     DuplicateCandidateOut,
     OperationJobOut,
+    SalesActivityAnalyticsOut,
+    SalesAnalyticsAssigneeOut,
     SavedCompanyFilterInput,
     SavedCompanyFilterOut,
 )
@@ -44,6 +46,73 @@ from app.security import current_user
 
 router = APIRouter(prefix="/api")
 JST = ZoneInfo("Asia/Tokyo")
+
+
+def status_transition_count(status: str):
+    return func.count().filter(
+        Activity.activity_type == "status_change",
+        Activity.note.like(f"% から {status} に変更"),
+    )
+
+
+@router.get("/sales-activity-analytics", response_model=SalesActivityAnalyticsOut)
+def sales_activity_analytics(
+    days: int = Query(30, ge=1, le=365),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    since = datetime.now(timezone.utc) - timedelta(days=days)
+    base = (
+        select(
+            func.count(),
+            status_transition_count("approached"),
+            status_transition_count("replied"),
+            status_transition_count("meeting"),
+            status_transition_count("won"),
+        )
+        .select_from(Activity)
+        .join(Company, Company.id == Activity.company_id)
+        .join(Project, Project.id == Company.project_id)
+        .where(Project.user_id == user.id, Activity.created_at >= since)
+    )
+    activities, approached, replied, meetings, won = db.execute(base).one()
+    rows = db.execute(
+        select(
+            Company.assignee,
+            status_transition_count("approached"),
+            status_transition_count("replied"),
+            status_transition_count("meeting"),
+            status_transition_count("won"),
+        )
+        .select_from(Activity)
+        .join(Company, Company.id == Activity.company_id)
+        .join(Project, Project.id == Company.project_id)
+        .where(Project.user_id == user.id, Activity.created_at >= since)
+        .group_by(Company.assignee)
+        .order_by(status_transition_count("won").desc(), Company.assignee)
+    ).all()
+    denominator = approached or 0
+    return SalesActivityAnalyticsOut(
+        days=days,
+        activities=activities,
+        approached=approached,
+        replied=replied,
+        meetings=meetings,
+        won=won,
+        reply_rate=round(replied / denominator * 100, 1) if denominator else 0,
+        meeting_rate=round(meetings / denominator * 100, 1) if denominator else 0,
+        win_rate=round(won / denominator * 100, 1) if denominator else 0,
+        by_assignee=[
+            SalesAnalyticsAssigneeOut(
+                assignee=assignee or "未設定",
+                approached=row_approached,
+                replied=row_replied,
+                meetings=row_meetings,
+                won=row_won,
+            )
+            for assignee, row_approached, row_replied, row_meetings, row_won in rows
+        ],
+    )
 
 
 @router.get(

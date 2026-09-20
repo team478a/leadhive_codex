@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
-import type { Dashboard } from './types'
+import type { Dashboard, SalesActivityAnalytics } from './types'
 
 const labels: Record<string, string> = {
   target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -16,11 +16,16 @@ const operationStatuses: Record<string, string> = {
 
 export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: number) => void }) {
   const [data, setData] = useState<Dashboard | null>(null)
+  const [sales, setSales] = useState<SalesActivityAnalytics | null>(null)
+  const [salesDays, setSalesDays] = useState(30)
   const [error, setError] = useState('')
   const load = useCallback(async () => {
-    const next = await api<Dashboard>('/dashboard')
+    const [next, nextSales] = await Promise.all([
+      api<Dashboard>('/dashboard'), api<SalesActivityAnalytics>(`/sales-activity-analytics?days=${salesDays}`),
+    ])
     setData(next); onUnreadChange(next.unread_operation_failures)
-  }, [onUnreadChange])
+    setSales(nextSales)
+  }, [onUnreadChange, salesDays])
   useEffect(() => { load().catch(e => setError(errorMessage(e))) }, [load])
   async function acknowledge(id: string) {
     try { await api(`/operations/${id}/acknowledge`, 'POST'); await load() }
@@ -49,6 +54,9 @@ export function DashboardPage({ onUnreadChange }: { onUnreadChange: (count: numb
           <div className="text-right text-sm"><span className="badge">{job.status === 'completed' ? '完了' : job.status === 'failed' ? '失敗' : '実行中'}</span>
             <p className="muted mt-2">保存 {job.saved_count} / 発見 {job.found_count}</p></div>
         </article>)}</section>
+    {sales && <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>営業活動成果</h2><p className="muted mt-2 text-sm">ステータス変更履歴から期間内の成果率を集計します。</p></div><label className="field mb-0">集計期間<select value={salesDays} onChange={e => setSalesDays(Number(e.target.value))}><option value={7}>7日</option><option value={30}>30日</option><option value={90}>90日</option><option value={365}>365日</option></select></label></div>
+      <div className="grid gap-3 mt-5 sm:grid-cols-2 xl:grid-cols-4">{[['アプローチ', sales.approached], ['返信率', `${sales.reply_rate}%`], ['商談率', `${sales.meeting_rate}%`], ['成約率', `${sales.win_rate}%`]].map(([label, value]) => <div className="metric" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+      <div className="company-table-wrap mt-5"><table className="company-table"><thead><tr><th>担当者</th><th>アプローチ</th><th>返信</th><th>商談</th><th>成約</th></tr></thead><tbody>{sales.by_assignee.map(item => <tr key={item.assignee}><td>{item.assignee}</td><td>{item.approached}</td><td>{item.replied}</td><td>{item.meetings}</td><td>{item.won}</td></tr>)}{sales.by_assignee.length === 0 && <tr><td colSpan={5} className="text-center muted">期間内の営業活動はありません。</td></tr>}</tbody></table></div></section>}
     <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3">
       <h2>バックグラウンド処理監視</h2>
       <p className="muted text-sm">{Object.entries(data.operation_statuses).map(([key, value]) => `${operationStatuses[key] ?? key} ${value}`).join(' / ') || '処理なし'}</p>

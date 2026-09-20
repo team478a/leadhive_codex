@@ -109,3 +109,8 @@ export interface AssigneeAnalytics {
   assignee: string; total: number; approached: number; replied: number
   meetings: number; won: number; overdue: number
 }
+export interface SalesActivityAnalytics {
+  days: number; activities: number; approached: number; replied: number
+  meetings: number; won: number; reply_rate: number; meeting_rate: number; win_rate: number
+  by_assignee: Array<{ assignee: string; approached: number; replied: number; meetings: number; won: number }>
+}

@@ -418,3 +418,24 @@ class AssigneeAnalyticsOut(BaseModel):
     meetings: int
     won: int
     overdue: int
+
+
+class SalesAnalyticsAssigneeOut(BaseModel):
+    assignee: str
+    approached: int
+    replied: int
+    meetings: int
+    won: int
+
+
+class SalesActivityAnalyticsOut(BaseModel):
+    days: int
+    activities: int
+    approached: int
+    replied: int
+    meetings: int
+    won: int
+    reply_rate: float
+    meeting_rate: float
+    win_rate: float
+    by_assignee: list[SalesAnalyticsAssigneeOut]
