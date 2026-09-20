@@ -43,6 +43,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 保存フィルターと担当者別営業成果は[実装記録](docs/27_SAVED_FILTERS_ASSIGNEE_ANALYTICS.md)を参照してください。
 手動修正項目の再解析保護は[実装記録](docs/28_MANUAL_FIELD_PROTECTION.md)を参照してください。
 CSV取込プレビューと列対応付けは[実装記録](docs/29_CSV_IMPORT_WORKFLOW.md)を参照してください。
+期間別の営業活動成果は[実装記録](docs/30_SALES_ACTIVITY_ANALYTICS.md)を参照してください。
 重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 担当者とフォロー期限管理は[実装記録](docs/26_ASSIGNEE_FOLLOWUP_IMPLEMENTATION.md)を参照してください。
 
@@ -198,6 +199,7 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | PATCH | `/api/companies/{id}/sales` | 営業状況・メモ更新 |
 | GET | `/api/projects/{id}/companies.csv` | 現在の条件でCSV出力 |
 | GET | `/api/dashboard` | ランク・営業状況・直近収集の集計 |
+| GET | `/api/sales-activity-analytics` | 期間別の営業成果率・担当者別集計 |
 | PUT | `/api/companies/{id}` | 企業基本情報・連絡先の手動修正 |
 | PATCH | `/api/projects/{id}/companies/bulk-sales` | 最大100社の営業状況一括更新 |
 | GET / POST | `/api/companies/{id}/activities` | 営業活動履歴の一覧 / 追加 |
