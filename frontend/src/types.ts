@@ -118,6 +118,7 @@ export interface EmailDeliveryList {
 export interface FormField { name: string; label: string; field_type: 'text' | 'email' | 'tel' | 'textarea' | 'select'; required: boolean; value: string; options: string[] }
 export interface FormPreview { form_url: string; action_url: string; fields: FormField[] }
 export interface FormDelivery { id: string; draft_id: string; company_id: string; status: 'submitted' | 'failed'; action_url: string; response_status: number | null; submitted_at: string | null; error_message: string; created_at: string }
+export interface FormAssist { company_name: string; form_url: string; body: string; instructions: string }
 export interface Notification {
   id: string; project_id: string; company_id: string | null; operation_job_id: string | null
   email_delivery_id: string | null

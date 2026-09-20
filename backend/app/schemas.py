@@ -451,6 +451,13 @@ class FormDeliveryOut(BaseModel):
     created_at: datetime
 
 
+class FormAssistOut(BaseModel):
+    company_name: str
+    form_url: str
+    body: str
+    instructions: str
+
+
 class SmtpSettingsInput(Input):
     host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     port: int = Field(ge=1, le=65535)

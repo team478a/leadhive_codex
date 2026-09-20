@@ -25,6 +25,7 @@ from app.schemas import (
     EmailDeliveryListOut,
     EmailDeliveryOut,
     EmailDeliveryRetryInput,
+    FormAssistOut,
     FormDeliveryCreateInput,
     FormDeliveryOut,
     FormFieldOut,
@@ -194,6 +195,31 @@ def get_form_preview(
         form_url=preview.form_url,
         action_url=preview.action_url,
         fields=[FormFieldOut(**field.__dict__) for field in preview.fields],
+    )
+
+
+@router.get("/outreach-drafts/{draft_id}/form-assist", response_model=FormAssistOut)
+def get_form_assist(
+    draft_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    draft = owned_draft(draft_id, db, user, write=False)
+    if draft.channel != "form":
+        raise HTTPException(409, "フォーム文面だけをCodex支援へ渡せます。")
+    company = db.get(Company, draft.company_id)
+    if company is None or not company.contact_url:
+        raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
+    instructions = (
+        "ブラウザで次の問い合わせフォームを開き、入力項目を確認してください。"
+        "CAPTCHA、ログイン、規約上の制限がなければ、下記文面を問い合わせ本文へ入力し、"
+        "送信前に内容を画面で確認してください。送信は利用者の明示確認後に一度だけ実行します。"
+    )
+    return FormAssistOut(
+        company_name=company.company_name,
+        form_url=company.contact_url,
+        body=draft.body,
+        instructions=instructions,
     )
 
 
