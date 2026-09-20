@@ -72,11 +72,20 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
         auth.get(f"/api/projects/{company.project_id}/email-deliveries").json()["sent_count"] == 1
     )
     assert sent[0][2] == company.email and sent[0][3] == "サービスのご相談"
+    db.refresh(company)
+    assert company.status == "approached"
     activity = db.scalar(
         select(Activity).where(Activity.company_id == company.id, Activity.activity_type == "email")
     )
     assert activity is not None
     assert "メール送信" in activity.note
+    status_activity = db.scalar(
+        select(Activity).where(
+            Activity.company_id == company.id,
+            Activity.activity_type == "status_change",
+        )
+    )
+    assert status_activity is not None and "アプローチ済" in status_activity.note
     assert (
         auth.post(
             f"/api/outreach-drafts/{draft.id}/email-delivery",
@@ -135,6 +144,27 @@ def test_email_delivery_failure_retry_cancel_and_access(auth, users, db, monkeyp
             f"/api/email-deliveries/{delivery_id}/retry", json={"confirmed": True}
         ).status_code
         == 404
+    )
+
+
+def test_email_delivery_keeps_advanced_sales_status(auth, db, monkeypatch):
+    _, company, draft = make_draft(auth, db)
+    company.status = "replied"
+    db.commit()
+    auth.post(
+        f"/api/outreach-drafts/{draft.id}/email-delivery",
+        json={"recipient_email": company.email, "confirmed": True},
+    )
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    monkeypatch.setattr(worker, "send_email", lambda *_args: None)
+    assert worker.run_once()
+    db.refresh(company)
+    assert company.status == "replied"
+    assert not db.scalar(
+        select(Activity).where(
+            Activity.company_id == company.id,
+            Activity.activity_type == "status_change",
+        )
     )
 
 
