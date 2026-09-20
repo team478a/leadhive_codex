@@ -231,6 +231,28 @@ class ContactPerson(Timestamps, Base):
     notes: Mapped[str] = mapped_column(Text, default="")
 
 
+class OutreachDraft(Timestamps, Base):
+    __tablename__ = "outreach_drafts"
+    __table_args__ = (
+        CheckConstraint("channel IN ('email', 'form', 'sns')", name="ck_outreach_draft_channel"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    contact_person_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("contact_people.id", ondelete="SET NULL"), index=True
+    )
+    channel: Mapped[str] = mapped_column(String(20))
+    subject: Mapped[str] = mapped_column(String(300), default="")
+    body: Mapped[str] = mapped_column(Text)
+    ai_provider: Mapped[str] = mapped_column(String(50), default="")
+    ai_model: Mapped[str] = mapped_column(String(100), default="")
+
+
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (

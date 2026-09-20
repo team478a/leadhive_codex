@@ -345,6 +345,32 @@ class ContactPersonOut(ContactPersonInput):
     updated_at: datetime
 
 
+class OutreachDraftGenerateInput(Input):
+    channel: Literal["email", "form", "sns"]
+    contact_person_id: UUID | None = None
+    instruction: str = Field(default="", max_length=1000)
+
+
+class OutreachDraftUpdateInput(Input):
+    subject: str = Field(default="", max_length=300)
+    body: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+
+
+class OutreachDraftOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    company_id: UUID
+    created_by_user_id: UUID | None
+    contact_person_id: UUID | None
+    channel: Literal["email", "form", "sns"]
+    subject: str
+    body: str
+    ai_provider: str
+    ai_model: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class NotificationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID

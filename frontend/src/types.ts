@@ -92,6 +92,11 @@ export interface ContactPerson {
   verification_status: 'unknown' | 'verified' | 'invalid'
   verified_at: string | null; notes: string; created_at: string; updated_at: string
 }
+export interface OutreachDraft {
+  id: string; company_id: string; created_by_user_id: string | null; contact_person_id: string | null
+  channel: 'email' | 'form' | 'sns'; subject: string; body: string
+  ai_provider: string; ai_model: string; created_at: string; updated_at: string
+}
 export interface Notification {
   id: string; project_id: string; company_id: string | null; operation_job_id: string | null
   notification_type: 'followup_overdue' | 'operation_failed'

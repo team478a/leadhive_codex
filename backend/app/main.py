@@ -13,6 +13,7 @@ from app.company_routes import router as company_router
 from app.config import settings
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
+from app.outreach_draft_routes import router as outreach_draft_router
 from app.routes import router
 
 logger = logging.getLogger("leadhive")
@@ -71,3 +72,4 @@ app.include_router(ai_router)
 app.include_router(company_router)
 app.include_router(operation_router)
 app.include_router(notification_router)
+app.include_router(outreach_draft_router)
