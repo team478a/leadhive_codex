@@ -121,3 +121,42 @@ def test_worker_runs_inbound_sync_before_other_work(db, monkeypatch):
     monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: calls.append(True) or 1)
     assert worker.run_once() is True
     assert calls == [True]
+
+
+def test_admin_can_search_and_manually_match_unmatched_inbound_email(auth, users, db):
+    users[0].is_admin = True
+    db.commit()
+    company = make_company(auth, db, "contact@manual.example")
+    inbound = InboundEmail(
+        mailbox_uid="manual-100",
+        sender_email="shared@manual.example",
+        subject="日程について",
+        preview="来週でしたら対応可能です。",
+        received_at=datetime.now(timezone.utc),
+        match_type="unmatched",
+    )
+    db.add(inbound)
+    db.commit()
+
+    candidates = auth.get(
+        "/api/admin/inbound-email-companies", params={"query": company.company_name}
+    )
+    assert candidates.status_code == 200
+    assert candidates.json()[0]["id"] == str(company.id)
+
+    matched = auth.post(
+        f"/api/admin/inbound-emails/{inbound.id}/match", json={"company_id": str(company.id)}
+    )
+    assert matched.status_code == 200
+    assert matched.json()["company_name"] == company.company_name
+    assert matched.json()["match_type"] == "manual"
+    db.refresh(company)
+    assert company.status == "replied"
+    notes = db.scalars(select(Activity.note).where(Activity.company_id == company.id)).all()
+    assert any("受信メールを手動紐付け" in note for note in notes)
+    assert (
+        auth.post(
+            f"/api/admin/inbound-emails/{inbound.id}/match", json={"company_id": str(company.id)}
+        ).status_code
+        == 409
+    )
