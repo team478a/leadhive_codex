@@ -36,6 +36,8 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [savedFilters, setSavedFilters] = useState<SavedCompanyFilter[]>([])
   const [assigneeAnalytics, setAssigneeAnalytics] = useState<AssigneeAnalytics[]>([])
   const [filterName, setFilterName] = useState('')
+  const [editingFilterId, setEditingFilterId] = useState('')
+  const [editingFilterName, setEditingFilterName] = useState('')
   const [staleDays, setStaleDays] = useState(90)
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
@@ -164,6 +166,15 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       await reload(); setNotice('保存フィルターを削除しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function updateFilter(item: SavedCompanyFilter, name: string, nextFilters: Filters) {
+    if (!name.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/saved-company-filters/${item.id}`, 'PUT', { name, filters: nextFilters })
+      setEditingFilterId(''); setEditingFilterName(''); await reload()
+      setNotice(nextFilters === filters ? '保存フィルターを現在の条件で上書きしました。' : '保存フィルター名を変更しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   if (projects.length === 0) return <section className="panel empty"><h2>先にプロジェクトを作成してください</h2></section>
   return <>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
@@ -182,7 +193,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       <button className="secondary" onClick={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div></section>
     <section className="panel mt-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2>保存フィルター</h2><p className="muted mt-2 text-sm">適用中の絞り込み条件を名前付きで保存します。</p></div>
       <div className="flex flex-wrap items-end gap-2"><label className="field mb-0">フィルター名<input value={filterName} maxLength={200} onChange={e => setFilterName(e.target.value)} placeholder="例：佐藤担当の期限超過" /></label><button disabled={busy || !filterName.trim()} onClick={() => void saveFilter()}>現在の条件を保存</button></div></div>
-      {savedFilters.length === 0 ? <p className="muted mt-4">保存済みフィルターはありません。</p> : <div className="grid gap-3 mt-4 sm:grid-cols-2 xl:grid-cols-3">{savedFilters.map(item => <article className="job-row block" key={item.id}><strong>{item.name}</strong><div className="flex gap-2 mt-3"><button className="secondary" onClick={() => { setDraft(item.filters); setFilters(item.filters); setPage(0) }}>適用</button><button className="danger" disabled={busy} onClick={() => void deleteFilter(item.id)}>削除</button></div></article>)}</div>}</section>
+      {savedFilters.length === 0 ? <p className="muted mt-4">保存済みフィルターはありません。</p> : <div className="grid gap-3 mt-4 sm:grid-cols-2 xl:grid-cols-3">{savedFilters.map(item => <article className="job-row block" key={item.id}>{editingFilterId === item.id ? <><label className="field">保存名<input aria-label={`${item.name}の保存名`} maxLength={200} value={editingFilterName} onChange={e => setEditingFilterName(e.target.value)} /></label><div className="flex gap-2"><button disabled={busy || !editingFilterName.trim()} onClick={() => void updateFilter(item, editingFilterName, item.filters)}>名前を保存</button><button className="secondary" onClick={() => setEditingFilterId('')}>キャンセル</button></div></> : <><strong>{item.name}</strong><div className="flex flex-wrap gap-2 mt-3"><button className="secondary" onClick={() => { setDraft(item.filters); setFilters(item.filters); setPage(0) }}>適用</button><button className="secondary" disabled={busy} onClick={() => void updateFilter(item, item.name, filters)}>現在の条件で上書き</button><button className="secondary" onClick={() => { setEditingFilterId(item.id); setEditingFilterName(item.name) }}>名前変更</button><button className="danger" disabled={busy} onClick={() => void deleteFilter(item.id)}>削除</button></div></>}</article>)}</div>}</section>
     <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>担当者別営業成果</h2><p className="muted mt-2 text-sm">担当企業数と現在の営業状況、期限超過を比較します。</p></div><span className="badge">{assigneeAnalytics.length} 人</span></div>
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>担当者</th><th>担当企業</th><th>アプローチ</th><th>返信</th><th>商談</th><th>成約</th><th>期限超過</th></tr></thead><tbody>{assigneeAnalytics.map(item => <tr key={item.assignee}><td><strong>{item.assignee}</strong></td><td>{item.total}</td><td>{item.approached}</td><td>{item.replied}</td><td>{item.meetings}</td><td>{item.won}</td><td>{item.overdue}</td></tr>)}{assigneeAnalytics.length === 0 && <tr><td colSpan={7} className="text-center muted">集計対象の企業はありません。</td></tr>}</tbody></table></div></section>
     {quality && <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>データ品質</h2><p className="muted mt-2 text-sm">欠損情報とWeb解析の更新状況を確認します。</p></div>

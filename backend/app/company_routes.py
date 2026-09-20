@@ -150,6 +150,27 @@ def create_saved_company_filter(
     return item
 
 
+@router.put("/saved-company-filters/{filter_id}", response_model=SavedCompanyFilterOut)
+def update_saved_company_filter(
+    filter_id: UUID,
+    body: SavedCompanyFilterInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    item = db.scalar(
+        select(SavedCompanyFilter)
+        .join(Project, Project.id == SavedCompanyFilter.project_id)
+        .where(SavedCompanyFilter.id == filter_id, Project.user_id == user.id)
+    )
+    if item is None:
+        raise HTTPException(404, "保存フィルターが見つかりません。")
+    item.name = body.name
+    item.filters = body.filters.model_dump()
+    db.commit()
+    db.refresh(item)
+    return item
+
+
 @router.delete("/saved-company-filters/{filter_id}", status_code=204)
 def delete_saved_company_filter(
     filter_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
