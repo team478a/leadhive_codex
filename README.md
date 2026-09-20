@@ -217,7 +217,7 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | POST | `/api/projects/{id}/companies/merge` | 指定した企業へ重複企業を統合 |
 | PATCH | `/api/projects/{id}/companies/bulk-assignee` | 最大100社の担当者を一括更新 |
 | GET / POST | `/api/projects/{id}/saved-company-filters` | 企業一覧の保存フィルター一覧 / 作成 |
-| DELETE | `/api/saved-company-filters/{id}` | 保存フィルターを削除 |
+| PUT / DELETE | `/api/saved-company-filters/{id}` | 保存フィルターを更新 / 削除 |
 | GET | `/api/projects/{id}/assignee-analytics` | 担当者別の営業状況・期限超過集計 |
 
 health / login / logout以外はログイン必須。logoutは未ログイン時も204。

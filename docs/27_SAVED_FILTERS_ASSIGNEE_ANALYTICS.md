@@ -7,7 +7,7 @@
 ## 保存フィルター
 
 - 適用中のランク、最低スコア、地域、営業状況、収集元、キーワード、担当者、フォロー期限、並び順を名前付きで保存する。
-- 保存済み条件は企業一覧から再適用、削除できる。
+- 保存済み条件は企業一覧から再適用、名前変更、現在条件での上書き、削除ができる。
 - フィルターはプロジェクトに所属し、プロジェクト所有者だけが一覧、作成、削除できる。
 - DB変更は `saved_company_filters` テーブルを追加するMigrationで管理する。
 
@@ -27,11 +27,12 @@
 | --- | --- | --- |
 | GET | `/api/projects/{id}/saved-company-filters` | 保存フィルター一覧 |
 | POST | `/api/projects/{id}/saved-company-filters` | 現在の条件を保存 |
+| PUT | `/api/saved-company-filters/{id}` | 保存名と条件を更新 |
 | DELETE | `/api/saved-company-filters/{id}` | 保存フィルターを削除 |
 | GET | `/api/projects/{id}/assignee-analytics` | 担当者別営業成果を集計 |
 
 ## 検証
 
-- 保存フィルターの作成、一覧、削除と担当者別集計をAPIテストで確認する。
-- ブラウザE2Eで保存、適用、削除と集計表の表示を確認する。
+- 保存フィルターの作成、一覧、更新、削除と担当者別集計をAPIテストで確認する。
+- ブラウザE2Eで保存、適用、上書き、名前変更、削除と集計表の表示を確認する。
 - Migrationのdowngrade / upgrade、Alembic差分検査を実行する。
