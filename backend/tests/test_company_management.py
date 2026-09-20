@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.models import Activity, Company, OperationJob
+from app.models import Activity, Company, ContactPerson, OperationJob
 
 
 def make_project(auth, name="営業リストテスト"):
@@ -168,6 +168,40 @@ def test_outreach_queue_prioritizes_due_work_and_records_result(auth, db):
     assert [item["company"]["id"] for item in queue] == [str(alpha.id)]
 
 
+def test_company_contact_people_crud_and_access_isolation(auth, users, db):
+    project = make_project(auth)
+    alpha, _ = add_companies(auth, db, project["id"])
+    payload = {
+        "name": "山田 花子",
+        "department": "営業部",
+        "title": "部長",
+        "email": "hanako@example.jp",
+        "phone": "03-1234-5678",
+        "source_url": "https://alpha.example/company",
+        "verification_status": "verified",
+        "notes": "問い合わせ窓口の責任者",
+    }
+    created = auth.post(f"/api/companies/{alpha.id}/contacts", json=payload)
+    assert created.status_code == 201
+    contact = created.json()
+    assert contact["name"] == "山田 花子" and contact["verified_at"] is not None
+    assert auth.get(f"/api/companies/{alpha.id}/contacts").json() == [contact]
+
+    payload["title"] = "営業本部長"
+    payload["verification_status"] = "invalid"
+    updated = auth.put(f"/api/contacts/{contact['id']}", json=payload)
+    assert updated.status_code == 200
+    assert updated.json()["title"] == "営業本部長"
+    assert updated.json()["verified_at"] is None
+
+    auth.post(
+        "/api/auth/login",
+        json={"email": users[1].email, "password": "test-only-long-password"},
+    )
+    assert auth.put(f"/api/contacts/{contact['id']}", json=payload).status_code == 404
+    assert auth.delete(f"/api/contacts/{contact['id']}").status_code == 404
+
+
 def test_sales_status_update_and_access_isolation(auth, users, db):
     project = make_project(auth)
     alpha, _ = add_companies(auth, db, project["id"])
@@ -308,6 +342,7 @@ def test_duplicate_candidates_and_safe_merge(auth, db):
     alpha.notes = "残す企業のメモ"
     beta.notes = "統合元のメモ"
     db.add(Activity(company_id=beta.id, activity_type="call", note="統合前の電話履歴"))
+    db.add(ContactPerson(company_id=beta.id, name="統合元担当者"))
     db.flush()
 
     candidates = auth.get(f"/api/projects/{project['id']}/duplicate-candidates")
@@ -329,6 +364,8 @@ def test_duplicate_candidates_and_safe_merge(auth, db):
     activities = auth.get(f"/api/companies/{alpha.id}/activities").json()
     assert any(item["note"] == "統合前の電話履歴" for item in activities)
     assert any("重複企業" in item["note"] for item in activities)
+    contacts = auth.get(f"/api/companies/{alpha.id}/contacts").json()
+    assert [item["name"] for item in contacts] == ["統合元担当者"]
     assert auth.get(f"/api/projects/{project['id']}/duplicate-candidates").json() == []
 
 
