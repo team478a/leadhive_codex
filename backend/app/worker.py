@@ -186,6 +186,16 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
                 note=f"メール送信: {delivery.recipient_email} / 件名: {delivery.subject}",
             )
         )
+        company = db.get(Company, delivery.company_id)
+        if company and company.status in {"unreviewed", "target"}:
+            company.status = "approached"
+            db.add(
+                Activity(
+                    company_id=company.id,
+                    activity_type="status_change",
+                    note="営業状況を更新: アプローチ済（メール送信）",
+                )
+            )
         db.commit()
         logger.info("email delivery end: id=%s status=sent", delivery.id)
     except EmailDeliveryError as exc:
