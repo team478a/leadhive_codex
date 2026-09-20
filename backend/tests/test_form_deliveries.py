@@ -82,3 +82,50 @@ def test_form_preview_and_confirmed_delivery(auth, db, monkeypatch):
         ).status_code
         == 409
     )
+
+
+def test_codex_assisted_form_delivery_result_updates_sales_status(auth, db):
+    company, draft = make_form_draft(auth, db)
+    blocked = auth.post(
+        f"/api/outreach-drafts/{draft.id}/form-assist-delivery",
+        json={"status": "submitted", "confirmed": False},
+    )
+    assert blocked.status_code == 422
+
+    pending = auth.post(
+        f"/api/outreach-drafts/{draft.id}/form-assist-delivery",
+        json={"status": "pending", "note": "CAPTCHAの確認待ち", "confirmed": True},
+    )
+    assert pending.status_code == 201
+    assert pending.json()["delivery_method"] == "codex_assisted"
+    assert pending.json()["status"] == "pending"
+    db.refresh(company)
+    assert company.status == "unreviewed"
+
+    submitted = auth.post(
+        f"/api/outreach-drafts/{draft.id}/form-assist-delivery",
+        json={"status": "submitted", "note": "送信完了画面を確認", "confirmed": True},
+    )
+    assert submitted.status_code == 201
+    assert submitted.json()["status"] == "submitted"
+    assert submitted.json()["result_note"] == "送信完了画面を確認"
+    db.refresh(company)
+    assert company.status == "approached"
+    assert db.scalar(select(FormDelivery).where(FormDelivery.draft_id == draft.id)).submitted_at
+    assert (
+        len(
+            db.scalars(
+                select(Activity).where(
+                    Activity.company_id == company.id, Activity.activity_type == "form"
+                )
+            ).all()
+        )
+        == 2
+    )
+    assert (
+        auth.post(
+            f"/api/outreach-drafts/{draft.id}/form-assist-delivery",
+            json={"status": "submitted", "confirmed": True},
+        ).status_code
+        == 409
+    )
