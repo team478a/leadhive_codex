@@ -66,6 +66,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `52_INBOUND_EMAIL_REPLIES.md`
 - `53_INBOUND_EMAIL_MANUAL_MATCHING.md`
 - `54_INBOUND_EMAIL_SUPPRESSION.md`
+- `55_REPLY_RESPONSE_QUEUE.md`
 
 ## 基本原則
 
