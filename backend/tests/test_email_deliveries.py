@@ -57,6 +57,9 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
     delivery = created.json()
     assert delivery["status"] == "queued"
     assert delivery["subject"] == draft.subject
+    overview = auth.get(f"/api/projects/{company.project_id}/email-deliveries").json()
+    assert overview["queued_count"] == 1
+    assert overview["items"][0]["company_name"] == company.company_name
     draft.subject = "送信後に編集した件名"
     db.commit()
     sent = []
@@ -65,6 +68,9 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
     assert worker.run_once()
     result = auth.get(f"/api/outreach-drafts/{draft.id}/email-delivery").json()
     assert result["status"] == "sent" and result["sent_at"]
+    assert (
+        auth.get(f"/api/projects/{company.project_id}/email-deliveries").json()["sent_count"] == 1
+    )
     assert sent[0][2] == company.email and sent[0][3] == "サービスのご相談"
     activity = db.scalar(
         select(Activity).where(Activity.company_id == company.id, Activity.activity_type == "email")
