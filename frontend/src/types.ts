@@ -28,6 +28,10 @@ export interface CollectionJob {
   duplicate_count: number; error_count: number; error_message: string
   created_at: string; finished_at: string | null
 }
+export interface CsvPreview {
+  headers: string[]; sample_rows: Record<string, string>[]; row_count: number
+  suggested_mapping: Record<string, string>
+}
 export interface Company {
   id: string; project_id: string; company_name: string; website_url: string | null
   domain: string | null; address: string; phone: string; email: string

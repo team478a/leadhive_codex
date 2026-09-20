@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
-import { allPages, api, errorMessage, upload } from './api'
+import { allPages, api, download, errorMessage, upload } from './api'
 import { Field } from './forms'
-import type { CollectionJob, CollectionSource, Company, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
+import type { CollectionJob, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places',
@@ -29,6 +29,8 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
   const [file, setFile] = useState<File | null>(null)
+  const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null)
+  const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [operations, setOperations] = useState<OperationJob[]>([])
@@ -80,6 +82,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       if (source === 'csv') {
         if (!file) { setError('CSVファイルを選択してください。'); return }
         const form = new FormData(); form.append('file', file)
+        if (csvPreview) form.append('column_mapping', JSON.stringify(csvMapping))
         result = [await upload<CollectionJob>(`/projects/${projectId}/collection-jobs/csv`, form)]
       } else if (source === 'url') {
         const urls = keywords.split('\n').map(value => value.trim()).filter(Boolean)
@@ -99,6 +102,16 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         : '収集処理が完了しました。結果を確認してください。')
     } catch (e) { setError(errorMessage(e)) }
     finally { setLoading(false) }
+  }
+
+  async function selectCsv(nextFile: File | null) {
+    setFile(nextFile); setCsvPreview(null); setCsvMapping({}); setError('')
+    if (!nextFile || !projectId) return
+    try {
+      const form = new FormData(); form.append('file', nextFile)
+      const preview = await upload<CsvPreview>(`/projects/${projectId}/collection-jobs/csv/preview`, form)
+      setCsvPreview(preview); setCsvMapping(preview.suggested_mapping)
+    } catch (e) { setError(errorMessage(e)) }
   }
 
   async function analyze(companyIds: string[] = []) {
@@ -175,7 +188,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         }}>{Object.entries(sourceNames).map(([value, label]) =>
           <option key={value} value={value}>{label}</option>)}</select></Field>
         {source === 'csv' ? <Field label="CSVファイル（UTF-8・最大5MB・1000行）">
-          <input type="file" accept=".csv,text/csv" required onChange={e => setFile(e.target.files?.[0] ?? null)} />
+          <input type="file" accept=".csv,text/csv" required onChange={e => void selectCsv(e.target.files?.[0] ?? null)} />
         </Field> : <Field label={source === 'url' ? 'URL（1行に1件）' : '検索キーワード（1行に1件）'}>
           <textarea required rows={8} value={keywords} onChange={e => setKeywords(e.target.value)}
             placeholder={source === 'url' ? 'https://example.com' : '検索キーワード'} />
@@ -186,7 +199,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             max={source === 'google_places' ? 60 : 100} value={maxResults}
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>
         </div>}
-        {source === 'csv' && <p className="muted text-sm">必須列：company_name, website_url, phone, email, address</p>}
+        {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所' }).map(([field, label]) => <Field key={field} label={label}><select required value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
         <div className="actions"><button type="submit">{loading ? (source === 'serper' || source === 'google_places' ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
       </fieldset>
     </form>
@@ -253,6 +266,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             <div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
               <span>重複 {job.duplicate_count}</span><span>エラー {job.error_count}</span></div>
             {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
+            {job.source === 'csv' && job.error_count > 0 && <button type="button" className="secondary mt-3" onClick={() => void download(`/collection-jobs/${job.id}/errors.csv`, 'csv-import-errors.csv').catch(e => setError(errorMessage(e)))}>行別エラーをダウンロード</button>}
           </article>)}
       </div>
       <div className="panel"><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>

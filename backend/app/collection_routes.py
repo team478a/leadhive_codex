@@ -1,8 +1,12 @@
+import csv
+import io
+import json
 import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from sqlalchemy import or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -12,6 +16,7 @@ from app.models import CollectionJob, Company, Project, User
 from app.schemas import (
     CollectionJobOut,
     CompanyOut,
+    CsvPreviewOut,
     SearchCollectionInput,
     UrlCollectionInput,
 )
@@ -21,7 +26,9 @@ from app.services.collection import (
     ExternalServiceError,
     canonicalize_url,
     parse_csv,
+    parse_csv_with_mapping,
     parse_urls,
+    read_csv,
     search_google_places,
     search_serper,
 )
@@ -99,10 +106,13 @@ def save_candidates(
     job: CollectionJob,
     candidates: list[Candidate],
     source_keyword: str = "",
-    input_errors: int = 0,
+    input_errors: int | list[dict[str, object]] = 0,
 ):
-    job.found_count = len(candidates) + input_errors
-    job.error_count = input_errors
+    error_details = input_errors if isinstance(input_errors, list) else []
+    error_count = len(input_errors) if isinstance(input_errors, list) else input_errors
+    job.found_count = len(candidates) + error_count
+    job.error_count = error_count
+    job.import_errors = error_details
     for candidate in candidates:
         if is_duplicate(db, job.project_id, candidate):
             job.duplicate_count += 1
@@ -247,6 +257,7 @@ def collect_urls(
 async def collect_csv(
     project_id: UUID,
     file: UploadFile = File(...),
+    column_mapping: str | None = Form(None),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -255,8 +266,61 @@ async def collect_csv(
         raise HTTPException(422, "CSVファイルを選択してください。")
     content = await file.read(5 * 1024 * 1024 + 1)
     try:
-        candidates, errors = parse_csv(content)
-    except ValueError as exc:
+        if column_mapping:
+            mapping = json.loads(column_mapping)
+            candidates, errors = parse_csv_with_mapping(content, mapping)
+        else:
+            candidates, count = parse_csv(content)
+            errors = count
+    except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(422, str(exc)) from None
     job = start_job(db, project_id, "csv", file.filename[:500], "")
     return save_candidates(db, job, candidates, input_errors=errors)
+
+
+@router.post("/projects/{project_id}/collection-jobs/csv/preview", response_model=CsvPreviewOut)
+async def preview_csv(
+    project_id: UUID,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    content = await file.read(5 * 1024 * 1024 + 1)
+    try:
+        headers, rows = read_csv(content)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from None
+    aliases = {
+        "company_name": ("company_name", "会社名", "企業名"),
+        "website_url": ("website_url", "URL", "Webサイト"),
+        "phone": ("phone", "電話", "電話番号"),
+        "email": ("email", "メール", "メールアドレス"),
+        "address": ("address", "住所", "所在地"),
+    }
+    suggested = {
+        field: next((header for header in choices if header in headers), "")
+        for field, choices in aliases.items()
+    }
+    return CsvPreviewOut(
+        headers=headers, sample_rows=rows[:5], row_count=len(rows), suggested_mapping=suggested
+    )
+
+
+@router.get("/collection-jobs/{job_id}/errors.csv")
+def download_csv_errors(
+    job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    job = owned_job(job_id, db, user)
+    if job.source != "csv" or not job.import_errors:
+        raise HTTPException(404, "CSV取込エラーはありません。")
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["row", "reason"])
+    for item in job.import_errors:
+        writer.writerow([item.get("row", ""), item.get("reason", "")])
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="csv-import-errors.csv"'},
+    )

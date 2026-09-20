@@ -65,7 +65,10 @@ def parse_urls(values: list[str]) -> tuple[list[Candidate], int]:
     return candidates, errors
 
 
-def parse_csv(content: bytes) -> tuple[list[Candidate], int]:
+CSV_FIELDS = ("company_name", "website_url", "phone", "email", "address")
+
+
+def read_csv(content: bytes) -> tuple[list[str], list[dict[str, str]]]:
     if len(content) > 5 * 1024 * 1024:
         raise ValueError("CSVは5MB以下にしてください。")
     try:
@@ -73,36 +76,60 @@ def parse_csv(content: bytes) -> tuple[list[Candidate], int]:
     except UnicodeDecodeError as exc:
         raise ValueError("CSVはUTF-8形式で保存してください。") from exc
     reader = csv.DictReader(io.StringIO(text))
-    required = {"company_name", "website_url", "phone", "email", "address"}
-    if reader.fieldnames is None or not required.issubset(set(reader.fieldnames)):
-        raise ValueError("CSVの列はcompany_name, website_url, phone, email, addressが必要です。")
-    candidates: list[Candidate] = []
-    errors = 0
+    if reader.fieldnames is None:
+        raise ValueError("CSVにヘッダー行が必要です。")
+    headers = [value.strip() for value in reader.fieldnames if value and value.strip()]
+    rows = []
     for index, row in enumerate(reader, start=2):
         if index > 1001:
             raise ValueError("CSVは1000行以下にしてください。")
-        name = (row.get("company_name") or "").strip()
-        website = (row.get("website_url") or "").strip()
+        rows.append({str(key): value or "" for key, value in row.items() if key is not None})
+    return headers, rows
+
+
+def parse_csv_with_mapping(
+    content: bytes, mapping: dict[str, str]
+) -> tuple[list[Candidate], list[dict[str, object]]]:
+    headers, rows = read_csv(content)
+    if (
+        not isinstance(mapping, dict)
+        or set(mapping) != set(CSV_FIELDS)
+        or any(value not in headers for value in mapping.values())
+    ):
+        raise ValueError("CSVの列対応付けが正しくありません。")
+    candidates: list[Candidate] = []
+    errors: list[dict[str, object]] = []
+    for index, row in enumerate(rows, start=2):
+        name = (row.get(mapping["company_name"]) or "").strip()
+        website = (row.get(mapping["website_url"]) or "").strip()
         if not name:
-            errors += 1
+            errors.append({"row": index, "reason": "会社名が空です。"})
             continue
         normalized: str | None = None
         if website:
             try:
                 normalized, _ = canonicalize_url(website)
             except ValueError:
-                errors += 1
+                errors.append({"row": index, "reason": "WebサイトURLが不正です。"})
                 continue
         candidates.append(
             Candidate(
                 company_name=name[:500],
                 website_url=normalized,
-                phone=(row.get("phone") or "").strip()[:100],
-                email=(row.get("email") or "").strip()[:320],
-                address=(row.get("address") or "").strip()[:5000],
+                phone=(row.get(mapping["phone"]) or "").strip()[:100],
+                email=(row.get(mapping["email"]) or "").strip()[:320],
+                address=(row.get(mapping["address"]) or "").strip()[:5000],
             )
         )
     return candidates, errors
+
+
+def parse_csv(content: bytes) -> tuple[list[Candidate], int]:
+    headers, _ = read_csv(content)
+    if not set(CSV_FIELDS).issubset(headers):
+        raise ValueError("CSVの列はcompany_name, website_url, phone, email, addressが必要です。")
+    candidates, errors = parse_csv_with_mapping(content, {field: field for field in CSV_FIELDS})
+    return candidates, len(errors)
 
 
 def search_serper(keyword: str, region: str, max_results: int) -> list[Candidate]:

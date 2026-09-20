@@ -141,6 +141,13 @@ class CollectionJobOut(BaseModel):
     finished_at: datetime | None
 
 
+class CsvPreviewOut(BaseModel):
+    headers: list[str]
+    sample_rows: list[dict[str, str]]
+    row_count: int
+    suggested_mapping: dict[str, str]
+
+
 class SearchCollectionInput(Input):
     source: Literal["serper", "google_places"]
     keywords: Annotated[list[Keyword], Field(min_length=1, max_length=20)]
