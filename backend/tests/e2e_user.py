@@ -12,7 +12,15 @@ if not (make_url(url).database or "").endswith("_test"):
 os.environ["DATABASE_URL"] = url
 
 from app.database import SessionLocal  # noqa: E402
-from app.models import AuthSession, Project, SmtpSettings, TargetProfile, User  # noqa: E402
+from app.models import (  # noqa: E402
+    AuthSession,
+    InboundEmail,
+    InboundMailSettings,
+    Project,
+    SmtpSettings,
+    TargetProfile,
+    User,
+)
 from app.security import password_hasher  # noqa: E402
 
 email = os.environ["E2E_EMAIL"]
@@ -29,6 +37,8 @@ with SessionLocal() as db:
         )
     elif sys.argv[1] == "cleanup":
         db.execute(delete(SmtpSettings))
+        db.execute(delete(InboundEmail))
+        db.execute(delete(InboundMailSettings))
         user = db.scalar(select(User).where(User.email == email))
         if user:
             for model in (AuthSession, Project, TargetProfile):
