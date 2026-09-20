@@ -44,6 +44,16 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   const projectCard = page.getByRole('article').filter({
     has: page.getByRole('heading', { name: projectName, exact: true }),
   })
+  await projectCard.getByRole('button', { name: 'メンバー' }).click()
+  const membersPanel = page.getByRole('region', { name: 'プロジェクトメンバー' })
+  await membersPanel.getByLabel('メンバーのメール').fill(process.env.E2E_MEMBER_EMAIL!)
+  await membersPanel.getByLabel('権限').selectOption('viewer')
+  await membersPanel.getByRole('button', { name: 'メンバーを保存' }).click()
+  const memberRow = membersPanel.getByRole('article').filter({ hasText: process.env.E2E_MEMBER_EMAIL! })
+  await expect(memberRow.getByText('閲覧者', { exact: true })).toBeVisible()
+  await memberRow.getByRole('button', { name: '削除' }).click()
+  await expect(memberRow).toHaveCount(0)
+  await membersPanel.getByRole('button', { name: '閉じる' }).click()
   await projectCard.getByRole('button', { name: '編集', exact: true }).click()
   await page.getByLabel('営業目的').fill('車両販売のご提案')
   await page.getByLabel('ステータス').selectOption('active')
