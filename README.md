@@ -2,7 +2,7 @@
 
 LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を解析し、AIで営業適性を判定して優先順位付きリストを作成するBtoB営業リスト収集基盤です。
 
-メール配信設定・テスト送信・配信失敗通知・送信量制御の運用手順は [`docs/41_SMTP_SETTINGS_MANAGEMENT.md`](docs/41_SMTP_SETTINGS_MANAGEMENT.md)、[`docs/42_EMAIL_DELIVERY_FAILURE_NOTIFICATIONS.md`](docs/42_EMAIL_DELIVERY_FAILURE_NOTIFICATIONS.md)、[`docs/43_EMAIL_DELIVERY_RATE_LIMITS.md`](docs/43_EMAIL_DELIVERY_RATE_LIMITS.md) を参照してください。
+メール配信設定・テスト送信・配信失敗通知・送信量制御・配信状況の運用手順は [`docs/41_SMTP_SETTINGS_MANAGEMENT.md`](docs/41_SMTP_SETTINGS_MANAGEMENT.md)、[`docs/42_EMAIL_DELIVERY_FAILURE_NOTIFICATIONS.md`](docs/42_EMAIL_DELIVERY_FAILURE_NOTIFICATIONS.md)、[`docs/43_EMAIL_DELIVERY_RATE_LIMITS.md`](docs/43_EMAIL_DELIVERY_RATE_LIMITS.md)、[`docs/44_EMAIL_DELIVERY_STATUS.md`](docs/44_EMAIL_DELIVERY_STATUS.md) を参照してください。
 
 ## 開発方針
 
