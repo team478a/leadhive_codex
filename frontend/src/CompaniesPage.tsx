@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, OperationJob, OutreachChannel, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, OperationJob, OutreachChannel, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -48,6 +48,10 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [editingFilterId, setEditingFilterId] = useState('')
   const [editingFilterName, setEditingFilterName] = useState('')
   const [staleDays, setStaleDays] = useState(90)
+  const [refreshSchedule, setRefreshSchedule] = useState<AnalysisRefreshSchedule | null>(null)
+  const [refreshInterval, setRefreshInterval] = useState(168)
+  const [refreshStaleDays, setRefreshStaleDays] = useState(90)
+  const [refreshBatchLimit, setRefreshBatchLimit] = useState(100)
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
   const [selected, setSelected] = useState<Company | null>(null)
@@ -72,17 +76,24 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const query = useMemo(() => queryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
     if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); return }
-    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue] = await Promise.all([
+    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextRefreshSchedule] = await Promise.all([
       api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
       api<SavedCompanyFilter[]>(`/projects/${projectId}/saved-company-filters`),
       api<AssigneeAnalytics[]>(`/projects/${projectId}/assignee-analytics`),
       api<OutreachQueueItem[]>(`/projects/${projectId}/outreach-queue?limit=25`),
+      api<AnalysisRefreshSchedule | null>(`/projects/${projectId}/analysis-refresh-schedule`),
     ])
     setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
     setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
     setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setChecked([])
+    setRefreshSchedule(nextRefreshSchedule)
+    if (nextRefreshSchedule) {
+      setRefreshInterval(nextRefreshSchedule.interval_hours)
+      setRefreshStaleDays(nextRefreshSchedule.stale_days)
+      setRefreshBatchLimit(nextRefreshSchedule.batch_limit)
+    }
   }, [projectId, query, staleDays])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
   async function open(company: Company) {
@@ -212,6 +223,30 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       setNotice(`${job.total_count || quality?.reanalyzable || 0}社を再解析ジョブへ登録しました。`)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function saveRefreshSchedule(active = refreshSchedule?.active ?? true) {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/projects/${projectId}/analysis-refresh-schedule`, 'PUT', {
+        interval_hours: refreshInterval, stale_days: refreshStaleDays,
+        batch_limit: refreshBatchLimit, active,
+      })
+      await reload(); setNotice('自動再解析設定を保存しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function runRefreshSchedule() {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const job = await api<OperationJob>(`/projects/${projectId}/analysis-refresh-schedule/run`, 'POST')
+      await reload(); setNotice(`${job.total_count || refreshBatchLimit}社までの自動再解析を登録しました。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function deleteRefreshSchedule() {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/projects/${projectId}/analysis-refresh-schedule`, 'DELETE')
+      setRefreshSchedule(null); setNotice('自動再解析設定を削除しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   async function mergeCompanies(target: Company, source: Company) {
     if (!window.confirm(`「${source.company_name}」を「${target.company_name}」へ統合しますか？`)) return
     setBusy(true); setError(''); setNotice('')
@@ -282,6 +317,11 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
         ['連絡先なし', quality.missing_contact], ['解析失敗', quality.failed_analysis],
         [`${quality.stale_days}日超過`, quality.stale_analysis], ['再解析対象', quality.reanalyzable],
       ].map(([label, value]) => <div className="metric" key={label}><span>{label}</span><strong>{value}</strong></div>)}</div></section>}
+    <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>自動再解析</h2><p className="muted mt-2 text-sm">解析失敗または期限切れの企業情報を定期的に更新します。</p></div>{refreshSchedule && <span className="badge">{refreshSchedule.active ? '有効' : '停止中'}</span>}</div>
+      <div className="filter-grid mt-4"><label className="field">実行間隔（時間）<input type="number" min={1} max={720} value={refreshInterval} onChange={e => setRefreshInterval(Number(e.target.value))} /></label><label className="field">期限切れ判定（日）<input type="number" min={1} max={3650} value={refreshStaleDays} onChange={e => setRefreshStaleDays(Number(e.target.value))} /></label><label className="field">1回の最大件数<input type="number" min={1} max={100} value={refreshBatchLimit} onChange={e => setRefreshBatchLimit(Number(e.target.value))} /></label></div>
+      {refreshSchedule && <><p className="muted text-sm">次回 {new Date(refreshSchedule.next_run_at).toLocaleString('ja-JP')}</p>{refreshSchedule.last_enqueued_at && <p className="muted text-sm">最終登録 {new Date(refreshSchedule.last_enqueued_at).toLocaleString('ja-JP')}</p>}{refreshSchedule.last_error && <p className="error mt-2 mb-0">{refreshSchedule.last_error}</p>}</>}
+      <div className="actions"><button disabled={busy} onClick={() => void saveRefreshSchedule()}>{refreshSchedule ? '設定を保存' : '自動再解析を設定'}</button>{refreshSchedule && <><button className="secondary" disabled={busy} onClick={() => void runRefreshSchedule()}>今すぐ対象を登録</button><button className="secondary" disabled={busy} onClick={() => void saveRefreshSchedule(!refreshSchedule.active)}>{refreshSchedule.active ? '停止' : '再開'}</button><button className="danger" disabled={busy} onClick={() => void deleteRefreshSchedule()}>削除</button></>}</div>
+    </section>
     <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>重複候補</h2><p className="muted mt-2 text-sm">メール・電話・会社名と住所の一致を確認して統合します。</p></div><span className="badge">{duplicates.length} 組</span></div>
       {duplicates.length === 0 ? <p className="muted mt-4">重複候補はありません。</p> : duplicates.map(item => <article className="job-row block" key={`${item.left.id}-${item.right.id}`}><p className="muted text-sm">一致：{item.reasons.map(reason => reason === 'email' ? 'メール' : reason === 'phone' ? '電話' : '会社名＋住所').join(' / ')}</p>
         <div className="grid gap-3 mt-3 sm:grid-cols-2"><div><strong>{item.left.company_name}</strong><p className="muted text-sm">{item.left.email || item.left.phone || item.left.address}</p><button disabled={busy} className="secondary mt-2" onClick={() => void mergeCompanies(item.left, item.right)}>こちらへ統合</button></div>

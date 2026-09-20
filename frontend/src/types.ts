@@ -115,6 +115,11 @@ export interface SearchSchedule {
   next_run_at: string; last_enqueued_at: string | null; last_error: string
   created_at: string; updated_at: string
 }
+export interface AnalysisRefreshSchedule {
+  id: string; project_id: string; interval_hours: number; stale_days: number
+  batch_limit: number; active: boolean; next_run_at: string
+  last_enqueued_at: string | null; last_error: string; created_at: string; updated_at: string
+}
 export interface SearchAnalytics {
   schedule_id: string; name: string; run_count: number
   found_count: number; saved_count: number; duplicate_count: number; excluded_count: number; error_count: number

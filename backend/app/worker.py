@@ -12,7 +12,15 @@ from app.analysis_routes import analyze
 from app.collection_routes import fail_job, save_candidates, start_job
 from app.config import settings
 from app.database import SessionLocal
-from app.models import Company, OperationJob, Project, SearchSchedule, TargetProfile
+from app.models import (
+    AnalysisRefreshSchedule,
+    Company,
+    OperationJob,
+    Project,
+    SearchSchedule,
+    TargetProfile,
+)
+from app.operation_routes import refresh_company_ids
 from app.services.collection import ExternalServiceError, search_google_places, search_serper
 
 logger = logging.getLogger("leadhive")
@@ -104,6 +112,50 @@ def enqueue_due_schedules(db) -> int:
                     "company_limit": schedule.company_limit,
                     "schedule_id": str(schedule.id),
                 },
+            )
+        )
+        schedule.last_enqueued_at = now
+        schedule.last_error = ""
+        enqueued += 1
+    if schedules:
+        db.commit()
+    return enqueued
+
+
+def enqueue_due_refresh_schedules(db) -> int:
+    now = datetime.now(timezone.utc)
+    schedules = db.scalars(
+        select(AnalysisRefreshSchedule)
+        .where(
+            AnalysisRefreshSchedule.active.is_(True),
+            AnalysisRefreshSchedule.next_run_at <= now,
+        )
+        .order_by(AnalysisRefreshSchedule.next_run_at)
+        .with_for_update(skip_locked=True)
+        .limit(100)
+    ).all()
+    enqueued = 0
+    for schedule in schedules:
+        schedule.next_run_at = now + timedelta(hours=schedule.interval_hours)
+        active = db.scalar(
+            select(OperationJob.id).where(
+                OperationJob.project_id == schedule.project_id,
+                OperationJob.operation_type == "web_analysis",
+                OperationJob.status.in_(("queued", "running")),
+            )
+        )
+        if active:
+            schedule.last_error = "前回のWeb解析が実行中のため、今回の自動再解析を見送りました。"
+            continue
+        company_ids = refresh_company_ids(db, schedule)
+        if not company_ids:
+            schedule.last_error = ""
+            continue
+        db.add(
+            OperationJob(
+                project_id=schedule.project_id,
+                operation_type="web_analysis",
+                payload={"company_ids": [str(item) for item in company_ids], "force": True},
             )
         )
         schedule.last_enqueued_at = now
@@ -288,6 +340,7 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 def run_once() -> bool:
     with SessionLocal() as db:
         enqueue_due_schedules(db)
+        enqueue_due_refresh_schedules(db)
         recover_stale_jobs(db)
         job = claim_job(db)
         if job is None:

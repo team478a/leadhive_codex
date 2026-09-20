@@ -438,6 +438,24 @@ class SearchScheduleOut(SearchScheduleInput):
     updated_at: datetime
 
 
+class AnalysisRefreshScheduleInput(Input):
+    interval_hours: int = Field(default=168, ge=1, le=720)
+    stale_days: int = Field(default=90, ge=1, le=3650)
+    batch_limit: int = Field(default=100, ge=1, le=100)
+    active: bool = True
+
+
+class AnalysisRefreshScheduleOut(AnalysisRefreshScheduleInput):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    next_run_at: datetime
+    last_enqueued_at: datetime | None
+    last_error: str
+    created_at: datetime
+    updated_at: datetime
+
+
 class SearchAnalyticsOut(BaseModel):
     schedule_id: UUID
     name: str

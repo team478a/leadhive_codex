@@ -7,8 +7,18 @@ from sqlalchemy.orm import Session
 
 from app.analysis_routes import owned_project
 from app.database import get_db
-from app.models import CollectionJob, OperationJob, Project, SearchSchedule, User
+from app.models import (
+    AnalysisRefreshSchedule,
+    CollectionJob,
+    Company,
+    OperationJob,
+    Project,
+    SearchSchedule,
+    User,
+)
 from app.schemas import (
+    AnalysisRefreshScheduleInput,
+    AnalysisRefreshScheduleOut,
     OperationJobInput,
     OperationJobOut,
     SearchAnalyticsOut,
@@ -18,6 +28,27 @@ from app.schemas import (
 from app.security import current_user
 
 router = APIRouter(prefix="/api")
+
+
+def refresh_company_ids(db: Session, schedule: AnalysisRefreshSchedule) -> list[UUID]:
+    cutoff = datetime.now(timezone.utc) - timedelta(days=schedule.stale_days)
+    return list(
+        db.scalars(
+            select(Company.id)
+            .where(
+                Company.project_id == schedule.project_id,
+                Company.website_url.is_not(None),
+                Company.analysis_status.notin_(("duplicate", "excluded")),
+                (
+                    (Company.analysis_status == "failed")
+                    | Company.scraped_at.is_(None)
+                    | (Company.scraped_at < cutoff)
+                ),
+            )
+            .order_by(Company.scraped_at.asc().nullsfirst(), Company.id)
+            .limit(schedule.batch_limit)
+        ).all()
+    )
 
 
 def owned_operation(job_id: UUID, db: Session, user: User) -> OperationJob:
@@ -40,6 +71,100 @@ def owned_schedule(schedule_id: UUID, db: Session, user: User) -> SearchSchedule
     if schedule is None:
         raise HTTPException(404, "定期収集が見つかりません。")
     return schedule
+
+
+@router.get(
+    "/projects/{project_id}/analysis-refresh-schedule",
+    response_model=AnalysisRefreshScheduleOut | None,
+)
+def get_analysis_refresh_schedule(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    owned_project(project_id, db, user)
+    return db.scalar(
+        select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
+    )
+
+
+@router.put(
+    "/projects/{project_id}/analysis-refresh-schedule",
+    response_model=AnalysisRefreshScheduleOut,
+)
+def upsert_analysis_refresh_schedule(
+    project_id: UUID,
+    body: AnalysisRefreshScheduleInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    schedule = db.scalar(
+        select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
+    )
+    if schedule is None:
+        schedule = AnalysisRefreshSchedule(project_id=project_id, **body.model_dump())
+        db.add(schedule)
+    else:
+        for key, value in body.model_dump().items():
+            setattr(schedule, key, value)
+    schedule.next_run_at = datetime.now(timezone.utc) + timedelta(hours=body.interval_hours)
+    schedule.last_error = ""
+    db.commit()
+    db.refresh(schedule)
+    return schedule
+
+
+@router.delete("/projects/{project_id}/analysis-refresh-schedule", status_code=204)
+def delete_analysis_refresh_schedule(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    owned_project(project_id, db, user)
+    schedule = db.scalar(
+        select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
+    )
+    if schedule is None:
+        raise HTTPException(404, "自動再解析設定が見つかりません。")
+    db.delete(schedule)
+    db.commit()
+
+
+@router.post(
+    "/projects/{project_id}/analysis-refresh-schedule/run",
+    response_model=OperationJobOut,
+    status_code=202,
+)
+def run_analysis_refresh_schedule(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    owned_project(project_id, db, user)
+    schedule = db.scalar(
+        select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
+    )
+    if schedule is None:
+        raise HTTPException(404, "自動再解析設定が見つかりません。")
+    if db.scalar(
+        select(OperationJob.id).where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "web_analysis",
+            OperationJob.status.in_(("queued", "running")),
+        )
+    ):
+        raise HTTPException(409, "Web解析がすでに実行待ちです。")
+    company_ids = refresh_company_ids(db, schedule)
+    if not company_ids:
+        raise HTTPException(409, "再解析対象の企業はありません。")
+    job = OperationJob(
+        project_id=project_id,
+        operation_type="web_analysis",
+        payload={"company_ids": [str(item) for item in company_ids], "force": True},
+    )
+    now = datetime.now(timezone.utc)
+    schedule.last_enqueued_at = now
+    schedule.next_run_at = now + timedelta(hours=schedule.interval_hours)
+    schedule.last_error = ""
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 @router.get("/projects/{project_id}/search-schedules", response_model=list[SearchScheduleOut])
