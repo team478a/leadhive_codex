@@ -47,6 +47,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `33_OUTREACH_QUEUE.md`
 - `34_COMPANY_CONTACT_PEOPLE.md`
 - `35_IN_APP_NOTIFICATIONS.md`
+- `36_MULTIPAGE_WEB_ANALYSIS.md`
 
 ## 基本原則
 

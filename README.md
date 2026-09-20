@@ -49,6 +49,7 @@ CSV取込プレビューと列対応付けは[実装記録](docs/29_CSV_IMPORT_W
 営業アプローチキューは[実装記録](docs/33_OUTREACH_QUEUE.md)を参照してください。
 相手企業の担当者管理は[実装記録](docs/34_COMPANY_CONTACT_PEOPLE.md)を参照してください。
 アプリ内通知センターは[実装記録](docs/35_IN_APP_NOTIFICATIONS.md)を参照してください。
+重要ページの巡回解析は[実装記録](docs/36_MULTIPAGE_WEB_ANALYSIS.md)を参照してください。
 重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 担当者とフォロー期限管理は[実装記録](docs/26_ASSIGNEE_FOLLOWUP_IMPLEMENTATION.md)を参照してください。
 
