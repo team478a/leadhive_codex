@@ -46,6 +46,7 @@ CSV取込プレビューと列対応付けは[実装記録](docs/29_CSV_IMPORT_W
 期間別の営業活動成果は[実装記録](docs/30_SALES_ACTIVITY_ANALYTICS.md)を参照してください。
 連絡禁止と連絡先品質管理は[実装記録](docs/31_CONTACT_SUPPRESSION_QUALITY.md)を参照してください。
 検索収集の精度・速度改善は[実装記録](docs/32_COLLECTION_ACCURACY_SPEED.md)を参照してください。
+営業アプローチキューは[実装記録](docs/33_OUTREACH_QUEUE.md)を参照してください。
 重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 担当者とフォロー期限管理は[実装記録](docs/26_ASSIGNEE_FOLLOWUP_IMPLEMENTATION.md)を参照してください。
 
