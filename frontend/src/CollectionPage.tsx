@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { allPages, api, download, errorMessage, upload } from './api'
 import { Field } from './forms'
-import type { CollectionJob, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
+import type { CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places',
@@ -36,6 +36,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [operations, setOperations] = useState<OperationJob[]>([])
   const [schedules, setSchedules] = useState<SearchSchedule[]>([])
   const [analytics, setAnalytics] = useState<SearchAnalytics[]>([])
+  const [performance, setPerformance] = useState<CollectionPerformance[]>([])
   const [scheduleName, setScheduleName] = useState('定期検索')
   const [intervalHours, setIntervalHours] = useState(168)
   const [companyLimit, setCompanyLimit] = useState(10000)
@@ -51,16 +52,17 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const suggestedKeywordText = suggestedKeywords.join('\n')
 
   const reload = useCallback(async () => {
-    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); setAnalytics([]); return }
-    const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics] = await Promise.all([
+    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); return }
+    const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics, nextPerformance] = await Promise.all([
       allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
       api<OperationJob[]>(`/projects/${projectId}/operations`),
       api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
       api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
+      api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
     ])
     setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations); setSchedules(nextSchedules)
-    setAnalytics(nextAnalytics)
+    setAnalytics(nextAnalytics); setPerformance(nextPerformance)
   }, [projectId])
 
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
@@ -222,6 +224,8 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       </article>)}
       {analytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-3">テンプレート別成果</h3><table><thead><tr><th>テンプレート</th><th>検索数</th><th>発見</th><th>保存</th><th>保存率</th><th>重複率</th><th>公式外</th><th>エラー</th></tr></thead>
         <tbody>{analytics.map(item => <tr key={item.schedule_id}><td>{item.name}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.duplicate_rate}%</td><td>{item.excluded_count}</td><td>{item.error_count}</td></tr>)}</tbody></table></div>}
+      {performance.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-2">収集精度・速度の実績</h3><p className="muted mb-3 text-sm">保存率が低い検索語、公式外が多い検索語、時間がかかる収集元を比較して、検索条件を見直せます。</p><table><thead><tr><th>収集元</th><th>検索語</th><th>実行</th><th>発見</th><th>保存</th><th>保存率</th><th>公式外率</th><th>重複</th><th>エラー</th><th>平均時間</th></tr></thead>
+        <tbody>{performance.map(item => <tr key={`${item.source}:${item.keyword}`}><td>{sourceNames[item.source]}</td><td>{item.keyword || '検索語なし'}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.excluded_rate}%</td><td>{item.duplicate_count}</td><td>{item.error_count}</td><td>{(item.average_processing_ms / 1000).toFixed(1)}秒</td></tr>)}</tbody></table></div>}
     </div></section>
     <section className="space-y-6">
       <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>

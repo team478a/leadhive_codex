@@ -48,6 +48,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings'>('projects')
   const [collectionProjectId, setCollectionProjectId] = useState('')
   const [replyInboundEmailId, setReplyInboundEmailId] = useState<string | null>(null)
+  const [followupCompanyId, setFollowupCompanyId] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [editor, setEditor] = useState<Editor>(null)
@@ -172,9 +173,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           {memberProject && <section className="panel mt-6" aria-label="プロジェクトメンバー"><div className="flex justify-between gap-3"><div><h2>{memberProject.project_name}のメンバー</h2><p className="muted mt-2 text-sm">編集者は操作可能、閲覧者は参照のみです。</p></div><button className="secondary" onClick={() => setMemberProject(null)}>閉じる</button></div><div className="detail-grid mt-4"><label className="field">メンバーのメール<input type="email" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} /></label><label className="field">権限<select value={memberRole} onChange={e => setMemberRole(e.target.value as 'editor' | 'viewer')}><option value="editor">編集者</option><option value="viewer">閲覧者</option></select></label></div><div className="actions"><button disabled={busy || !memberEmail.trim()} onClick={() => void saveMember()}>メンバーを保存</button></div>{members.map(member => <article className="job-row" key={member.id}><div><strong>{member.email}</strong><p className="muted text-sm">{member.role === 'owner' ? '所有者' : member.role === 'editor' ? '編集者' : '閲覧者'}</p></div>{member.role !== 'owner' && <button className="danger" disabled={busy} onClick={() => void removeMember(member)}>削除</button>}</article>)}</section>}
         </> : loaded && tab === 'collection' ? <CollectionPage projects={projects.filter(project => projectRoles[project.id] !== 'viewer')} profiles={profiles}
           initialProjectId={collectionProjectId} /> : loaded && tab === 'companies' ?
-          <CompaniesPage projects={projects} initialProjectId={collectionProjectId} initialReplyInboundEmailId={replyInboundEmailId} /> : loaded && tab === 'dashboard' ?
+          <CompaniesPage projects={projects} initialProjectId={collectionProjectId} initialReplyInboundEmailId={replyInboundEmailId} initialFollowupCompanyId={followupCompanyId} /> : loaded && tab === 'dashboard' ?
           <DashboardPage onUnreadChange={setUnreadNotifications} onOpenInboundReply={(projectId, inboundEmailId) => {
-            setCollectionProjectId(projectId); setReplyInboundEmailId(inboundEmailId); setTab('companies'); setNotice('')
+            setCollectionProjectId(projectId); setFollowupCompanyId(null); setReplyInboundEmailId(inboundEmailId); setTab('companies'); setNotice('')
+          }} onOpenFollowup={(projectId, companyId) => {
+            setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
           <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'deliveries' ?
           <EmailDeliveriesPage projects={projects} /> : loaded && <>

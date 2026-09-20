@@ -6,7 +6,7 @@ from threading import Barrier
 from sqlalchemy import select
 
 from app import worker
-from app.models import AnalysisRefreshSchedule, Company, OperationJob, SearchSchedule
+from app.models import AnalysisRefreshSchedule, CollectionJob, Company, OperationJob, SearchSchedule
 from app.services.collection import Candidate, ExternalServiceError
 
 
@@ -329,3 +329,60 @@ def test_cancel_retry_validation_and_access_isolation(auth, users):
     )
     assert auth.get(f"/api/projects/{project['id']}/operations").status_code == 404
     assert auth.post(f"/api/operations/{job_id}/cancel").status_code == 404
+
+
+def test_collection_performance_groups_quality_and_speed(auth, db):
+    project = make_project(auth)
+    db.add_all(
+        [
+            CollectionJob(
+                project_id=project["id"],
+                source="serper",
+                keyword="運送会社",
+                status="completed",
+                found_count=10,
+                saved_count=4,
+                duplicate_count=2,
+                excluded_count=3,
+                error_count=1,
+                processing_ms=2000,
+            ),
+            CollectionJob(
+                project_id=project["id"],
+                source="serper",
+                keyword="運送会社",
+                status="completed",
+                found_count=5,
+                saved_count=3,
+                duplicate_count=1,
+                excluded_count=0,
+                processing_ms=4000,
+            ),
+            CollectionJob(
+                project_id=project["id"],
+                source="google_places",
+                keyword="物流",
+                status="completed",
+                found_count=2,
+                saved_count=2,
+                processing_ms=1000,
+            ),
+        ]
+    )
+    db.commit()
+
+    items = auth.get(f"/api/projects/{project['id']}/collection-performance").json()
+    transport = next(item for item in items if item["keyword"] == "運送会社")
+    assert transport == {
+        "source": "serper",
+        "keyword": "運送会社",
+        "run_count": 2,
+        "found_count": 15,
+        "saved_count": 7,
+        "duplicate_count": 3,
+        "excluded_count": 3,
+        "error_count": 1,
+        "save_rate": 46.7,
+        "excluded_rate": 20.0,
+        "average_processing_ms": 3000,
+    }

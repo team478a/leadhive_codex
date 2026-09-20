@@ -19,6 +19,7 @@ from app.project_access import project_access
 from app.schemas import (
     AnalysisRefreshScheduleInput,
     AnalysisRefreshScheduleOut,
+    CollectionPerformanceOut,
     OperationJobInput,
     OperationJobOut,
     SearchAnalyticsOut,
@@ -208,6 +209,62 @@ def search_analytics(
             duplicate_rate=round(duplicates / found * 100, 1) if found else 0,
         )
         for schedule_id, name, run_count, found, saved, duplicates, excluded, errors in rows
+    ]
+
+
+@router.get(
+    "/projects/{project_id}/collection-performance", response_model=list[CollectionPerformanceOut]
+)
+def collection_performance(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    """Compare real collection outcomes by source and search keyword."""
+    owned_project(project_id, db, user, write=False)
+    rows = db.execute(
+        select(
+            CollectionJob.source,
+            CollectionJob.keyword,
+            func.count(CollectionJob.id),
+            func.coalesce(func.sum(CollectionJob.found_count), 0),
+            func.coalesce(func.sum(CollectionJob.saved_count), 0),
+            func.coalesce(func.sum(CollectionJob.duplicate_count), 0),
+            func.coalesce(func.sum(CollectionJob.excluded_count), 0),
+            func.coalesce(func.sum(CollectionJob.error_count), 0),
+            func.coalesce(func.avg(func.nullif(CollectionJob.processing_ms, 0)), 0),
+        )
+        .where(CollectionJob.project_id == project_id)
+        .group_by(CollectionJob.source, CollectionJob.keyword)
+        .order_by(
+            func.coalesce(func.sum(CollectionJob.saved_count), 0).desc(),
+            CollectionJob.source,
+            CollectionJob.keyword,
+        )
+    ).all()
+    return [
+        CollectionPerformanceOut(
+            source=source,
+            keyword=keyword,
+            run_count=run_count,
+            found_count=found,
+            saved_count=saved,
+            duplicate_count=duplicates,
+            excluded_count=excluded,
+            error_count=errors,
+            save_rate=round(saved / found * 100, 1) if found else 0,
+            excluded_rate=round(excluded / found * 100, 1) if found else 0,
+            average_processing_ms=round(float(average_processing_ms or 0)),
+        )
+        for (
+            source,
+            keyword,
+            run_count,
+            found,
+            saved,
+            duplicates,
+            excluded,
+            errors,
+            average_processing_ms,
+        ) in rows
     ]
 
 

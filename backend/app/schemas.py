@@ -768,6 +768,20 @@ class SearchAnalyticsOut(BaseModel):
     duplicate_rate: float
 
 
+class CollectionPerformanceOut(BaseModel):
+    source: str
+    keyword: str
+    run_count: int
+    found_count: int
+    saved_count: int
+    duplicate_count: int
+    excluded_count: int
+    error_count: int
+    save_rate: float
+    excluded_rate: float
+    average_processing_ms: int
+
+
 class CompanyFilterValues(Input):
     rank: str = Field(default="", max_length=20)
     minScore: str = Field(default="", max_length=3)

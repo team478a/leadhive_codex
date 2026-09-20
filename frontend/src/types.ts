@@ -38,6 +38,11 @@ export interface CollectionJob {
   error_message: string
   created_at: string; finished_at: string | null
 }
+export interface CollectionPerformance {
+  source: CollectionSource; keyword: string; run_count: number; found_count: number
+  saved_count: number; duplicate_count: number; excluded_count: number; error_count: number
+  save_rate: number; excluded_rate: number; average_processing_ms: number
+}
 export interface CsvPreview {
   headers: string[]; sample_rows: Record<string, string>[]; row_count: number
   suggested_mapping: Record<string, string>
