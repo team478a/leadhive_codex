@@ -1,7 +1,8 @@
 import csv
 from pathlib import Path
 
-from app.phase6 import EXPORT_FIELDS, build_report
+from app import phase6
+from app.phase6 import EXPORT_FIELDS, build_preflight, build_report
 
 
 def write_review(path: Path):
@@ -97,3 +98,28 @@ def test_phase6_report_metrics_and_objective_difference(tmp_path):
     assert sns["false_exclusion_rate"] == 100.0
     comparison = report["transport_objective_comparison"]
     assert comparison == {"shared_companies": 1, "different_decisions": 1, "difference_rate": 100.0}
+
+
+def test_phase6_preflight_reports_readiness_without_secrets(db, users, tmp_path, monkeypatch):
+    monkeypatch.setattr(phase6.settings, "serper_api_key", "secret-serper")
+    monkeypatch.setattr(phase6.settings, "openai_api_key", "secret-openai")
+    result = build_preflight(db, users[0].email, tmp_path / "results")
+    assert result["ready"] is True
+    serialized = str(result)
+    assert "secret-serper" not in serialized and "secret-openai" not in serialized
+    assert {check["key"] for check in result["checks"]} == {
+        "database",
+        "serper_api_key",
+        "openai_api_key",
+        "user",
+        "system_profiles",
+        "output",
+    }
+
+    monkeypatch.setattr(phase6.settings, "serper_api_key", "")
+    missing = build_preflight(db, "missing@example.com", tmp_path / "results")
+    assert missing["ready"] is False
+    assert {check["key"] for check in missing["checks"] if not check["ready"]} == {
+        "serper_api_key",
+        "user",
+    }
