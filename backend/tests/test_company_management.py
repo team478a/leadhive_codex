@@ -185,6 +185,34 @@ def test_dashboard_counts_and_recent_jobs(auth, db):
     assert data["overdue_followups"] == 1
 
 
+def test_sales_activity_analytics_by_period_and_assignee(auth, db):
+    project = make_project(auth)
+    alpha, _ = add_companies(auth, db, project["id"])
+    alpha.assignee = "佐藤"
+    db.flush()
+    for status in ("approached", "replied", "meeting", "won"):
+        response = auth.patch(
+            f"/api/companies/{alpha.id}/sales",
+            json={"status": status, "notes": "", "next_followup_at": None},
+        )
+        assert response.status_code == 200
+    auth.post(
+        f"/api/companies/{alpha.id}/activities",
+        json={"activity_type": "call", "note": "成果確認の電話"},
+    )
+
+    response = auth.get("/api/sales-activity-analytics", params={"days": 30})
+    assert response.status_code == 200
+    data = response.json()
+    assert data["activities"] == 5
+    assert data["approached"] == data["replied"] == data["meetings"] == data["won"] == 1
+    assert data["reply_rate"] == data["meeting_rate"] == data["win_rate"] == 100.0
+    assert data["by_assignee"] == [
+        {"assignee": "佐藤", "approached": 1, "replied": 1, "meetings": 1, "won": 1}
+    ]
+    assert auth.get("/api/sales-activity-analytics", params={"days": 0}).status_code == 422
+
+
 def test_data_quality_summary_and_reanalysis_queue(auth, db):
     project = make_project(auth)
     alpha, beta = add_companies(auth, db, project["id"])
