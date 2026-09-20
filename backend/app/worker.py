@@ -26,6 +26,7 @@ from app.models import (
 from app.operation_routes import refresh_company_ids
 from app.services.collection import ExternalServiceError, search_google_places, search_serper
 from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
+from app.services.inbound_email import sync_inbound_mail
 
 logger = logging.getLogger("leadhive")
 
@@ -500,6 +501,8 @@ def run_once() -> bool:
         enqueue_due_refresh_schedules(db)
         recover_stale_jobs(db)
         recover_stale_email_deliveries(db)
+        if sync_inbound_mail(db):
+            return True
         delivery = claim_email_delivery(db)
         if delivery is not None:
             run_email_delivery(db, delivery)

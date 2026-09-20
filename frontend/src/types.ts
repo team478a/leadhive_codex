@@ -177,6 +177,16 @@ export interface SalesActivityAnalytics {
   meetings: number; won: number; reply_rate: number; meeting_rate: number; win_rate: number
   by_assignee: Array<{ assignee: string; approached: number; replied: number; meetings: number; won: number }>
 }
+export interface InboundMailSettings {
+  host: string; port: number; username: string; mailbox: string; use_ssl: boolean
+  timeout_seconds: number; poll_interval_seconds: number; active: boolean
+  password_configured: boolean; last_polled_at: string | null; last_error: string; updated_at: string
+}
+export interface InboundEmail {
+  id: string; sender_email: string; subject: string; preview: string; received_at: string
+  company_id: string | null; company_name: string
+  match_type: 'company_email' | 'contact_person' | 'unmatched'
+}
 export interface OutreachEffectivenessAnalytics {
   days: number
   items: Array<{ approval_type: 'email' | 'form_direct' | 'form_codex'; subject: string; approvals: number; replied: number; meetings: number; won: number; reply_rate: number }>

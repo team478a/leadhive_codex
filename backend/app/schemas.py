@@ -529,6 +529,51 @@ class SmtpTestInput(Input):
     recipient_email: EmailStr
 
 
+class InboundMailSettingsInput(Input):
+    host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
+    port: int = Field(ge=1, le=65535)
+    username: EmailStr
+    password: str | None = Field(default=None, max_length=1024)
+    mailbox: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
+    ] = "INBOX"
+    use_ssl: bool = True
+    timeout_seconds: float = Field(default=20, ge=1, le=120)
+    poll_interval_seconds: int = Field(default=300, ge=60, le=86_400)
+    active: bool = False
+
+
+class InboundMailSettingsOut(BaseModel):
+    host: str
+    port: int
+    username: str
+    mailbox: str
+    use_ssl: bool
+    timeout_seconds: float
+    poll_interval_seconds: int
+    active: bool
+    password_configured: bool
+    last_polled_at: datetime | None
+    last_error: str
+    updated_at: datetime
+
+
+class InboundEmailOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    sender_email: str
+    subject: str
+    preview: str
+    received_at: datetime
+    company_id: UUID | None
+    company_name: str = ""
+    match_type: Literal["company_email", "contact_person", "unmatched"]
+
+
+class InboundMailSyncOut(BaseModel):
+    processed: int
+
+
 class NotificationOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID

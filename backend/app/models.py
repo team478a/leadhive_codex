@@ -388,6 +388,53 @@ class SmtpSettings(Timestamps, Base):
     )
 
 
+class InboundMailSettings(Timestamps, Base):
+    __tablename__ = "inbound_mail_settings"
+    __table_args__ = (
+        CheckConstraint(
+            "poll_interval_seconds BETWEEN 60 AND 86400",
+            name="ck_inbound_mail_settings_poll_interval",
+        ),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    host: Mapped[str] = mapped_column(String(255))
+    port: Mapped[int] = mapped_column(Integer)
+    username: Mapped[str] = mapped_column(String(320))
+    password_ciphertext: Mapped[str] = mapped_column(Text, default="")
+    mailbox: Mapped[str] = mapped_column(String(200), default="INBOX")
+    use_ssl: Mapped[bool] = mapped_column(Boolean, default=True)
+    timeout_seconds: Mapped[float] = mapped_column()
+    poll_interval_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    active: Mapped[bool] = mapped_column(Boolean, default=False)
+    last_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_error: Mapped[str] = mapped_column(String(500), default="")
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+
+
+class InboundEmail(Timestamps, Base):
+    __tablename__ = "inbound_emails"
+    __table_args__ = (
+        UniqueConstraint("mailbox_uid", name="uq_inbound_email_mailbox_uid"),
+        CheckConstraint(
+            "match_type IN ('company_email', 'contact_person', 'unmatched')",
+            name="ck_inbound_email_match_type",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    mailbox_uid: Mapped[str] = mapped_column(String(100))
+    message_id: Mapped[str] = mapped_column(String(500), default="")
+    sender_email: Mapped[str] = mapped_column(String(320), index=True)
+    subject: Mapped[str] = mapped_column(String(500), default="")
+    preview: Mapped[str] = mapped_column(String(1000), default="")
+    received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"), index=True
+    )
+    match_type: Mapped[str] = mapped_column(String(30), default="unmatched")
+
+
 class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
