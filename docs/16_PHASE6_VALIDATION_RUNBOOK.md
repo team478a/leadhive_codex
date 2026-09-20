@@ -13,6 +13,23 @@ APIキー設定後に、次の検証を中断・再開可能な一連の処理�
 
 ## 実行
 
+実行前に、秘密値を表示せず必要条件を一括確認する。
+
+```powershell
+cd backend
+.venv/Scripts/python -m app.phase6 --stage preflight --user your-address@example.com
+```
+
+次をJSONで返す。
+
+- PostgreSQL接続
+- Serper / OpenAI APIキーの設定有無
+- 検証ユーザーの存在
+- SNS運用事業者・トラック運送事業者の標準プロファイル
+- 結果出力先への書込み
+
+全項目が揃うと`ready: true`かつ終了コード0、不足がある場合は`ready: false`かつ終了コード2になる。APIキーの値は出力しない。`preflight`だけは`--user`を省略でき、その場合はユーザー確認が未準備となる。
+
 ```powershell
 cd backend
 .venv/Scripts/python -m app.phase6 --user your-address@example.com --stage all
@@ -72,4 +89,4 @@ cd backend
 
 ## 現在の制約
 
-本ランブックとランナーは実装・自動テスト済みだが、現在のローカル環境には検索APIキーがないため200社の本実行結果はまだ生成していない。キー設定後にこの手順を実行してPhase 6を完了する。
+本ランブック、事前診断、ランナーは実装・自動テスト済みだが、現在のローカル環境は事前診断でSerper APIキーと検証ユーザーが未準備と判定されているため、200社の本実行結果はまだ生成していない。準備後に同じ診断を再実行し、`ready: true`を確認してPhase 6を完了する。

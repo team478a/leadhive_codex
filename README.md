@@ -300,6 +300,7 @@ GitHub Actionsでも同じ検証とMigrationのupgrade / downgrade / upgradeを�
 ## Phase 6 実データ検証
 
 検索APIキー設定後、既存ユーザーを指定して再開可能な検証ランナーを実行できます。
+`--stage preflight`では、キーの値を表示せずPhase 6の必要条件を一括診断できます。
 
 ```powershell
 cd backend
