@@ -128,6 +128,10 @@ export interface Notification {
   title: string; message: string; read_at: string | null; created_at: string
 }
 export interface FollowupTask { company: Company; due_state: 'overdue' | 'today' | 'upcoming' }
+export interface ReplyQueueItem {
+  company: Company; inbound_email_id: string; sender_email: string; subject: string
+  preview: string; received_at: string
+}
 export type OutreachChannel = 'email' | 'form' | 'call' | 'sns'
 export interface OutreachQueueItem {
   company: Company

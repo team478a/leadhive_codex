@@ -634,6 +634,21 @@ class FollowupTaskResolveInput(Input):
         return self
 
 
+class ReplyResponseInput(Input):
+    outcome: Literal["replied", "meeting", "lost"]
+    note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+    next_followup_at: datetime | None = None
+
+
+class ReplyQueueItemOut(BaseModel):
+    company: CompanyOut
+    inbound_email_id: UUID
+    sender_email: str
+    subject: str
+    preview: str
+    received_at: datetime
+
+
 class OperationJobInput(Input):
     operation_type: Literal["collect_search", "web_analysis", "ai_analysis"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)

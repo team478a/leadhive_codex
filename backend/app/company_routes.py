@@ -17,6 +17,7 @@ from app.models import (
     CollectionJob,
     Company,
     ContactPerson,
+    InboundEmail,
     OperationJob,
     OutreachDraft,
     OutreachDraftApproval,
@@ -51,6 +52,8 @@ from app.schemas import (
     OutreachEffectivenessItemOut,
     OutreachQueueItemOut,
     OutreachRecordInput,
+    ReplyQueueItemOut,
+    ReplyResponseInput,
     SalesActivityAnalyticsOut,
     SalesAnalyticsAssigneeOut,
     SavedCompanyFilterInput,
@@ -723,6 +726,47 @@ def list_followup_tasks(
     ]
 
 
+@router.get("/projects/{project_id}/reply-queue", response_model=list[ReplyQueueItemOut])
+def list_reply_queue(
+    project_id: UUID,
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user, write=False)
+    rows = db.execute(
+        select(InboundEmail, Company)
+        .join(Company, Company.id == InboundEmail.company_id)
+        .where(
+            Company.project_id == project_id,
+            Company.status == "replied",
+            Company.do_not_contact.is_(False),
+            InboundEmail.classification == "reply",
+        )
+        .order_by(InboundEmail.received_at.desc(), InboundEmail.id)
+        .limit(limit * 5)
+    ).all()
+    items = []
+    seen_company_ids = set()
+    for inbound, company in rows:
+        if company.id in seen_company_ids:
+            continue
+        seen_company_ids.add(company.id)
+        items.append(
+            ReplyQueueItemOut(
+                company=company,
+                inbound_email_id=inbound.id,
+                sender_email=inbound.sender_email,
+                subject=inbound.subject,
+                preview=inbound.preview,
+                received_at=inbound.received_at,
+            )
+        )
+        if len(items) == limit:
+            break
+    return items
+
+
 @router.post("/companies/{company_id}/followup-task", response_model=CompanyOut)
 def resolve_followup_task(
     company_id: UUID,
@@ -751,6 +795,33 @@ def resolve_followup_task(
         company.next_followup_at = None
         activity_note = f"追客タスクを完了: 期限 {previous_due.isoformat()}（{body.note}）"
     db.add(Activity(company_id=company.id, activity_type="note", note=activity_note))
+    db.commit()
+    db.refresh(company)
+    return company
+
+
+@router.post("/companies/{company_id}/reply-response", response_model=CompanyOut)
+def record_reply_response(
+    company_id: UUID,
+    body: ReplyResponseInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = owned_company(company_id, db, user)
+    if company.status != "replied" or company.do_not_contact:
+        raise HTTPException(409, "この企業の返信対応は記録できません。")
+    activity_type = "meeting" if body.outcome == "meeting" else "email"
+    if company.status != body.outcome:
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="status_change",
+                note=f"営業状況を {company.status} から {body.outcome} に変更（返信対応）",
+            )
+        )
+    db.add(Activity(company_id=company.id, activity_type=activity_type, note=body.note))
+    company.status = body.outcome
+    company.next_followup_at = body.next_followup_at
     db.commit()
     db.refresh(company)
     return company

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -40,6 +40,11 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [assigneeAnalytics, setAssigneeAnalytics] = useState<AssigneeAnalytics[]>([])
   const [outreachQueue, setOutreachQueue] = useState<OutreachQueueItem[]>([])
   const [followupTasks, setFollowupTasks] = useState<FollowupTask[]>([])
+  const [replyQueue, setReplyQueue] = useState<ReplyQueueItem[]>([])
+  const [replyTarget, setReplyTarget] = useState<ReplyQueueItem | null>(null)
+  const [replyOutcome, setReplyOutcome] = useState<'replied' | 'meeting' | 'lost'>('replied')
+  const [replyNote, setReplyNote] = useState('')
+  const [replyFollowup, setReplyFollowup] = useState('')
   const [followupTarget, setFollowupTarget] = useState<FollowupTask | null>(null)
   const [followupAction, setFollowupAction] = useState<'completed' | 'rescheduled'>('completed')
   const [followupTaskNote, setFollowupTaskNote] = useState('')
@@ -99,8 +104,8 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [notice, setNotice] = useState('')
   const query = useMemo(() => queryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
-    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); return }
-    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextRefreshSchedule] = await Promise.all([
+    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); return }
+    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule] = await Promise.all([
       api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
@@ -108,11 +113,12 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       api<AssigneeAnalytics[]>(`/projects/${projectId}/assignee-analytics`),
       api<OutreachQueueItem[]>(`/projects/${projectId}/outreach-queue?limit=25`),
       api<FollowupTask[]>(`/projects/${projectId}/followup-tasks?limit=25`),
+      api<ReplyQueueItem[]>(`/projects/${projectId}/reply-queue?limit=25`),
       api<AnalysisRefreshSchedule | null>(`/projects/${projectId}/analysis-refresh-schedule`),
     ])
     setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
     setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
-    setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setFollowupTasks(nextFollowupTasks); setChecked([])
+    setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setFollowupTasks(nextFollowupTasks); setReplyQueue(nextReplyQueue); setChecked([])
     setRefreshSchedule(nextRefreshSchedule)
     if (nextRefreshSchedule) {
       setRefreshInterval(nextRefreshSchedule.interval_hours)
@@ -398,6 +404,22 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       setOutreachTarget(null); await reload(); setNotice('アプローチと次回対応を記録しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  function startReply(item: ReplyQueueItem) {
+    setReplyTarget(item); setReplyOutcome('replied'); setReplyNote(''); setReplyFollowup('')
+  }
+  async function recordReplyResponse() {
+    if (!replyTarget || !replyNote.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const updated = await api<Company>(`/companies/${replyTarget.company.id}/reply-response`, 'POST', {
+        outcome: replyOutcome, note: replyNote,
+        next_followup_at: replyFollowup ? new Date(replyFollowup).toISOString() : null,
+      })
+      setReplyTarget(null); await reload()
+      if (selected?.id === updated.id) await open(updated)
+      setNotice('返信対応と次回対応を記録しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   function startFollowupTask(task: FollowupTask) {
     setFollowupTarget(task); setFollowupAction('completed'); setFollowupTaskNote('')
     setFollowupTaskDate(task.company.next_followup_at?.slice(0, 16) ?? '')
@@ -512,6 +534,10 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       <label className="field">並び順<select value={draft.sort} onChange={e => setDraft({ ...draft, sort: e.target.value })}><option value="score_desc">スコア順</option><option value="newest">新しい順</option><option value="company_name">会社名順</option></select></label>
     </div><div className="flex flex-wrap justify-end gap-2"><button className="secondary" onClick={() => { setDraft(defaults); setFilters(defaults); setPage(0) }}>リセット</button><button onClick={() => { setFilters(draft); setPage(0) }}>絞り込む</button>
       <button className="secondary" onClick={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div></section>
+    <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>返信対応キュー</h2><p className="muted mt-2 text-sm">受信した返信を確認し、商談化・失注・次回対応を記録します。</p></div><span className="badge">{replyQueue.length} 件</span></div>
+      <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>受信内容</th><th>受信日時</th><th>担当</th><th></th></tr></thead><tbody>{replyQueue.map(item => <tr key={item.inbound_email_id}><td><strong>{item.company.company_name}</strong><p className="muted text-xs">{item.company.email || item.sender_email}</p></td><td><strong>{item.subject || '件名なし'}</strong><p className="muted text-xs">{item.preview}</p></td><td>{new Date(item.received_at).toLocaleString('ja-JP')}</td><td>{item.company.assignee || '未設定'}</td><td><button className="secondary" onClick={() => startReply(item)}>対応する</button></td></tr>)}{replyQueue.length === 0 && <tr><td colSpan={5} className="text-center muted">対応待ちの返信はありません。</td></tr>}</tbody></table></div>
+      {replyTarget && <div className="mt-5"><h3>{replyTarget.company.company_name}への返信対応</h3><p className="muted text-sm mt-2">{replyTarget.sender_email} / {replyTarget.subject || '件名なし'}</p><p className="mt-2 text-sm whitespace-pre-wrap">{replyTarget.preview || '本文の要約はありません。'}</p><div className="detail-grid mt-4"><div><label className="field">対応結果<select value={replyOutcome} onChange={e => setReplyOutcome(e.target.value as 'replied' | 'meeting' | 'lost')}><option value="replied">返信確認・継続対応</option><option value="meeting">商談化</option><option value="lost">失注</option></select></label><label className="field">次回対応日時<input type="datetime-local" value={replyFollowup} onChange={e => setReplyFollowup(e.target.value)} /></label></div><label className="field">対応内容<textarea rows={4} maxLength={10000} value={replyNote} onChange={e => setReplyNote(e.target.value)} placeholder="返信内容、対応方針、商談日時など" /></label></div><div className="actions"><button disabled={busy || !replyNote.trim()} onClick={() => void recordReplyResponse()}>返信対応を記録</button><button className="secondary" onClick={() => setReplyTarget(null)}>キャンセル</button></div></div>}
+    </section>
     <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>追客タスク</h2><p className="muted mt-2 text-sm">期限がある次回対応を完了または延期します。</p></div><span className="badge">{followupTasks.length} 件</span></div>
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>担当</th><th>期限</th><th>営業状況</th><th></th></tr></thead><tbody>{followupTasks.map(task => <tr key={task.company.id}><td><strong>{task.company.company_name}</strong><p className="muted text-xs">{task.company.rank ?? '—'} / {task.company.score ?? '—'}点</p></td><td>{task.company.assignee || '未設定'}</td><td><span className="badge">{dueNames[task.due_state]}</span><p className="muted text-xs">{task.company.next_followup_at ? new Date(task.company.next_followup_at).toLocaleString('ja-JP') : '—'}</p></td><td>{statusNames[task.company.status]}</td><td><button className="secondary" onClick={() => startFollowupTask(task)}>完了・延期</button></td></tr>)}{followupTasks.length === 0 && <tr><td colSpan={5} className="text-center muted">期限が設定された追客タスクはありません。</td></tr>}</tbody></table></div>
       {followupTarget && <div className="mt-5"><h3>{followupTarget.company.company_name}の追客タスク</h3><div className="detail-grid"><div><label className="field">処理<select value={followupAction} onChange={e => setFollowupAction(e.target.value as 'completed' | 'rescheduled')}><option value="completed">完了</option><option value="rescheduled">延期</option></select></label>{followupAction === 'rescheduled' && <label className="field">次回対応日時<input type="datetime-local" value={followupTaskDate} onChange={e => setFollowupTaskDate(e.target.value)} /></label>}</div><label className="field">対応メモ<textarea rows={4} maxLength={10000} value={followupTaskNote} onChange={e => setFollowupTaskNote(e.target.value)} placeholder="例：先方都合により来週へ延期" /></label></div><div className="actions"><button disabled={busy || !followupTaskNote.trim() || (followupAction === 'rescheduled' && !followupTaskDate)} onClick={() => void resolveFollowupTask()}>{followupAction === 'completed' ? 'タスクを完了' : 'タスクを延期'}</button><button className="secondary" onClick={() => setFollowupTarget(null)}>キャンセル</button></div></div>}
