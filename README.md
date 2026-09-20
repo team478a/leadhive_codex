@@ -42,6 +42,7 @@ Phase 5の詳細は[Phase 5実装記録](docs/15_PHASE5_IMPLEMENTATION.md)を参
 企業データ品質管理は[実装記録](docs/24_DATA_QUALITY_IMPLEMENTATION.md)を参照してください。
 保存フィルターと担当者別営業成果は[実装記録](docs/27_SAVED_FILTERS_ASSIGNEE_ANALYTICS.md)を参照してください。
 手動修正項目の再解析保護は[実装記録](docs/28_MANUAL_FIELD_PROTECTION.md)を参照してください。
+CSV取込プレビューと列対応付けは[実装記録](docs/29_CSV_IMPORT_WORKFLOW.md)を参照してください。
 重複候補の検出と企業統合は[実装記録](docs/25_COMPANY_DEDUPLICATION_IMPLEMENTATION.md)を参照してください。
 担当者とフォロー期限管理は[実装記録](docs/26_ASSIGNEE_FOLLOWUP_IMPLEMENTATION.md)を参照してください。
 
@@ -186,6 +187,8 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | POST | `/api/projects/{id}/collection-jobs/search` | Serper / Places検索 |
 | POST | `/api/projects/{id}/collection-jobs/urls` | URLを最大100件登録 |
 | POST | `/api/projects/{id}/collection-jobs/csv` | UTF-8 CSVを取込 |
+| POST | `/api/projects/{id}/collection-jobs/csv/preview` | CSVの列・先頭行を事前確認 |
+| GET | `/api/collection-jobs/{id}/errors.csv` | CSV取込の行別エラーを出力 |
 | POST | `/api/companies/{id}/analyze` | 企業1社のWebサイト解析 |
 | POST | `/api/projects/{id}/web-analysis` | 未解析企業を最大20社解析 |
 | POST | `/api/companies/{id}/ai-analysis` | 企業1社のAI判定 |
