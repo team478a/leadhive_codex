@@ -8,7 +8,16 @@ from sqlalchemy.orm import Session
 
 from app.analysis_routes import owned_company
 from app.database import get_db
-from app.models import Company, ContactPerson, EmailDelivery, OutreachDraft, Project, User
+from app.models import (
+    Activity,
+    Company,
+    ContactPerson,
+    EmailDelivery,
+    FormDelivery,
+    OutreachDraft,
+    Project,
+    User,
+)
 from app.project_access import project_access
 from app.schemas import (
     EmailDeliveryCreateInput,
@@ -16,12 +25,17 @@ from app.schemas import (
     EmailDeliveryListOut,
     EmailDeliveryOut,
     EmailDeliveryRetryInput,
+    FormDeliveryCreateInput,
+    FormDeliveryOut,
+    FormFieldOut,
+    FormPreviewOut,
     OutreachDraftGenerateInput,
     OutreachDraftOut,
     OutreachDraftUpdateInput,
 )
 from app.security import current_user
 from app.services.ai import AiAnalysisError, OutreachContext, get_ai_provider
+from app.services.form_delivery import FormDeliveryError, inspect_form, submit_form
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
@@ -158,6 +172,89 @@ def get_email_delivery(
 ):
     draft = owned_draft(draft_id, db, user, write=False)
     return db.scalar(select(EmailDelivery).where(EmailDelivery.draft_id == draft.id))
+
+
+@router.get("/outreach-drafts/{draft_id}/form-preview", response_model=FormPreviewOut)
+def get_form_preview(
+    draft_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    draft = owned_draft(draft_id, db, user, write=False)
+    if draft.channel != "form":
+        raise HTTPException(409, "フォーム文面だけを送信できます。")
+    company = db.get(Company, draft.company_id)
+    if company is None or not company.contact_url:
+        raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
+    try:
+        preview = inspect_form(company.contact_url)
+    except FormDeliveryError as exc:
+        raise HTTPException(422, exc.public_message) from exc
+    return FormPreviewOut(
+        form_url=preview.form_url,
+        action_url=preview.action_url,
+        fields=[FormFieldOut(**field.__dict__) for field in preview.fields],
+    )
+
+
+@router.post(
+    "/outreach-drafts/{draft_id}/form-delivery", response_model=FormDeliveryOut, status_code=201
+)
+def create_form_delivery(
+    draft_id: UUID,
+    body: FormDeliveryCreateInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if not body.confirmed:
+        raise HTTPException(422, "送信内容を確認して承認してください。")
+    draft = owned_draft(draft_id, db, user)
+    if draft.channel != "form":
+        raise HTTPException(409, "フォーム文面だけを送信できます。")
+    company = db.get(Company, draft.company_id)
+    if company is None or not company.contact_url:
+        raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
+    if company.do_not_contact:
+        raise HTTPException(409, "連絡禁止の企業にはフォーム送信できません。")
+    if db.scalar(select(FormDelivery.id).where(FormDelivery.draft_id == draft.id)):
+        raise HTTPException(409, "この文面は既にフォーム送信済みです。")
+    try:
+        preview, response_status = submit_form(company.contact_url, body.field_values)
+    except FormDeliveryError as exc:
+        logger.warning(
+            "form delivery failed: company_id=%s type=%s", company.id, type(exc).__name__
+        )
+        raise HTTPException(422, exc.public_message) from exc
+    delivery = FormDelivery(
+        draft_id=draft.id,
+        company_id=company.id,
+        created_by_user_id=user.id,
+        form_url=preview.form_url,
+        action_url=preview.action_url,
+        response_status=response_status,
+        submitted_at=datetime.now(timezone.utc),
+    )
+    db.add(delivery)
+    db.add(
+        Activity(
+            company_id=company.id,
+            activity_type="form",
+            note=f"フォーム送信を実行: {preview.form_url}",
+        )
+    )
+    if company.status in {"unreviewed", "target"}:
+        company.status = "approached"
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="status_change",
+                note="営業状況を更新: アプローチ済（フォーム送信）",
+            )
+        )
+    db.commit()
+    db.refresh(delivery)
+    logger.info("form delivery submitted: id=%s company_id=%s", delivery.id, company.id)
+    return delivery
 
 
 @router.post(

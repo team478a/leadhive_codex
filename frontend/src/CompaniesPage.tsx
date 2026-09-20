@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, OperationJob, OutreachChannel, OutreachDraft, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -72,6 +72,9 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [deliveryRecipient, setDeliveryRecipient] = useState('')
   const [deliverySchedule, setDeliverySchedule] = useState('')
   const [deliveryConfirmed, setDeliveryConfirmed] = useState(false)
+  const [formPreview, setFormPreview] = useState<FormPreview | null>(null)
+  const [formValues, setFormValues] = useState<Record<string, string>>({})
+  const [formConfirmed, setFormConfirmed] = useState(false)
   const [draftChannel, setDraftChannel] = useState<OutreachDraft['channel']>('email')
   const [draftContactId, setDraftContactId] = useState('')
   const [draftInstruction, setDraftInstruction] = useState('')
@@ -125,7 +128,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       ? await api<EmailDelivery | null>(`/outreach-drafts/${firstDraft.id}/email-delivery`) : null
     setActivities(nextActivities); setContacts(nextContacts); setOutreachDrafts(nextDrafts)
     setSelectedDraft(firstDraft); setEmailDelivery(nextDelivery); setDeliveryRecipient(company.email)
-    setDeliverySchedule(''); setDeliveryConfirmed(false); setDraftContactId(''); setDraftInstruction('')
+    setDeliverySchedule(''); setDeliveryConfirmed(false); setFormPreview(null); setFormValues({}); setFormConfirmed(false); setDraftContactId(''); setDraftInstruction('')
   }
   async function save() {
     if (!selected) return
@@ -245,10 +248,31 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
     catch { setError('コピーできませんでした。文面を選択してコピーしてください。') }
   }
   async function selectDraft(draft: OutreachDraft) {
-    setSelectedDraft(draft); setDeliveryConfirmed(false); setDeliverySchedule('')
+    setSelectedDraft(draft); setDeliveryConfirmed(false); setDeliverySchedule(''); setFormPreview(null); setFormValues({}); setFormConfirmed(false)
     if (draft.channel !== 'email') { setEmailDelivery(null); return }
     try { setEmailDelivery(await api<EmailDelivery | null>(`/outreach-drafts/${draft.id}/email-delivery`)) }
     catch (e) { setError(errorMessage(e)) }
+  }
+  async function inspectForm() {
+    if (!selectedDraft) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const preview = await api<FormPreview>(`/outreach-drafts/${selectedDraft.id}/form-preview`)
+      setFormPreview(preview)
+      setFormValues(Object.fromEntries(preview.fields.map(field => [field.name, field.value || (/(message|inquiry|contact|内容|問い合わせ)/i.test(field.name) ? selectedDraft.body : '')])))
+      setNotice('フォーム項目を読み込みました。内容を確認してから送信してください。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function submitForm() {
+    if (!selectedDraft || !formPreview || !formConfirmed) return
+    if (!window.confirm('このフォームへ入力内容を送信しますか？')) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api(`/outreach-drafts/${selectedDraft.id}/form-delivery`, 'POST', { field_values: formValues, confirmed: true })
+      setNotice('フォームへの送信リクエストを実行しました。企業の活動履歴を確認してください。')
+      setFormConfirmed(false)
+      if (selected) await open(selected)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function scheduleEmailDelivery() {
     if (!selectedDraft || !deliveryRecipient || !deliveryConfirmed) return
@@ -450,6 +474,7 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       {outreachDrafts.length > 0 && <div className="flex flex-wrap gap-2 mt-5">{outreachDrafts.map(draft => <button className={selectedDraft?.id === draft.id ? '' : 'secondary'} key={draft.id} onClick={() => void selectDraft(draft)}>{draft.channel === 'email' ? 'メール' : draft.channel === 'form' ? 'フォーム' : 'SNS'}・{new Date(draft.created_at).toLocaleString('ja-JP')}</button>)}</div>}
       {selectedDraft && <div className="mt-5">{selectedDraft.channel === 'email' && <label className="field">件名<input maxLength={300} value={selectedDraft.subject} onChange={e => setSelectedDraft({ ...selectedDraft, subject: e.target.value })} /></label>}<label className="field">本文<textarea rows={12} maxLength={10000} value={selectedDraft.body} onChange={e => setSelectedDraft({ ...selectedDraft, body: e.target.value })} /></label><p className="muted text-sm">生成：{selectedDraft.ai_provider} / {selectedDraft.ai_model}</p><div className="actions"><button disabled={busy || !selectedDraft.body.trim()} onClick={() => void saveDraft()}>編集内容を保存</button><button className="secondary" onClick={() => void copyDraft()}>コピー</button><button className="danger" disabled={busy} onClick={() => void deleteDraft()}>削除</button></div>
         {selectedDraft.channel === 'email' && <div className="mt-6"><h3>メール送信</h3>{emailDelivery ? <><p className="muted text-sm">宛先：{emailDelivery.recipient_name ? `${emailDelivery.recipient_name} / ` : ''}{emailDelivery.recipient_email}</p><p className="muted text-sm">状態：{emailDelivery.status === 'queued' ? '送信待ち' : emailDelivery.status === 'running' ? '送信中' : emailDelivery.status === 'sent' ? '送信済み' : emailDelivery.status === 'failed' ? '失敗' : 'キャンセル済み'}{emailDelivery.sent_at ? `（${new Date(emailDelivery.sent_at).toLocaleString('ja-JP')}）` : ''}</p>{emailDelivery.error_message && <p className="error">{emailDelivery.error_message}</p>}{emailDelivery.status === 'queued' && <div className="actions"><button className="danger" disabled={busy} onClick={() => void cancelEmailDelivery()}>送信予約をキャンセル</button></div>}{emailDelivery.status === 'failed' && <><label className="field">再送日時（空欄ならすぐ送信）<input type="datetime-local" value={deliverySchedule} onChange={e => setDeliverySchedule(e.target.value)} /></label><label className="checkbox-row"><input type="checkbox" checked={deliveryConfirmed} onChange={e => setDeliveryConfirmed(e.target.checked)} />宛先・件名・本文を確認し、このメールの再送を承認します。</label><div className="actions"><button disabled={busy || !deliveryConfirmed} onClick={() => void retryEmailDelivery()}>再送を予約</button></div></>}</> : <><div className="detail-grid"><label className="field">送信先<select value={deliveryRecipient} onChange={e => setDeliveryRecipient(e.target.value)}><option value="">選択してください</option>{selected.email && <option value={selected.email}>{selected.company_name}（代表）: {selected.email}</option>}{contacts.filter(contact => contact.email && contact.verification_status !== 'invalid').map(contact => <option value={contact.email} key={contact.id}>{contact.name}: {contact.email}</option>)}</select></label><label className="field">送信日時（空欄ならすぐ送信）<input type="datetime-local" value={deliverySchedule} onChange={e => setDeliverySchedule(e.target.value)} /></label></div><label className="checkbox-row"><input type="checkbox" checked={deliveryConfirmed} onChange={e => setDeliveryConfirmed(e.target.checked)} />宛先・件名・本文を確認し、このメールの送信を承認します。</label><div className="actions"><button disabled={busy || !deliveryRecipient || !deliveryConfirmed || selected.do_not_contact} onClick={() => void scheduleEmailDelivery()}>送信を承認</button></div></>}</div>}
+        {selectedDraft.channel === 'form' && <div className="mt-6"><h3>フォーム送信</h3><p className="muted text-sm">CAPTCHAのない通常フォームだけを、確認後に1社ずつ送信できます。</p>{!formPreview ? <div className="actions"><button className="secondary" disabled={busy || selected.do_not_contact} onClick={() => void inspectForm()}>フォーム項目を確認</button></div> : <><p className="muted text-xs mt-3 break-all">送信先: {formPreview.form_url}</p><div className="detail-grid mt-3">{formPreview.fields.map(field => <label className="field" key={field.name}>{field.label}{field.required && ' *'}{field.field_type === 'textarea' ? <textarea rows={5} value={formValues[field.name] ?? ''} onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })} /> : field.field_type === 'select' ? <select value={formValues[field.name] ?? ''} onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })}><option value="">選択してください</option>{field.options.map(option => <option value={option} key={option}>{option}</option>)}</select> : <input type={field.field_type} value={formValues[field.name] ?? ''} onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })} />}</label>)}</div><label className="checkbox-row mt-4"><input type="checkbox" checked={formConfirmed} onChange={e => setFormConfirmed(e.target.checked)} />入力内容と送信先を確認し、このフォーム送信を承認します。</label><div className="actions"><button disabled={busy || !formConfirmed || selected.do_not_contact} onClick={() => void submitForm()}>フォームを送信</button></div></>}</div>}
       </div>}
     </section>}
     {selected && <section className="panel mt-7"><h2>活動履歴</h2><div className="detail-grid"><label className="field">活動種別<select value={activityType} onChange={e => setActivityType(e.target.value)}><option value="note">メモ</option><option value="call">電話</option><option value="email">メール</option><option value="form">フォーム</option><option value="sns">SNS</option><option value="meeting">商談</option></select></label><label className="field">活動内容<textarea rows={3} value={activityNote} onChange={e => setActivityNote(e.target.value)} /></label></div><div className="actions"><button disabled={busy || !activityNote.trim()} onClick={() => void addActivity()}>履歴を追加</button></div>{activities.map(item => <article className="job-row" key={item.id}><div><strong>{item.activity_type}</strong><p>{item.note}</p></div><time className="muted text-sm">{new Date(item.created_at).toLocaleString('ja-JP')}</time></article>)}</section>}

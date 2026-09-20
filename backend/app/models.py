@@ -290,6 +290,30 @@ class EmailDelivery(Timestamps, Base):
     error_message: Mapped[str] = mapped_column(String(500), default="")
 
 
+class FormDelivery(Timestamps, Base):
+    __tablename__ = "form_deliveries"
+    __table_args__ = (
+        CheckConstraint("status IN ('submitted', 'failed')", name="ck_form_delivery_status"),
+        UniqueConstraint("draft_id", name="uq_form_delivery_draft"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("outreach_drafts.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    form_url: Mapped[str] = mapped_column(Text)
+    action_url: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(20), default="submitted", index=True)
+    response_status: Mapped[int | None] = mapped_column(Integer)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    error_message: Mapped[str] = mapped_column(String(500), default="")
+
+
 class SmtpSettings(Timestamps, Base):
     __tablename__ = "smtp_settings"
     __table_args__ = (

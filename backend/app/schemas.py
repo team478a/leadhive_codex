@@ -418,6 +418,39 @@ class EmailDeliveryListOut(BaseModel):
     cancelled_count: int
 
 
+class FormFieldOut(BaseModel):
+    name: str
+    label: str
+    field_type: Literal["text", "email", "tel", "textarea", "select"]
+    required: bool
+    value: str
+    options: list[str] = []
+
+
+class FormPreviewOut(BaseModel):
+    form_url: str
+    action_url: str
+    fields: list[FormFieldOut]
+
+
+class FormDeliveryCreateInput(Input):
+    field_values: dict[str, str] = Field(default_factory=dict)
+    confirmed: bool = False
+
+
+class FormDeliveryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    draft_id: UUID
+    company_id: UUID
+    status: Literal["submitted", "failed"]
+    action_url: str
+    response_status: int | None
+    submitted_at: datetime | None
+    error_message: str
+    created_at: datetime
+
+
 class SmtpSettingsInput(Input):
     host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     port: int = Field(ge=1, le=65535)
