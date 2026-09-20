@@ -405,6 +405,19 @@ class EmailDeliveryOut(BaseModel):
     updated_at: datetime
 
 
+class EmailDeliveryListItemOut(EmailDeliveryOut):
+    company_name: str
+
+
+class EmailDeliveryListOut(BaseModel):
+    items: list[EmailDeliveryListItemOut]
+    queued_count: int
+    running_count: int
+    sent_count: int
+    failed_count: int
+    cancelled_count: int
+
+
 class SmtpSettingsInput(Input):
     host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     port: int = Field(ge=1, le=65535)

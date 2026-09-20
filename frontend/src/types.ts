@@ -110,6 +110,11 @@ export interface EmailDelivery {
   started_at: string | null; finished_at: string | null; attempt_count: number
   error_message: string; created_at: string; updated_at: string
 }
+export interface EmailDeliveryListItem extends EmailDelivery { company_name: string }
+export interface EmailDeliveryList {
+  items: EmailDeliveryListItem[]; queued_count: number; running_count: number
+  sent_count: number; failed_count: number; cancelled_count: number
+}
 export interface Notification {
   id: string; project_id: string; company_id: string | null; operation_job_id: string | null
   email_delivery_id: string | null

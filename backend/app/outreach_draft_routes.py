@@ -2,15 +2,18 @@ import logging
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.analysis_routes import owned_company
 from app.database import get_db
 from app.models import Company, ContactPerson, EmailDelivery, OutreachDraft, Project, User
+from app.project_access import project_access
 from app.schemas import (
     EmailDeliveryCreateInput,
+    EmailDeliveryListItemOut,
+    EmailDeliveryListOut,
     EmailDeliveryOut,
     EmailDeliveryRetryInput,
     OutreachDraftGenerateInput,
@@ -40,6 +43,44 @@ def owned_email_delivery(
         raise HTTPException(404, "メール送信が見つかりません。")
     owned_company(delivery.company_id, db, user, write=write)
     return delivery
+
+
+@router.get("/projects/{project_id}/email-deliveries", response_model=EmailDeliveryListOut)
+def list_email_deliveries(
+    project_id: UUID,
+    limit: int = Query(100, ge=1, le=200),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    rows = db.execute(
+        select(EmailDelivery, Company.company_name)
+        .join(Company, Company.id == EmailDelivery.company_id)
+        .where(Company.project_id == project_id)
+        .order_by(EmailDelivery.created_at.desc(), EmailDelivery.id.desc())
+        .limit(limit)
+    ).all()
+    counts = {status: 0 for status in ("queued", "running", "sent", "failed", "cancelled")}
+    count_rows = db.execute(
+        select(EmailDelivery.status, func.count())
+        .join(Company, Company.id == EmailDelivery.company_id)
+        .where(Company.project_id == project_id)
+        .group_by(EmailDelivery.status)
+    ).all()
+    counts.update(dict(count_rows))
+    return EmailDeliveryListOut(
+        items=[
+            EmailDeliveryListItemOut(
+                **EmailDeliveryOut.model_validate(delivery).model_dump(), company_name=company_name
+            )
+            for delivery, company_name in rows
+        ],
+        queued_count=counts["queued"],
+        running_count=counts["running"],
+        sent_count=counts["sent"],
+        failed_count=counts["failed"],
+        cancelled_count=counts["cancelled"],
+    )
 
 
 def delivery_time(value: datetime | None) -> datetime:
