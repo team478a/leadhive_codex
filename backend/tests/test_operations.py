@@ -3,8 +3,10 @@ from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from threading import Barrier
 
+from sqlalchemy import select
+
 from app import worker
-from app.models import Company, OperationJob, SearchSchedule
+from app.models import AnalysisRefreshSchedule, Company, OperationJob, SearchSchedule
 from app.services.collection import Candidate, ExternalServiceError
 
 
@@ -239,6 +241,58 @@ def test_search_schedule_crud_due_enqueue_and_company_limit(auth, db, monkeypatc
     updated = auth.put(f"/api/search-schedules/{schedule_id}", json={**body, "active": False})
     assert updated.status_code == 200 and not updated.json()["active"]
     assert auth.delete(f"/api/search-schedules/{schedule_id}").status_code == 204
+
+
+def test_analysis_refresh_schedule_crud_and_due_enqueue(auth, db):
+    project = make_project(auth)
+    company = add_company(auth, db, project["id"])
+    company.analysis_status = "completed"
+    company.scraped_at = datetime.now(timezone.utc) - timedelta(days=120)
+    db.commit()
+    body = {"interval_hours": 24, "stale_days": 90, "batch_limit": 25, "active": True}
+
+    created = auth.put(f"/api/projects/{project['id']}/analysis-refresh-schedule", json=body)
+    assert created.status_code == 200
+    schedule_id = created.json()["id"]
+    assert (
+        auth.get(f"/api/projects/{project['id']}/analysis-refresh-schedule").json()["stale_days"]
+        == 90
+    )
+
+    immediate = auth.post(f"/api/projects/{project['id']}/analysis-refresh-schedule/run")
+    assert immediate.status_code == 202
+    assert immediate.json()["status"] == "queued"
+    assert auth.post(f"/api/operations/{immediate.json()['id']}/cancel").status_code == 200
+
+    schedule = db.get(AnalysisRefreshSchedule, schedule_id)
+    schedule.next_run_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+    assert worker.enqueue_due_refresh_schedules(db) == 1
+    db.refresh(schedule)
+    assert schedule.last_enqueued_at is not None
+    queued = db.scalar(
+        select(OperationJob).where(
+            OperationJob.project_id == company.project_id,
+            OperationJob.status == "queued",
+        )
+    )
+    assert queued.payload == {"company_ids": [str(company.id)], "force": True}
+    auth.post(f"/api/operations/{queued.id}/cancel")
+
+    company.scraped_at = datetime.now(timezone.utc)
+    schedule.next_run_at = datetime.now(timezone.utc) - timedelta(minutes=1)
+    db.commit()
+    assert worker.enqueue_due_refresh_schedules(db) == 0
+    assert (
+        auth.put(
+            f"/api/projects/{project['id']}/analysis-refresh-schedule",
+            json={**body, "active": False},
+        ).json()["active"]
+        is False
+    )
+    assert (
+        auth.delete(f"/api/projects/{project['id']}/analysis-refresh-schedule").status_code == 204
+    )
 
 
 def test_cancel_retry_validation_and_access_isolation(auth, users):
