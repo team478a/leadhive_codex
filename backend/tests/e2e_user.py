@@ -12,7 +12,7 @@ if not (make_url(url).database or "").endswith("_test"):
 os.environ["DATABASE_URL"] = url
 
 from app.database import SessionLocal  # noqa: E402
-from app.models import AuthSession, Project, TargetProfile, User  # noqa: E402
+from app.models import AuthSession, Project, SmtpSettings, TargetProfile, User  # noqa: E402
 from app.security import password_hasher  # noqa: E402
 
 email = os.environ["E2E_EMAIL"]
@@ -20,8 +20,15 @@ if not email.startswith("e2e-") or not email.endswith("@example.com"):
     raise RuntimeError("Only temporary e2e accounts may be modified")
 with SessionLocal() as db:
     if sys.argv[1] == "create":
-        db.add(User(email=email, password_hash=password_hasher.hash(os.environ["E2E_PASSWORD"])))
+        db.add(
+            User(
+                email=email,
+                password_hash=password_hasher.hash(os.environ["E2E_PASSWORD"]),
+                is_admin=db.scalar(select(User.id).limit(1)) is None,
+            )
+        )
     elif sys.argv[1] == "cleanup":
+        db.execute(delete(SmtpSettings))
         user = db.scalar(select(User).where(User.email == email))
         if user:
             for model in (AuthSession, Project, TargetProfile):

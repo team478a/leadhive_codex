@@ -20,7 +20,10 @@ export default defineConfig({
     {
       command: `"${python}" -m uvicorn app.main:app --host 127.0.0.1 --port 18039`,
       url: 'http://127.0.0.1:18039/api/health', reuseExistingServer: false,
-      env: { DATABASE_URL: testDatabase, CORS_ORIGINS: 'http://localhost:15173', COOKIE_SECURE: 'false' },
+      env: {
+        DATABASE_URL: testDatabase, CORS_ORIGINS: 'http://localhost:15173', COOKIE_SECURE: 'false',
+        SETTINGS_ENCRYPTION_KEY: 'TXo8wyai6a-uQTN15jhU7_la86LCSPzFR6pMXGkYslM=',
+      },
     },
     {
       command: 'npm run dev -- --port 15173', url: 'http://localhost:15173',

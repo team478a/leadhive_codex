@@ -64,7 +64,7 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
     assert worker.run_once()
     result = auth.get(f"/api/outreach-drafts/{draft.id}/email-delivery").json()
     assert result["status"] == "sent" and result["sent_at"]
-    assert sent[0][1] == company.email and sent[0][2] == "サービスのご相談"
+    assert sent[0][2] == company.email and sent[0][3] == "サービスのご相談"
     activity = db.scalar(
         select(Activity).where(Activity.company_id == company.id, Activity.activity_type == "email")
     )
