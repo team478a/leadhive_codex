@@ -168,6 +168,49 @@ def test_outreach_queue_prioritizes_due_work_and_records_result(auth, db):
     assert [item["company"]["id"] for item in queue] == [str(alpha.id)]
 
 
+def test_followup_tasks_can_be_completed_or_rescheduled(auth, db):
+    project = make_project(auth)
+    alpha, beta = add_companies(auth, db, project["id"])
+    alpha.status = beta.status = "approached"
+    alpha.next_followup_at = datetime.now(timezone.utc) - timedelta(hours=1)
+    beta.next_followup_at = datetime.now(timezone.utc) + timedelta(days=2)
+    db.flush()
+
+    tasks = auth.get(f"/api/projects/{project['id']}/followup-tasks").json()
+    assert [item["company"]["id"] for item in tasks] == [str(alpha.id), str(beta.id)]
+    assert tasks[0]["due_state"] == "overdue"
+    assert (
+        auth.post(
+            f"/api/companies/{alpha.id}/followup-task",
+            json={"action": "rescheduled", "note": "来週へ延期"},
+        ).status_code
+        == 422
+    )
+
+    next_due = datetime.now(timezone.utc) + timedelta(days=7)
+    rescheduled = auth.post(
+        f"/api/companies/{alpha.id}/followup-task",
+        json={
+            "action": "rescheduled",
+            "note": "先方都合により来週へ延期",
+            "next_followup_at": next_due.isoformat(),
+        },
+    )
+    assert rescheduled.status_code == 200
+    assert rescheduled.json()["next_followup_at"] is not None
+    completed = auth.post(
+        f"/api/companies/{alpha.id}/followup-task",
+        json={"action": "completed", "note": "確認を完了"},
+    )
+    assert completed.status_code == 200
+    assert completed.json()["next_followup_at"] is None
+    history = auth.get(f"/api/companies/{alpha.id}/activities").json()
+    assert any("追客タスクを延期" in item["note"] for item in history)
+    assert any("追客タスクを完了" in item["note"] for item in history)
+    tasks = auth.get(f"/api/projects/{project['id']}/followup-tasks").json()
+    assert [item["company"]["id"] for item in tasks] == [str(beta.id)]
+
+
 def test_company_contact_people_crud_and_access_isolation(auth, users, db):
     project = make_project(auth)
     alpha, _ = add_companies(auth, db, project["id"])
