@@ -310,6 +310,20 @@ class ActivityOut(BaseModel):
     created_at: datetime
 
 
+class OutreachQueueItemOut(BaseModel):
+    company: CompanyOut
+    available_channels: list[Literal["email", "form", "call", "sns"]]
+    recommended_channel: Literal["email", "form", "call", "sns"]
+    due_state: Literal["overdue", "today", "upcoming", "unset"]
+
+
+class OutreachRecordInput(Input):
+    channel: Literal["email", "form", "call", "sns"]
+    outcome: Literal["approached", "replied", "meeting", "lost"] = "approached"
+    note: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+    next_followup_at: datetime | None = None
+
+
 class OperationJobInput(Input):
     operation_type: Literal["collect_search", "web_analysis", "ai_analysis"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)

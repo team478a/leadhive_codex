@@ -81,6 +81,13 @@ export interface Activity {
   activity_type: 'note' | 'call' | 'email' | 'form' | 'sns' | 'meeting' | 'status_change'
   note: string; created_at: string
 }
+export type OutreachChannel = 'email' | 'form' | 'call' | 'sns'
+export interface OutreachQueueItem {
+  company: Company
+  available_channels: OutreachChannel[]
+  recommended_channel: OutreachChannel
+  due_state: 'overdue' | 'today' | 'upcoming' | 'unset'
+}
 export interface OperationJob {
   id: string; project_id: string
   operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis'

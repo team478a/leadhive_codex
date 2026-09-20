@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
-from sqlalchemy import String, asc, cast, desc, func, or_, select, update
+from sqlalchemy import String, asc, case, cast, desc, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
 from app.analysis_routes import owned_company, owned_project
@@ -39,6 +39,8 @@ from app.schemas import (
     DataQualityReanalyzeInput,
     DuplicateCandidateOut,
     OperationJobOut,
+    OutreachQueueItemOut,
+    OutreachRecordInput,
     SalesActivityAnalyticsOut,
     SalesAnalyticsAssigneeOut,
     SavedCompanyFilterInput,
@@ -48,6 +50,38 @@ from app.security import current_user
 
 router = APIRouter(prefix="/api")
 JST = ZoneInfo("Asia/Tokyo")
+
+
+def outreach_channels(company: Company) -> list[str]:
+    channels = []
+    if company.email:
+        channels.append("email")
+    if company.contact_url:
+        channels.append("form")
+    if company.phone:
+        channels.append("call")
+    if any(
+        (
+            company.instagram_url,
+            company.x_url,
+            company.tiktok_url,
+            company.facebook_url,
+            company.line_url,
+        )
+    ):
+        channels.append("sns")
+    return channels
+
+
+def outreach_due_state(company: Company, now: datetime) -> str:
+    if company.next_followup_at is None:
+        return "unset"
+    day_start = now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+    if company.next_followup_at < now:
+        return "overdue"
+    if company.next_followup_at < day_start + timedelta(days=1):
+        return "today"
+    return "upcoming"
 
 
 def status_transition_count(status: str):
@@ -506,6 +540,101 @@ def company_query(
     if sort == "company_name":
         return query.order_by(asc(Company.company_name), Company.id)
     return query.order_by(desc(Company.created_at), Company.id)
+
+
+@router.get("/projects/{project_id}/outreach-queue", response_model=list[OutreachQueueItemOut])
+def outreach_queue(
+    project_id: UUID,
+    assignee: str | None = Query(None, max_length=200),
+    due: Literal["overdue", "today", "upcoming", "unset"] | None = None,
+    limit: int = Query(25, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    owned_project(project_id, db, user)
+    now = datetime.now(timezone.utc)
+    query = select(Company).where(
+        Company.project_id == project_id,
+        Company.status.in_(("target", "approached", "replied", "meeting")),
+        Company.do_not_contact.is_(False),
+        or_(
+            Company.email != "",
+            Company.contact_url != "",
+            Company.phone != "",
+            Company.instagram_url != "",
+            Company.x_url != "",
+            Company.tiktok_url != "",
+            Company.facebook_url != "",
+            Company.line_url != "",
+        ),
+    )
+    if assignee:
+        query = query.where(Company.assignee.ilike(f"%{assignee}%"))
+    if due == "overdue":
+        query = query.where(Company.next_followup_at < now)
+    elif due == "today":
+        day_start = now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+        query = query.where(
+            Company.next_followup_at >= now,
+            Company.next_followup_at < day_start + timedelta(days=1),
+        )
+    elif due == "upcoming":
+        query = query.where(Company.next_followup_at >= now)
+    elif due == "unset":
+        query = query.where(Company.next_followup_at.is_(None))
+    priority = case(
+        (Company.next_followup_at < now, 0),
+        (Company.next_followup_at.is_not(None), 1),
+        else_=2,
+    )
+    companies = db.scalars(
+        query.order_by(
+            priority,
+            Company.next_followup_at.asc().nullslast(),
+            Company.score.desc().nullslast(),
+            Company.id,
+        ).limit(limit)
+    ).all()
+    return [
+        OutreachQueueItemOut(
+            company=company,
+            available_channels=channels,
+            recommended_channel=channels[0],
+            due_state=outreach_due_state(company, now),
+        )
+        for company in companies
+        if (channels := outreach_channels(company))
+    ]
+
+
+@router.post("/companies/{company_id}/outreach", response_model=CompanyOut)
+def record_outreach(
+    company_id: UUID,
+    body: OutreachRecordInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = owned_company(company_id, db, user)
+    if company.do_not_contact:
+        raise HTTPException(409, "連絡禁止企業にはアプローチを記録できません。")
+    if body.channel not in outreach_channels(company):
+        raise HTTPException(409, "指定した連絡経路の情報がありません。")
+    if company.status in {"won", "lost", "excluded"}:
+        raise HTTPException(409, "完了済みの企業にはアプローチを記録できません。")
+    if company.status != body.outcome:
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="status_change",
+                note=f"営業状況を {company.status} から {body.outcome} に変更",
+            )
+        )
+    db.add(Activity(company_id=company.id, activity_type=body.channel, note=body.note))
+    company.status = body.outcome
+    company.next_followup_at = body.next_followup_at
+    db.commit()
+    db.refresh(company)
+    return company
 
 
 @router.get("/projects/{project_id}/company-list", response_model=CompanyPageOut)
