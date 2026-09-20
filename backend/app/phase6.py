@@ -55,6 +55,70 @@ COHORTS = (
 )
 
 
+def build_preflight(db, email: str, output: Path) -> dict:
+    normalized_email = email.strip().lower()
+    user_exists = bool(
+        normalized_email
+        and db.scalar(select(User.id).where(User.email == normalized_email)) is not None
+    )
+    required_profiles = {cohort.profile_name for cohort in COHORTS}
+    available_profiles = set(
+        db.scalars(
+            select(TargetProfile.profile_name).where(
+                TargetProfile.is_system.is_(True),
+                TargetProfile.profile_name.in_(required_profiles),
+            )
+        ).all()
+    )
+    output_writable = False
+    output_error = ""
+    try:
+        output.mkdir(parents=True, exist_ok=True)
+        probe = output / ".phase6-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        output_writable = True
+    except OSError as exc:
+        output_error = type(exc).__name__
+    checks = [
+        {"key": "database", "ready": True, "message": "PostgreSQLへ接続できました。"},
+        {
+            "key": "serper_api_key",
+            "ready": bool(settings.serper_api_key),
+            "message": "設定済み" if settings.serper_api_key else "SERPER_API_KEYが未設定です。",
+        },
+        {
+            "key": "openai_api_key",
+            "ready": bool(settings.openai_api_key),
+            "message": "設定済み" if settings.openai_api_key else "OPENAI_API_KEYが未設定です。",
+        },
+        {
+            "key": "user",
+            "ready": user_exists,
+            "message": "検証ユーザーを確認しました。"
+            if user_exists
+            else "検証ユーザーが存在しません。",
+        },
+        {
+            "key": "system_profiles",
+            "ready": available_profiles == required_profiles,
+            "message": (
+                "必要な標準プロファイルを確認しました。"
+                if available_profiles == required_profiles
+                else "必要な標準プロファイルが不足しています。"
+            ),
+        },
+        {
+            "key": "output",
+            "ready": output_writable,
+            "message": "出力先へ書き込めます。"
+            if output_writable
+            else f"出力先へ書き込めません: {output_error}",
+        },
+    ]
+    return {"ready": all(check["ready"] for check in checks), "checks": checks}
+
+
 def get_user(db, email: str) -> User:
     user = db.scalar(select(User).where(User.email == email.lower()))
     if user is None:
@@ -317,13 +381,22 @@ def build_report(review_path: Path) -> dict:
 
 def main():
     parser = argparse.ArgumentParser(description="Run resumable LeadHive Phase 6 validation")
-    parser.add_argument("--user", required=True, help="Existing LeadHive user email")
+    parser.add_argument("--user", default="", help="Existing LeadHive user email")
     parser.add_argument(
-        "--stage", choices=("all", "collect", "web", "ai", "export", "report"), default="all"
+        "--stage",
+        choices=("preflight", "all", "collect", "web", "ai", "export", "report"),
+        default="all",
     )
     parser.add_argument("--limit", type=int, default=100, choices=range(1, 101))
     parser.add_argument("--output", type=Path, default=Path("phase6-results"))
     args = parser.parse_args()
+    if args.stage == "preflight":
+        with SessionLocal() as db:
+            result = build_preflight(db, args.user, args.output)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        raise SystemExit(0 if result["ready"] else 2)
+    if not args.user:
+        parser.error("--user is required unless --stage preflight is used")
     review = args.output / "phase6-review.csv"
     if args.stage == "report":
         if not review.exists():
