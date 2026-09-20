@@ -152,18 +152,27 @@ def test_url_collection_counts_and_project_scope(auth, db):
             "urls": [
                 "https://www.Example.com/",
                 "https://example.com/about",
+                "https://instagram.com/example-company",
                 "not-a-url",
             ]
         },
     )
     assert response.status_code == 201
     job = response.json()
-    assert (job["found_count"], job["saved_count"], job["duplicate_count"], job["error_count"]) == (
-        3,
+    assert (
+        job["found_count"],
+        job["saved_count"],
+        job["duplicate_count"],
+        job["excluded_count"],
+        job["error_count"],
+    ) == (
+        4,
+        1,
         1,
         1,
         1,
     )
+    assert job["processing_ms"] >= 0
     companies = auth.get(f"/api/projects/{project['id']}/companies").json()
     assert len(companies) == 1
     assert companies[0]["domain"] == "example.com"

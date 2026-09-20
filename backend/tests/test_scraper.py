@@ -1,8 +1,9 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 
 from app import analysis_routes
+from app.models import Company
 from app.services import scraper
 from app.services.scraper import FetchedPage, PageData, ScrapeError, extract_page
 
@@ -182,7 +183,7 @@ def test_company_analysis_preserves_and_releases_protected_fields(auth, monkeypa
     assert released.json()["contact_url"] == "https://protected.example/contact"
 
 
-def test_analysis_failure_missing_url_and_aggregator(auth, monkeypatch):
+def test_analysis_failure_missing_url_and_aggregator(auth, db, monkeypatch):
     project = make_project(auth)
     csv_content = b"company_name,website_url,phone,email,address\nNo URL,,,,\n"
     auth.post(
@@ -194,8 +195,16 @@ def test_analysis_failure_missing_url_and_aggregator(auth, monkeypatch):
     result = auth.post(f"/api/companies/{missing['id']}/analyze", json={}).json()
     assert result["analysis_status"] == "skipped"
 
-    aggregator = add_url(auth, project["id"], "https://instagram.com/sample-company")
-    result = auth.post(f"/api/companies/{aggregator['id']}/analyze", json={}).json()
+    aggregator = Company(
+        project_id=UUID(project["id"]),
+        company_name="instagram.com",
+        website_url="https://instagram.com/sample-company",
+        domain="instagram.com",
+        source="url",
+    )
+    db.add(aggregator)
+    db.commit()
+    result = auth.post(f"/api/companies/{aggregator.id}/analyze", json={}).json()
     assert result["analysis_status"] == "excluded" and result["is_aggregator"]
 
     failing = add_url(auth, project["id"], "https://failure.example")

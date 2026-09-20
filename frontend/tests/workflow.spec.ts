@@ -62,10 +62,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await expect(page.getByRole('strong').filter({ hasText: /^example\.com$/ })).toBeVisible()
   await page.getByLabel('URL（1行に1件）').fill('https://instagram.com/example-company')
   await page.getByRole('button', { name: '収集を開始' }).click()
-  const aggregatorCard = page.getByRole('article').filter({ hasText: 'instagram.com' }).first()
-  await aggregatorCard.getByRole('button', { name: 'Web解析' }).click()
-  await expect(aggregatorCard.getByText('対象外', { exact: true })).toBeVisible()
-  await expect(aggregatorCard.getByText('企業公式サイトではない可能性')).toBeVisible()
+  await expect(page.getByText('公式外 1', { exact: true })).toBeVisible()
   await page.getByLabel('収集元').selectOption('csv')
   await page.getByLabel('CSVファイル（UTF-8・最大5MB・1000行）').setInputFiles({
     name: 'companies.csv', mimeType: 'text/csv',

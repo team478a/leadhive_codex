@@ -1,6 +1,7 @@
 import uuid
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
+from threading import Barrier
 
 from app import worker
 from app.models import Company, OperationJob, SearchSchedule
@@ -93,6 +94,32 @@ def test_search_collection_worker_records_partial_failure(auth, db, monkeypatch)
     assert len(auth.get(f"/api/projects/{project['id']}/collection-jobs").json()) == 2
     assert len(auth.get(f"/api/projects/{project['id']}/companies").json()) == 1
     assert auth.get("/api/dashboard").json()["unread_operation_failures"] == 1
+
+
+def test_search_collection_runs_keywords_concurrently(auth, db, monkeypatch):
+    project = make_project(auth)
+    created = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json={
+            "operation_type": "collect_search",
+            "source": "serper",
+            "keywords": ["alpha", "beta"],
+            "region": "東京",
+            "max_results": 5,
+        },
+    )
+    assert created.status_code == 202
+    barrier = Barrier(2)
+
+    def search(keyword, _region, _max_results):
+        barrier.wait(timeout=2)
+        return [Candidate(f"{keyword}社", f"https://{keyword}.example")]
+
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    monkeypatch.setattr(worker, "search_serper", search)
+    assert worker.run_once()
+    job = auth.get(f"/api/projects/{project['id']}/operations").json()[0]
+    assert job["status"] == "completed" and job["success_count"] == 2
 
 
 def test_stale_job_recovery_and_attempt_limit(auth, db, monkeypatch):
