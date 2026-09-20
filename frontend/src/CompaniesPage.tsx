@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachQueueItem, Project, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -72,6 +72,9 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
   const [activities, setActivities] = useState<Activity[]>([])
   const [contacts, setContacts] = useState<ContactPerson[]>([])
   const [outreachDrafts, setOutreachDrafts] = useState<OutreachDraft[]>([])
+  const [outreachTemplates, setOutreachTemplates] = useState<OutreachTemplate[]>([])
+  const [draftApprovals, setDraftApprovals] = useState<OutreachDraftApproval[]>([])
+  const [templateName, setTemplateName] = useState('')
   const [selectedDraft, setSelectedDraft] = useState<OutreachDraft | null>(null)
   const [emailDelivery, setEmailDelivery] = useState<EmailDelivery | null>(null)
   const [deliveryRecipient, setDeliveryRecipient] = useState('')
@@ -128,19 +131,21 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
     setProtectedFields(company.protected_fields)
     setDoNotContact(company.do_not_contact); setExclusionReason(company.exclusion_reason)
     setContactQuality(company.contact_quality_status)
-    const [nextActivities, nextContacts, nextDrafts] = await Promise.all([
+    const [nextActivities, nextContacts, nextDrafts, nextTemplates] = await Promise.all([
       api<Activity[]>(`/companies/${company.id}/activities`),
       api<ContactPerson[]>(`/companies/${company.id}/contacts`),
       api<OutreachDraft[]>(`/companies/${company.id}/outreach-drafts`),
+      api<OutreachTemplate[]>(`/projects/${company.project_id}/outreach-templates`),
     ])
     const firstDraft = nextDrafts[0] ?? null
-    const [nextDelivery, nextFormDelivery] = await Promise.all([
+    const [nextDelivery, nextFormDelivery, nextApprovals] = await Promise.all([
       firstDraft?.channel === 'email'
         ? api<EmailDelivery | null>(`/outreach-drafts/${firstDraft.id}/email-delivery`) : Promise.resolve(null),
       firstDraft?.channel === 'form'
         ? api<FormDelivery | null>(`/outreach-drafts/${firstDraft.id}/form-delivery`) : Promise.resolve(null),
+      firstDraft ? api<OutreachDraftApproval[]>(`/outreach-drafts/${firstDraft.id}/approvals`) : Promise.resolve([]),
     ])
-    setActivities(nextActivities); setContacts(nextContacts); setOutreachDrafts(nextDrafts)
+    setActivities(nextActivities); setContacts(nextContacts); setOutreachDrafts(nextDrafts); setOutreachTemplates(nextTemplates); setDraftApprovals(nextApprovals)
     setSelectedDraft(firstDraft); setEmailDelivery(nextDelivery); setFormDelivery(nextFormDelivery); setDeliveryRecipient(company.email)
     setDeliverySchedule(''); setDeliveryConfirmed(false); setFormPreview(null); setFormValues({}); setFormConfirmed(false); setAssistOutcome('pending'); setAssistNote(''); setAssistConfirmed(false); setDraftContactId(''); setDraftInstruction('')
   }
@@ -261,14 +266,40 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
     try { await navigator.clipboard.writeText(text); setNotice('営業文面をコピーしました。') }
     catch { setError('コピーできませんでした。文面を選択してコピーしてください。') }
   }
+  async function saveTemplate() {
+    if (!selectedDraft || !selected || !templateName.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const template = await api<OutreachTemplate>(`/projects/${selected.project_id}/outreach-templates`, 'POST', {
+        name: templateName, channel: selectedDraft.channel, subject: selectedDraft.subject, body: selectedDraft.body,
+      })
+      setOutreachTemplates([...outreachTemplates, template]); setTemplateName(''); setNotice('営業文面テンプレートを保存しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function applyTemplate(template: OutreachTemplate) {
+    if (!selectedDraft || !window.confirm(`「${template.name}」を現在の文面へ適用しますか？`)) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const updated = await api<OutreachDraft>(`/outreach-drafts/${selectedDraft.id}/apply-template`, 'POST', { template_id: template.id })
+      setSelectedDraft(updated); setOutreachDrafts(outreachDrafts.map(item => item.id === updated.id ? updated : item)); setNotice('テンプレートを適用しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function deleteTemplate(template: OutreachTemplate) {
+    if (!window.confirm(`テンプレート「${template.name}」を削除しますか？`)) return
+    setBusy(true); setError(''); setNotice('')
+    try { await api(`/outreach-templates/${template.id}`, 'DELETE'); setOutreachTemplates(outreachTemplates.filter(item => item.id !== template.id)); setNotice('テンプレートを削除しました。') }
+    catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   async function selectDraft(draft: OutreachDraft) {
     setSelectedDraft(draft); setDeliveryConfirmed(false); setDeliverySchedule(''); setFormPreview(null); setFormValues({}); setFormConfirmed(false)
     setAssistOutcome('pending'); setAssistNote(''); setAssistConfirmed(false)
     try {
-      setEmailDelivery(draft.channel === 'email'
-        ? await api<EmailDelivery | null>(`/outreach-drafts/${draft.id}/email-delivery`) : null)
-      setFormDelivery(draft.channel === 'form'
-        ? await api<FormDelivery | null>(`/outreach-drafts/${draft.id}/form-delivery`) : null)
+      const [nextEmailDelivery, nextFormDelivery, nextApprovals] = await Promise.all([
+        draft.channel === 'email' ? api<EmailDelivery | null>(`/outreach-drafts/${draft.id}/email-delivery`) : Promise.resolve(null),
+        draft.channel === 'form' ? api<FormDelivery | null>(`/outreach-drafts/${draft.id}/form-delivery`) : Promise.resolve(null),
+        api<OutreachDraftApproval[]>(`/outreach-drafts/${draft.id}/approvals`),
+      ])
+      setEmailDelivery(nextEmailDelivery); setFormDelivery(nextFormDelivery); setDraftApprovals(nextApprovals)
     } catch (e) { setError(errorMessage(e)) }
   }
   async function inspectForm() {
@@ -535,6 +566,8 @@ export function CompaniesPage({ projects, initialProjectId }: { projects: Projec
       <div className="detail-grid mt-4"><div><label className="field">連絡経路<select value={draftChannel} onChange={e => setDraftChannel(e.target.value as OutreachDraft['channel'])}><option value="email">メール</option><option value="form">問い合わせフォーム</option><option value="sns">SNS</option></select></label><label className="field">宛先担当者<select value={draftContactId} onChange={e => setDraftContactId(e.target.value)}><option value="">担当者指定なし</option>{contacts.filter(contact => contact.verification_status !== 'invalid').map(contact => <option value={contact.id} key={contact.id}>{contact.name}{contact.title ? `（${contact.title}）` : ''}</option>)}</select></label></div><label className="field">追加指示<textarea rows={4} maxLength={1000} value={draftInstruction} onChange={e => setDraftInstruction(e.target.value)} placeholder="例：初回連絡なので短く、無料相談を案内" /></label></div><div className="actions"><button disabled={busy || selected.do_not_contact || selected.ai_status !== 'completed'} onClick={() => void generateDraft()}>{busy ? '生成中…' : '文面を生成'}</button></div>{selected.do_not_contact && <p className="error">連絡禁止の企業には文面を生成できません。</p>}{selected.ai_status !== 'completed' && <p className="muted text-sm">文面生成にはAI企業分析の完了が必要です。</p>}
       {outreachDrafts.length > 0 && <div className="flex flex-wrap gap-2 mt-5">{outreachDrafts.map(draft => <button className={selectedDraft?.id === draft.id ? '' : 'secondary'} key={draft.id} onClick={() => void selectDraft(draft)}>{draft.channel === 'email' ? 'メール' : draft.channel === 'form' ? 'フォーム' : 'SNS'}・{new Date(draft.created_at).toLocaleString('ja-JP')}</button>)}</div>}
       {selectedDraft && <div className="mt-5">{selectedDraft.channel === 'email' && <label className="field">件名<input maxLength={300} value={selectedDraft.subject} onChange={e => setSelectedDraft({ ...selectedDraft, subject: e.target.value })} /></label>}<label className="field">本文<textarea rows={12} maxLength={10000} value={selectedDraft.body} onChange={e => setSelectedDraft({ ...selectedDraft, body: e.target.value })} /></label><p className="muted text-sm">生成：{selectedDraft.ai_provider} / {selectedDraft.ai_model}</p><div className="actions"><button disabled={busy || !selectedDraft.body.trim()} onClick={() => void saveDraft()}>編集内容を保存</button><button className="secondary" onClick={() => void copyDraft()}>コピー</button><button className="danger" disabled={busy} onClick={() => void deleteDraft()}>削除</button></div>
+        <div className="mt-5"><h3>文面テンプレート</h3><div className="actions"><input aria-label="テンプレート名" maxLength={200} value={templateName} onChange={e => setTemplateName(e.target.value)} placeholder="例：初回メール" /><button disabled={busy || !templateName.trim()} onClick={() => void saveTemplate()}>現在の文面を保存</button></div>{outreachTemplates.filter(template => template.channel === selectedDraft.channel).length === 0 ? <p className="muted text-sm">この連絡経路のテンプレートはありません。</p> : <div className="grid gap-2 mt-3">{outreachTemplates.filter(template => template.channel === selectedDraft.channel).map(template => <article className="job-row" key={template.id}><div><strong>{template.name}</strong><p className="muted text-xs">{template.subject || '件名なし'} / {template.body.slice(0, 80)}</p></div><div className="actions"><button className="secondary" disabled={busy} onClick={() => void applyTemplate(template)}>適用</button><button className="danger" disabled={busy} onClick={() => void deleteTemplate(template)}>削除</button></div></article>)}</div>}</div>
+        <div className="mt-5"><h3>承認履歴</h3>{draftApprovals.length === 0 ? <p className="muted text-sm">まだ承認履歴はありません。</p> : draftApprovals.map(approval => <article className="job-row" key={approval.id}><div><strong>{approval.approval_type === 'email' ? 'メール送信承認' : approval.approval_type === 'form_direct' ? 'フォーム送信承認' : 'Codex支援フォーム承認'}</strong><p className="muted text-xs">{approval.subject || '件名なし'} / {approval.body.slice(0, 120)}</p></div><time className="muted text-xs">{new Date(approval.approved_at).toLocaleString('ja-JP')}</time></article>)}</div>
         {selectedDraft.channel === 'email' && <div className="mt-6"><h3>メール送信</h3>{emailDelivery ? <><p className="muted text-sm">宛先：{emailDelivery.recipient_name ? `${emailDelivery.recipient_name} / ` : ''}{emailDelivery.recipient_email}</p><p className="muted text-sm">状態：{emailDelivery.status === 'queued' ? '送信待ち' : emailDelivery.status === 'running' ? '送信中' : emailDelivery.status === 'sent' ? '送信済み' : emailDelivery.status === 'failed' ? '失敗' : 'キャンセル済み'}{emailDelivery.sent_at ? `（${new Date(emailDelivery.sent_at).toLocaleString('ja-JP')}）` : ''}</p>{emailDelivery.error_message && <p className="error">{emailDelivery.error_message}</p>}{emailDelivery.status === 'queued' && <div className="actions"><button className="danger" disabled={busy} onClick={() => void cancelEmailDelivery()}>送信予約をキャンセル</button></div>}{emailDelivery.status === 'failed' && <><label className="field">再送日時（空欄ならすぐ送信）<input type="datetime-local" value={deliverySchedule} onChange={e => setDeliverySchedule(e.target.value)} /></label><label className="checkbox-row"><input type="checkbox" checked={deliveryConfirmed} onChange={e => setDeliveryConfirmed(e.target.checked)} />宛先・件名・本文を確認し、このメールの再送を承認します。</label><div className="actions"><button disabled={busy || !deliveryConfirmed} onClick={() => void retryEmailDelivery()}>再送を予約</button></div></>}</> : <><div className="detail-grid"><label className="field">送信先<select value={deliveryRecipient} onChange={e => setDeliveryRecipient(e.target.value)}><option value="">選択してください</option>{selected.email && <option value={selected.email}>{selected.company_name}（代表）: {selected.email}</option>}{contacts.filter(contact => contact.email && contact.verification_status !== 'invalid').map(contact => <option value={contact.email} key={contact.id}>{contact.name}: {contact.email}</option>)}</select></label><label className="field">送信日時（空欄ならすぐ送信）<input type="datetime-local" value={deliverySchedule} onChange={e => setDeliverySchedule(e.target.value)} /></label></div><label className="checkbox-row"><input type="checkbox" checked={deliveryConfirmed} onChange={e => setDeliveryConfirmed(e.target.checked)} />宛先・件名・本文を確認し、このメールの送信を承認します。</label><div className="actions"><button disabled={busy || !deliveryRecipient || !deliveryConfirmed || selected.do_not_contact} onClick={() => void scheduleEmailDelivery()}>送信を承認</button></div></>}</div>}
         {selectedDraft.channel === 'form' && <div className="mt-6">
           <h3>フォーム送信</h3>

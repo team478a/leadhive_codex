@@ -372,6 +372,37 @@ class OutreachDraftOut(BaseModel):
     updated_at: datetime
 
 
+class OutreachTemplateInput(Input):
+    name: Name
+    channel: Literal["email", "form", "sns"]
+    subject: str = Field(default="", max_length=300)
+    body: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=10000)]
+
+
+class OutreachTemplateOut(OutreachTemplateInput):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    created_by_user_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class OutreachTemplateApplyInput(Input):
+    template_id: UUID
+
+
+class OutreachDraftApprovalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    draft_id: UUID
+    approved_by_user_id: UUID | None
+    approval_type: Literal["email", "form_direct", "form_codex"]
+    subject: str
+    body: str
+    approved_at: datetime
+
+
 class EmailDeliveryCreateInput(Input):
     recipient_email: EmailStr
     scheduled_for: datetime | None = None

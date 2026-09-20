@@ -254,6 +254,47 @@ class OutreachDraft(Timestamps, Base):
     ai_model: Mapped[str] = mapped_column(String(100), default="")
 
 
+class OutreachTemplate(Timestamps, Base):
+    __tablename__ = "outreach_templates"
+    __table_args__ = (
+        CheckConstraint("channel IN ('email', 'form', 'sns')", name="ck_outreach_template_channel"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    channel: Mapped[str] = mapped_column(String(20))
+    subject: Mapped[str] = mapped_column(String(300), default="")
+    body: Mapped[str] = mapped_column(Text)
+
+
+class OutreachDraftApproval(Base):
+    __tablename__ = "outreach_draft_approvals"
+    __table_args__ = (
+        CheckConstraint(
+            "approval_type IN ('email', 'form_direct', 'form_codex')",
+            name="ck_outreach_draft_approval_type",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    draft_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("outreach_drafts.id", ondelete="CASCADE"), index=True
+    )
+    approved_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    approval_type: Mapped[str] = mapped_column(String(30))
+    subject: Mapped[str] = mapped_column(String(300), default="")
+    body: Mapped[str] = mapped_column(Text)
+    approved_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+
 class EmailDelivery(Timestamps, Base):
     __tablename__ = "email_deliveries"
     __table_args__ = (

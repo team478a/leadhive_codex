@@ -15,6 +15,8 @@ from app.models import (
     EmailDelivery,
     FormDelivery,
     OutreachDraft,
+    OutreachDraftApproval,
+    OutreachTemplate,
     Project,
     User,
 )
@@ -31,9 +33,13 @@ from app.schemas import (
     FormDeliveryOut,
     FormFieldOut,
     FormPreviewOut,
+    OutreachDraftApprovalOut,
     OutreachDraftGenerateInput,
     OutreachDraftOut,
     OutreachDraftUpdateInput,
+    OutreachTemplateApplyInput,
+    OutreachTemplateInput,
+    OutreachTemplateOut,
 )
 from app.security import current_user
 from app.services.ai import AiAnalysisError, OutreachContext, get_ai_provider
@@ -59,6 +65,69 @@ def owned_email_delivery(
         raise HTTPException(404, "メール送信が見つかりません。")
     owned_company(delivery.company_id, db, user, write=write)
     return delivery
+
+
+def record_draft_approval(
+    db: Session, draft: OutreachDraft, user: User, approval_type: str
+) -> OutreachDraftApproval:
+    approval = OutreachDraftApproval(
+        draft_id=draft.id,
+        approved_by_user_id=user.id,
+        approval_type=approval_type,
+        subject=draft.subject,
+        body=draft.body,
+    )
+    db.add(approval)
+    return approval
+
+
+@router.get("/projects/{project_id}/outreach-templates", response_model=list[OutreachTemplateOut])
+def list_outreach_templates(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    return db.scalars(
+        select(OutreachTemplate)
+        .where(OutreachTemplate.project_id == project_id)
+        .order_by(OutreachTemplate.name, OutreachTemplate.id)
+    ).all()
+
+
+@router.post(
+    "/projects/{project_id}/outreach-templates",
+    response_model=OutreachTemplateOut,
+    status_code=201,
+)
+def create_outreach_template(
+    project_id: UUID,
+    body: OutreachTemplateInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user)
+    template = OutreachTemplate(
+        project_id=project_id, created_by_user_id=user.id, **body.model_dump()
+    )
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+@router.delete("/outreach-templates/{template_id}", status_code=204)
+def delete_outreach_template(
+    template_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    template = db.get(OutreachTemplate, template_id)
+    if template is None:
+        raise HTTPException(404, "営業文面テンプレートが見つかりません。")
+    project_access(template.project_id, db, user)
+    db.delete(template)
+    db.commit()
 
 
 @router.get("/projects/{project_id}/email-deliveries", response_model=EmailDeliveryListOut)
@@ -164,6 +233,42 @@ def list_outreach_drafts(
         .order_by(OutreachDraft.created_at.desc(), OutreachDraft.id.desc())
         .limit(50)
     ).all()
+
+
+@router.get("/outreach-drafts/{draft_id}/approvals", response_model=list[OutreachDraftApprovalOut])
+def list_outreach_draft_approvals(
+    draft_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    draft = owned_draft(draft_id, db, user, write=False)
+    return db.scalars(
+        select(OutreachDraftApproval)
+        .where(OutreachDraftApproval.draft_id == draft.id)
+        .order_by(OutreachDraftApproval.approved_at.desc(), OutreachDraftApproval.id.desc())
+        .limit(50)
+    ).all()
+
+
+@router.post("/outreach-drafts/{draft_id}/apply-template", response_model=OutreachDraftOut)
+def apply_outreach_template(
+    draft_id: UUID,
+    body: OutreachTemplateApplyInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    draft = owned_draft(draft_id, db, user)
+    company = db.get(Company, draft.company_id)
+    template = db.get(OutreachTemplate, body.template_id)
+    if company is None or template is None or template.project_id != company.project_id:
+        raise HTTPException(404, "営業文面テンプレートが見つかりません。")
+    if template.channel != draft.channel:
+        raise HTTPException(409, "同じ連絡経路のテンプレートだけを適用できます。")
+    draft.subject = template.subject
+    draft.body = template.body
+    db.commit()
+    db.refresh(draft)
+    return draft
 
 
 @router.get("/outreach-drafts/{draft_id}/email-delivery", response_model=EmailDeliveryOut | None)
@@ -277,6 +382,8 @@ def record_form_assist_delivery(
         delivery.status = body.status
         delivery.submitted_at = submitted_at
         delivery.result_note = body.note
+    if body.status == "submitted":
+        record_draft_approval(db, draft, user, "form_codex")
     outcome_label = {"pending": "保留", "submitted": "送信済み", "failed": "失敗"}[body.status]
     note = f"Codex支援フォーム送信を{outcome_label}として記録: {company.contact_url}"
     if body.note:
@@ -341,6 +448,7 @@ def create_form_delivery(
         submitted_at=datetime.now(timezone.utc),
     )
     db.add(delivery)
+    record_draft_approval(db, draft, user, "form_direct")
     db.add(
         Activity(
             company_id=company.id,
@@ -402,6 +510,7 @@ def create_email_delivery(
         confirmed_at=datetime.now(timezone.utc),
     )
     db.add(delivery)
+    record_draft_approval(db, draft, user, "email")
     db.commit()
     db.refresh(delivery)
     logger.info("email delivery queued: id=%s company_id=%s", delivery.id, company.id)
