@@ -570,6 +570,8 @@ class InboundEmailOut(BaseModel):
     company_name: str = ""
     match_type: Literal["company_email", "contact_person", "manual", "unmatched"]
     classification: Literal["reply", "bounce", "unsubscribe", "other"]
+    handled_by_user_id: UUID | None
+    handled_at: datetime | None
 
 
 class InboundEmailMatchInput(Input):

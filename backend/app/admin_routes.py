@@ -78,6 +78,8 @@ def inbound_email_out(value: InboundEmail, company_name: str = "") -> InboundEma
         company_name=company_name,
         match_type=value.match_type,
         classification=value.classification,
+        handled_by_user_id=value.handled_by_user_id,
+        handled_at=value.handled_at,
     )
 
 

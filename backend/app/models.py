@@ -461,6 +461,10 @@ class InboundEmail(Timestamps, Base):
     outreach_approval_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("outreach_draft_approvals.id", ondelete="SET NULL"), index=True
     )
+    handled_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    handled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     match_type: Mapped[str] = mapped_column(String(30), default="unmatched")
     classification: Mapped[str] = mapped_column(String(20), default="reply")
 

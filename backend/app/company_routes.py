@@ -754,6 +754,7 @@ def list_reply_queue(
             Company.status == "replied",
             Company.do_not_contact.is_(False),
             InboundEmail.classification == "reply",
+            InboundEmail.handled_at.is_(None),
         )
         .order_by(InboundEmail.received_at.desc(), InboundEmail.id)
         .limit(limit * 5)
@@ -829,6 +830,8 @@ def record_reply_response(
         or inbound.classification != "reply"
     ):
         raise HTTPException(422, "この企業に紐付いた受信返信を指定してください。")
+    if inbound.handled_at is not None:
+        raise HTTPException(409, "この受信返信はすでに対応済みです。")
     activity_type = "meeting" if body.outcome == "meeting" else "email"
     if company.status != body.outcome:
         db.add(
@@ -847,6 +850,16 @@ def record_reply_response(
             )
     company.status = body.outcome
     company.next_followup_at = body.next_followup_at
+    db.execute(
+        update(InboundEmail)
+        .where(
+            InboundEmail.company_id == company.id,
+            InboundEmail.classification == "reply",
+            InboundEmail.handled_at.is_(None),
+            InboundEmail.received_at <= inbound.received_at,
+        )
+        .values(handled_at=datetime.now(timezone.utc), handled_by_user_id=user.id)
+    )
     db.commit()
     db.refresh(company)
     return company

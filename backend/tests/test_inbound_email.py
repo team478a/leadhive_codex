@@ -420,6 +420,8 @@ def test_reply_queue_lists_received_replies_and_records_response(auth, db, monke
     )
     assert response.status_code == 200 and response.json()["status"] == "meeting"
     assert auth.get(f"/api/projects/{company.project_id}/reply-queue").json() == []
+    db.refresh(inbound)
+    assert inbound.handled_at is not None
     notes = db.scalars(select(Activity.note).where(Activity.company_id == company.id)).all()
     assert "オンライン商談の日程を確定" in notes
     assert db.scalar(
@@ -428,3 +430,46 @@ def test_reply_queue_lists_received_replies_and_records_response(auth, db, monke
             OutreachConversion.outcome == "meeting",
         )
     )
+
+
+def test_reply_response_marks_continued_reply_handled_and_keeps_new_replies(auth, db):
+    company = make_company(auth, db, "contact@handled-reply.example", status="replied")
+    inbound = InboundEmail(
+        mailbox_uid="handled-reply-100",
+        sender_email=company.email,
+        subject="ご相談について",
+        preview="来週に詳しくお話しできればと思います。",
+        received_at=datetime.now(timezone.utc),
+        company_id=company.id,
+        match_type="company_email",
+    )
+    db.add(inbound)
+    db.commit()
+
+    response = auth.post(
+        f"/api/companies/{company.id}/reply-response",
+        json={
+            "inbound_email_id": str(inbound.id),
+            "outcome": "replied",
+            "note": "確認済み。次回の連絡日時を設定。",
+            "next_followup_at": (datetime.now(timezone.utc) + timedelta(days=1)).isoformat(),
+        },
+    )
+    assert response.status_code == 200 and response.json()["status"] == "replied"
+    db.refresh(inbound)
+    assert inbound.handled_at is not None
+    assert auth.get(f"/api/projects/{company.project_id}/reply-queue").json() == []
+
+    later = InboundEmail(
+        mailbox_uid="handled-reply-101",
+        sender_email=company.email,
+        subject="追加のご質問",
+        preview="確認したい点があります。",
+        received_at=datetime.now(timezone.utc) + timedelta(minutes=1),
+        company_id=company.id,
+        match_type="company_email",
+    )
+    db.add(later)
+    db.commit()
+    queue = auth.get(f"/api/projects/{company.project_id}/reply-queue").json()
+    assert len(queue) == 1 and queue[0]["inbound_email_id"] == str(later.id)
