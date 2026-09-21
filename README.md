@@ -67,6 +67,7 @@ AI判定レビュー、文面A/Bテスト、案件管理、gBizINFO収集は[継
 初回利用者向けの画面内案内は[オンボーディングガイド](docs/69_ONBOARDING_GUIDE.md)を参照してください。
 案件地域の都道府県・市区町村指定は[地域選択](docs/70_PREFECTURE_MUNICIPALITY_SELECTION.md)を参照してください。
 外部サービスのAPIキー取得手順は[APIキー取得ガイド](docs/71_API_KEY_SETUP_GUIDE.md)を参照してください。
+APIキーの保存状態と疎通確認は[APIキー保存・接続テスト](docs/72_API_KEY_PERSISTENCE_AND_CONNECTION_TESTS.md)を参照してください。
 
 構成:
 

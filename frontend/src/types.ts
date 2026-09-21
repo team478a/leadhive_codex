@@ -5,7 +5,12 @@ export interface ApplicationSettings {
   serper_api_key_source: 'database' | 'environment' | 'unset'
   google_places_api_key_source: 'database' | 'environment' | 'unset'
   gbizinfo_api_token_source: 'database' | 'environment' | 'unset'
+  settings_encryption_ready: boolean
   updated_at: string | null
+}
+export type ApplicationService = 'serper' | 'google_places' | 'openai' | 'gbizinfo'
+export interface ServiceConnectionTest {
+  service: ApplicationService; ok: boolean; message: string; checked_at: string
 }
 export interface SmtpSettings {
   host: string; port: number; username: string; from_email: string; from_name: string

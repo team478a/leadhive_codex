@@ -149,6 +149,7 @@ def test_admin_can_store_application_settings_without_exposing_api_keys(
     )
     assert saved.status_code == 200
     result = saved.json()
+    assert result["settings_encryption_ready"] is True
     assert result["openai_api_key_source"] == "database"
     assert result["serper_api_key_source"] == "database"
     assert "openai_api_key" not in result
@@ -161,3 +162,21 @@ def test_admin_can_store_application_settings_without_exposing_api_keys(
 
 def test_application_settings_require_admin(auth):
     assert auth.get("/api/admin/application-settings").status_code == 404
+    assert auth.post("/api/admin/application-settings/test/serper").status_code == 404
+
+
+def test_admin_can_run_service_connection_test(auth, users, db, monkeypatch):
+    users[0].is_admin = True
+    db.commit()
+    calls = []
+
+    def test_connection(service):
+        calls.append(service)
+        return True, "Serper APIへ正常に接続できました。"
+
+    monkeypatch.setattr(admin_routes, "test_service_connection", test_connection)
+    response = auth.post("/api/admin/application-settings/test/serper")
+    assert response.status_code == 200
+    assert response.json()["service"] == "serper"
+    assert response.json()["ok"] is True
+    assert calls == ["serper"]

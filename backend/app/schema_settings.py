@@ -31,7 +31,15 @@ class ApplicationSettingsOut(BaseModel):
     serper_api_key_source: Literal["database", "environment", "unset"]
     google_places_api_key_source: Literal["database", "environment", "unset"]
     gbizinfo_api_token_source: Literal["database", "environment", "unset"]
+    settings_encryption_ready: bool
     updated_at: datetime | None
+
+
+class ServiceConnectionTestOut(BaseModel):
+    service: Literal["serper", "google_places", "openai", "gbizinfo"]
+    ok: bool
+    message: str
+    checked_at: datetime
 
 
 class SmtpSettingsInput(Input):

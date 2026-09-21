@@ -1,9 +1,9 @@
-import type { ApplicationSettings } from './types'
+import type { ApplicationService, ApplicationSettings, ServiceConnectionTest } from './types'
 
 type SettingSource = 'database' | 'environment' | 'unset'
 
 const services: Array<{
-  id: string
+  id: ApplicationService
   name: string
   purpose: string
   sourceKey: keyof Pick<ApplicationSettings, 'openai_api_key_source' | 'serper_api_key_source' | 'google_places_api_key_source' | 'gbizinfo_api_token_source'>
@@ -23,7 +23,7 @@ const services: Array<{
     links: [{ label: 'Serper公式サイトを開く', href: 'https://serper.dev/' }],
   },
   {
-    id: 'google-places', name: 'Google Places API（New）', purpose: '地図上の店舗・事業所情報を検索する', sourceKey: 'google_places_api_key_source',
+    id: 'google_places', name: 'Google Places API（New）', purpose: '地図上の店舗・事業所情報を検索する', sourceKey: 'google_places_api_key_source',
     steps: [
       'Google Cloud Consoleでプロジェクトを作成または選択します。',
       'プロジェクトへ請求先アカウントを設定します。',
@@ -67,7 +67,12 @@ function sourceLabel(source: SettingSource | undefined) {
   return source && source !== 'unset' ? '設定済み' : '未設定'
 }
 
-export function ServiceSetupGuide({ settings }: { settings: ApplicationSettings | null }) {
+export function ServiceSetupGuide({ settings, testingService, testResults, onTest }: {
+  settings: ApplicationSettings | null
+  testingService: ApplicationService | null
+  testResults: Partial<Record<ApplicationService, ServiceConnectionTest>>
+  onTest: (service: ApplicationService, label: string) => void
+}) {
   return <section className="api-setup-guide" aria-label="APIキー取得ガイド">
     <div className="api-guide-heading"><div><h3>APIキーの取得手順</h3>
       <p className="muted mt-1 text-sm">使いたい収集方法だけ設定すれば開始できます。Serperが最も簡単です。</p></div>
@@ -81,6 +86,11 @@ export function ServiceSetupGuide({ settings }: { settings: ApplicationSettings 
         <div className="api-guide-content"><ol>{service.steps.map(step => <li key={step}>{step}</li>)}</ol>
           <p className="api-guide-note"><strong>確認：</strong>{service.notes}</p>
           <div className="api-guide-links">{service.links.map(link => <a href={link.href} target="_blank" rel="noreferrer" key={link.href}>{link.label} ↗</a>)}</div>
+          <div className="api-test-row"><button type="button" className="secondary" disabled={!configured || testingService !== null}
+            onClick={() => onTest(service.id, service.name)}>{testingService === service.id ? '接続確認中…' : `${service.name}をテスト`}</button>
+            {!configured && <span className="muted text-xs">先にAPIキーを保存してください。</span>}</div>
+          {testResults[service.id] && <p className={testResults[service.id]?.ok ? 'api-test-result success' : 'api-test-result failure'} role="status">
+            {testResults[service.id]?.message}<small>{new Date(testResults[service.id]!.checked_at).toLocaleString('ja-JP')}</small></p>}
         </div>
       </details>
     })}</div>

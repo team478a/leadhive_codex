@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { ServiceSetupGuide } from './ServiceSetupGuide'
-import type { ApplicationSettings, InboundEmail, InboundEmailCompanyCandidate, InboundMailSettings, SmtpSettings } from './types'
+import type { ApplicationService, ApplicationSettings, InboundEmail, InboundEmailCompanyCandidate, InboundMailSettings, ServiceConnectionTest, SmtpSettings } from './types'
 
 const empty = {
   host: '', port: 587, username: '', from_email: '', from_name: 'LeadHive',
@@ -31,6 +31,8 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const [testingService, setTestingService] = useState<ApplicationService | null>(null)
+  const [serviceTests, setServiceTests] = useState<Partial<Record<ApplicationService, ServiceConnectionTest>>>({})
   useEffect(() => {
     api<ApplicationSettings>('/admin/application-settings').then(value => {
       setApplicationSettings(value)
@@ -69,8 +71,17 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
       const saved = await api<ApplicationSettings>('/admin/application-settings', 'PUT', payload)
       setApplicationSettings(saved)
       setApplicationSecrets({ openai_api_key: '', serper_api_key: '', google_places_api_key: '', gbizinfo_api_token: '' })
-      setNotice('全体サービス設定を保存しました。入力したAPIキーは暗号化して保存され、画面には再表示されません。')
+      setServiceTests({})
+      setNotice('全体サービス設定を保存しました。下の設定状態が「画面で保存済み」に変わったことを確認してください。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function testService(service: ApplicationService, label: string) {
+    if (service !== 'openai' && !window.confirm(`${label}へ接続確認を行います。APIを1回使用します。実行しますか？`)) return
+    setTestingService(service); setError(''); setNotice('')
+    try {
+      const result = await api<ServiceConnectionTest>(`/admin/application-settings/test/${service}`, 'POST')
+      setServiceTests({ ...serviceTests, [service]: result })
+    } catch (e) { setError(errorMessage(e)) } finally { setTestingService(null) }
   }
   async function save() {
     setBusy(true); setError(''); setNotice('')
@@ -137,7 +148,11 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
   return <section className="panel max-w-3xl" aria-label="運用設定"><p className="eyebrow">ADMIN SETTINGS</p><h2>全体サービス設定</h2>
     <p className="muted mt-2">収集、AI判定、配信停止リンクに使う共通設定です。APIキーは入力時だけ更新され、空欄なら既存の環境設定を再利用します。</p>
     {error && <p className="error mt-4" role="alert">{error}</p>}{notice && <p className="notice mt-4" role="status">{notice}</p>}
-    <ServiceSetupGuide settings={applicationSettings} />
+    <div className={applicationSettings?.settings_encryption_ready ? 'settings-save-status ready' : 'settings-save-status blocked'}>
+      <div><strong>APIキーの保存状態</strong><p>{applicationSettings?.settings_encryption_ready ? '暗号化保存を利用できます。' : '暗号化キーが未設定のため、APIキーを保存できません。'}</p></div>
+      <span>{applicationSettings?.updated_at ? `最終保存：${new Date(applicationSettings.updated_at).toLocaleString('ja-JP')}` : 'DB保存：まだありません'}</span>
+    </div>
+    <ServiceSetupGuide settings={applicationSettings} testingService={testingService} testResults={serviceTests} onTest={(service, label) => void testService(service, label)} />
     <div className="detail-grid mt-5"><label className="field">公開アプリURL<input type="url" value={applicationForm.public_app_url} onChange={e => setApplicationForm({ ...applicationForm, public_app_url: e.target.value })} placeholder="https://app.example.com" /></label><label className="field">OpenAIモデル<input value={applicationForm.openai_model} onChange={e => setApplicationForm({ ...applicationForm, openai_model: e.target.value })} placeholder="gpt-5.6-luna" /></label><label className="field">gBizINFO API URL<input type="url" value={applicationForm.gbizinfo_api_base_url} onChange={e => setApplicationForm({ ...applicationForm, gbizinfo_api_base_url: e.target.value })} /></label><label className="field">OpenAI APIキー <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.openai_api_key_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.openai_api_key} onChange={e => setApplicationSecrets({ ...applicationSecrets, openai_api_key: e.target.value })} autoComplete="new-password" /></label><label className="field">Serper APIキー <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.serper_api_key_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.serper_api_key} onChange={e => setApplicationSecrets({ ...applicationSecrets, serper_api_key: e.target.value })} autoComplete="new-password" /></label><label className="field">Google Places APIキー <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.google_places_api_key_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.google_places_api_key} onChange={e => setApplicationSecrets({ ...applicationSecrets, google_places_api_key: e.target.value })} autoComplete="new-password" /></label><label className="field">gBizINFO APIトークン <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.gbizinfo_api_token_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.gbizinfo_api_token} onChange={e => setApplicationSecrets({ ...applicationSecrets, gbizinfo_api_token: e.target.value })} autoComplete="new-password" /></label></div>
     <div className="actions"><button disabled={busy} onClick={() => void saveApplication()}>全体設定を保存</button></div>
     <div className="mt-7 border-t pt-5"><h2>メール送信設定</h2>

@@ -96,4 +96,14 @@
   .api-guide-links { @apply mt-4 flex flex-wrap gap-x-5 gap-y-2; }
   .api-guide-links a { @apply text-sm font-semibold text-[#235c4c] underline underline-offset-4 hover:text-[#173c35]; }
   .api-security-note { @apply mt-4 text-xs leading-relaxed text-[#65776f]; }
+  .settings-save-status { @apply mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm; }
+  .settings-save-status p { @apply mt-1 text-xs; }
+  .settings-save-status span { @apply text-xs; }
+  .settings-save-status.ready { @apply border-emerald-200 bg-emerald-50 text-emerald-800; }
+  .settings-save-status.blocked { @apply border-red-200 bg-red-50 text-red-800; }
+  .api-test-row { @apply mt-4 flex flex-wrap items-center gap-3 border-t border-[#e7ebe6] pt-4; }
+  .api-test-result { @apply mt-3 rounded-lg p-3 text-sm; }
+  .api-test-result small { @apply mt-1 block text-xs opacity-75; }
+  .api-test-result.success { @apply bg-emerald-50 text-emerald-800; }
+  .api-test-result.failure { @apply bg-red-50 text-red-800; }
 }

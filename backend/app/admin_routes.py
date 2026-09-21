@@ -1,10 +1,13 @@
 import logging
+from datetime import datetime, timezone
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import (
     ApplicationSettings,
@@ -24,6 +27,7 @@ from app.schemas import (
     InboundMailSettingsInput,
     InboundMailSettingsOut,
     InboundMailSyncOut,
+    ServiceConnectionTestOut,
     SmtpSettingsInput,
     SmtpSettingsOut,
     SmtpTestInput,
@@ -45,6 +49,7 @@ from app.services.inbound_email import (
 )
 from app.services.inbound_reply_notification import notify_inbound_reply
 from app.services.outreach_attribution import attribute_inbound_reply
+from app.services.service_connection import test_service_connection
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api/admin")
@@ -74,6 +79,7 @@ def application_settings_out(value: ApplicationSettings | None) -> ApplicationSe
         gbizinfo_api_token_source=secret_source(
             value.gbizinfo_api_token_ciphertext if value else "", _environment.gbizinfo_api_token
         ),
+        settings_encryption_ready=bool(settings.settings_encryption_key),
         updated_at=value.updated_at if value else None,
     )
 
@@ -120,6 +126,30 @@ def update_application_settings(
         raise HTTPException(503, exc.public_message) from exc
     logger.info("application settings updated: user_id=%s", user.id)
     return application_settings_out(saved)
+
+
+@router.post(
+    "/application-settings/test/{service}", response_model=ServiceConnectionTestOut
+)
+def test_application_service(
+    service: Literal["serper", "google_places", "openai", "gbizinfo"],
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
+):
+    try:
+        apply_application_settings(db)
+    except EmailDeliveryError as exc:
+        raise HTTPException(503, exc.public_message) from exc
+    ok, message = test_service_connection(service)
+    logger.info(
+        "external service test completed: provider=%s ok=%s user_id=%s",
+        service,
+        ok,
+        user.id,
+    )
+    return ServiceConnectionTestOut(
+        service=service, ok=ok, message=message, checked_at=datetime.now(timezone.utc)
+    )
 
 
 def smtp_out(value: SmtpSettings) -> SmtpSettingsOut:

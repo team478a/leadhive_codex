@@ -24,6 +24,8 @@ APIキーの入力欄を空欄のまま保存すると、既存の環境変数�
 
 運用設定画面の「APIキーの取得手順」では、Serper、Google Places API（New）、OpenAI、gBizINFOについて、用途、取得手順、課金や利用申請の注意点、公式ページへのリンクを確認できる。設定状態も同じ場所に表示する。
 
+画面には暗号化保存の利用可否、DBへの最終保存日時、各キーの保存元を表示する。保存済みのサービスは個別の疎通テストを実行でき、成功・失敗理由と確認日時を画面で確認できる。
+
 ## 反映タイミング
 
 管理画面で保存した値は、そのWebアプリの処理へ直ちに反映される。バックグラウンドワーカーは各処理サイクルの開始時に設定を読み直すため、再起動せずに次の収集・AI判定・配信停止リンク生成から利用する。
@@ -32,6 +34,7 @@ APIキーの入力欄を空欄のまま保存すると、既存の環境変数�
 
 - `GET /api/admin/application-settings`：安全な状態表示を取得
 - `PUT /api/admin/application-settings`：全体サービス設定を保存
+- `POST /api/admin/application-settings/test/{service}`：外部サービスの疎通を確認
 - `GET /api/admin/smtp-settings` / `PUT /api/admin/smtp-settings`：SMTP設定
 - `POST /api/admin/smtp-settings/test`：SMTPテスト送信
 - `GET /api/admin/inbound-mail-settings` / `PUT /api/admin/inbound-mail-settings`：IMAP設定
