@@ -3,21 +3,38 @@
 ## 利用者に必要なもの
 
 - Windows 10または11
-- Docker Desktop
 - 8GB以上のメモリ（16GB推奨）
 - 初回インストール時のインターネット接続
 
-Python、Node.js、PostgreSQLを個別にインストールする必要はない。LeadHiveのデータ、APIキー、メール設定は利用者のPC内へ保存される。
+Docker Desktop、Python、Node.js、PostgreSQLを事前に個別インストールする必要はない。LeadHiveのデータ、APIキー、メール設定は利用者のPC内へ保存される。
 
 ## 初回インストール
 
-1. Docker Desktopをインストールして起動する。
-2. GitHubのLeadHiveリポジトリをZIPでダウンロードし、通常のフォルダーへ展開する。
-3. `Install-LeadHive.cmd`をダブルクリックする。
-4. 初回だけ管理者メールアドレスと12文字以上のパスワードを入力する。
-5. ブラウザでLeadHiveが自動的に開いたらログインする。
+1. GitHubのLeadHiveリポジトリをZIPでダウンロードし、通常のフォルダーへ展開する。
+2. `Install-LeadHive.cmd`をダブルクリックする。
+3. Docker Desktopが未導入の場合、表示された公式利用条件を確認して同意する。
+4. WSL 2の有効化でWindowsの管理者確認が表示された場合は許可する。
+5. 再起動を求められた場合はWindowsを再起動し、もう一度`Install-LeadHive.cmd`を実行する。
+6. 初回だけ管理者メールアドレスと12文字以上のパスワードを入力する。
+7. ブラウザでLeadHiveが自動的に開いたらログインする。
 
 初回はコンテナイメージの取得とビルドを行うため、数分かかる場合がある。2回目以降は`Start-LeadHive.cmd`で起動する。
+
+## Docker Desktopの自動導入
+
+ウィザードはDocker Desktopの有無を確認し、未導入の場合だけDocker公式サイトからPCのCPUに合うインストーラーを取得する。実行前にWindowsの署名検証でDocker発行のファイルであることを確認する。
+
+- ユーザー単位インストールを使用
+- Linuxコンテナ用のWSL 2を使用
+- Windowsコンテナ機能は無効
+- Docker利用条件への同意チェック後だけインストール
+- WSL未導入時はMicrosoft公式の`wsl --install --no-distribution`を実行
+
+Docker Desktopは、個人利用、教育、非商用オープンソース、条件を満たす小規模事業者では無償で利用できる。その他の企業利用や政府機関では有償契約が必要になる場合があるため、ウィザードに表示される公式利用条件を確認する。
+
+- [Docker Desktop Windowsインストール要件](https://docs.docker.com/desktop/setup/install/windows-install/)
+- [Docker Subscription Service Agreement](https://www.docker.com/legal/docker-subscription-service-agreement/)
+- [Microsoft WSLコマンド](https://learn.microsoft.com/windows/wsl/basic-commands)
 
 ## 日常操作
 

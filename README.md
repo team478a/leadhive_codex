@@ -72,7 +72,7 @@ Windows初心者向けのローカル導入は[Windowsローカルインスト�
 
 ## Windowsかんたんインストール
 
-Docker Desktopを起動後、リポジトリをZIPで展開して`Install-LeadHive.cmd`をダブルクリックします。Python、Node.js、PostgreSQLの個別セットアップは不要です。2回目以降は`Start-LeadHive.cmd`で起動できます。
+リポジトリをZIPで展開して`Install-LeadHive.cmd`をダブルクリックします。Docker Desktopが未導入なら、公式利用条件への同意後にウィザードが自動導入します。Python、Node.js、PostgreSQLの個別セットアップも不要です。2回目以降は`Start-LeadHive.cmd`で起動できます。
 
 構成:
 

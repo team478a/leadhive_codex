@@ -1,7 +1,8 @@
 . (Join-Path $PSScriptRoot "Common.ps1")
+. (Join-Path $PSScriptRoot "DockerSetup.ps1")
 
 Write-Host "LeadHive local installer" -ForegroundColor Green
-Assert-Docker
+Ensure-DockerDesktop
 
 Write-Step "Creating local security settings"
 New-LeadHiveEnvironment
