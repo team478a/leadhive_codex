@@ -81,4 +81,19 @@
   .region-fields { @apply grid gap-x-5 sm:grid-cols-2; }
   .region-selector .field { @apply mb-3; }
   .region-helper { @apply flex flex-wrap items-center justify-between gap-2 text-xs text-[#65776f]; }
+  .api-setup-guide { @apply mt-6 rounded-xl border border-[#dbe5dc] bg-[#f8faf7] p-4 sm:p-5; }
+  .api-guide-heading { @apply mb-4 flex flex-wrap items-start justify-between gap-3; }
+  .api-guide-list { @apply grid gap-2; }
+  .api-guide-item { @apply rounded-lg border border-[#dfe6df] bg-white; }
+  .api-guide-item summary { @apply flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3; }
+  .api-guide-item summary::-webkit-details-marker { @apply hidden; }
+  .api-guide-item summary small { @apply mt-1 block text-xs font-normal text-[#65776f]; }
+  .api-status { @apply shrink-0 rounded-full bg-[#f2f4f0] px-2.5 py-1 text-xs font-medium text-[#65776f]; }
+  .api-status.configured { @apply bg-emerald-50 text-emerald-700; }
+  .api-guide-content { @apply border-t border-[#e7ebe6] px-4 py-4 text-sm; }
+  .api-guide-content ol { @apply list-decimal space-y-2 pl-5 leading-relaxed; }
+  .api-guide-note { @apply mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-900; }
+  .api-guide-links { @apply mt-4 flex flex-wrap gap-x-5 gap-y-2; }
+  .api-guide-links a { @apply text-sm font-semibold text-[#235c4c] underline underline-offset-4 hover:text-[#173c35]; }
+  .api-security-note { @apply mt-4 text-xs leading-relaxed text-[#65776f]; }
 }

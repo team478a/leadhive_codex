@@ -82,6 +82,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `68_SERVICE_LAYER_REFACTOR.md`
 - `69_ONBOARDING_GUIDE.md`
 - `70_PREFECTURE_MUNICIPALITY_SELECTION.md`
+- `71_API_KEY_SETUP_GUIDE.md`
 
 ## 基本原則
 
