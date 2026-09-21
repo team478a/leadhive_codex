@@ -549,6 +549,14 @@ class FormCodexTaskOut(BaseModel):
     body: str
     reason: str
     instructions: str
+    codex_status: Literal["open", "running", "submitted", "failed"]
+    codex_assignee: str
+
+
+class FormCodexTaskUpdateInput(Input):
+    status: Literal["running", "submitted", "failed"]
+    note: str = Field(default="", max_length=500)
+    confirmed: bool = False
 
 
 class FormDeliveryBatchItemOut(BaseModel):
@@ -571,6 +579,7 @@ class FormDeliveryBatchOut(BaseModel):
     project_id: UUID
     template_id: UUID
     status: Literal["ready", "running", "completed", "cancelled"]
+    operation_job_id: UUID | None
     created_at: datetime
     updated_at: datetime
     items: list[FormDeliveryBatchItemOut] = []

@@ -18,6 +18,8 @@ from app.models import (
     Company,
     EmailCampaign,
     EmailDelivery,
+    FormDeliveryBatch,
+    FormDeliveryBatchItem,
     Notification,
     OperationJob,
     OutreachDraftApproval,
@@ -26,6 +28,7 @@ from app.models import (
     TargetProfile,
 )
 from app.operation_routes import refresh_company_ids
+from app.services.bulk_form_delivery import process_form_batch_item
 from app.services.collection import (
     ExternalServiceError,
     search_gbizinfo,
@@ -571,6 +574,41 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             return
 
 
+def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    batch_id = uuid.UUID(job.payload["batch_id"])
+    batch = db.get(FormDeliveryBatch, batch_id)
+    if batch is None or batch.status == "cancelled":
+        return
+    user_id = uuid.UUID(job.payload["created_by_user_id"])
+    items = db.scalars(
+        select(FormDeliveryBatchItem)
+        .where(
+            FormDeliveryBatchItem.batch_id == batch.id,
+            FormDeliveryBatchItem.status == "queued",
+        )
+        .order_by(FormDeliveryBatchItem.created_at, FormDeliveryBatchItem.id)
+        .limit(min(int(job.payload.get("limit", 20)), 20))
+    ).all()
+    job.total_count = len(items)
+    db.commit()
+    for item in items:
+        if stop_requested(db, job, worker_id):
+            return
+        success = process_form_batch_item(db, item, user_id)
+        if not progress(db, job, worker_id, success):
+            return
+    remaining = db.scalar(
+        select(FormDeliveryBatchItem.id)
+        .where(
+            FormDeliveryBatchItem.batch_id == batch.id,
+            FormDeliveryBatchItem.status == "queued",
+        )
+        .limit(1)
+    )
+    batch.status = "ready" if remaining else "completed"
+    db.commit()
+
+
 def run_once() -> bool:
     with SessionLocal() as db:
         enqueue_due_schedules(db)
@@ -589,9 +627,12 @@ def run_once() -> bool:
         worker_id = job.worker_id
         logger.info("operation start: id=%s type=%s", job.id, job.operation_type)
         try:
-            {"collect_search": run_collection, "web_analysis": run_web, "ai_analysis": run_ai}[
-                job.operation_type
-            ](db, job, worker_id)
+            {
+                "collect_search": run_collection,
+                "web_analysis": run_web,
+                "ai_analysis": run_ai,
+                "form_delivery": run_form_delivery,
+            }[job.operation_type](db, job, worker_id)
             db.refresh(job)
             if job.status == "running" and job.worker_id == worker_id:
                 job.status = "completed" if job.failed_count == 0 else "failed"

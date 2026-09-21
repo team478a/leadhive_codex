@@ -497,6 +497,9 @@ class FormDeliveryBatch(Timestamps, Base):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     status: Mapped[str] = mapped_column(String(20), default="ready", index=True)
+    operation_job_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("operation_jobs.id", ondelete="SET NULL"), index=True
+    )
 
 
 class FormDeliveryBatchItem(Timestamps, Base):
@@ -524,6 +527,8 @@ class FormDeliveryBatchItem(Timestamps, Base):
     status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
     reason: Mapped[str] = mapped_column(String(500), default="")
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    codex_status: Mapped[str] = mapped_column(String(20), default="open", index=True)
+    codex_assignee: Mapped[str] = mapped_column(String(320), default="")
 
 
 class SmtpSettings(Timestamps, Base):
@@ -703,7 +708,7 @@ class OperationJob(Base):
     __tablename__ = "operation_jobs"
     __table_args__ = (
         CheckConstraint(
-            "operation_type IN ('collect_search', 'web_analysis', 'ai_analysis')",
+            "operation_type IN ('collect_search', 'web_analysis', 'ai_analysis', 'form_delivery')",
             name="ck_operation_job_type",
         ),
         CheckConstraint(
