@@ -1,0 +1,17 @@
+import type { ContactPerson } from './types'
+
+type Props = {
+  contacts: ContactPerson[]
+  contactDraft: Record<string, string>
+  editingContactId: string
+  busy: boolean
+  onEdit: (contact: ContactPerson) => void
+  onDelete: (contact: ContactPerson) => void
+  onDraftChange: (draft: Record<string, string>) => void
+  onSave: () => void
+  onCancel: () => void
+}
+
+export function CompanyContactsPanel({ contacts, contactDraft, editingContactId, busy, onEdit, onDelete, onDraftChange, onSave, onCancel }: Props) {
+  return <section className="panel mt-7" aria-label="先方担当者"><div className="flex items-center justify-between gap-3"><div><h2>先方担当者</h2><p className="muted mt-2 text-sm">相手企業の担当者・責任者と連絡先を管理します。</p></div><span className="badge">{contacts.length} 人</span></div><div className="grid gap-3 mt-4 sm:grid-cols-2">{contacts.map(contact => <article className="job-row block" key={contact.id}><div className="flex items-start justify-between gap-3"><div><strong>{contact.name}</strong><p className="muted text-sm">{[contact.department, contact.title].filter(Boolean).join(' / ') || '部署・役職未設定'}</p></div><span className="badge">{contact.verification_status === 'verified' ? '確認済み' : contact.verification_status === 'invalid' ? '無効' : '未確認'}</span></div><p className="mt-2 text-sm">{contact.email || 'メールなし'} / {contact.phone || '電話なし'}</p>{contact.notes && <p className="muted text-sm">{contact.notes}</p>}<div className="flex gap-2 mt-3"><button className="secondary" onClick={() => onEdit(contact)}>編集</button><button className="danger" disabled={busy} onClick={() => onDelete(contact)}>削除</button></div></article>)}{contacts.length === 0 && <p className="muted">登録済みの先方担当者はいません。</p>}</div><div className="mt-5"><h3>{editingContactId ? '先方担当者を編集' : '先方担当者を追加'}</h3><div className="detail-grid"><div><label className="field">担当者氏名<input maxLength={200} value={contactDraft.name} onChange={e => onDraftChange({ ...contactDraft, name: e.target.value })} /></label><label className="field">部署<input maxLength={200} value={contactDraft.department} onChange={e => onDraftChange({ ...contactDraft, department: e.target.value })} /></label><label className="field">役職<input maxLength={200} value={contactDraft.title} onChange={e => onDraftChange({ ...contactDraft, title: e.target.value })} /></label><label className="field">確認状態<select value={contactDraft.verification_status} onChange={e => onDraftChange({ ...contactDraft, verification_status: e.target.value })}><option value="unknown">未確認</option><option value="verified">確認済み</option><option value="invalid">無効</option></select></label></div><div><label className="field">担当者メール<input maxLength={320} value={contactDraft.email} onChange={e => onDraftChange({ ...contactDraft, email: e.target.value })} /></label><label className="field">担当者電話<input maxLength={100} value={contactDraft.phone} onChange={e => onDraftChange({ ...contactDraft, phone: e.target.value })} /></label><label className="field">取得元URL<input maxLength={5000} value={contactDraft.source_url} onChange={e => onDraftChange({ ...contactDraft, source_url: e.target.value })} /></label><label className="field">担当者メモ<textarea rows={3} maxLength={10000} value={contactDraft.notes} onChange={e => onDraftChange({ ...contactDraft, notes: e.target.value })} /></label></div></div><div className="actions"><button disabled={busy || !contactDraft.name?.trim()} onClick={onSave}>{editingContactId ? '担当者情報を更新' : '担当者を追加'}</button>{editingContactId && <button className="secondary" onClick={onCancel}>キャンセル</button>}</div></div></section>
+}
