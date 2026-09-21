@@ -1,32 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
+import { CompanyFilters } from './CompanyFilters'
+import { CompanyList } from './CompanyList'
+import { channelNames, companyQueryString, defaultCompanyFilters, dueNames, emptyContact, statusNames } from './companyPageShared'
+import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
-const statusNames: Record<SalesStatus, string> = {
-  unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
-  meeting: '商談', won: '成約', lost: '失注', excluded: '対象外',
-}
-const sourceNames: Record<CollectionSource, string> = {
-  serper: 'Google検索', google_places: 'Google Maps', gbizinfo: 'gBizINFO', url: 'URL', csv: 'CSV',
-}
-const channelNames: Record<OutreachChannel, string> = { email: 'メール', form: 'フォーム', call: '電話', sns: 'SNS' }
-const dueNames = { overdue: '期限超過', today: '本日', upcoming: '今後', unset: '期限なし' }
-const emptyContact = { name: '', department: '', title: '', email: '', phone: '', source_url: '', verification_status: 'unknown', notes: '' }
 type Filters = CompanyFilterValues
-const defaults: Filters = { rank: '', minScore: '', region: '', status: '', source: '', keyword: '', assignee: '', followup: '', sort: 'score_desc' }
-
-function queryString(filters: Filters, page: number) {
-  const params = new URLSearchParams({ limit: '25', offset: String(page * 25), sort: filters.sort })
-  if (filters.rank) params.set('rank', filters.rank)
-  if (filters.minScore) params.set('min_score', filters.minScore)
-  if (filters.region) params.set('region', filters.region)
-  if (filters.status) params.set('status', filters.status)
-  if (filters.source) params.set('source', filters.source)
-  if (filters.keyword) params.set('keyword', filters.keyword)
-  if (filters.assignee) params.set('assignee', filters.assignee)
-  if (filters.followup) params.set('followup', filters.followup)
-  return params.toString()
-}
 
 export function CompaniesPage({ projects, initialProjectId, initialReplyInboundEmailId, initialFollowupCompanyId }: {
   projects: Project[]
@@ -35,8 +14,8 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   initialFollowupCompanyId: string | null
 }) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
-  const [draft, setDraft] = useState<Filters>(defaults)
-  const [filters, setFilters] = useState<Filters>(defaults)
+  const [draft, setDraft] = useState<Filters>(defaultCompanyFilters)
+  const [filters, setFilters] = useState<Filters>(defaultCompanyFilters)
   const [companies, setCompanies] = useState<Company[]>([])
   const [total, setTotal] = useState(0)
   const [quality, setQuality] = useState<DataQuality | null>(null)
@@ -137,7 +116,7 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const openedReplyInboundEmailId = useRef<string | null>(null)
   const openedFollowupCompanyId = useRef<string | null>(null)
   const followupPanelRef = useRef<HTMLDivElement>(null)
-  const query = useMemo(() => queryString(filters, page), [filters, page])
+  const query = useMemo(() => companyQueryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
     if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setFormCodexTasks([]); setEmailCampaigns([]); setDealPipeline(null); return }
     const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextFormCodexTasks, nextDealPipeline] = await Promise.all([
@@ -712,19 +691,16 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   if (projects.length === 0) return <section className="panel empty"><h2>先にプロジェクトを作成してください</h2></section>
   return <>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
-    <section className="panel"><div className="filter-grid">
-      <label className="field">プロジェクト<select value={projectId} onChange={e => { setProjectId(e.target.value); setSelected(null); setPage(0) }}>{projects.map(project => <option key={project.id} value={project.id}>{project.project_name}</option>)}</select></label>
-      <label className="field">キーワード<input value={draft.keyword} onChange={e => setDraft({ ...draft, keyword: e.target.value })} placeholder="会社名・業種・AI要約" /></label>
-      <label className="field">ランク<select value={draft.rank} onChange={e => setDraft({ ...draft, rank: e.target.value })}><option value="">すべて</option>{['A', 'B', 'C', '対象外'].map(value => <option key={value}>{value}</option>)}</select></label>
-      <label className="field">最低スコア<input type="number" min="0" max="100" value={draft.minScore} onChange={e => setDraft({ ...draft, minScore: e.target.value })} /></label>
-      <label className="field">地域<input value={draft.region} onChange={e => setDraft({ ...draft, region: e.target.value })} /></label>
-      <label className="field">営業状況<select value={draft.status} onChange={e => setDraft({ ...draft, status: e.target.value })}><option value="">すべて</option>{Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="field">収集元<select value={draft.source} onChange={e => setDraft({ ...draft, source: e.target.value })}><option value="">すべて</option>{Object.entries(sourceNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-      <label className="field">担当者<input value={draft.assignee} onChange={e => setDraft({ ...draft, assignee: e.target.value })} /></label>
-      <label className="field">フォロー期限<select value={draft.followup} onChange={e => setDraft({ ...draft, followup: e.target.value })}><option value="">すべて</option><option value="overdue">期限超過</option><option value="today">本日</option><option value="upcoming">今後</option><option value="unset">未設定</option></select></label>
-      <label className="field">並び順<select value={draft.sort} onChange={e => setDraft({ ...draft, sort: e.target.value })}><option value="score_desc">スコア順</option><option value="newest">新しい順</option><option value="company_name">会社名順</option></select></label>
-    </div><div className="flex flex-wrap justify-end gap-2"><button className="secondary" onClick={() => { setDraft(defaults); setFilters(defaults); setPage(0) }}>リセット</button><button onClick={() => { setFilters(draft); setPage(0) }}>絞り込む</button>
-      <button className="secondary" onClick={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div></section>
+    <CompanyFilters
+      projects={projects}
+      projectId={projectId}
+      draft={draft}
+      setDraft={setDraft}
+      onProjectChange={nextProjectId => { setProjectId(nextProjectId); setSelected(null); setPage(0) }}
+      onReset={() => { setDraft(defaultCompanyFilters); setFilters(defaultCompanyFilters); setPage(0) }}
+      onApply={() => { setFilters(draft); setPage(0) }}
+      onDownload={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}
+    />
     {dealPipeline && <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>案件パイプライン</h2><p className="muted mt-2 text-sm">このプロジェクト全体の見込み案件、金額、次の対応を確認できます。</p></div><span className="badge">見込金額 {dealPipeline.total_amount.toLocaleString()}円</span></div><div className="job-stats mt-4">{Object.entries(dealPipeline.by_stage).map(([stage, count]) => <span key={stage}>{({ lead: '見込み', proposal: '提案', negotiation: '交渉', won: '受注', lost: '失注' }[stage] ?? stage)} {count}</span>)}</div>{dealPipeline.items.length === 0 ? <p className="muted mt-4">登録済み案件はありません。</p> : <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>案件</th><th>段階</th><th>見込金額</th><th>次の対応</th><th>予定日</th></tr></thead><tbody>{dealPipeline.items.slice(0, 20).map(deal => <tr key={deal.id}><td>{deal.company_name}</td><td>{deal.title}</td><td>{({ lead: '見込み', proposal: '提案', negotiation: '交渉', won: '受注', lost: '失注' }[deal.stage])}</td><td>{deal.expected_amount.toLocaleString()}円</td><td>{deal.next_step || '未設定'}</td><td>{deal.expected_close_date || '未設定'}</td></tr>)}</tbody></table></div>}</section>}
     <section className="panel mt-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2>一括メール送信</h2><p className="muted mt-2 text-sm">一覧で選択した企業へメール文面を予約します。送信上限と間隔は既存のメールワーカーが適用し、返信後の追客日数も設定できます。</p></div><span className="badge">選択 {checked.length} 社</span></div><div className="detail-grid mt-4"><label className="field">キャンペーン名<input maxLength={200} value={emailCampaignName} onChange={e => setEmailCampaignName(e.target.value)} placeholder="例：9月初回メール" /></label><label className="field">メール文面テンプレート<select value={emailCampaignTemplateId} onChange={e => setEmailCampaignTemplateId(e.target.value)}><option value="">選択してください</option>{outreachTemplates.filter(item => item.channel === 'email').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field">送信後の追客（日後）<input type="number" min={0} max={365} value={emailCampaignFollowupDays} onChange={e => setEmailCampaignFollowupDays(Number(e.target.value))} /></label></div><label className="checkbox-row mt-3"><input type="checkbox" checked={emailCampaignConfirmed} onChange={e => setEmailCampaignConfirmed(e.target.checked)} />対象企業、文面、連絡禁止・送信済み企業の除外を確認し、一括メール送信を承認します。</label><div className="actions"><button disabled={busy || !emailCampaignName.trim() || !emailCampaignTemplateId || checked.length === 0 || !emailCampaignConfirmed} onClick={() => void createEmailCampaign()}>一括メールを予約</button></div>{emailCampaigns.map(campaign => <article className="job-row mt-4" key={campaign.id}><div><strong>{campaign.name}</strong><p className="muted text-sm">送信待ち {campaign.queued_count} / 送信済み {campaign.sent_count} / 失敗 {campaign.failed_count} / 返信 {campaign.replied_count} / 商談 {campaign.meeting_count} / 成約 {campaign.won_count} / 追客 {campaign.followup_days || 0}日後</p></div><div className="actions">{campaign.status === 'paused' ? <button className="secondary" disabled={busy} onClick={() => void changeEmailCampaign(campaign, 'resume')}>再開</button> : <button className="secondary" disabled={busy || campaign.status === 'completed'} onClick={() => void changeEmailCampaign(campaign, 'pause')}>停止</button>}<span className="badge">{campaign.status === 'queued' ? '配信中' : campaign.status === 'paused' ? '停止中' : '完了'}</span></div></article>)}{emailCampaigns.length === 0 && <p className="muted mt-4">メールキャンペーンはまだありません。</p>}</section>
     <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>Codex支援フォームの作業キュー</h2><p className="muted mt-2 text-sm">通常フォームで完結しない案件を、Codexに渡す指示としてまとめます。送信前の確認と最終送信は担当者が行います。</p></div><span className="badge">{formCodexTasks.length} 件</span></div>{formCodexTasks.length === 0 ? <p className="muted mt-4">Codex支援が必要なフォームはありません。</p> : formCodexTasks.map(task => <article className="job-row mt-4" key={task.item_id}><div><strong>{task.company_name}</strong><p className="muted text-sm">{task.reason} / {task.codex_status === 'running' ? `作業中: ${task.codex_assignee || '担当未設定'}` : '未着手'}</p><p className="muted text-xs break-all">{task.form_url}</p></div><div className="actions"><a className="secondary" href={task.form_url} target="_blank" rel="noreferrer">フォームを開く</a><button className="secondary" disabled={busy} onClick={() => void copyBatchCodexTask(task)}>Codex用指示をコピー</button>{task.codex_status === 'open' && <button className="secondary" disabled={busy} onClick={() => void updateFormCodexTask(task, 'running')}>作業開始</button>}<button disabled={busy} onClick={() => void updateFormCodexTask(task, 'submitted')}>送信済みを記録</button><button className="danger" disabled={busy} onClick={() => void updateFormCodexTask(task, 'failed')}>失敗を記録</button></div></article>)}</section>
@@ -764,12 +740,20 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       {duplicates.length === 0 ? <p className="muted mt-4">重複候補はありません。</p> : duplicates.map(item => <article className="job-row block" key={`${item.left.id}-${item.right.id}`}><p className="muted text-sm">一致：{item.reasons.map(reason => reason === 'email' ? 'メール' : reason === 'phone' ? '電話' : '会社名＋住所').join(' / ')}</p>
         <div className="grid gap-3 mt-3 sm:grid-cols-2"><div><strong>{item.left.company_name}</strong><p className="muted text-sm">{item.left.email || item.left.phone || item.left.address}</p><button disabled={busy} className="secondary mt-2" onClick={() => void mergeCompanies(item.left, item.right)}>こちらへ統合</button></div>
           <div><strong>{item.right.company_name}</strong><p className="muted text-sm">{item.right.email || item.right.phone || item.right.address}</p><button disabled={busy} className="secondary mt-2" onClick={() => void mergeCompanies(item.right, item.left)}>こちらへ統合</button></div></div></article>)}</section>
-    <div className="section-heading mt-7"><h2>企業一覧</h2><span className="badge">全 {total} 社</span></div>
-    <div className="mb-3 flex flex-wrap items-center gap-2"><span className="muted text-sm">{checked.length}社を選択</span><select className="max-w-48" defaultValue="" onChange={e => { if (e.target.value) void bulkStatus(e.target.value as SalesStatus); e.target.value = '' }}><option value="">営業状況を一括変更</option>{Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select><input className="max-w-48" aria-label="一括担当者" placeholder="担当者名（空欄で解除）" value={bulkAssignee} onChange={e => setBulkAssignee(e.target.value)} /><button className="secondary" disabled={!checked.length || busy} onClick={() => void assignSelected()}>担当者を設定</button></div>
-    <section className="company-table-wrap"><table className="company-table"><thead><tr><th><input aria-label="このページをすべて選択" type="checkbox" checked={companies.length > 0 && checked.length === companies.length} onChange={e => setChecked(e.target.checked ? companies.map(c => c.id) : [])} /></th><th>ランク</th><th>企業</th><th>地域</th><th>連絡先</th><th>担当・次回</th><th>営業状況</th><th></th></tr></thead><tbody>
-      {companies.map(company => <tr key={company.id}><td><input aria-label={`${company.company_name}を選択`} type="checkbox" checked={checked.includes(company.id)} onChange={e => setChecked(e.target.checked ? [...checked, company.id] : checked.filter(id => id !== company.id))} /></td><td><strong>{company.rank ?? '—'}</strong><br /><span className="muted text-xs">{company.score ?? '—'}点</span></td><td><strong>{company.company_name}</strong><p className="muted text-xs">{company.business_type || company.ai_summary || '業種未判定'}</p></td><td>{company.prefecture || company.address || '—'}</td><td>{company.email || company.phone || (company.contact_url ? 'フォームあり' : '—')}</td><td>{company.assignee || '未設定'}<p className="muted text-xs">{company.next_followup_at ? new Date(company.next_followup_at).toLocaleString('ja-JP') : '期限なし'}</p></td><td><span className="badge">{statusNames[company.status]}</span></td><td><button className="secondary" onClick={() => void open(company)}>詳細</button></td></tr>)}
-      {companies.length === 0 && <tr><td colSpan={8} className="text-center muted">条件に一致する企業はありません。</td></tr>}</tbody></table></section>
-    <div className="mt-4 flex items-center justify-between"><button className="secondary" disabled={page === 0} onClick={() => setPage(page - 1)}>前へ</button><span className="muted text-sm">{page + 1} / {Math.max(1, Math.ceil(total / 25))} ページ</span><button className="secondary" disabled={(page + 1) * 25 >= total} onClick={() => setPage(page + 1)}>次へ</button></div>
+    <CompanyList
+      companies={companies}
+      total={total}
+      checked={checked}
+      page={page}
+      busy={busy}
+      bulkAssignee={bulkAssignee}
+      setChecked={setChecked}
+      setBulkAssignee={setBulkAssignee}
+      setPage={setPage}
+      onBulkStatus={nextStatus => void bulkStatus(nextStatus)}
+      onAssign={() => void assignSelected()}
+      onOpen={company => void open(company)}
+    />
     {selected && <section className="panel mt-7" aria-label="企業詳細"><div className="flex justify-between gap-4"><div><p className="eyebrow">COMPANY DETAIL</p><h2>{selected.company_name}</h2></div><button className="secondary" onClick={() => setSelected(null)}>閉じる</button></div>
       <div className="detail-grid"><div><h3>基本情報を編集</h3>{[['company_name', '会社名'], ['address', '住所'], ['prefecture', '都道府県'], ['city', '市区町村'], ['phone', '電話'], ['email', 'メール'], ['assignee', '担当者']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label>{key !== 'assignee' && <label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label>}</div>)}</div>
         <div><h3>問い合わせ先を編集</h3>{[['contact_url', 'フォーム'], ['instagram_url', 'Instagram'], ['x_url', 'X'], ['tiktok_url', 'TikTok'], ['facebook_url', 'Facebook'], ['youtube_url', 'YouTube'], ['line_url', 'LINE']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label><label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label></div>)}</div></div>
