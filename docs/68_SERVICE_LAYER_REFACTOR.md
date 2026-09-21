@@ -26,6 +26,7 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 ## 企業管理画面の分割
 
 - `CompanyFilters.tsx`：プロジェクト選択、検索・絞り込み、CSV出力
+- `CompanySavedFiltersPanel.tsx`：保存フィルターの適用、保存、上書き、名前変更、削除
 - `CompanyList.tsx`：企業一覧、選択、一括状況変更、担当者設定、ページ送り
 - `CompanyReportingPanels.tsx`：案件パイプライン、担当者別営業成果
 - `CompanyContactsPanel.tsx`：先方担当者の一覧、追加、編集、削除

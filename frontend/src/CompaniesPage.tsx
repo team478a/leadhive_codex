@@ -7,6 +7,7 @@ import { CompanyFilters } from './CompanyFilters'
 import { CompanyList } from './CompanyList'
 import { AssigneeAnalyticsPanel, DealPipelinePanel } from './CompanyReportingPanels'
 import { CompanyQualityPanels } from './CompanyQualityPanels'
+import { CompanySavedFiltersPanel } from './CompanySavedFiltersPanel'
 import { CompanyAiReviewPanel, CompanyExperimentPanel } from './CompanyOptimizationPanels'
 import { channelNames, companyQueryString, defaultCompanyFilters, dueNames, emptyContact, statusNames } from './companyPageShared'
 import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
@@ -723,9 +724,23 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>推奨経路</th><th>担当者</th><th>期限</th><th>状況</th><th></th></tr></thead><tbody>{outreachQueue.map(item => <tr key={item.company.id}><td><strong>{item.company.company_name}</strong><p className="muted text-xs">{item.company.rank ?? '—'} / {item.company.score ?? '—'}点</p></td><td>{channelNames[item.recommended_channel]}<p className="muted text-xs">{item.available_channels.map(channel => channelNames[channel]).join(' / ')}</p></td><td>{item.company.assignee || '未設定'}</td><td><span className="badge">{dueNames[item.due_state]}</span><p className="muted text-xs">{item.company.next_followup_at ? new Date(item.company.next_followup_at).toLocaleString('ja-JP') : '—'}</p></td><td>{statusNames[item.company.status]}</td><td><button className="secondary" onClick={() => startOutreach(item)}>対応する</button></td></tr>)}{outreachQueue.length === 0 && <tr><td colSpan={6} className="text-center muted">連絡可能な営業対象はありません。</td></tr>}</tbody></table></div>
       {outreachTarget && <div className="mt-5"><h3>{outreachTarget.company.company_name}への対応記録</h3><div className="detail-grid"><div><label className="field">連絡経路<select value={outreachChannel} onChange={e => setOutreachChannel(e.target.value as OutreachChannel)}>{outreachTarget.available_channels.map(channel => <option key={channel} value={channel}>{channelNames[channel]}</option>)}</select></label><label className="field">結果<select value={outreachOutcome} onChange={e => setOutreachOutcome(e.target.value as SalesStatus)}><option value="approached">アプローチ済</option><option value="replied">返信あり</option><option value="meeting">商談</option><option value="lost">失注</option></select></label><label className="field">次回対応日時<input type="datetime-local" value={outreachFollowup} onChange={e => setOutreachFollowup(e.target.value)} /></label></div><label className="field">対応内容<textarea rows={5} maxLength={10000} value={outreachNote} onChange={e => setOutreachNote(e.target.value)} placeholder="送信内容、通話結果、次回確認事項" /></label></div><div className="actions"><button disabled={busy || !outreachNote.trim()} onClick={() => void recordOutreach()}>対応を記録</button><button className="secondary" onClick={() => setOutreachTarget(null)}>キャンセル</button></div></div>}
     </section>
-    <section className="panel mt-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2>保存フィルター</h2><p className="muted mt-2 text-sm">適用中の絞り込み条件を名前付きで保存します。</p></div>
-      <div className="flex flex-wrap items-end gap-2"><label className="field mb-0">フィルター名<input value={filterName} maxLength={200} onChange={e => setFilterName(e.target.value)} placeholder="例：佐藤担当の期限超過" /></label><button disabled={busy || !filterName.trim()} onClick={() => void saveFilter()}>現在の条件を保存</button></div></div>
-      {savedFilters.length === 0 ? <p className="muted mt-4">保存済みフィルターはありません。</p> : <div className="grid gap-3 mt-4 sm:grid-cols-2 xl:grid-cols-3">{savedFilters.map(item => <article className="job-row block" key={item.id}>{editingFilterId === item.id ? <><label className="field">保存名<input aria-label={`${item.name}の保存名`} maxLength={200} value={editingFilterName} onChange={e => setEditingFilterName(e.target.value)} /></label><div className="flex gap-2"><button disabled={busy || !editingFilterName.trim()} onClick={() => void updateFilter(item, editingFilterName, item.filters)}>名前を保存</button><button className="secondary" onClick={() => setEditingFilterId('')}>キャンセル</button></div></> : <><strong>{item.name}</strong><div className="flex flex-wrap gap-2 mt-3"><button className="secondary" onClick={() => { setDraft(item.filters); setFilters(item.filters); setPage(0) }}>適用</button><button className="secondary" disabled={busy} onClick={() => void updateFilter(item, item.name, filters)}>現在の条件で上書き</button><button className="secondary" onClick={() => { setEditingFilterId(item.id); setEditingFilterName(item.name) }}>名前変更</button><button className="danger" disabled={busy} onClick={() => void deleteFilter(item.id)}>削除</button></div></>}</article>)}</div>}</section>
+    <CompanySavedFiltersPanel
+      items={savedFilters}
+      currentFilters={filters}
+      filterName={filterName}
+      editingId={editingFilterId}
+      editingName={editingFilterName}
+      busy={busy}
+      onFilterNameChange={setFilterName}
+      onEditingNameChange={setEditingFilterName}
+      onSave={() => void saveFilter()}
+      onApply={nextFilters => { setDraft(nextFilters); setFilters(nextFilters); setPage(0) }}
+      onOverwrite={item => void updateFilter(item, item.name, filters)}
+      onStartRename={item => { setEditingFilterId(item.id); setEditingFilterName(item.name) }}
+      onCancelRename={() => setEditingFilterId('')}
+      onRename={item => void updateFilter(item, editingFilterName, item.filters)}
+      onDelete={item => void deleteFilter(item.id)}
+    />
     <AssigneeAnalyticsPanel items={assigneeAnalytics} />
     <CompanyQualityPanels
       quality={quality}
