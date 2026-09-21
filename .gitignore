@@ -21,3 +21,4 @@ dist/
 frontend/test-results/
 frontend/playwright-report/
 backend/phase6-results/
+backups/

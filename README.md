@@ -68,6 +68,11 @@ AI判定レビュー、文面A/Bテスト、案件管理、gBizINFO収集は[継
 案件地域の都道府県・市区町村指定は[地域選択](docs/70_PREFECTURE_MUNICIPALITY_SELECTION.md)を参照してください。
 外部サービスのAPIキー取得手順は[APIキー取得ガイド](docs/71_API_KEY_SETUP_GUIDE.md)を参照してください。
 APIキーの保存状態と疎通確認は[APIキー保存・接続テスト](docs/72_API_KEY_PERSISTENCE_AND_CONNECTION_TESTS.md)を参照してください。
+Windows初心者向けのローカル導入は[Windowsローカルインストール](docs/73_WINDOWS_LOCAL_INSTALLER.md)を参照してください。
+
+## Windowsかんたんインストール
+
+Docker Desktopを起動後、リポジトリをZIPで展開して`Install-LeadHive.cmd`をダブルクリックします。Python、Node.js、PostgreSQLの個別セットアップは不要です。2回目以降は`Start-LeadHive.cmd`で起動できます。
 
 構成:
 
