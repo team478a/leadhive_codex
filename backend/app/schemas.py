@@ -498,6 +498,41 @@ class FormAssistOut(BaseModel):
     instructions: str
 
 
+class FormDeliveryBatchCreateInput(Input):
+    template_id: UUID
+    company_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
+
+
+class FormDeliveryBatchExecuteInput(Input):
+    confirmed: bool = False
+    limit: int = Field(default=20, ge=1, le=20)
+
+
+class FormDeliveryBatchItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    company_id: UUID
+    draft_id: UUID | None
+    form_delivery_id: UUID | None
+    status: Literal["queued", "submitted", "failed", "manual_required", "skipped"]
+    reason: str
+    submitted_at: datetime | None
+    created_at: datetime
+    company_name: str = ""
+    form_url: str = ""
+
+
+class FormDeliveryBatchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    template_id: UUID
+    status: Literal["ready", "running", "completed", "cancelled"]
+    created_at: datetime
+    updated_at: datetime
+    items: list[FormDeliveryBatchItemOut] = []
+
+
 class SmtpSettingsInput(Input):
     host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     port: int = Field(ge=1, le=65535)

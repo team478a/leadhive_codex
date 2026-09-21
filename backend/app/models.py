@@ -449,6 +449,53 @@ class FormDelivery(Timestamps, Base):
     result_note: Mapped[str] = mapped_column(String(500), default="")
 
 
+class FormDeliveryBatch(Timestamps, Base):
+    __tablename__ = "form_delivery_batches"
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('ready', 'running', 'completed', 'cancelled')", name="ck_form_batch_status"
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    template_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("outreach_templates.id", ondelete="RESTRICT"), index=True
+    )
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(20), default="ready", index=True)
+
+
+class FormDeliveryBatchItem(Timestamps, Base):
+    __tablename__ = "form_delivery_batch_items"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "company_id", name="uq_form_batch_item_company"),
+        CheckConstraint(
+            "status IN ('queued', 'submitted', 'failed', 'manual_required', 'skipped')",
+            name="ck_form_batch_item_status",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("form_delivery_batches.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    draft_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("outreach_drafts.id", ondelete="SET NULL"), index=True
+    )
+    form_delivery_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("form_deliveries.id", ondelete="SET NULL"), index=True
+    )
+    status: Mapped[str] = mapped_column(String(30), default="queued", index=True)
+    reason: Mapped[str] = mapped_column(String(500), default="")
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
 class SmtpSettings(Timestamps, Base):
     __tablename__ = "smtp_settings"
     __table_args__ = (

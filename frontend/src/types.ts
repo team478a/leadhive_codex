@@ -127,6 +127,8 @@ export interface EmailDeliveryList {
   items: EmailDeliveryListItem[]; queued_count: number; running_count: number
   sent_count: number; failed_count: number; cancelled_count: number
 }
+export interface FormDeliveryBatchItem { id: string; company_id: string; draft_id: string | null; form_delivery_id: string | null; status: 'queued' | 'submitted' | 'failed' | 'manual_required' | 'skipped'; reason: string; submitted_at: string | null; created_at: string; company_name: string; form_url: string }
+export interface FormDeliveryBatch { id: string; project_id: string; template_id: string; status: 'ready' | 'running' | 'completed' | 'cancelled'; created_at: string; updated_at: string; items: FormDeliveryBatchItem[] }
 export interface FormField { name: string; label: string; field_type: 'text' | 'email' | 'tel' | 'textarea' | 'select'; required: boolean; value: string; options: string[] }
 export interface FormPreview { form_url: string; action_url: string; fields: FormField[] }
 export interface FormDelivery { id: string; draft_id: string; company_id: string; delivery_method: 'direct' | 'codex_assisted'; status: 'pending' | 'submitted' | 'failed'; action_url: string; response_status: number | null; submitted_at: string | null; error_message: string; result_note: string; created_at: string }
