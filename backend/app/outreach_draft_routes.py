@@ -6,7 +6,6 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.analysis_routes import owned_company
 from app.database import get_db
 from app.models import (
     Activity,
@@ -20,6 +19,7 @@ from app.models import (
     Project,
     User,
 )
+from app.project_access import company_access as owned_company
 from app.project_access import project_access
 from app.schemas import (
     EmailDeliveryCreateInput,

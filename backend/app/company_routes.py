@@ -10,7 +10,6 @@ from fastapi.responses import Response
 from sqlalchemy import String, asc, case, cast, desc, func, or_, select, update
 from sqlalchemy.orm import Session, aliased
 
-from app.analysis_routes import owned_company, owned_project
 from app.database import get_db
 from app.models import (
     Activity,
@@ -28,6 +27,8 @@ from app.models import (
     User,
 )
 from app.project_access import accessible_project_condition
+from app.project_access import company_access as owned_company
+from app.project_access import project_access as owned_project
 from app.schemas import (
     ActivityInput,
     ActivityOut,

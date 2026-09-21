@@ -1,7 +1,7 @@
 from uuid import uuid4
 
-from app import ai_routes
 from app.models import Company
+from app.services import ai_analysis
 from app.services.ai import AiAnalysisError, AnalysisDecision, rank_for_score
 
 
@@ -64,7 +64,7 @@ def test_ai_analysis_uses_profile_objective_and_normalizes_rank(auth, db, monkey
     project = make_project(auth)
     company = make_analyzable_company(auth, db, project["id"])
     provider = FakeProvider(decision())
-    monkeypatch.setattr(ai_routes, "get_ai_provider", lambda: provider)
+    monkeypatch.setattr(ai_analysis, "get_ai_provider", lambda: provider)
 
     response = auth.post(f"/api/companies/{company['id']}/ai-analysis", json={})
 
@@ -83,7 +83,7 @@ def test_ai_analysis_failure_and_missing_web_data(auth, db, monkeypatch):
     project = make_project(auth)
     company = make_analyzable_company(auth, db, project["id"])
     provider = FakeProvider(error=AiAnalysisError("AIサービスとの通信に失敗しました。"))
-    monkeypatch.setattr(ai_routes, "get_ai_provider", lambda: provider)
+    monkeypatch.setattr(ai_analysis, "get_ai_provider", lambda: provider)
     failed = auth.post(f"/api/companies/{company['id']}/ai-analysis", json={}).json()
     assert failed["ai_status"] == "failed"
     assert failed["ai_error"] == "AIサービスとの通信に失敗しました。"
@@ -106,7 +106,7 @@ def test_batch_ai_analysis_and_access_isolation(auth, users, db, monkeypatch):
     project = make_project(auth)
     first = make_analyzable_company(auth, db, project["id"], "https://one-ai.example")
     second = make_analyzable_company(auth, db, project["id"], "https://two-ai.example")
-    monkeypatch.setattr(ai_routes, "get_ai_provider", lambda: FakeProvider(decision(65)))
+    monkeypatch.setattr(ai_analysis, "get_ai_provider", lambda: FakeProvider(decision(65)))
 
     response = auth.post(
         f"/api/projects/{project['id']}/ai-analysis",

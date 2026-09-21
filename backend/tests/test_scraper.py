@@ -2,9 +2,8 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from app import analysis_routes
 from app.models import Company
-from app.services import scraper
+from app.services import scraper, web_analysis
 from app.services.scraper import FetchedPage, PageData, ScrapeError, extract_page
 
 HTML = """
@@ -146,7 +145,7 @@ def test_company_analysis_success(auth, monkeypatch):
     project = make_project(auth)
     company = add_url(auth, project["id"], "https://original.example")
     monkeypatch.setattr(
-        analysis_routes,
+        web_analysis,
         "scrape_company",
         lambda url: (
             FetchedPage("https://final.example/", HTML),
@@ -196,7 +195,7 @@ def test_company_analysis_preserves_and_releases_protected_fields(auth, monkeypa
     invalid = {**editable, "protected_fields": ["website_text"]}
     assert auth.put(f"/api/companies/{company['id']}", json=invalid).status_code == 422
     monkeypatch.setattr(
-        analysis_routes,
+        web_analysis,
         "scrape_company",
         lambda url: (
             FetchedPage(url, HTML),
@@ -248,7 +247,7 @@ def test_analysis_failure_missing_url_and_aggregator(auth, db, monkeypatch):
     def fail(url):
         raise ScrapeError("接続できません。")
 
-    monkeypatch.setattr(analysis_routes, "scrape_company", fail)
+    monkeypatch.setattr(web_analysis, "scrape_company", fail)
     result = auth.post(f"/api/companies/{failing['id']}/analyze", json={}).json()
     assert result["analysis_status"] == "failed"
     assert result["analysis_error"] == "接続できません。"
@@ -259,7 +258,7 @@ def test_analysis_marks_redirected_domain_duplicate(auth, monkeypatch):
     original = add_url(auth, project["id"], "https://canonical.example")
     duplicate = add_url(auth, project["id"], "https://redirect.example")
     monkeypatch.setattr(
-        analysis_routes,
+        web_analysis,
         "scrape_company",
         lambda url: (
             FetchedPage("https://canonical.example/", HTML),
@@ -276,7 +275,7 @@ def test_batch_analysis_and_access_isolation(auth, users, monkeypatch):
     first = add_url(auth, project["id"], "https://first.example")
     second = add_url(auth, project["id"], "https://second.example")
     monkeypatch.setattr(
-        analysis_routes,
+        web_analysis,
         "scrape_company",
         lambda url: (FetchedPage(url, HTML), PageData(company_name=urlsplit_name(url))),
     )

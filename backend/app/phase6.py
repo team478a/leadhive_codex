@@ -6,13 +6,13 @@ from pathlib import Path
 
 from sqlalchemy import func, select
 
-from app.ai_routes import analyze_company_ai
-from app.analysis_routes import analyze
-from app.collection_routes import fail_job, save_candidates, start_job
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Company, Project, TargetProfile, User
+from app.services.ai_analysis import analyze_company_ai
 from app.services.collection import ExternalServiceError, search_serper
+from app.services.collection_jobs import fail_job, save_candidates, start_job
+from app.services.web_analysis import analyze
 
 
 @dataclass(frozen=True)

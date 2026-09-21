@@ -7,9 +7,6 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, or_, select
 
-from app.ai_routes import analyze_company_ai
-from app.analysis_routes import analyze
-from app.collection_routes import fail_job, save_candidates, start_job
 from app.config import settings
 from app.database import SessionLocal
 from app.models import (
@@ -27,7 +24,7 @@ from app.models import (
     SearchSchedule,
     TargetProfile,
 )
-from app.operation_routes import refresh_company_ids
+from app.services.ai_analysis import analyze_company_ai
 from app.services.application_settings import apply_application_settings
 from app.services.bulk_form_delivery import process_form_batch_item
 from app.services.collection import (
@@ -36,8 +33,11 @@ from app.services.collection import (
     search_google_places,
     search_serper,
 )
+from app.services.collection_jobs import fail_job, save_candidates, start_job
 from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
 from app.services.inbound_email import sync_inbound_mail
+from app.services.operations import refresh_company_ids
+from app.services.web_analysis import analyze
 
 logger = logging.getLogger("leadhive")
 

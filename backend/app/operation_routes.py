@@ -5,12 +5,10 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.analysis_routes import owned_project
 from app.database import get_db
 from app.models import (
     AnalysisRefreshSchedule,
     CollectionJob,
-    Company,
     OperationJob,
     SearchSchedule,
     User,
@@ -27,29 +25,9 @@ from app.schemas import (
     SearchScheduleOut,
 )
 from app.security import current_user
+from app.services.operations import refresh_company_ids
 
 router = APIRouter(prefix="/api")
-
-
-def refresh_company_ids(db: Session, schedule: AnalysisRefreshSchedule) -> list[UUID]:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=schedule.stale_days)
-    return list(
-        db.scalars(
-            select(Company.id)
-            .where(
-                Company.project_id == schedule.project_id,
-                Company.website_url.is_not(None),
-                Company.analysis_status.notin_(("duplicate", "excluded")),
-                (
-                    (Company.analysis_status == "failed")
-                    | Company.scraped_at.is_(None)
-                    | (Company.scraped_at < cutoff)
-                ),
-            )
-            .order_by(Company.scraped_at.asc().nullsfirst(), Company.id)
-            .limit(schedule.batch_limit)
-        ).all()
-    )
 
 
 def owned_operation(job_id: UUID, db: Session, user: User) -> OperationJob:
@@ -75,7 +53,7 @@ def owned_schedule(schedule_id: UUID, db: Session, user: User) -> SearchSchedule
 def get_analysis_refresh_schedule(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user, write=False)
+    project_access(project_id, db, user, write=False)
     return db.scalar(
         select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
     )
@@ -91,7 +69,7 @@ def upsert_analysis_refresh_schedule(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    project_access(project_id, db, user)
     schedule = db.scalar(
         select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
     )
@@ -112,7 +90,7 @@ def upsert_analysis_refresh_schedule(
 def delete_analysis_refresh_schedule(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user)
+    project_access(project_id, db, user)
     schedule = db.scalar(
         select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
     )
@@ -130,7 +108,7 @@ def delete_analysis_refresh_schedule(
 def run_analysis_refresh_schedule(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user)
+    project_access(project_id, db, user)
     schedule = db.scalar(
         select(AnalysisRefreshSchedule).where(AnalysisRefreshSchedule.project_id == project_id)
     )
@@ -166,7 +144,7 @@ def run_analysis_refresh_schedule(
 def list_search_schedules(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user, write=False)
+    project_access(project_id, db, user, write=False)
     return db.scalars(
         select(SearchSchedule)
         .where(SearchSchedule.project_id == project_id)
@@ -178,7 +156,7 @@ def list_search_schedules(
 def search_analytics(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
-    owned_project(project_id, db, user, write=False)
+    project_access(project_id, db, user, write=False)
     rows = db.execute(
         select(
             SearchSchedule.id,
@@ -219,7 +197,7 @@ def collection_performance(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     """Compare real collection outcomes by source and search keyword."""
-    owned_project(project_id, db, user, write=False)
+    project_access(project_id, db, user, write=False)
     rows = db.execute(
         select(
             CollectionJob.source,
@@ -277,7 +255,7 @@ def create_search_schedule(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    project_access(project_id, db, user)
     schedule = SearchSchedule(
         project_id=project_id,
         **body.model_dump(),
@@ -355,7 +333,7 @@ def enqueue_operation(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user)
+    project_access(project_id, db, user)
     active = db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == project_id,
@@ -380,7 +358,7 @@ def list_operations(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    owned_project(project_id, db, user, write=False)
+    project_access(project_id, db, user, write=False)
     return db.scalars(
         select(OperationJob)
         .where(OperationJob.project_id == project_id)
