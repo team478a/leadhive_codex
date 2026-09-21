@@ -29,6 +29,7 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 - `CompanyList.tsx`：企業一覧、選択、一括状況変更、担当者設定、ページ送り
 - `CompanyReportingPanels.tsx`：案件パイプライン、担当者別営業成果
 - `CompanyContactsPanel.tsx`：先方担当者の一覧、追加、編集、削除
+- `CompanyDealsPanel.tsx`：案件の登録と案件状況の表示
 - `CompanyActivitiesPanel.tsx`：企業ごとの活動履歴の記録と表示
 - `CompanyQualityPanels.tsx`：データ品質、自動再解析、重複候補と統合
 - `companyPageShared.ts`：一覧で共有する表示名、初期フィルター、URLクエリー生成
