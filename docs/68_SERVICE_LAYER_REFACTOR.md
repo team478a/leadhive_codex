@@ -34,6 +34,7 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 - `CompanyOptimizationPanels.tsx`：AI判定レビューと営業文面A/Bテスト
 - `CompanyActivitiesPanel.tsx`：企業ごとの活動履歴の記録と表示
 - `CompanyReplyQueuePanel.tsx`：受信返信の確認と対応結果の記録
+- `CompanyFollowupTasksPanel.tsx`：追客タスクの完了・延期と次回対応の記録
 - `CompanyQualityPanels.tsx`：データ品質、自動再解析、重複候補と統合
 - `companyPageShared.ts`：一覧で共有する表示名、初期フィルター、URLクエリー生成
 - `CompaniesPage.tsx`：データ取得、詳細編集、送信、営業対応の状態と操作

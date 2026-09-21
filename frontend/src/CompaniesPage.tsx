@@ -4,6 +4,7 @@ import { CompanyActivitiesPanel } from './CompanyActivitiesPanel'
 import { CompanyContactsPanel } from './CompanyContactsPanel'
 import { CompanyDealsPanel } from './CompanyDealsPanel'
 import { CompanyFilters } from './CompanyFilters'
+import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
 import { CompanyList } from './CompanyList'
 import { AssigneeAnalyticsPanel, DealPipelinePanel } from './CompanyReportingPanels'
 import { CompanyQualityPanels } from './CompanyQualityPanels'
@@ -123,7 +124,6 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const [notice, setNotice] = useState('')
   const openedReplyInboundEmailId = useRef<string | null>(null)
   const openedFollowupCompanyId = useRef<string | null>(null)
-  const followupPanelRef = useRef<HTMLDivElement>(null)
   const query = useMemo(() => companyQueryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
     if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setFormCodexTasks([]); setEmailCampaigns([]); setDealPipeline(null); return }
@@ -178,9 +178,6 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       }
     }
   }, [initialFollowupCompanyId, followupTasks])
-  useEffect(() => {
-    if (followupTarget) followupPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-  }, [followupTarget])
   useEffect(() => {
     if (!selected) {
       setAiReview(null); setDeals([]); setExperiments([]); setExperimentResults([])
@@ -727,10 +724,20 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       onRecord={() => void recordReplyResponse()}
       onCancel={() => setReplyTarget(null)}
     />
-    <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>追客タスク</h2><p className="muted mt-2 text-sm">期限がある次回対応を完了または延期します。</p></div><span className="badge">{followupTasks.length} 件</span></div>
-      <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>担当</th><th>期限</th><th>営業状況</th><th></th></tr></thead><tbody>{followupTasks.map(task => <tr key={task.company.id}><td><strong>{task.company.company_name}</strong><p className="muted text-xs">{task.company.rank ?? '—'} / {task.company.score ?? '—'}点</p></td><td>{task.company.assignee || '未設定'}</td><td><span className="badge">{dueNames[task.due_state]}</span><p className="muted text-xs">{task.company.next_followup_at ? new Date(task.company.next_followup_at).toLocaleString('ja-JP') : '—'}</p></td><td>{statusNames[task.company.status]}</td><td><button className="secondary" onClick={() => startFollowupTask(task)}>完了・延期</button></td></tr>)}{followupTasks.length === 0 && <tr><td colSpan={5} className="text-center muted">期限が設定された追客タスクはありません。</td></tr>}</tbody></table></div>
-      {followupTarget && <div ref={followupPanelRef} className="mt-5"><h3>{followupTarget.company.company_name}の追客タスク</h3><div className="detail-grid"><div><label className="field">処理<select value={followupAction} onChange={e => setFollowupAction(e.target.value as 'completed' | 'rescheduled')}><option value="completed">完了</option><option value="rescheduled">延期</option></select></label>{followupAction === 'rescheduled' && <label className="field">次回対応日時<input type="datetime-local" value={followupTaskDate} onChange={e => setFollowupTaskDate(e.target.value)} /></label>}</div><label className="field">対応メモ<textarea rows={4} maxLength={10000} value={followupTaskNote} onChange={e => setFollowupTaskNote(e.target.value)} placeholder="例：先方都合により来週へ延期" /></label></div><div className="actions"><button disabled={busy || !followupTaskNote.trim() || (followupAction === 'rescheduled' && !followupTaskDate)} onClick={() => void resolveFollowupTask()}>{followupAction === 'completed' ? 'タスクを完了' : 'タスクを延期'}</button><button className="secondary" onClick={() => setFollowupTarget(null)}>キャンセル</button></div></div>}
-    </section>
+    <CompanyFollowupTasksPanel
+      items={followupTasks}
+      target={followupTarget}
+      action={followupAction}
+      note={followupTaskNote}
+      scheduledAt={followupTaskDate}
+      busy={busy}
+      onStart={startFollowupTask}
+      onActionChange={setFollowupAction}
+      onNoteChange={setFollowupTaskNote}
+      onScheduledAtChange={setFollowupTaskDate}
+      onResolve={() => void resolveFollowupTask()}
+      onCancel={() => setFollowupTarget(null)}
+    />
     <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>営業アプローチキュー</h2><p className="muted mt-2 text-sm">期限超過を優先し、連絡可能な営業対象を処理します。</p></div><span className="badge">{outreachQueue.length} 社</span></div>
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>推奨経路</th><th>担当者</th><th>期限</th><th>状況</th><th></th></tr></thead><tbody>{outreachQueue.map(item => <tr key={item.company.id}><td><strong>{item.company.company_name}</strong><p className="muted text-xs">{item.company.rank ?? '—'} / {item.company.score ?? '—'}点</p></td><td>{channelNames[item.recommended_channel]}<p className="muted text-xs">{item.available_channels.map(channel => channelNames[channel]).join(' / ')}</p></td><td>{item.company.assignee || '未設定'}</td><td><span className="badge">{dueNames[item.due_state]}</span><p className="muted text-xs">{item.company.next_followup_at ? new Date(item.company.next_followup_at).toLocaleString('ja-JP') : '—'}</p></td><td>{statusNames[item.company.status]}</td><td><button className="secondary" onClick={() => startOutreach(item)}>対応する</button></td></tr>)}{outreachQueue.length === 0 && <tr><td colSpan={6} className="text-center muted">連絡可能な営業対象はありません。</td></tr>}</tbody></table></div>
       {outreachTarget && <div className="mt-5"><h3>{outreachTarget.company.company_name}への対応記録</h3><div className="detail-grid"><div><label className="field">連絡経路<select value={outreachChannel} onChange={e => setOutreachChannel(e.target.value as OutreachChannel)}>{outreachTarget.available_channels.map(channel => <option key={channel} value={channel}>{channelNames[channel]}</option>)}</select></label><label className="field">結果<select value={outreachOutcome} onChange={e => setOutreachOutcome(e.target.value as SalesStatus)}><option value="approached">アプローチ済</option><option value="replied">返信あり</option><option value="meeting">商談</option><option value="lost">失注</option></select></label><label className="field">次回対応日時<input type="datetime-local" value={outreachFollowup} onChange={e => setOutreachFollowup(e.target.value)} /></label></div><label className="field">対応内容<textarea rows={5} maxLength={10000} value={outreachNote} onChange={e => setOutreachNote(e.target.value)} placeholder="送信内容、通話結果、次回確認事項" /></label></div><div className="actions"><button disabled={busy || !outreachNote.trim()} onClick={() => void recordOutreach()}>対応を記録</button><button className="secondary" onClick={() => setOutreachTarget(null)}>キャンセル</button></div></div>}
