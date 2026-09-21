@@ -77,4 +77,8 @@
   .guide-tip p { @apply mt-1 leading-relaxed; }
   .guide-link { @apply mt-2 bg-transparent p-0 text-[#235c4c] underline underline-offset-4 hover:bg-transparent hover:text-[#173c35]; }
   .guide-actions { @apply mt-6 flex flex-col-reverse gap-3 border-t border-[#e0e6df] pt-5 sm:flex-row sm:justify-end; }
+  .region-selector { @apply mb-5 rounded-xl border border-[#e0e6df] bg-[#f8faf7] p-4; }
+  .region-fields { @apply grid gap-x-5 sm:grid-cols-2; }
+  .region-selector .field { @apply mb-3; }
+  .region-helper { @apply flex flex-wrap items-center justify-between gap-2 text-xs text-[#65776f]; }
 }

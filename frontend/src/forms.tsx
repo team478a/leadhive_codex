@@ -1,5 +1,6 @@
 import { cloneElement, useId, useState, type FormEvent, type ReactElement } from 'react'
 import { api, errorMessage } from './api'
+import { RegionSelector } from './RegionSelector'
 import type { Profile, ProfileInput, Project, ProjectInput } from './types'
 
 export function Field({ label, children }: { label: string; children: ReactElement<{ id?: string }> }) {
@@ -41,9 +42,8 @@ export function ProjectForm({ profiles, initial, onSaved, onCancel }: {
       </select></Field>
       <Field label="営業目的"><textarea required maxLength={10000} rows={3} value={value.sales_objective}
         onChange={e => setValue({ ...value, sales_objective: e.target.value })} /></Field>
+      <RegionSelector value={value.region} onChange={region => setValue({ ...value, region })} />
       <div className="grid gap-5 sm:grid-cols-2">
-        <Field label="地域"><input required maxLength={500} value={value.region}
-          onChange={e => setValue({ ...value, region: e.target.value })} /></Field>
         <Field label="ステータス"><select value={value.status}
           onChange={e => setValue({ ...value, status: e.target.value as ProjectInput['status'] })}>
           <option value="draft">下書き</option><option value="active">進行中</option>
