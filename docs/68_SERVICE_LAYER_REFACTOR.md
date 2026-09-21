@@ -24,6 +24,12 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 
 既存のURLは維持し、各ルーターをアプリへ個別に登録している。
 
+## モデル・スキーマの分割
+
+ORMモデルは`model_core.py`、`model_company.py`、`model_outreach.py`、`model_settings.py`、`model_operations.py`へ分割した。APIスキーマは`schema_core.py`、`schema_collection.py`、`schema_company.py`、`schema_outreach.py`、`schema_settings.py`、`schema_workflow.py`、`schema_reporting.py`へ分割した。
+
+既存コードとMigrationが利用する`app.models`と`app.schemas`は互換ファサードとして残し、従来のimportを維持している。
+
 ## 企業管理画面の分割
 
 - `CompanyFilters.tsx`：プロジェクト選択、検索・絞り込み、CSV出力
@@ -49,7 +55,3 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 - `CompaniesPage.tsx`：データ取得と各業務コンポーネントへの状態・操作の接続
 
 画面上の項目・操作・API呼び出しは維持したまま、一覧、レポート、品質管理、送信業務に関する変更を他の機能へ波及させにくくした。
-
-## 次の分割候補
-
-- `schemas.py` と `models.py` を機能領域ごとのモジュールへ分割
