@@ -5,8 +5,9 @@ import { CollectionPage } from './CollectionPage'
 import { CompaniesPage } from './CompaniesPage'
 import { DashboardPage } from './DashboardPage'
 import { EmailDeliveriesPage } from './EmailDeliveriesPage'
+import { OnboardingGuide } from './OnboardingGuide'
 import { SmtpSettingsPage } from './SmtpSettingsPage'
-import type { Notification, Profile, Project, ProjectMember, User } from './types'
+import type { Dashboard, Notification, Profile, Project, ProjectMember, User } from './types'
 
 function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: string }) {
   const [email, setEmail] = useState('')
@@ -58,20 +59,24 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [busy, setBusy] = useState(false)
   const [loaded, setLoaded] = useState(false)
   const [unreadNotifications, setUnreadNotifications] = useState(0)
+  const [totalCompanies, setTotalCompanies] = useState(0)
+  const guideStorageKey = `leadhive:onboarding:${user.email}`
+  const [guideOpen, setGuideOpen] = useState(() => localStorage.getItem(guideStorageKey) !== 'dismissed')
   const [projectRoles, setProjectRoles] = useState<Record<string, ProjectMember['role']>>({})
   const [memberProject, setMemberProject] = useState<Project | null>(null)
   const [members, setMembers] = useState<ProjectMember[]>([])
   const [memberEmail, setMemberEmail] = useState('')
   const [memberRole, setMemberRole] = useState<'editor' | 'viewer'>('editor')
   const reload = useCallback(async () => {
-    const [nextProjects, nextProfiles, notifications] = await Promise.all([
+    const [nextProjects, nextProfiles, notifications, dashboard] = await Promise.all([
       allPages<Project>('/projects'), allPages<Profile>('/target-profiles'),
       api<Notification[]>('/notifications?unread_only=true&limit=100'),
+      api<Dashboard>('/dashboard'),
     ])
     const memberLists = await Promise.all(nextProjects.map(project => api<ProjectMember[]>(`/projects/${project.id}/members`)))
     setProjects(nextProjects); setProfiles(nextProfiles)
     setProjectRoles(Object.fromEntries(nextProjects.map((project, index) => [project.id, memberLists[index].find(member => member.email === user.email)?.role ?? 'viewer'])))
-    setUnreadNotifications(notifications.length); setLoaded(true)
+    setUnreadNotifications(notifications.length); setTotalCompanies(dashboard.total_companies); setLoaded(true)
   }, [user.email])
   useEffect(() => {
     reload().catch(e => setError(errorMessage(e))).finally(() => setLoading(false))
@@ -105,6 +110,17 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       setNotice('プロジェクトメンバーを削除しました。')
     })
   }
+  function closeGuide() {
+    localStorage.setItem(guideStorageKey, 'dismissed')
+    setGuideOpen(false)
+  }
+  function openProjectCreator() {
+    closeGuide(); setTab('projects'); setEditor({ type: 'project' }); setNotice('')
+  }
+  function navigateFromGuide(destination: 'collection' | 'companies' | 'settings') {
+    closeGuide(); setEditor(null); setNotice(''); setTab(destination)
+    if (projects[0]) setCollectionProjectId(projects[0].id)
+  }
   return <div className="app-layout">
     <aside className="sidebar"><div className="brand">⬡ LeadHive</div>
       <p className="nav-label">ワークスペース</p>
@@ -130,6 +146,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         {user.is_admin && <button className={tab === 'settings' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('settings'); setEditor(null); setNotice('')
         }}>⚙ 運用設定</button>}
+        <button className="nav-item" onClick={() => setGuideOpen(true)}>？ 使い方ガイド</button>
       </nav>
       <div className="sidebar-footer"><p className="break-all">{user.email}</p>
         <button className="nav-item" disabled={busy} onClick={() => void action(async () => {
@@ -153,7 +170,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           onCancel={() => setEditor(null)} /> : loaded && tab === 'projects' ? <>
           <div className="section-heading"><h2>すべてのプロジェクト</h2><span className="badge">{projects.length} 件</span></div>
           {projects.length === 0 ? <section className="panel empty"><div className="empty-icon">▦</div>
-            <h2>最初のプロジェクトを作成しましょう</h2><p className="muted">営業目的とターゲットを決めるところから始められます。</p></section> :
+            <h2>最初のプロジェクトを作成しましょう</h2><p className="muted">標準プロファイルを選び、案件名・提案内容・地域を入力するだけで始められます。</p>
+            <div className="mt-6 flex flex-wrap justify-center gap-3"><button onClick={() => setEditor({ type: 'project' })}>プロジェクトを作る</button><button className="secondary" onClick={() => setGuideOpen(true)}>使い方を見る</button></div></section> :
             <div className="grid gap-5 xl:grid-cols-2">{projects.map(project => <article className="panel" key={project.id}>
               <div className="flex justify-between gap-3"><h2>{project.project_name}</h2><span className="badge">{statusNames[project.status]}</span></div>
               <p className="muted mt-3">{profiles.find(p => p.id === project.target_profile_id)?.profile_name ?? 'プロファイル'}</p>
@@ -204,6 +222,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           </article>)}</div>
         </>}
     </main>
+    <OnboardingGuide open={loaded && guideOpen} projectCount={projects.length} totalCompanies={totalCompanies}
+      isAdmin={user.is_admin} onClose={closeGuide} onCreateProject={openProjectCreator} onNavigate={navigateFromGuide} />
   </div>
 }
 

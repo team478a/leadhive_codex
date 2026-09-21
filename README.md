@@ -64,6 +64,7 @@ AI判定レビュー、文面A/Bテスト、案件管理、gBizINFO収集は[継
 一括フォームDMは[実装記録](docs/66_DELIVERY_CAMPAIGNS_AND_PIPELINE.md)を参照してください。
 全体サービス設定（APIキー、収集、AI、SMTP、IMAP）は[運用設定](docs/67_APPLICATION_SETTINGS_MANAGEMENT.md)を参照してください。
 バックグラウンド処理とAPIの共通サービス化は[サービス層の分離](docs/68_SERVICE_LAYER_REFACTOR.md)を参照してください。
+初回利用者向けの画面内案内は[オンボーディングガイド](docs/69_ONBOARDING_GUIDE.md)を参照してください。
 
 構成:
 
