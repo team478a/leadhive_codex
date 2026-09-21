@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import Response
 from sqlalchemy import String, asc, case, cast, desc, func, or_, select, update
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
@@ -18,11 +18,8 @@ from app.models import (
     ContactPerson,
     InboundEmail,
     OperationJob,
-    OutreachConversion,
-    OutreachDraft,
     OutreachDraftApproval,
     Project,
-    SavedCompanyFilter,
     SuppressionEntry,
     User,
 )
@@ -32,34 +29,22 @@ from app.project_access import project_access as owned_project
 from app.schemas import (
     ActivityInput,
     ActivityOut,
-    AssigneeAnalyticsOut,
     CompanyBulkAssigneeInput,
     CompanyBulkSalesInput,
     CompanyContactControlInput,
     CompanyEditInput,
-    CompanyMergeInput,
     CompanyOut,
     CompanyPageOut,
     CompanySalesInput,
     ContactPersonInput,
     ContactPersonOut,
     DashboardOut,
-    DataQualityOut,
-    DataQualityReanalyzeInput,
-    DuplicateCandidateOut,
     FollowupTaskOut,
     FollowupTaskResolveInput,
-    OperationJobOut,
-    OutreachEffectivenessAnalyticsOut,
-    OutreachEffectivenessItemOut,
     OutreachQueueItemOut,
     OutreachRecordInput,
     ReplyQueueItemOut,
     ReplyResponseInput,
-    SalesActivityAnalyticsOut,
-    SalesAnalyticsAssigneeOut,
-    SavedCompanyFilterInput,
-    SavedCompanyFilterOut,
 )
 from app.security import current_user
 from app.services.outreach_attribution import record_outreach_conversion
@@ -106,471 +91,6 @@ def owned_contact_person(contact_id: UUID, db: Session, user: User) -> ContactPe
         raise HTTPException(404, "担当者情報が見つかりません。")
     owned_company(contact.company_id, db, user)
     return contact
-
-
-def status_transition_count(status: str):
-    return func.count().filter(
-        Activity.activity_type == "status_change",
-        Activity.note.like(f"% から {status} に変更"),
-    )
-
-
-@router.get("/sales-activity-analytics", response_model=SalesActivityAnalyticsOut)
-def sales_activity_analytics(
-    days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-    base = (
-        select(
-            func.count(),
-            status_transition_count("approached"),
-            status_transition_count("replied"),
-            status_transition_count("meeting"),
-            status_transition_count("won"),
-        )
-        .select_from(Activity)
-        .join(Company, Company.id == Activity.company_id)
-        .join(Project, Project.id == Company.project_id)
-        .where(accessible_project_condition(user.id), Activity.created_at >= since)
-    )
-
-    activities, approached, replied, meetings, won = db.execute(base).one()
-    rows = db.execute(
-        select(
-            Company.assignee,
-            status_transition_count("approached"),
-            status_transition_count("replied"),
-            status_transition_count("meeting"),
-            status_transition_count("won"),
-        )
-        .select_from(Activity)
-        .join(Company, Company.id == Activity.company_id)
-        .join(Project, Project.id == Company.project_id)
-        .where(accessible_project_condition(user.id), Activity.created_at >= since)
-        .group_by(Company.assignee)
-        .order_by(status_transition_count("won").desc(), Company.assignee)
-    ).all()
-    denominator = approached or 0
-    return SalesActivityAnalyticsOut(
-        days=days,
-        activities=activities,
-        approached=approached,
-        replied=replied,
-        meetings=meetings,
-        won=won,
-        reply_rate=round(replied / denominator * 100, 1) if denominator else 0,
-        meeting_rate=round(meetings / denominator * 100, 1) if denominator else 0,
-        win_rate=round(won / denominator * 100, 1) if denominator else 0,
-        by_assignee=[
-            SalesAnalyticsAssigneeOut(
-                assignee=assignee or "未設定",
-                approached=row_approached,
-                replied=row_replied,
-                meetings=row_meetings,
-                won=row_won,
-            )
-            for assignee, row_approached, row_replied, row_meetings, row_won in rows
-        ],
-    )
-
-
-@router.get("/outreach-effectiveness-analytics", response_model=OutreachEffectivenessAnalyticsOut)
-def outreach_effectiveness_analytics(
-    days: int = Query(30, ge=1, le=365),
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    since = datetime.now(timezone.utc) - timedelta(days=days)
-    approvals = func.count(OutreachDraftApproval.id)
-    replied = func.count(func.distinct(OutreachConversion.approval_id)).filter(
-        OutreachConversion.outcome == "replied"
-    )
-    meetings = func.count(func.distinct(OutreachConversion.approval_id)).filter(
-        OutreachConversion.outcome == "meeting"
-    )
-    won = func.count(func.distinct(OutreachConversion.approval_id)).filter(
-        OutreachConversion.outcome == "won"
-    )
-    rows = db.execute(
-        select(
-            OutreachDraftApproval.approval_type,
-            OutreachDraftApproval.subject,
-            approvals,
-            replied,
-            meetings,
-            won,
-        )
-        .select_from(OutreachDraftApproval)
-        .join(OutreachDraft, OutreachDraft.id == OutreachDraftApproval.draft_id)
-        .join(Company, Company.id == OutreachDraft.company_id)
-        .join(Project, Project.id == Company.project_id)
-        .outerjoin(
-            OutreachConversion, OutreachConversion.approval_id == OutreachDraftApproval.id
-        )
-        .where(
-            accessible_project_condition(user.id),
-            OutreachDraftApproval.delivered_at >= since,
-        )
-        .group_by(OutreachDraftApproval.approval_type, OutreachDraftApproval.subject)
-        .order_by(approvals.desc(), OutreachDraftApproval.subject)
-        .limit(100)
-    ).all()
-    return OutreachEffectivenessAnalyticsOut(
-        days=days,
-        items=[
-            OutreachEffectivenessItemOut(
-                approval_type=approval_type,
-                subject=subject,
-                approvals=approvals,
-                replied=row_replied,
-                meetings=meetings,
-                won=won,
-                reply_rate=round(row_replied / approvals * 100, 1) if approvals else 0,
-            )
-            for approval_type, subject, approvals, row_replied, meetings, won in rows
-        ],
-    )
-
-
-@router.get(
-    "/projects/{project_id}/saved-company-filters", response_model=list[SavedCompanyFilterOut]
-)
-def list_saved_company_filters(
-    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
-):
-    owned_project(project_id, db, user, write=False)
-    return db.scalars(
-        select(SavedCompanyFilter)
-        .where(SavedCompanyFilter.project_id == project_id)
-        .order_by(SavedCompanyFilter.created_at, SavedCompanyFilter.id)
-    ).all()
-
-
-@router.post(
-    "/projects/{project_id}/saved-company-filters",
-    response_model=SavedCompanyFilterOut,
-    status_code=201,
-)
-def create_saved_company_filter(
-    project_id: UUID,
-    body: SavedCompanyFilterInput,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    owned_project(project_id, db, user)
-    item = SavedCompanyFilter(
-        project_id=project_id, name=body.name, filters=body.filters.model_dump()
-    )
-    db.add(item)
-    db.commit()
-    db.refresh(item)
-    return item
-
-
-@router.put("/saved-company-filters/{filter_id}", response_model=SavedCompanyFilterOut)
-def update_saved_company_filter(
-    filter_id: UUID,
-    body: SavedCompanyFilterInput,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    item = db.scalar(
-        select(SavedCompanyFilter)
-        .join(Project, Project.id == SavedCompanyFilter.project_id)
-        .where(SavedCompanyFilter.id == filter_id, Project.user_id == user.id)
-    )
-    if item is None:
-        raise HTTPException(404, "保存フィルターが見つかりません。")
-    item.name = body.name
-    item.filters = body.filters.model_dump()
-    db.commit()
-    db.refresh(item)
-    return item
-
-
-@router.delete("/saved-company-filters/{filter_id}", status_code=204)
-def delete_saved_company_filter(
-    filter_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
-):
-    item = db.scalar(
-        select(SavedCompanyFilter)
-        .join(Project, Project.id == SavedCompanyFilter.project_id)
-        .where(SavedCompanyFilter.id == filter_id, Project.user_id == user.id)
-    )
-    if item is None:
-        raise HTTPException(404, "保存フィルターが見つかりません。")
-    db.delete(item)
-    db.commit()
-
-
-@router.get("/projects/{project_id}/assignee-analytics", response_model=list[AssigneeAnalyticsOut])
-def assignee_analytics(
-    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
-):
-    owned_project(project_id, db, user, write=False)
-    now = datetime.now(timezone.utc)
-    rows = db.execute(
-        select(
-            Company.assignee,
-            func.count(),
-            func.count().filter(Company.status == "approached"),
-            func.count().filter(Company.status == "replied"),
-            func.count().filter(Company.status == "meeting"),
-            func.count().filter(Company.status == "won"),
-            func.count().filter(Company.next_followup_at < now),
-        )
-        .where(Company.project_id == project_id)
-        .group_by(Company.assignee)
-        .order_by(func.count().desc(), Company.assignee)
-    ).all()
-    return [
-        AssigneeAnalyticsOut(
-            assignee=assignee or "未設定",
-            total=total,
-            approached=approached,
-            replied=replied,
-            meetings=meetings,
-            won=won,
-            overdue=overdue,
-        )
-        for assignee, total, approached, replied, meetings, won, overdue in rows
-    ]
-
-
-def duplicate_reasons(first: Company, second: Company) -> list[str]:
-    reasons = []
-    if first.email and first.email.lower() == second.email.lower():
-        reasons.append("email")
-    if first.phone and first.phone == second.phone:
-        reasons.append("phone")
-    if (
-        first.address
-        and first.company_name.lower() == second.company_name.lower()
-        and first.address.lower() == second.address.lower()
-    ):
-        reasons.append("name_address")
-    return reasons
-
-
-@router.get(
-    "/projects/{project_id}/duplicate-candidates", response_model=list[DuplicateCandidateOut]
-)
-def duplicate_candidates(
-    project_id: UUID,
-    limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    owned_project(project_id, db, user, write=False)
-    left = aliased(Company)
-    right = aliased(Company)
-    email_match = (left.email != "") & (func.lower(left.email) == func.lower(right.email))
-    phone_match = (left.phone != "") & (left.phone == right.phone)
-    name_address_match = (
-        (left.address != "")
-        & (func.lower(left.company_name) == func.lower(right.company_name))
-        & (func.lower(left.address) == func.lower(right.address))
-    )
-    rows = db.execute(
-        select(left, right)
-        .where(
-            left.project_id == project_id,
-            right.project_id == project_id,
-            left.id < right.id,
-            or_(email_match, phone_match, name_address_match),
-        )
-        .order_by(left.created_at, right.created_at)
-        .limit(limit)
-    ).all()
-    result = []
-    for first, second in rows:
-        result.append(
-            DuplicateCandidateOut(
-                left=first, right=second, reasons=duplicate_reasons(first, second)
-            )
-        )
-    return result
-
-
-@router.post("/projects/{project_id}/companies/merge", response_model=CompanyOut)
-def merge_companies(
-    project_id: UUID,
-    body: CompanyMergeInput,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    owned_project(project_id, db, user)
-    if body.target_id == body.source_id:
-        raise HTTPException(422, "異なる企業を指定してください。")
-    companies = db.scalars(
-        select(Company).where(
-            Company.project_id == project_id,
-            Company.id.in_((body.target_id, body.source_id)),
-        )
-    ).all()
-    if len(companies) != 2:
-        raise HTTPException(404, "統合対象の企業が見つかりません。")
-    by_id = {item.id: item for item in companies}
-    target, source = by_id[body.target_id], by_id[body.source_id]
-    if not duplicate_reasons(target, source):
-        raise HTTPException(409, "一致する重複根拠がないため統合できません。")
-    fill_fields = (
-        "address",
-        "phone",
-        "email",
-        "prefecture",
-        "city",
-        "contact_url",
-        "instagram_url",
-        "x_url",
-        "tiktok_url",
-        "facebook_url",
-        "youtube_url",
-        "line_url",
-        "business_summary",
-        "website_text",
-        "business_type",
-        "ai_summary",
-        "ai_reason",
-        "ai_recommended_approach",
-    )
-    for field in fill_fields:
-        if not getattr(target, field) and getattr(source, field):
-            setattr(target, field, getattr(source, field))
-    if source.notes and source.notes not in target.notes:
-        target.notes = "\n\n".join(value for value in (target.notes, source.notes) if value)
-    if target.next_followup_at is None:
-        target.next_followup_at = source.next_followup_at
-    website_url, domain = source.website_url, source.domain
-    db.execute(
-        update(Activity).where(Activity.company_id == source.id).values(company_id=target.id)
-    )
-    db.execute(
-        update(ContactPerson)
-        .where(ContactPerson.company_id == source.id)
-        .values(company_id=target.id)
-    )
-    db.execute(
-        update(Company)
-        .where(Company.duplicate_of_id == source.id)
-        .values(duplicate_of_id=target.id)
-    )
-    db.delete(source)
-    db.flush()
-    if target.website_url is None and website_url:
-        target.website_url, target.domain = website_url, domain
-    db.add(
-        Activity(
-            company_id=target.id,
-            activity_type="note",
-            note=f"重複企業「{source.company_name}」を統合しました。",
-        )
-    )
-    db.commit()
-    db.refresh(target)
-    return target
-
-
-def stale_condition(cutoff: datetime):
-    return (Company.analysis_status == "completed") & (
-        Company.scraped_at.is_(None) | (Company.scraped_at < cutoff)
-    )
-
-
-@router.get("/projects/{project_id}/data-quality", response_model=DataQualityOut)
-def data_quality(
-    project_id: UUID,
-    stale_days: int = Query(90, ge=1, le=3650),
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    owned_project(project_id, db, user, write=False)
-    cutoff = datetime.now(timezone.utc) - timedelta(days=stale_days)
-    base = Company.project_id == project_id
-    row = db.execute(
-        select(
-            func.count(),
-            func.count().filter(Company.website_url.is_(None)),
-            func.count().filter(Company.address == ""),
-            func.count().filter(Company.phone == ""),
-            func.count().filter(Company.email == ""),
-            func.count().filter(
-                (Company.phone == "") & (Company.email == "") & (Company.contact_url == "")
-            ),
-            func.count().filter(Company.analysis_status == "failed"),
-            func.count().filter(stale_condition(cutoff)),
-            func.count().filter(
-                Company.website_url.is_not(None)
-                & ((Company.analysis_status == "failed") | stale_condition(cutoff))
-            ),
-        ).where(base)
-    ).one()
-    return DataQualityOut(
-        total=row[0],
-        missing_website=row[1],
-        missing_address=row[2],
-        missing_phone=row[3],
-        missing_email=row[4],
-        missing_contact=row[5],
-        failed_analysis=row[6],
-        stale_analysis=row[7],
-        reanalyzable=row[8],
-        stale_days=stale_days,
-    )
-
-
-@router.post(
-    "/projects/{project_id}/data-quality/reanalyze",
-    response_model=OperationJobOut,
-    status_code=202,
-)
-def reanalyze_data_quality(
-    project_id: UUID,
-    body: DataQualityReanalyzeInput,
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
-    owned_project(project_id, db, user)
-    active = db.scalar(
-        select(OperationJob.id).where(
-            OperationJob.project_id == project_id,
-            OperationJob.operation_type == "web_analysis",
-            OperationJob.status.in_(("queued", "running")),
-        )
-    )
-    if active:
-        raise HTTPException(409, "Web解析がすでに実行待ちです。")
-    cutoff = datetime.now(timezone.utc) - timedelta(days=body.stale_days)
-    condition = Company.analysis_status == "failed"
-    if body.scope == "stale":
-        condition = stale_condition(cutoff)
-    elif body.scope == "failed_or_stale":
-        condition = condition | stale_condition(cutoff)
-    company_ids = list(
-        db.scalars(
-            select(Company.id)
-            .where(
-                Company.project_id == project_id,
-                Company.website_url.is_not(None),
-                condition,
-            )
-            .order_by(Company.updated_at, Company.id)
-            .limit(100)
-        ).all()
-    )
-    if not company_ids:
-        raise HTTPException(409, "再解析対象の企業はありません。")
-    job = OperationJob(
-        project_id=project_id,
-        operation_type="web_analysis",
-        payload={"company_ids": [str(item) for item in company_ids], "force": True},
-    )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-    return job
 
 
 def company_query(
@@ -825,11 +345,7 @@ def record_reply_response(
     if company.status != "replied" or company.do_not_contact:
         raise HTTPException(409, "この企業の返信対応は記録できません。")
     inbound = db.get(InboundEmail, body.inbound_email_id)
-    if (
-        inbound is None
-        or inbound.company_id != company.id
-        or inbound.classification != "reply"
-    ):
+    if inbound is None or inbound.company_id != company.id or inbound.classification != "reply":
         raise HTTPException(422, "この企業に紐付いた受信返信を指定してください。")
     if inbound.handled_at is not None:
         raise HTTPException(409, "この受信返信はすでに対応済みです。")
@@ -846,9 +362,7 @@ def record_reply_response(
     if body.outcome in {"meeting", "won"} and inbound.outreach_approval_id:
         approval = db.get(OutreachDraftApproval, inbound.outreach_approval_id)
         if approval:
-            record_outreach_conversion(
-                db, approval, company, body.outcome, inbound_email=inbound
-            )
+            record_outreach_conversion(db, approval, company, body.outcome, inbound_email=inbound)
     company.status = body.outcome
     company.next_followup_at = body.next_followup_at
     db.execute(

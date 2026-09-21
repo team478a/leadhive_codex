@@ -12,6 +12,8 @@ from app.ai_routes import router as ai_router
 from app.analysis_routes import router as analysis_router
 from app.campaign_routes import router as campaign_router
 from app.collection_routes import router as collection_router
+from app.company_quality_routes import router as company_quality_router
+from app.company_reporting_routes import router as company_reporting_router
 from app.company_routes import router as company_router
 from app.config import settings
 from app.database import SessionLocal
@@ -91,6 +93,8 @@ app.include_router(campaign_router)
 app.include_router(analysis_router)
 app.include_router(ai_router)
 app.include_router(company_router)
+app.include_router(company_reporting_router)
+app.include_router(company_quality_router)
 app.include_router(operation_router)
 app.include_router(notification_router)
 app.include_router(improvement_router)
