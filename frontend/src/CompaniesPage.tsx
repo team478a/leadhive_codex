@@ -7,6 +7,7 @@ import { CompanyFilters } from './CompanyFilters'
 import { CompanyList } from './CompanyList'
 import { AssigneeAnalyticsPanel, DealPipelinePanel } from './CompanyReportingPanels'
 import { CompanyQualityPanels } from './CompanyQualityPanels'
+import { CompanyAiReviewPanel, CompanyExperimentPanel } from './CompanyOptimizationPanels'
 import { channelNames, companyQueryString, defaultCompanyFilters, dueNames, emptyContact, statusNames } from './companyPageShared'
 import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
@@ -817,7 +818,15 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
         </div>}
       </div>}
     </section>}
-    {selected && <section className="panel mt-7"><h2>AI判定レビュー</h2><p className="muted mt-2 text-sm">実際の営業対象としての妥当性を記録し、検索語ごとの精度改善に使います。</p><div className="detail-grid mt-4"><label className="field">判定<select value={aiReviewVerdict} onChange={e => setAiReviewVerdict(e.target.value as 'correct' | 'incorrect')}><option value="correct">正しい</option><option value="incorrect">誤り</option></select></label><label className="field">レビュー理由<textarea rows={3} maxLength={5000} value={aiReviewNote} onChange={e => setAiReviewNote(e.target.value)} placeholder="例：対象業種ではない、決裁者が明確" /></label></div><div className="actions"><button disabled={busy} onClick={() => void saveAiReview()}>レビューを保存</button></div>{aiReview && <p className="muted text-sm mt-3">最終レビュー：{aiReview.verdict === 'correct' ? '正しい' : '誤り'} / {new Date(aiReview.updated_at).toLocaleString('ja-JP')}</p>}</section>}
+    {selected && <CompanyAiReviewPanel
+      review={aiReview}
+      verdict={aiReviewVerdict}
+      note={aiReviewNote}
+      busy={busy}
+      onVerdictChange={setAiReviewVerdict}
+      onNoteChange={setAiReviewNote}
+      onSave={() => void saveAiReview()}
+    />}
     {selected && <CompanyDealsPanel
       deals={deals}
       title={dealTitle}
@@ -837,7 +846,23 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       onLostReasonChange={setDealLostReason}
       onCreate={() => void createDeal()}
     />}
-    {selected && <section className="panel mt-7"><h2>営業文面 A/Bテスト</h2><p className="muted mt-2 text-sm">同じ種別のテンプレートを2案用意し、企業IDで均等に割り当てます。送信後の返信・商談・成約を案ごとに比較します。</p><div className="detail-grid mt-4"><label className="field">テスト名<input maxLength={200} value={experimentName} onChange={e => setExperimentName(e.target.value)} placeholder="例：9月件名比較" /></label><label className="field">A案<select value={experimentA} onChange={e => setExperimentA(e.target.value)}><option value="">選択してください</option>{outreachTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label><label className="field">B案<select value={experimentB} onChange={e => setExperimentB(e.target.value)}><option value="">選択してください</option>{outreachTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label></div><div className="actions"><button disabled={busy || !experimentName.trim() || !experimentA || !experimentB || experimentA === experimentB} onClick={() => void createExperiment()}>A/Bテストを作成</button></div><div className="detail-grid mt-4"><label className="field">利用するA/Bテスト<select value={experimentId} onChange={e => void loadExperimentResults(e.target.value)}><option value="">選択してください</option>{experiments.filter(item => item.active).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="actions self-end"><button className="secondary" disabled={busy || !selectedDraft || !experimentId} onClick={() => void applyExperiment()}>現在の文面へ均等割当を適用</button></div></div>{experimentId && <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>案</th><th>送信済み</th><th>返信</th><th>商談</th><th>成約</th><th>返信率</th></tr></thead><tbody>{experimentResults.map(item => <tr key={item.variant}><td>{item.variant}案</td><td>{item.delivered}</td><td>{item.replied}</td><td>{item.meetings}</td><td>{item.won}</td><td>{item.reply_rate}%</td></tr>)}</tbody></table></div>}</section>}
+    {selected && <CompanyExperimentPanel
+      templates={outreachTemplates}
+      experiments={experiments}
+      results={experimentResults}
+      hasSelectedDraft={Boolean(selectedDraft)}
+      name={experimentName}
+      templateA={experimentA}
+      templateB={experimentB}
+      experimentId={experimentId}
+      busy={busy}
+      onNameChange={setExperimentName}
+      onTemplateAChange={setExperimentA}
+      onTemplateBChange={setExperimentB}
+      onExperimentChange={id => void loadExperimentResults(id)}
+      onCreate={() => void createExperiment()}
+      onApply={() => void applyExperiment()}
+    />}
     {selected && <CompanyActivitiesPanel
       activities={activities}
       activityType={activityType}
