@@ -67,3 +67,13 @@ Composeプロジェクト名とDBボリューム名は固定されているた�
 ## 技術構成
 
 `compose.local.yaml`がPostgreSQL、FastAPI、バックグラウンドワーカー、Nginx配信のReact画面を起動する。DBは外部へ公開せず、Web画面だけを`127.0.0.1`へ公開する。Migrationは起動・更新時にAlembicで適用する。
+
+## 配布パッケージの作成
+
+開発者はリポジトリ直下から次を実行する。
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-windows.ps1
+```
+
+`dist`フォルダーへコミット番号付きZIPと`.sha256`ファイルを出力する。ZIPにはGit管理済みの実行必須ファイルだけを含め、`.env`、`.env.local`、仮想環境、`node_modules`、テスト結果、既存データは含めない。ZIP内の全ファイルには`MANIFEST-SHA256.txt`を付与する。
