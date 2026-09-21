@@ -3,16 +3,19 @@ import { api, download, errorMessage } from './api'
 import { CompanyActivitiesPanel } from './CompanyActivitiesPanel'
 import { CompanyContactsPanel } from './CompanyContactsPanel'
 import { CompanyDealsPanel } from './CompanyDealsPanel'
+import { CompanyDetailsPanel } from './CompanyDetailsPanel'
 import { CompanyFilters } from './CompanyFilters'
 import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
+import { CompanyFormDeliveryPanel } from './CompanyFormDeliveryPanel'
 import { CompanyEmailDeliveryPanel } from './CompanyEmailDeliveryPanel'
 import { CompanyList } from './CompanyList'
 import { AssigneeAnalyticsPanel, DealPipelinePanel } from './CompanyReportingPanels'
 import { CompanyQualityPanels } from './CompanyQualityPanels'
+import { CompanyOutreachQueuePanel } from './CompanyOutreachQueuePanel'
 import { CompanyReplyQueuePanel } from './CompanyReplyQueuePanel'
 import { CompanySavedFiltersPanel } from './CompanySavedFiltersPanel'
 import { CompanyAiReviewPanel, CompanyExperimentPanel } from './CompanyOptimizationPanels'
-import { channelNames, companyQueryString, defaultCompanyFilters, dueNames, emptyContact, statusNames } from './companyPageShared'
+import { companyQueryString, defaultCompanyFilters, emptyContact } from './companyPageShared'
 import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 type Filters = CompanyFilterValues
@@ -739,10 +742,22 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       onResolve={() => void resolveFollowupTask()}
       onCancel={() => setFollowupTarget(null)}
     />
-    <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>営業アプローチキュー</h2><p className="muted mt-2 text-sm">期限超過を優先し、連絡可能な営業対象を処理します。</p></div><span className="badge">{outreachQueue.length} 社</span></div>
-      <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>推奨経路</th><th>担当者</th><th>期限</th><th>状況</th><th></th></tr></thead><tbody>{outreachQueue.map(item => <tr key={item.company.id}><td><strong>{item.company.company_name}</strong><p className="muted text-xs">{item.company.rank ?? '—'} / {item.company.score ?? '—'}点</p></td><td>{channelNames[item.recommended_channel]}<p className="muted text-xs">{item.available_channels.map(channel => channelNames[channel]).join(' / ')}</p></td><td>{item.company.assignee || '未設定'}</td><td><span className="badge">{dueNames[item.due_state]}</span><p className="muted text-xs">{item.company.next_followup_at ? new Date(item.company.next_followup_at).toLocaleString('ja-JP') : '—'}</p></td><td>{statusNames[item.company.status]}</td><td><button className="secondary" onClick={() => startOutreach(item)}>対応する</button></td></tr>)}{outreachQueue.length === 0 && <tr><td colSpan={6} className="text-center muted">連絡可能な営業対象はありません。</td></tr>}</tbody></table></div>
-      {outreachTarget && <div className="mt-5"><h3>{outreachTarget.company.company_name}への対応記録</h3><div className="detail-grid"><div><label className="field">連絡経路<select value={outreachChannel} onChange={e => setOutreachChannel(e.target.value as OutreachChannel)}>{outreachTarget.available_channels.map(channel => <option key={channel} value={channel}>{channelNames[channel]}</option>)}</select></label><label className="field">結果<select value={outreachOutcome} onChange={e => setOutreachOutcome(e.target.value as SalesStatus)}><option value="approached">アプローチ済</option><option value="replied">返信あり</option><option value="meeting">商談</option><option value="lost">失注</option></select></label><label className="field">次回対応日時<input type="datetime-local" value={outreachFollowup} onChange={e => setOutreachFollowup(e.target.value)} /></label></div><label className="field">対応内容<textarea rows={5} maxLength={10000} value={outreachNote} onChange={e => setOutreachNote(e.target.value)} placeholder="送信内容、通話結果、次回確認事項" /></label></div><div className="actions"><button disabled={busy || !outreachNote.trim()} onClick={() => void recordOutreach()}>対応を記録</button><button className="secondary" onClick={() => setOutreachTarget(null)}>キャンセル</button></div></div>}
-    </section>
+    <CompanyOutreachQueuePanel
+      items={outreachQueue}
+      target={outreachTarget}
+      channel={outreachChannel}
+      outcome={outreachOutcome}
+      note={outreachNote}
+      followup={outreachFollowup}
+      busy={busy}
+      onStart={startOutreach}
+      onChannelChange={setOutreachChannel}
+      onOutcomeChange={setOutreachOutcome}
+      onNoteChange={setOutreachNote}
+      onFollowupChange={setOutreachFollowup}
+      onRecord={() => void recordOutreach()}
+      onCancel={() => setOutreachTarget(null)}
+    />
     <CompanySavedFiltersPanel
       items={savedFilters}
       currentFilters={filters}
@@ -794,15 +809,30 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       onAssign={() => void assignSelected()}
       onOpen={company => void open(company)}
     />
-    {selected && <section className="panel mt-7" aria-label="企業詳細"><div className="flex justify-between gap-4"><div><p className="eyebrow">COMPANY DETAIL</p><h2>{selected.company_name}</h2></div><button className="secondary" onClick={() => setSelected(null)}>閉じる</button></div>
-      <div className="detail-grid"><div><h3>基本情報を編集</h3>{[['company_name', '会社名'], ['address', '住所'], ['prefecture', '都道府県'], ['city', '市区町村'], ['phone', '電話'], ['email', 'メール'], ['assignee', '担当者']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label>{key !== 'assignee' && <label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label>}</div>)}</div>
-        <div><h3>問い合わせ先を編集</h3>{[['contact_url', 'フォーム'], ['instagram_url', 'Instagram'], ['x_url', 'X'], ['tiktok_url', 'TikTok'], ['facebook_url', 'Facebook'], ['youtube_url', 'YouTube'], ['line_url', 'LINE']].map(([key, label]) => <div key={key}><label className="field">{label}<input value={companyEdit[key] ?? ''} onChange={e => setCompanyEdit({ ...companyEdit, [key]: e.target.value })} /></label><label className="checkbox-row text-sm"><input type="checkbox" checked={protectedFields.includes(key)} onChange={e => setProtectedFields(e.target.checked ? [...protectedFields, key] : protectedFields.filter(field => field !== key))} />{label}をWeb再解析から保護</label></div>)}</div></div>
-      <div className="actions"><button disabled={busy} onClick={() => void saveCompany()}>企業情報を保存</button></div>
-      <div className="detail-grid"><div><h3>連絡禁止・除外</h3><label className="checkbox-row"><input type="checkbox" checked={doNotContact} onChange={e => setDoNotContact(e.target.checked)} />この企業への連絡を禁止</label><label className="field">除外理由<input maxLength={500} required={doNotContact} value={exclusionReason} onChange={e => setExclusionReason(e.target.value)} placeholder="例：連絡拒否、既存顧客、競合" /></label></div><div><h3>連絡先品質</h3><label className="field">確認状態<select value={contactQuality} onChange={e => setContactQuality(e.target.value as Company['contact_quality_status'])}><option value="unknown">未確認</option><option value="observed">Web取得済み</option><option value="verified">人手確認済み</option><option value="invalid">無効</option></select></label><p className="muted text-sm">取得元：{selected.contact_source_url || '未記録'}</p><p className="muted text-sm">最終確認：{selected.contact_checked_at ? new Date(selected.contact_checked_at).toLocaleString('ja-JP') : '未確認'}</p></div></div><div className="actions"><button disabled={busy || (doNotContact && !exclusionReason.trim())} onClick={() => void saveContactControl()}>連絡制御を保存</button></div>
-      <div className="detail-grid"><div><h3>AI分析</h3><p><strong>{selected.rank ?? '未判定'} / {selected.score ?? '—'}点</strong> {selected.business_type}</p><p>{selected.ai_summary || 'AI要約はありません。'}</p><p className="muted">{selected.ai_reason}</p></div><div><h3>強み・懸念</h3><p>{selected.ai_strengths.join(' / ') || '—'}</p><p className="muted">{selected.ai_concerns.join(' / ') || '—'}</p><p>推奨：{selected.ai_recommended_approach || '—'}</p></div></div>
-      <div className="mt-5"><h3>Web解析ページ</h3>{selected.scraped_urls.length === 0 ? <p className="muted text-sm">解析ページの記録はありません。</p> : <ul className="mt-2 list-disc pl-5 text-sm">{selected.scraped_urls.map(url => <li className="break-all" key={url}><a href={url} target="_blank" rel="noreferrer">{url}</a></li>)}</ul>}</div>
-      <div className="detail-grid"><div><label className="field">営業状況<select value={status} onChange={e => setStatus(e.target.value as SalesStatus)}>{Object.entries(statusNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label className="field">次回対応日時<input type="datetime-local" value={followup} onChange={e => setFollowup(e.target.value)} /></label></div><label className="field">メモ<textarea rows={5} maxLength={20000} value={notes} onChange={e => setNotes(e.target.value)} /></label></div>
-      <div className="actions"><button disabled={busy} onClick={() => void save()}>{busy ? '保存中…' : '営業状況を保存'}</button></div></section>}
+    {selected && <CompanyDetailsPanel
+      company={selected}
+      values={companyEdit}
+      protectedFields={protectedFields}
+      doNotContact={doNotContact}
+      exclusionReason={exclusionReason}
+      contactQuality={contactQuality}
+      status={status}
+      note={notes}
+      followup={followup}
+      busy={busy}
+      onValuesChange={setCompanyEdit}
+      onProtectedFieldsChange={setProtectedFields}
+      onDoNotContactChange={setDoNotContact}
+      onExclusionReasonChange={setExclusionReason}
+      onContactQualityChange={setContactQuality}
+      onStatusChange={setStatus}
+      onNoteChange={setNotes}
+      onFollowupChange={setFollowup}
+      onSaveCompany={() => void saveCompany()}
+      onSaveContactControl={() => void saveContactControl()}
+      onSaveStatus={() => void save()}
+      onClose={() => setSelected(null)}
+    />}
     {selected && <CompanyContactsPanel
       contacts={contacts}
       contactDraft={contactDraft}
@@ -835,35 +865,26 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
           onCancel={() => void cancelEmailDelivery()}
           onRetry={() => void retryEmailDelivery()}
         />}
-        {selectedDraft.channel === 'form' && <div className="mt-6">
-          <h3>フォーム送信</h3>
-          <p className="muted text-sm">通常フォームはこの画面から送信できます。CAPTCHAや複数画面のフォームはCodex支援へ引き渡します。</p>
-          {formDelivery ? <div className="mt-4">
-            <p className="muted text-sm">送信方法：{formDelivery.delivery_method === 'direct' ? 'LeadHive通常フォーム' : 'Codex支援'}</p>
-            <p className="muted text-sm">状態：{formDelivery.status === 'submitted' ? '送信済み' : formDelivery.status === 'failed' ? '失敗' : '保留'}</p>
-            {formDelivery.result_note && <p className="muted text-sm">メモ：{formDelivery.result_note}</p>}
-            {formDelivery.delivery_method === 'codex_assisted' && formDelivery.status !== 'submitted' && <div className="mt-4">
-              <label className="field">結果<select value={assistOutcome} onChange={e => setAssistOutcome(e.target.value as FormDelivery['status'])}><option value="pending">保留</option><option value="submitted">送信済み</option><option value="failed">失敗</option></select></label>
-              <label className="field">メモ<textarea rows={3} maxLength={500} value={assistNote} onChange={e => setAssistNote(e.target.value)} placeholder="例：CAPTCHAが解けず保留" /></label>
-              <label className="checkbox-row"><input type="checkbox" checked={assistConfirmed} onChange={e => setAssistConfirmed(e.target.checked)} />Codex上で確認した結果を記録します。</label>
-              <div className="actions"><button disabled={busy || !assistConfirmed} onClick={() => void recordFormAssistDelivery()}>Codex支援の結果を記録</button></div>
-            </div>}
-          </div> : <>
-            <div className="actions"><button className="secondary" disabled={busy || selected.do_not_contact} onClick={() => void copyFormAssist()}>Codex支援用の指示をコピー</button></div>
-            <div className="mt-4"><h4>Codex支援の送信結果</h4>
-              <label className="field">結果<select value={assistOutcome} onChange={e => setAssistOutcome(e.target.value as FormDelivery['status'])}><option value="pending">保留</option><option value="submitted">送信済み</option><option value="failed">失敗</option></select></label>
-              <label className="field">メモ<textarea rows={3} maxLength={500} value={assistNote} onChange={e => setAssistNote(e.target.value)} placeholder="例：CAPTCHAが解けず保留" /></label>
-              <label className="checkbox-row"><input type="checkbox" checked={assistConfirmed} onChange={e => setAssistConfirmed(e.target.checked)} />Codex上で確認した結果を記録します。</label>
-              <div className="actions"><button disabled={busy || !assistConfirmed || selected.do_not_contact} onClick={() => void recordFormAssistDelivery()}>Codex支援の結果を記録</button></div>
-            </div>
-            {!formPreview ? <div className="actions"><button className="secondary" disabled={busy || selected.do_not_contact} onClick={() => void inspectForm()}>フォーム項目を確認</button></div> : <>
-              <p className="muted text-xs mt-3 break-all">送信先: {formPreview.form_url}</p>
-              <div className="detail-grid mt-3">{formPreview.fields.map(field => <label className="field" key={field.name}>{field.label}{field.required && ' *'}{field.field_type === 'textarea' ? <textarea rows={5} value={formValues[field.name] ?? ''} onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })} /> : field.field_type === 'select' ? <select value={formValues[field.name] ?? ''} onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })}><option value="">選択してください</option>{field.options.map(option => <option value={option} key={option}>{option}</option>)}</select> : <input type={field.field_type} value={formValues[field.name] ?? ''} onChange={e => setFormValues({ ...formValues, [field.name]: e.target.value })} />}</label>)}</div>
-              <label className="checkbox-row mt-4"><input type="checkbox" checked={formConfirmed} onChange={e => setFormConfirmed(e.target.checked)} />入力内容と送信先を確認し、このフォーム送信を承認します。</label>
-              <div className="actions"><button disabled={busy || !formConfirmed || selected.do_not_contact} onClick={() => void submitForm()}>フォームを送信</button></div>
-            </>}
-          </>}
-        </div>}
+        {selectedDraft.channel === 'form' && <CompanyFormDeliveryPanel
+          company={selected}
+          delivery={formDelivery}
+          preview={formPreview}
+          values={formValues}
+          confirmed={formConfirmed}
+          assistOutcome={assistOutcome}
+          assistNote={assistNote}
+          assistConfirmed={assistConfirmed}
+          busy={busy}
+          onValuesChange={setFormValues}
+          onConfirmedChange={setFormConfirmed}
+          onAssistOutcomeChange={setAssistOutcome}
+          onAssistNoteChange={setAssistNote}
+          onAssistConfirmedChange={setAssistConfirmed}
+          onRecordAssist={() => void recordFormAssistDelivery()}
+          onCopyAssist={() => void copyFormAssist()}
+          onInspect={() => void inspectForm()}
+          onSubmit={() => void submitForm()}
+        />}
       </div>}
     </section>}
     {selected && <CompanyAiReviewPanel
