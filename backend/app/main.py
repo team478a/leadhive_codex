@@ -15,6 +15,7 @@ from app.collection_routes import router as collection_router
 from app.company_quality_routes import router as company_quality_router
 from app.company_reporting_routes import router as company_reporting_router
 from app.company_routes import router as company_router
+from app.company_workflow_routes import router as company_workflow_router
 from app.config import settings
 from app.database import SessionLocal
 from app.form_batch_routes import router as form_batch_router
@@ -93,6 +94,7 @@ app.include_router(campaign_router)
 app.include_router(analysis_router)
 app.include_router(ai_router)
 app.include_router(company_router)
+app.include_router(company_workflow_router)
 app.include_router(company_reporting_router)
 app.include_router(company_quality_router)
 app.include_router(operation_router)

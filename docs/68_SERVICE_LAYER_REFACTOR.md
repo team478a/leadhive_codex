@@ -19,7 +19,8 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 
 - `company_reporting_routes.py`：営業活動・送信成果の集計、保存フィルター、担当者別集計
 - `company_quality_routes.py`：重複候補、企業統合、データ品質、再解析キュー
-- `company_routes.py`：企業一覧・詳細、営業操作、フォロー、返信、担当者、CSV、ダッシュボード
+- `company_workflow_routes.py`：営業キュー、追客、返信対応、営業状況、活動履歴
+- `company_routes.py`：企業一覧・詳細、連絡制御、担当者、CSV、ダッシュボード
 
 既存のURLは維持し、各ルーターをアプリへ個別に登録している。
 
@@ -51,5 +52,4 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 
 ## 次の分割候補
 
-- `company_routes.py` の営業ワークフローと企業基本管理を分割
 - `schemas.py` と `models.py` を機能領域ごとのモジュールへ分割
