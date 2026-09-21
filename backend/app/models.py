@@ -531,6 +531,24 @@ class FormDeliveryBatchItem(Timestamps, Base):
     codex_assignee: Mapped[str] = mapped_column(String(320), default="")
 
 
+class ApplicationSettings(Timestamps, Base):
+    """Administrator-managed service settings. Secrets are stored encrypted."""
+
+    __tablename__ = "application_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    public_app_url: Mapped[str] = mapped_column(String(2000), default="")
+    openai_model: Mapped[str] = mapped_column(String(200), default="")
+    openai_api_key_ciphertext: Mapped[str] = mapped_column(Text, default="")
+    serper_api_key_ciphertext: Mapped[str] = mapped_column(Text, default="")
+    google_places_api_key_ciphertext: Mapped[str] = mapped_column(Text, default="")
+    gbizinfo_api_token_ciphertext: Mapped[str] = mapped_column(Text, default="")
+    gbizinfo_api_base_url: Mapped[str] = mapped_column(String(2000), default="")
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+
+
 class SmtpSettings(Timestamps, Base):
     __tablename__ = "smtp_settings"
     __table_args__ = (

@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -13,6 +14,7 @@ from app.campaign_routes import router as campaign_router
 from app.collection_routes import router as collection_router
 from app.company_routes import router as company_router
 from app.config import settings
+from app.database import SessionLocal
 from app.form_batch_routes import router as form_batch_router
 from app.improvement_routes import router as improvement_router
 from app.notification_routes import router as notification_router
@@ -21,7 +23,20 @@ from app.outreach_draft_routes import router as outreach_draft_router
 from app.routes import router
 
 logger = logging.getLogger("leadhive")
-app = FastAPI(title="LeadHive V2", version="0.1.0")
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    from app.services.application_settings import apply_application_settings
+
+    with SessionLocal() as db:
+        apply_application_settings(db)
+    yield
+
+
+app = FastAPI(title="LeadHive V2", version="0.1.0", lifespan=lifespan)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.allowed_origins,

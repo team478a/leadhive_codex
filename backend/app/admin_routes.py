@@ -6,8 +6,18 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Company, InboundEmail, InboundMailSettings, Project, SmtpSettings, User
+from app.models import (
+    ApplicationSettings,
+    Company,
+    InboundEmail,
+    InboundMailSettings,
+    Project,
+    SmtpSettings,
+    User,
+)
 from app.schemas import (
+    ApplicationSettingsInput,
+    ApplicationSettingsOut,
     InboundEmailCompanyCandidateOut,
     InboundEmailMatchInput,
     InboundEmailOut,
@@ -19,6 +29,12 @@ from app.schemas import (
     SmtpTestInput,
 )
 from app.security import current_admin
+from app.services.application_settings import (
+    _environment,
+    apply_application_settings,
+    effective_value,
+    secret_source,
+)
 from app.services.email_delivery import EmailDeliveryError, encrypt_secret, send_test_email
 from app.services.inbound_email import (
     InboundMailError,
@@ -32,6 +48,78 @@ from app.services.outreach_attribution import attribute_inbound_reply
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api/admin")
+
+
+def application_settings_out(value: ApplicationSettings | None) -> ApplicationSettingsOut:
+    return ApplicationSettingsOut(
+        public_app_url=effective_value(
+            value.public_app_url if value else "", _environment.public_app_url
+        ),
+        openai_model=effective_value(
+            value.openai_model if value else "", _environment.openai_model
+        ),
+        gbizinfo_api_base_url=effective_value(
+            value.gbizinfo_api_base_url if value else "", _environment.gbizinfo_api_base_url
+        ),
+        openai_api_key_source=secret_source(
+            value.openai_api_key_ciphertext if value else "", _environment.openai_api_key
+        ),
+        serper_api_key_source=secret_source(
+            value.serper_api_key_ciphertext if value else "", _environment.serper_api_key
+        ),
+        google_places_api_key_source=secret_source(
+            value.google_places_api_key_ciphertext if value else "",
+            _environment.google_places_api_key,
+        ),
+        gbizinfo_api_token_source=secret_source(
+            value.gbizinfo_api_token_ciphertext if value else "", _environment.gbizinfo_api_token
+        ),
+        updated_at=value.updated_at if value else None,
+    )
+
+
+@router.get("/application-settings", response_model=ApplicationSettingsOut)
+def get_application_settings(db: Session = Depends(get_db), user: User = Depends(current_admin)):
+    return application_settings_out(db.get(ApplicationSettings, 1))
+
+
+@router.put("/application-settings", response_model=ApplicationSettingsOut)
+def update_application_settings(
+    body: ApplicationSettingsInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
+):
+    saved = db.get(ApplicationSettings, 1)
+    try:
+        encrypted = {
+            field: encrypt_secret(value.strip())
+            for field, value in {
+                "openai_api_key_ciphertext": body.openai_api_key,
+                "serper_api_key_ciphertext": body.serper_api_key,
+                "google_places_api_key_ciphertext": body.google_places_api_key,
+                "gbizinfo_api_token_ciphertext": body.gbizinfo_api_token,
+            }.items()
+            if value is not None and value.strip()
+        }
+    except EmailDeliveryError as exc:
+        raise HTTPException(503, exc.public_message) from exc
+    if saved is None:
+        saved = ApplicationSettings(id=1)
+        db.add(saved)
+    saved.public_app_url = body.public_app_url.strip()
+    saved.openai_model = body.openai_model.strip()
+    saved.gbizinfo_api_base_url = body.gbizinfo_api_base_url.strip()
+    saved.updated_by_user_id = user.id
+    for field, value in encrypted.items():
+        setattr(saved, field, value)
+    db.commit()
+    db.refresh(saved)
+    try:
+        apply_application_settings(db)
+    except EmailDeliveryError as exc:
+        raise HTTPException(503, exc.public_message) from exc
+    logger.info("application settings updated: user_id=%s", user.id)
+    return application_settings_out(saved)
 
 
 def smtp_out(value: SmtpSettings) -> SmtpSettingsOut:

@@ -1,4 +1,12 @@
 export interface User { id: string; email: string; is_admin: boolean; created_at: string }
+export interface ApplicationSettings {
+  public_app_url: string; openai_model: string; gbizinfo_api_base_url: string
+  openai_api_key_source: 'database' | 'environment' | 'unset'
+  serper_api_key_source: 'database' | 'environment' | 'unset'
+  google_places_api_key_source: 'database' | 'environment' | 'unset'
+  gbizinfo_api_token_source: 'database' | 'environment' | 'unset'
+  updated_at: string | null
+}
 export interface SmtpSettings {
   host: string; port: number; username: string; from_email: string; from_name: string
   use_starttls: boolean; timeout_seconds: number; password_configured: boolean; updated_at: string

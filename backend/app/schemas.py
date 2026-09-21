@@ -585,6 +585,27 @@ class FormDeliveryBatchOut(BaseModel):
     items: list[FormDeliveryBatchItemOut] = []
 
 
+class ApplicationSettingsInput(Input):
+    public_app_url: str = Field(default="", max_length=2000)
+    openai_model: str = Field(default="", max_length=200)
+    openai_api_key: str | None = Field(default=None, max_length=1024)
+    serper_api_key: str | None = Field(default=None, max_length=1024)
+    google_places_api_key: str | None = Field(default=None, max_length=1024)
+    gbizinfo_api_token: str | None = Field(default=None, max_length=1024)
+    gbizinfo_api_base_url: str = Field(default="", max_length=2000)
+
+
+class ApplicationSettingsOut(BaseModel):
+    public_app_url: str
+    openai_model: str
+    gbizinfo_api_base_url: str
+    openai_api_key_source: Literal["database", "environment", "unset"]
+    serper_api_key_source: Literal["database", "environment", "unset"]
+    google_places_api_key_source: Literal["database", "environment", "unset"]
+    gbizinfo_api_token_source: Literal["database", "environment", "unset"]
+    updated_at: datetime | None
+
+
 class SmtpSettingsInput(Input):
     host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     port: int = Field(ge=1, le=65535)

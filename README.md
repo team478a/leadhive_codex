@@ -62,6 +62,7 @@ SMTP設定の管理画面とテスト送信は[実装記録](docs/41_SMTP_SETTIN
 追客通知からの直接操作は[実装記録](docs/62_FOLLOWUP_NOTIFICATION_ACTIONS.md)、収集精度・速度の実績比較は[実装記録](docs/63_COLLECTION_PERFORMANCE_INSIGHTS.md)を参照してください。
 AI判定レビュー、文面A/Bテスト、案件管理、gBizINFO収集は[継続改善ワークフロー](docs/64_CONTINUOUS_IMPROVEMENT_WORKFLOWS.md)を参照してください。
 一括フォームDMは[実装記録](docs/66_DELIVERY_CAMPAIGNS_AND_PIPELINE.md)を参照してください。
+全体サービス設定（APIキー、収集、AI、SMTP、IMAP）は[運用設定](docs/67_APPLICATION_SETTINGS_MANAGEMENT.md)を参照してください。
 
 構成:
 

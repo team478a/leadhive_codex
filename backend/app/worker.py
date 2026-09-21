@@ -28,6 +28,7 @@ from app.models import (
     TargetProfile,
 )
 from app.operation_routes import refresh_company_ids
+from app.services.application_settings import apply_application_settings
 from app.services.bulk_form_delivery import process_form_batch_item
 from app.services.collection import (
     ExternalServiceError,
@@ -611,6 +612,7 @@ def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 
 def run_once() -> bool:
     with SessionLocal() as db:
+        apply_application_settings(db)
         enqueue_due_schedules(db)
         enqueue_due_refresh_schedules(db)
         recover_stale_jobs(db)

@@ -1,8 +1,8 @@
 from cryptography.fernet import Fernet
 
 from app import admin_routes
-from app.models import InboundMailSettings, SmtpSettings
-from app.services import email_delivery
+from app.models import ApplicationSettings, InboundMailSettings, SmtpSettings
+from app.services import application_settings, email_delivery
 
 
 def smtp_body(password="smtp-password"):
@@ -115,3 +115,49 @@ def test_admin_can_store_and_test_encrypted_inbound_mail_settings(auth, users, d
 
     updated = auth.put("/api/admin/inbound-mail-settings", json=inbound_body(password=None))
     assert updated.status_code == 200 and updated.json()["password_configured"] is True
+
+
+def test_admin_can_store_application_settings_without_exposing_api_keys(
+    auth, users, db, monkeypatch
+):
+    users[0].is_admin = True
+    db.commit()
+    monkeypatch.setattr(
+        email_delivery.settings, "settings_encryption_key", Fernet.generate_key().decode()
+    )
+    for field in (
+        "public_app_url",
+        "openai_api_key",
+        "openai_model",
+        "serper_api_key",
+        "google_places_api_key",
+        "gbizinfo_api_token",
+        "gbizinfo_api_base_url",
+    ):
+        monkeypatch.setattr(application_settings.settings, field, "")
+    saved = auth.put(
+        "/api/admin/application-settings",
+        json={
+            "public_app_url": "https://app.example.com",
+            "openai_model": "gpt-5.6-luna",
+            "openai_api_key": "test-openai-key",
+            "serper_api_key": "test-serper-key",
+            "google_places_api_key": "test-places-key",
+            "gbizinfo_api_token": "test-gbizinfo-token",
+            "gbizinfo_api_base_url": "https://api.example.com/corporations",
+        },
+    )
+    assert saved.status_code == 200
+    result = saved.json()
+    assert result["openai_api_key_source"] == "database"
+    assert result["serper_api_key_source"] == "database"
+    assert "openai_api_key" not in result
+    row = db.get(ApplicationSettings, 1)
+    assert row.openai_api_key_ciphertext != "test-openai-key"
+    assert email_delivery.decrypt_secret(row.openai_api_key_ciphertext) == "test-openai-key"
+    assert application_settings.settings.openai_api_key == "test-openai-key"
+    assert application_settings.settings.public_app_url == "https://app.example.com"
+
+
+def test_application_settings_require_admin(auth):
+    assert auth.get("/api/admin/application-settings").status_code == 404
