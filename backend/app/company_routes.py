@@ -1358,4 +1358,3 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         overdue_followups=overdue_followups,
         due_today_followups=due_today_followups,
     )
-
