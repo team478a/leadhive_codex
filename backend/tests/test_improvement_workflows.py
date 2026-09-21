@@ -53,6 +53,10 @@ def test_ai_review_deals_and_ab_experiment(auth, db):
     )
     assert deal.status_code == 201 and deal.json()["expected_amount"] == 500000
     assert auth.get(f"/api/companies/{company.id}/deals").json()[0]["stage"] == "proposal"
+    pipeline = auth.get(f"/api/projects/{project['id']}/deal-pipeline")
+    assert pipeline.status_code == 200
+    assert pipeline.json()["total_amount"] == 500000
+    assert pipeline.json()["items"][0]["company_name"] == company.company_name
     template_a = auth.post(
         f"/api/projects/{project['id']}/outreach-templates",
         json={"name": "A案", "channel": "email", "subject": "A件名", "body": "A本文"},

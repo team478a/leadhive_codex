@@ -5,7 +5,7 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 
 from app.ai_routes import analyze_company_ai
 from app.analysis_routes import analyze
@@ -16,6 +16,7 @@ from app.models import (
     Activity,
     AnalysisRefreshSchedule,
     Company,
+    EmailCampaign,
     EmailDelivery,
     Notification,
     OperationJob,
@@ -152,12 +153,14 @@ def claim_email_delivery(db) -> EmailDelivery | None:
             return None
     delivery = db.scalar(
         select(EmailDelivery)
+        .outerjoin(EmailCampaign, EmailCampaign.id == EmailDelivery.campaign_id)
         .where(
             EmailDelivery.status == "queued",
             EmailDelivery.scheduled_for <= now,
+            or_(EmailDelivery.campaign_id.is_(None), EmailCampaign.status == "queued"),
         )
         .order_by(EmailDelivery.scheduled_for, EmailDelivery.created_at, EmailDelivery.id)
-        .with_for_update(skip_locked=True)
+        .with_for_update(of=EmailDelivery, skip_locked=True)
         .limit(1)
     )
     if delivery:
@@ -172,11 +175,44 @@ def claim_email_delivery(db) -> EmailDelivery | None:
     return delivery
 
 
+def sync_campaign_status(db, campaign_id) -> None:
+    if campaign_id is None:
+        return
+    campaign = db.get(EmailCampaign, campaign_id)
+    if campaign is None or campaign.status == "paused":
+        return
+    active = db.scalar(
+        select(EmailDelivery.id)
+        .where(
+            EmailDelivery.campaign_id == campaign_id,
+            EmailDelivery.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    )
+    if active is None:
+        campaign.status = "completed"
+
+
+def delivery_body_with_unsubscribe(delivery: EmailDelivery) -> str:
+    if not settings.public_app_url or not delivery.unsubscribe_token:
+        return delivery.body
+    url = (
+        f"{settings.public_app_url.rstrip('/')}/api/public/unsubscribe/{delivery.unsubscribe_token}"
+    )
+    return f"{delivery.body.rstrip()}\n\n---\n今後のご案内が不要な場合: {url}"
+
+
 def run_email_delivery(db, delivery: EmailDelivery) -> None:
     worker_id = delivery.worker_id
     logger.info("email delivery start: id=%s", delivery.id)
     try:
-        send_email(db, str(delivery.id), delivery.recipient_email, delivery.subject, delivery.body)
+        send_email(
+            db,
+            str(delivery.id),
+            delivery.recipient_email,
+            delivery.subject,
+            delivery_body_with_unsubscribe(delivery),
+        )
         db.refresh(delivery)
         if delivery.status != "running" or delivery.worker_id != worker_id:
             return
@@ -211,6 +247,22 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
                     note="営業状況を更新: アプローチ済（メール送信）",
                 )
             )
+        campaign = db.get(EmailCampaign, delivery.campaign_id) if delivery.campaign_id else None
+        if (
+            campaign
+            and campaign.followup_days
+            and company
+            and company.status in {"approached", "target", "unreviewed"}
+        ):
+            company.next_followup_at = delivery.sent_at + timedelta(days=campaign.followup_days)
+            db.add(
+                Activity(
+                    company_id=company.id,
+                    activity_type="note",
+                    note=f"メールキャンペーンの追客予定を登録: {campaign.followup_days}日後",
+                )
+            )
+        sync_campaign_status(db, delivery.campaign_id)
         db.commit()
         logger.info("email delivery end: id=%s status=sent", delivery.id)
     except EmailDeliveryError as exc:
@@ -223,6 +275,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
             delivery.lease_expires_at = None
             delivery.finished_at = datetime.now(timezone.utc)
             notify_email_delivery_failure(db, delivery)
+            sync_campaign_status(db, delivery.campaign_id)
             db.commit()
         logger.warning("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
     except Exception as exc:
@@ -235,6 +288,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
             delivery.lease_expires_at = None
             delivery.finished_at = datetime.now(timezone.utc)
             notify_email_delivery_failure(db, delivery)
+            sync_campaign_status(db, delivery.campaign_id)
             db.commit()
         logger.error("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
 

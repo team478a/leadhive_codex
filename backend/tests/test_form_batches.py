@@ -78,3 +78,33 @@ def test_approved_bulk_form_delivery(auth, db, monkeypatch):
     assert executed.status_code == 200
     assert sum(item["status"] == "submitted" for item in executed.json()["items"]) == 2
     assert executed.json()["status"] == "completed"
+
+
+def test_failed_form_batch_item_can_be_requeued(auth, db, monkeypatch):
+    project, companies, template = make_project_and_companies(auth, db)
+    batch = auth.post(
+        f"/api/projects/{project['id']}/form-delivery-batches",
+        json={"template_id": template["id"], "company_ids": [str(companies[0].id)]},
+    ).json()
+    monkeypatch.setattr(
+        form_batch_routes,
+        "inspect_form",
+        lambda _url: (_ for _ in ()).throw(RuntimeError("temporary failure")),
+    )
+    executed = auth.post(
+        f"/api/form-delivery-batches/{batch['id']}/execute", json={"confirmed": True}
+    ).json()
+    item = executed["items"][0]
+    assert item["status"] == "failed"
+    assert (
+        auth.post(
+            f"/api/form-delivery-batch-items/{item['id']}/retry", json={"confirmed": False}
+        ).status_code
+        == 422
+    )
+    retried = auth.post(
+        f"/api/form-delivery-batch-items/{item['id']}/retry", json={"confirmed": True}
+    )
+    assert retried.status_code == 200
+    assert retried.json()["status"] == "ready"
+    assert retried.json()["items"][0]["status"] == "queued"

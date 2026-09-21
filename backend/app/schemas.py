@@ -498,6 +498,34 @@ class FormAssistOut(BaseModel):
     instructions: str
 
 
+class EmailCampaignCreateInput(Input):
+    name: Name
+    template_id: UUID
+    company_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
+    scheduled_for: datetime | None = None
+    followup_days: int = Field(default=0, ge=0, le=365)
+    confirmed: bool = False
+
+
+class EmailCampaignOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    template_id: UUID
+    name: str
+    status: Literal["queued", "paused", "completed"]
+    followup_days: int
+    queued_count: int = 0
+    sent_count: int = 0
+    failed_count: int = 0
+    skipped_count: int = 0
+    replied_count: int = 0
+    meeting_count: int = 0
+    won_count: int = 0
+    created_at: datetime
+    updated_at: datetime
+
+
 class FormDeliveryBatchCreateInput(Input):
     template_id: UUID
     company_ids: Annotated[list[UUID], Field(min_length=1, max_length=100)]
@@ -506,6 +534,21 @@ class FormDeliveryBatchCreateInput(Input):
 class FormDeliveryBatchExecuteInput(Input):
     confirmed: bool = False
     limit: int = Field(default=20, ge=1, le=20)
+
+
+class FormDeliveryBatchItemRetryInput(Input):
+    confirmed: bool = False
+
+
+class FormCodexTaskOut(BaseModel):
+    item_id: UUID
+    batch_id: UUID
+    company_id: UUID
+    company_name: str
+    form_url: str
+    body: str
+    reason: str
+    instructions: str
 
 
 class FormDeliveryBatchItemOut(BaseModel):
@@ -857,6 +900,17 @@ class DealOut(DealInput):
     company_id: UUID
     created_at: datetime
     updated_at: datetime
+
+
+class DealPipelineItemOut(DealOut):
+    project_id: UUID
+    company_name: str
+
+
+class DealPipelineOut(BaseModel):
+    total_amount: int
+    by_stage: dict[str, int]
+    items: list[DealPipelineItemOut]
 
 
 class OutreachExperimentInput(Input):

@@ -20,7 +20,9 @@
 | 対象外 | 連絡禁止、フォームURLなし、送信済み |
 | 失敗 | 送信処理中の予期しない失敗 |
 
-Codex支援対象は外部サイトへ送信されない。企業詳細の既存Codex支援フォーム送信で、画面を確認しながら個別に対応する。
+Codex支援対象は外部サイトへ送信されない。企業詳細の既存Codex支援フォーム送信で、画面を確認しながら個別に対応する。一括画面のCodex支援フォーム作業キューから、企業名、フォームURL、本文、作業指示をコピーできる。
+
+失敗項目は確認後に再試行待ちへ戻せる。再実行時も改めて一括送信の承認が必要である。
 
 ## 安全条件
 
@@ -37,6 +39,8 @@ Codex支援対象は外部サイトへ送信されない。企業詳細の既存
 - `POST /api/projects/{project_id}/form-delivery-batches`
 - `POST /api/form-delivery-batches/{batch_id}/execute`
 - `POST /api/form-delivery-batches/{batch_id}/cancel`
+- `GET /api/projects/{project_id}/form-codex-queue`
+- `POST /api/form-delivery-batch-items/{item_id}/retry`
 
 ## 検証
 

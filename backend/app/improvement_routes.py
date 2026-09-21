@@ -23,6 +23,8 @@ from app.schemas import (
     AiReviewOut,
     DealInput,
     DealOut,
+    DealPipelineItemOut,
+    DealPipelineOut,
     OutreachExperimentAssignmentOut,
     OutreachExperimentInput,
     OutreachExperimentOut,
@@ -95,6 +97,49 @@ def ai_review_analytics(
         )
         for keyword, count, correct_count in rows
     ]
+
+
+@router.get("/projects/{project_id}/deal-pipeline", response_model=DealPipelineOut)
+def deal_pipeline(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    project_access(project_id, db, user, write=False)
+    rows = db.execute(
+        select(Deal, Company)
+        .join(Company, Company.id == Deal.company_id)
+        .where(Company.project_id == project_id)
+        .order_by(
+            Deal.expected_close_date.is_(None), Deal.expected_close_date, Deal.updated_at.desc()
+        )
+    ).all()
+    items = [
+        DealPipelineItemOut(
+            id=deal.id,
+            company_id=deal.company_id,
+            project_id=project_id,
+            company_name=company.company_name,
+            title=deal.title,
+            stage=deal.stage,
+            expected_amount=deal.expected_amount,
+            expected_close_date=deal.expected_close_date,
+            owner=deal.owner,
+            next_step=deal.next_step,
+            lost_reason=deal.lost_reason,
+            created_at=deal.created_at,
+            updated_at=deal.updated_at,
+        )
+        for deal, company in rows
+    ]
+    return DealPipelineOut(
+        total_amount=sum(
+            item.expected_amount for item in items if item.stage not in {"lost", "won"}
+        ),
+        by_stage={
+            stage: sum(item.stage == stage for item in items)
+            for stage in ("lead", "proposal", "negotiation", "won", "lost")
+        },
+        items=items,
+    )
 
 
 @router.get("/companies/{company_id}/deals", response_model=list[DealOut])

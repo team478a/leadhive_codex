@@ -94,6 +94,8 @@ export interface DuplicateCandidate {
 }
 export interface AiReview { id: string; company_id: string; reviewer_id: string | null; verdict: 'correct' | 'incorrect'; note: string; created_at: string; updated_at: string }
 export interface Deal { id: string; company_id: string; title: string; stage: 'lead' | 'proposal' | 'negotiation' | 'won' | 'lost'; expected_amount: number; expected_close_date: string | null; owner: string; next_step: string; lost_reason: string; created_at: string; updated_at: string }
+export interface DealPipelineItem extends Deal { project_id: string; company_name: string }
+export interface DealPipeline { total_amount: number; by_stage: Record<string, number>; items: DealPipelineItem[] }
 export interface OutreachExperiment { id: string; project_id: string; name: string; template_a_id: string; template_b_id: string; active: boolean; created_at: string; updated_at: string }
 export interface OutreachExperimentResult { variant: 'A' | 'B'; delivered: number; replied: number; meetings: number; won: number; reply_rate: number }
 export interface Activity {
@@ -127,8 +129,10 @@ export interface EmailDeliveryList {
   items: EmailDeliveryListItem[]; queued_count: number; running_count: number
   sent_count: number; failed_count: number; cancelled_count: number
 }
+export interface EmailCampaign { id: string; project_id: string; template_id: string; name: string; status: 'queued' | 'paused' | 'completed'; followup_days: number; queued_count: number; sent_count: number; failed_count: number; skipped_count: number; replied_count: number; meeting_count: number; won_count: number; created_at: string; updated_at: string }
 export interface FormDeliveryBatchItem { id: string; company_id: string; draft_id: string | null; form_delivery_id: string | null; status: 'queued' | 'submitted' | 'failed' | 'manual_required' | 'skipped'; reason: string; submitted_at: string | null; created_at: string; company_name: string; form_url: string }
 export interface FormDeliveryBatch { id: string; project_id: string; template_id: string; status: 'ready' | 'running' | 'completed' | 'cancelled'; created_at: string; updated_at: string; items: FormDeliveryBatchItem[] }
+export interface FormCodexTask { item_id: string; batch_id: string; company_id: string; company_name: string; form_url: string; body: string; reason: string; instructions: string }
 export interface FormField { name: string; label: string; field_type: 'text' | 'email' | 'tel' | 'textarea' | 'select'; required: boolean; value: string; options: string[] }
 export interface FormPreview { form_url: string; action_url: string; fields: FormField[] }
 export interface FormDelivery { id: string; draft_id: string; company_id: string; delivery_method: 'direct' | 'codex_assisted'; status: 'pending' | 'submitted' | 'failed'; action_url: string; response_status: number | null; submitted_at: string | null; error_message: string; result_note: string; created_at: string }

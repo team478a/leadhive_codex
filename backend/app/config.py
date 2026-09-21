@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     smtp_timeout_seconds: float = 20.0
     smtp_max_emails_per_day: int = 100
     smtp_minimum_interval_seconds: int = 60
+    public_app_url: str = ""
     settings_encryption_key: str = ""
 
     @field_validator("database_url")

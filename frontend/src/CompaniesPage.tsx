@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AiReview, Deal, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
@@ -83,6 +83,7 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const [aiReviewVerdict, setAiReviewVerdict] = useState<'correct' | 'incorrect'>('correct')
   const [aiReviewNote, setAiReviewNote] = useState('')
   const [deals, setDeals] = useState<Deal[]>([])
+  const [dealPipeline, setDealPipeline] = useState<DealPipeline | null>(null)
   const [dealTitle, setDealTitle] = useState('')
   const [dealStage, setDealStage] = useState<Deal['stage']>('lead')
   const [dealAmount, setDealAmount] = useState(0)
@@ -100,7 +101,13 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const [contacts, setContacts] = useState<ContactPerson[]>([])
   const [outreachDrafts, setOutreachDrafts] = useState<OutreachDraft[]>([])
   const [outreachTemplates, setOutreachTemplates] = useState<OutreachTemplate[]>([])
+  const [emailCampaigns, setEmailCampaigns] = useState<EmailCampaign[]>([])
+  const [emailCampaignTemplateId, setEmailCampaignTemplateId] = useState('')
+  const [emailCampaignName, setEmailCampaignName] = useState('')
+  const [emailCampaignFollowupDays, setEmailCampaignFollowupDays] = useState(0)
+  const [emailCampaignConfirmed, setEmailCampaignConfirmed] = useState(false)
   const [formBatches, setFormBatches] = useState<FormDeliveryBatch[]>([])
+  const [formCodexTasks, setFormCodexTasks] = useState<FormCodexTask[]>([])
   const [formBatchTemplateId, setFormBatchTemplateId] = useState('')
   const [formBatchConfirmed, setFormBatchConfirmed] = useState(false)
   const [draftApprovals, setDraftApprovals] = useState<OutreachDraftApproval[]>([])
@@ -132,8 +139,8 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const followupPanelRef = useRef<HTMLDivElement>(null)
   const query = useMemo(() => queryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
-    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); return }
-    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates] = await Promise.all([
+    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setFormCodexTasks([]); setEmailCampaigns([]); setDealPipeline(null); return }
+    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextFormCodexTasks, nextDealPipeline] = await Promise.all([
       api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
@@ -145,11 +152,14 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       api<AnalysisRefreshSchedule | null>(`/projects/${projectId}/analysis-refresh-schedule`),
       api<FormDeliveryBatch[]>(`/projects/${projectId}/form-delivery-batches`),
       api<OutreachTemplate[]>(`/projects/${projectId}/outreach-templates`),
+      api<EmailCampaign[]>(`/projects/${projectId}/email-campaigns`),
+      api<FormCodexTask[]>(`/projects/${projectId}/form-codex-queue`),
+      api<DealPipeline>(`/projects/${projectId}/deal-pipeline`),
     ])
     setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
     setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
     setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setFollowupTasks(nextFollowupTasks); setReplyQueue(nextReplyQueue); setChecked([])
-    setFormBatches(nextFormBatches); setOutreachTemplates(nextOutreachTemplates); setRefreshSchedule(nextRefreshSchedule)
+    setFormBatches(nextFormBatches); setFormCodexTasks(nextFormCodexTasks); setOutreachTemplates(nextOutreachTemplates); setEmailCampaigns(nextEmailCampaigns); setDealPipeline(nextDealPipeline); setRefreshSchedule(nextRefreshSchedule)
     if (nextRefreshSchedule) {
       setRefreshInterval(nextRefreshSchedule.interval_hours)
       setRefreshStaleDays(nextRefreshSchedule.stale_days)
@@ -509,6 +519,20 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       setNotice(followupAction === 'completed' ? '追客タスクを完了しました。' : '追客タスクを延期しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function createEmailCampaign() {
+    if (!projectId || !emailCampaignTemplateId || !emailCampaignName.trim() || checked.length === 0 || !emailCampaignConfirmed) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const campaign = await api<EmailCampaign>(`/projects/${projectId}/email-campaigns`, 'POST', { name: emailCampaignName, template_id: emailCampaignTemplateId, company_ids: checked, followup_days: emailCampaignFollowupDays, confirmed: true })
+      setEmailCampaigns([campaign, ...emailCampaigns]); setEmailCampaignName(''); setEmailCampaignConfirmed(false)
+      setNotice(`一括メールキャンペーンを作成しました。送信待ち ${campaign.queued_count} 件です。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function changeEmailCampaign(campaign: EmailCampaign, action: 'pause' | 'resume') {
+    setBusy(true); setError('')
+    try { const updated = await api<EmailCampaign>(`/email-campaigns/${campaign.id}/${action}`, 'POST'); setEmailCampaigns(emailCampaigns.map(item => item.id === updated.id ? updated : item)); setNotice(action === 'pause' ? 'メールキャンペーンを停止しました。' : 'メールキャンペーンを再開しました。') }
+    catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   async function createFormBatch() {
     if (!projectId || !formBatchTemplateId || checked.length === 0) return
     setBusy(true); setError(''); setNotice('')
@@ -527,6 +551,22 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       setNotice(`一括フォームDMを処理しました。送信済み ${counts.submitted ?? 0} / 手動対応 ${counts.manual_required ?? 0} / 残り ${counts.queued ?? 0}`)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function retryFormBatchItem(itemId: string) {
+    if (!window.confirm('この失敗したフォーム送信を、次回の一括実行対象に戻しますか？')) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const updated = await api<FormDeliveryBatch>(`/form-delivery-batch-items/${itemId}/retry`, 'POST', { confirmed: true })
+      setFormBatches(formBatches.map(item => item.id === updated.id ? updated : item))
+      setNotice('フォーム送信を再試行待ちに戻しました。実行前に改めて承認してください。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function copyBatchCodexTask(task: FormCodexTask) {
+    try {
+      await navigator.clipboard.writeText(`${task.instructions}\n\n会社: ${task.company_name}\nフォームURL: ${task.form_url}\n保留理由: ${task.reason}\n\n本文:\n${task.body}`)
+      setNotice(`${task.company_name}のCodex支援用指示をコピーしました。`)
+    } catch { setError('クリップボードへのコピーに失敗しました。') }
+  }
+
   async function cancelFormBatch(batch: FormDeliveryBatch) {
     setBusy(true); setError('')
     try { const updated = await api<FormDeliveryBatch>(`/form-delivery-batches/${batch.id}/cancel`, 'POST'); setFormBatches(formBatches.map(item => item.id === updated.id ? updated : item)); setNotice('一括フォームDMを中止しました。') }
@@ -673,7 +713,10 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       <label className="field">並び順<select value={draft.sort} onChange={e => setDraft({ ...draft, sort: e.target.value })}><option value="score_desc">スコア順</option><option value="newest">新しい順</option><option value="company_name">会社名順</option></select></label>
     </div><div className="flex flex-wrap justify-end gap-2"><button className="secondary" onClick={() => { setDraft(defaults); setFilters(defaults); setPage(0) }}>リセット</button><button onClick={() => { setFilters(draft); setPage(0) }}>絞り込む</button>
       <button className="secondary" onClick={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div></section>
-    <section className="panel mt-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2>一括フォームDM</h2><p className="muted mt-2 text-sm">一覧で選択した企業へ同じフォーム文面をキュー化します。通常フォームだけを承認後に最大20社ずつ送信し、入力項目が不足するフォームはCodex支援対象として残します。</p></div><span className="badge">選択 {checked.length} 社</span></div><div className="detail-grid mt-4"><label className="field">フォーム文面テンプレート<select value={formBatchTemplateId} onChange={e => setFormBatchTemplateId(e.target.value)}><option value="">選択してください</option>{outreachTemplates.filter(item => item.channel === 'form').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><div className="actions"><button disabled={busy || !formBatchTemplateId || checked.length === 0} onClick={() => void createFormBatch()}>選択企業で一括DMを作成</button></div>{formBatches.map(batch => <article className="job-row block mt-4" key={batch.id}><div className="flex flex-wrap justify-between gap-3"><div><strong>一括フォームDM</strong><p className="muted text-sm">{new Date(batch.created_at).toLocaleString('ja-JP')} / {batch.items.length}社</p></div><span className="badge">{batch.status === 'ready' ? '送信待ち' : batch.status === 'running' ? '実行中' : batch.status === 'completed' ? '完了' : '中止'}</span></div><div className="job-stats mt-3">{Object.entries(batch.items.reduce<Record<string, number>>((result, item) => ({ ...result, [item.status]: (result[item.status] ?? 0) + 1 }), {})).map(([status, count]) => <span key={status}>{({ queued: '送信待ち', submitted: '送信済み', failed: '失敗', manual_required: 'Codex支援', skipped: '対象外' }[status] ?? status)} {count}</span>)}</div>{batch.status === 'ready' && <><label className="checkbox-row mt-3"><input type="checkbox" checked={formBatchConfirmed} onChange={e => setFormBatchConfirmed(e.target.checked)} />対象企業、文面、送信済み・連絡禁止の除外を確認し、通常フォームへの一括送信を承認します。</label><div className="actions"><button disabled={busy || !formBatchConfirmed} onClick={() => void executeFormBatch(batch)}>最大20社を順次送信</button><button className="danger" disabled={busy} onClick={() => void cancelFormBatch(batch)}>中止</button></div></>}{batch.items.filter(item => item.status === 'manual_required').map(item => <p className="muted text-sm mt-2" key={item.id}>{item.company_name}：Codex支援が必要です（{item.reason}）</p>)}</article>)}{formBatches.length === 0 && <p className="muted mt-4">一括フォームDMはまだありません。</p>}</section>
+    {dealPipeline && <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>案件パイプライン</h2><p className="muted mt-2 text-sm">このプロジェクト全体の見込み案件、金額、次の対応を確認できます。</p></div><span className="badge">見込金額 {dealPipeline.total_amount.toLocaleString()}円</span></div><div className="job-stats mt-4">{Object.entries(dealPipeline.by_stage).map(([stage, count]) => <span key={stage}>{({ lead: '見込み', proposal: '提案', negotiation: '交渉', won: '受注', lost: '失注' }[stage] ?? stage)} {count}</span>)}</div>{dealPipeline.items.length === 0 ? <p className="muted mt-4">登録済み案件はありません。</p> : <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>案件</th><th>段階</th><th>見込金額</th><th>次の対応</th><th>予定日</th></tr></thead><tbody>{dealPipeline.items.slice(0, 20).map(deal => <tr key={deal.id}><td>{deal.company_name}</td><td>{deal.title}</td><td>{({ lead: '見込み', proposal: '提案', negotiation: '交渉', won: '受注', lost: '失注' }[deal.stage])}</td><td>{deal.expected_amount.toLocaleString()}円</td><td>{deal.next_step || '未設定'}</td><td>{deal.expected_close_date || '未設定'}</td></tr>)}</tbody></table></div>}</section>}
+    <section className="panel mt-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2>一括メール送信</h2><p className="muted mt-2 text-sm">一覧で選択した企業へメール文面を予約します。送信上限と間隔は既存のメールワーカーが適用し、返信後の追客日数も設定できます。</p></div><span className="badge">選択 {checked.length} 社</span></div><div className="detail-grid mt-4"><label className="field">キャンペーン名<input maxLength={200} value={emailCampaignName} onChange={e => setEmailCampaignName(e.target.value)} placeholder="例：9月初回メール" /></label><label className="field">メール文面テンプレート<select value={emailCampaignTemplateId} onChange={e => setEmailCampaignTemplateId(e.target.value)}><option value="">選択してください</option>{outreachTemplates.filter(item => item.channel === 'email').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label className="field">送信後の追客（日後）<input type="number" min={0} max={365} value={emailCampaignFollowupDays} onChange={e => setEmailCampaignFollowupDays(Number(e.target.value))} /></label></div><label className="checkbox-row mt-3"><input type="checkbox" checked={emailCampaignConfirmed} onChange={e => setEmailCampaignConfirmed(e.target.checked)} />対象企業、文面、連絡禁止・送信済み企業の除外を確認し、一括メール送信を承認します。</label><div className="actions"><button disabled={busy || !emailCampaignName.trim() || !emailCampaignTemplateId || checked.length === 0 || !emailCampaignConfirmed} onClick={() => void createEmailCampaign()}>一括メールを予約</button></div>{emailCampaigns.map(campaign => <article className="job-row mt-4" key={campaign.id}><div><strong>{campaign.name}</strong><p className="muted text-sm">送信待ち {campaign.queued_count} / 送信済み {campaign.sent_count} / 失敗 {campaign.failed_count} / 返信 {campaign.replied_count} / 商談 {campaign.meeting_count} / 成約 {campaign.won_count} / 追客 {campaign.followup_days || 0}日後</p></div><div className="actions">{campaign.status === 'paused' ? <button className="secondary" disabled={busy} onClick={() => void changeEmailCampaign(campaign, 'resume')}>再開</button> : <button className="secondary" disabled={busy || campaign.status === 'completed'} onClick={() => void changeEmailCampaign(campaign, 'pause')}>停止</button>}<span className="badge">{campaign.status === 'queued' ? '配信中' : campaign.status === 'paused' ? '停止中' : '完了'}</span></div></article>)}{emailCampaigns.length === 0 && <p className="muted mt-4">メールキャンペーンはまだありません。</p>}</section>
+    <section className="panel mt-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h2>Codex支援フォームの作業キュー</h2><p className="muted mt-2 text-sm">通常フォームで完結しない案件を、Codexに渡す指示としてまとめます。送信前の確認と最終送信は担当者が行います。</p></div><span className="badge">{formCodexTasks.length} 件</span></div>{formCodexTasks.length === 0 ? <p className="muted mt-4">Codex支援が必要なフォームはありません。</p> : formCodexTasks.map(task => <article className="job-row mt-4" key={task.item_id}><div><strong>{task.company_name}</strong><p className="muted text-sm">{task.reason}</p><p className="muted text-xs break-all">{task.form_url}</p></div><button className="secondary" disabled={busy} onClick={() => void copyBatchCodexTask(task)}>Codex用指示をコピー</button></article>)}</section>
+    <section className="panel mt-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><h2>一括フォームDM</h2><p className="muted mt-2 text-sm">一覧で選択した企業へ同じフォーム文面をキュー化します。通常フォームだけを承認後に最大20社ずつ送信し、入力項目が不足するフォームはCodex支援対象として残します。</p></div><span className="badge">選択 {checked.length} 社</span></div><div className="detail-grid mt-4"><label className="field">フォーム文面テンプレート<select value={formBatchTemplateId} onChange={e => setFormBatchTemplateId(e.target.value)}><option value="">選択してください</option>{outreachTemplates.filter(item => item.channel === 'form').map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label></div><div className="actions"><button disabled={busy || !formBatchTemplateId || checked.length === 0} onClick={() => void createFormBatch()}>選択企業で一括DMを作成</button></div>{formBatches.map(batch => <article className="job-row block mt-4" key={batch.id}><div className="flex flex-wrap justify-between gap-3"><div><strong>一括フォームDM</strong><p className="muted text-sm">{new Date(batch.created_at).toLocaleString('ja-JP')} / {batch.items.length}社</p></div><span className="badge">{batch.status === 'ready' ? '送信待ち' : batch.status === 'running' ? '実行中' : batch.status === 'completed' ? '完了' : '中止'}</span></div><div className="job-stats mt-3">{Object.entries(batch.items.reduce<Record<string, number>>((result, item) => ({ ...result, [item.status]: (result[item.status] ?? 0) + 1 }), {})).map(([status, count]) => <span key={status}>{({ queued: '送信待ち', submitted: '送信済み', failed: '失敗', manual_required: 'Codex支援', skipped: '対象外' }[status] ?? status)} {count}</span>)}</div>{batch.status === 'ready' && <><label className="checkbox-row mt-3"><input type="checkbox" checked={formBatchConfirmed} onChange={e => setFormBatchConfirmed(e.target.checked)} />対象企業、文面、送信済み・連絡禁止の除外を確認し、通常フォームへの一括送信を承認します。</label><div className="actions"><button disabled={busy || !formBatchConfirmed} onClick={() => void executeFormBatch(batch)}>最大20社を順次送信</button><button className="danger" disabled={busy} onClick={() => void cancelFormBatch(batch)}>中止</button></div></>}{batch.items.filter(item => item.status === 'manual_required').map(item => <p className="muted text-sm mt-2" key={item.id}>{item.company_name}：Codex支援が必要です（{item.reason}）</p>)}{batch.items.filter(item => item.status === 'failed').map(item => <div className="actions mt-2" key={item.id}><span className="error text-sm">{item.company_name}：{item.reason || '送信に失敗しました。'}</span><button className="secondary" disabled={busy} onClick={() => void retryFormBatchItem(item.id)}>再試行待ちに戻す</button></div>)}</article>)}{formBatches.length === 0 && <p className="muted mt-4">一括フォームDMはまだありません。</p>}</section>
     <section className="panel mt-6"><div className="flex items-center justify-between gap-3"><div><h2>返信対応キュー</h2><p className="muted mt-2 text-sm">受信した返信を確認し、商談化・失注・次回対応を記録します。</p></div><span className="badge">{replyQueue.length} 件</span></div>
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>企業</th><th>受信内容</th><th>受信日時</th><th>担当</th><th></th></tr></thead><tbody>{replyQueue.map(item => <tr key={item.inbound_email_id}><td><strong>{item.company.company_name}</strong><p className="muted text-xs">{item.company.email || item.sender_email}</p></td><td><strong>{item.subject || '件名なし'}</strong><p className="muted text-xs">{item.preview}</p></td><td>{new Date(item.received_at).toLocaleString('ja-JP')}</td><td>{item.company.assignee || '未設定'}</td><td><button className="secondary" onClick={() => startReply(item)}>対応する</button></td></tr>)}{replyQueue.length === 0 && <tr><td colSpan={5} className="text-center muted">対応待ちの返信はありません。</td></tr>}</tbody></table></div>
       {replyTarget && <div className="mt-5"><h3>{replyTarget.company.company_name}への返信対応</h3><p className="muted text-sm mt-2">{replyTarget.sender_email} / {replyTarget.subject || '件名なし'}</p><p className="mt-2 text-sm whitespace-pre-wrap">{replyTarget.preview || '本文の要約はありません。'}</p><div className="detail-grid mt-4"><div><label className="field">対応結果<select value={replyOutcome} onChange={e => setReplyOutcome(e.target.value as 'replied' | 'meeting' | 'won' | 'lost')}><option value="replied">返信確認・継続対応</option><option value="meeting">商談化</option><option value="won">成約</option><option value="lost">失注</option></select></label><label className="field">次回対応日時<input type="datetime-local" value={replyFollowup} onChange={e => setReplyFollowup(e.target.value)} /></label></div><label className="field">対応内容<textarea rows={4} maxLength={10000} value={replyNote} onChange={e => setReplyNote(e.target.value)} placeholder="返信内容、対応方針、商談日時など" /></label></div><div className="actions"><button disabled={busy || !replyNote.trim()} onClick={() => void recordReplyResponse()}>返信対応を記録</button><button className="secondary" onClick={() => setReplyTarget(null)}>キャンセル</button></div></div>}

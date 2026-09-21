@@ -19,9 +19,11 @@ from app.models import (
 )
 from app.project_access import project_access
 from app.schemas import (
+    FormCodexTaskOut,
     FormDeliveryBatchCreateInput,
     FormDeliveryBatchExecuteInput,
     FormDeliveryBatchItemOut,
+    FormDeliveryBatchItemRetryInput,
     FormDeliveryBatchOut,
 )
 from app.security import current_user
@@ -159,6 +161,72 @@ def create_form_batch(
                 reason=reason,
             )
         )
+    db.commit()
+    db.refresh(batch)
+    return batch_out(db, batch)
+
+
+@router.get("/projects/{project_id}/form-codex-queue", response_model=list[FormCodexTaskOut])
+def list_form_codex_queue(
+    project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    project_access(project_id, db, user, write=False)
+    rows = db.execute(
+        select(FormDeliveryBatchItem, FormDeliveryBatch, Company, OutreachDraft)
+        .join(FormDeliveryBatch, FormDeliveryBatch.id == FormDeliveryBatchItem.batch_id)
+        .join(Company, Company.id == FormDeliveryBatchItem.company_id)
+        .join(OutreachDraft, OutreachDraft.id == FormDeliveryBatchItem.draft_id)
+        .where(
+            FormDeliveryBatch.project_id == project_id,
+            FormDeliveryBatch.status != "cancelled",
+            FormDeliveryBatchItem.status == "manual_required",
+        )
+        .order_by(FormDeliveryBatchItem.created_at, FormDeliveryBatchItem.id)
+        .limit(100)
+    ).all()
+    return [
+        FormCodexTaskOut(
+            item_id=item.id,
+            batch_id=batch.id,
+            company_id=company.id,
+            company_name=company.company_name,
+            form_url=company.contact_url,
+            body=draft.body,
+            reason=item.reason,
+            instructions=(
+                "Codexのコンピューター操作でフォームを開き、本文を入力してください。"
+                "CAPTCHA、送信前確認、規約同意、最終送信は人が画面で確認し、"
+                "送信後はLeadHiveの企業詳細で結果を記録します。"
+            ),
+        )
+        for item, batch, company, draft in rows
+    ]
+
+
+@router.post("/form-delivery-batch-items/{item_id}/retry", response_model=FormDeliveryBatchOut)
+def retry_form_batch_item(
+    item_id: UUID,
+    body: FormDeliveryBatchItemRetryInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if not body.confirmed:
+        raise HTTPException(422, "対象フォームを確認して再試行を承認してください。")
+    item = db.get(FormDeliveryBatchItem, item_id)
+    if item is None:
+        raise HTTPException(404, "一括フォームDMの対象が見つかりません。")
+    batch = db.get(FormDeliveryBatch, item.batch_id)
+    if batch is None:
+        raise HTTPException(404, "一括フォームDMが見つかりません。")
+    project_access(batch.project_id, db, user)
+    if item.status != "failed":
+        raise HTTPException(409, "失敗したフォーム送信だけを再試行できます。")
+    if batch.status == "cancelled":
+        raise HTTPException(409, "中止済みの一括フォームDMは再試行できません。")
+    item.status = "queued"
+    item.reason = ""
+    item.submitted_at = None
+    batch.status = "ready"
     db.commit()
     db.refresh(batch)
     return batch_out(db, batch)
