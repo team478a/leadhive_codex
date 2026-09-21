@@ -37,17 +37,19 @@ APIルーターは認証、入力検証、HTTP応答に集中する。ワーカ�
 - `CompanyEmailDeliveryPanel.tsx`：個別メールの送信予約、取消、再送
 - `CompanyEmailCampaignsPanel.tsx`：一括メールの作成、承認、停止、再開
 - `CompanyFormDeliveryPanel.tsx`：個別フォーム送信とCodex支援結果の記録
+- `CompanyCodexFormQueue.tsx`：Codex支援フォーム作業キューの確認と結果記録
+- `CompanyFormBatchesPanel.tsx`：一括フォームDMの作成、承認、実行、中止、再試行
+- `CompanyOutreachDraftPanel.tsx`：営業文面の生成、編集、テンプレート、承認履歴
 - `CompanyOutreachQueuePanel.tsx`：営業アプローチ対象の対応記録
 - `CompanyDetailsPanel.tsx`：企業基本情報、連絡制御、営業状況の編集
 - `CompanyFollowupTasksPanel.tsx`：追客タスクの完了・延期と次回対応の記録
 - `CompanyQualityPanels.tsx`：データ品質、自動再解析、重複候補と統合
 - `companyPageShared.ts`：一覧で共有する表示名、初期フィルター、URLクエリー生成
-- `CompaniesPage.tsx`：データ取得、詳細編集、送信、営業対応の状態と操作
+- `CompaniesPage.tsx`：データ取得と各業務コンポーネントへの状態・操作の接続
 
-画面上の項目・操作・API呼び出しは維持したまま、一覧・レポート・品質管理に関する変更を他の機能へ波及させにくくした。
+画面上の項目・操作・API呼び出しは維持したまま、一覧、レポート、品質管理、送信業務に関する変更を他の機能へ波及させにくくした。
 
 ## 次の分割候補
 
-- `CompaniesPage.tsx` の詳細編集、送信操作、営業キューを個別コンポーネントへ分割
 - `company_routes.py` の営業ワークフローと企業基本管理を分割
 - `schemas.py` と `models.py` を機能領域ごとのモジュールへ分割
