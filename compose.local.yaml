@@ -1,0 +1,78 @@
+x-backend-environment: &backend-environment
+  APP_ENV: production
+  DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/leadhive_v2
+  CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8787,http://127.0.0.1:8787}
+  COOKIE_SECURE: "false"
+  SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
+  PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:8787}
+
+x-backend-service: &backend-service
+  build:
+    context: ./backend
+  environment: *backend-environment
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run Install-LeadHive.cmd first}
+      POSTGRES_DB: leadhive_v2
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d leadhive_v2"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  migrate:
+    build:
+      context: ./backend
+    environment: *backend-environment
+    command: ["python", "-m", "alembic", "-c", "alembic.ini", "upgrade", "head"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    <<: *backend-service
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=5)",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  worker:
+    <<: *backend-service
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    ports:
+      - "127.0.0.1:${LEADHIVE_PORT:-8787}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    name: ${LEADHIVE_DATA_VOLUME:-leadhive-local-postgres-data}

@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+backend/.venv
+backend/__pycache__
+backend/.pytest_cache
+backend/.ruff_cache
+backend/tests
+backend/phase6-results
+frontend/node_modules
+frontend/dist
+frontend/test-results
+frontend/playwright-report
+backups
+*.log

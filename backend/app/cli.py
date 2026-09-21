@@ -11,8 +11,17 @@ from app.security import password_hasher
 
 def main():
     parser = argparse.ArgumentParser(description="Create a LeadHive user (no public signup)")
-    parser.add_argument("email")
+    parser.add_argument("email", nargs="?")
+    parser.add_argument(
+        "--status", action="store_true", help="Print whether at least one user exists"
+    )
     args = parser.parse_args()
+    if args.status:
+        with SessionLocal() as db:
+            print("users-present" if db.scalar(select(User.id).limit(1)) else "no-users")
+        return
+    if not args.email:
+        parser.error("email is required")
     email = str(TypeAdapter(EmailStr).validate_python(args.email)).lower()
     password = getpass("Password (12+ characters): ")
     if not 12 <= len(password) <= 1024:
