@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, download, errorMessage } from './api'
-import type { Activity, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AiReview, Deal, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, CollectionSource, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
   meeting: '商談', won: '成約', lost: '失注', excluded: '対象外',
 }
 const sourceNames: Record<CollectionSource, string> = {
-  serper: 'Google検索', google_places: 'Google Maps', url: 'URL', csv: 'CSV',
+  serper: 'Google検索', google_places: 'Google Maps', gbizinfo: 'gBizINFO', url: 'URL', csv: 'CSV',
 }
 const channelNames: Record<OutreachChannel, string> = { email: 'メール', form: 'フォーム', call: '電話', sns: 'SNS' }
 const dueNames = { overdue: '期限超過', today: '本日', upcoming: '今後', unset: '期限なし' }
@@ -79,6 +79,23 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const [notes, setNotes] = useState('')
   const [followup, setFollowup] = useState('')
   const [bulkAssignee, setBulkAssignee] = useState('')
+  const [aiReview, setAiReview] = useState<AiReview | null>(null)
+  const [aiReviewVerdict, setAiReviewVerdict] = useState<'correct' | 'incorrect'>('correct')
+  const [aiReviewNote, setAiReviewNote] = useState('')
+  const [deals, setDeals] = useState<Deal[]>([])
+  const [dealTitle, setDealTitle] = useState('')
+  const [dealStage, setDealStage] = useState<Deal['stage']>('lead')
+  const [dealAmount, setDealAmount] = useState(0)
+  const [dealCloseDate, setDealCloseDate] = useState('')
+  const [dealOwner, setDealOwner] = useState('')
+  const [dealNextStep, setDealNextStep] = useState('')
+  const [dealLostReason, setDealLostReason] = useState('')
+  const [experiments, setExperiments] = useState<OutreachExperiment[]>([])
+  const [experimentName, setExperimentName] = useState('')
+  const [experimentA, setExperimentA] = useState('')
+  const [experimentB, setExperimentB] = useState('')
+  const [experimentId, setExperimentId] = useState('')
+  const [experimentResults, setExperimentResults] = useState<OutreachExperimentResult[]>([])
   const [activities, setActivities] = useState<Activity[]>([])
   const [contacts, setContacts] = useState<ContactPerson[]>([])
   const [outreachDrafts, setOutreachDrafts] = useState<OutreachDraft[]>([])
@@ -162,6 +179,20 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   useEffect(() => {
     if (followupTarget) followupPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }, [followupTarget])
+  useEffect(() => {
+    if (!selected) {
+      setAiReview(null); setDeals([]); setExperiments([]); setExperimentResults([])
+      return
+    }
+    Promise.all([
+      api<AiReview | null>(`/companies/${selected.id}/ai-review`),
+      api<Deal[]>(`/companies/${selected.id}/deals`),
+      api<OutreachExperiment[]>(`/projects/${selected.project_id}/outreach-experiments`),
+    ]).then(([review, nextDeals, nextExperiments]) => {
+      setAiReview(review); setAiReviewVerdict(review?.verdict ?? 'correct'); setAiReviewNote(review?.note ?? '')
+      setDeals(nextDeals); setExperiments(nextExperiments)
+    }).catch(e => setError(errorMessage(e)))
+  }, [selected])
   async function open(company: Company) {
     setSelected(company); setStatus(company.status); setNotes(company.notes); setNotice('')
     setCompanyEdit(Object.fromEntries([
@@ -473,6 +504,51 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       setNotice(followupAction === 'completed' ? '追客タスクを完了しました。' : '追客タスクを延期しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  async function saveAiReview() {
+    if (!selected) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const review = await api<AiReview>(`/companies/${selected.id}/ai-review`, 'PUT', { verdict: aiReviewVerdict, note: aiReviewNote })
+      setAiReview(review); setNotice('AI判定レビューを保存しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function createDeal() {
+    if (!selected || !dealTitle.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const deal = await api<Deal>(`/companies/${selected.id}/deals`, 'POST', {
+        title: dealTitle, stage: dealStage, expected_amount: dealAmount,
+        expected_close_date: dealCloseDate || null, owner: dealOwner, next_step: dealNextStep, lost_reason: dealLostReason,
+      })
+      setDeals([deal, ...deals]); setDealTitle(''); setDealAmount(0); setDealCloseDate(''); setDealNextStep(''); setDealLostReason('')
+      setNotice('案件を追加しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function createExperiment() {
+    if (!selected || !experimentName.trim() || !experimentA || !experimentB) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const experiment = await api<OutreachExperiment>(`/projects/${selected.project_id}/outreach-experiments`, 'POST', { name: experimentName, template_a_id: experimentA, template_b_id: experimentB, active: true })
+      setExperiments([experiment, ...experiments]); setExperimentId(experiment.id); setExperimentName('')
+      setNotice('A/Bテストを作成しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function applyExperiment() {
+    if (!selectedDraft || !experimentId) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const assignment = await api<{ experiment_id: string; variant: 'A' | 'B'; template: OutreachTemplate }>(`/outreach-experiments/${experimentId}/apply/${selectedDraft.id}`, 'POST')
+      const updated = { ...selectedDraft, subject: assignment.template.subject, body: assignment.template.body }
+      setSelectedDraft(updated); setOutreachDrafts(outreachDrafts.map(item => item.id === updated.id ? updated : item))
+      setNotice(`A/Bテストの${assignment.variant}案を適用しました。送信後に成果へ集計されます。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function loadExperimentResults(id: string) {
+    setExperimentId(id)
+    if (!id) { setExperimentResults([]); return }
+    try { setExperimentResults(await api<OutreachExperimentResult[]>(`/outreach-experiments/${id}/results`)) }
+    catch (e) { setError(errorMessage(e)) }
+  }
   async function saveContactControl() {
     if (!selected) return
     setBusy(true); setError('')
@@ -661,6 +737,9 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
         </div>}
       </div>}
     </section>}
+    {selected && <section className="panel mt-7"><h2>AI判定レビュー</h2><p className="muted mt-2 text-sm">実際の営業対象としての妥当性を記録し、検索語ごとの精度改善に使います。</p><div className="detail-grid mt-4"><label className="field">判定<select value={aiReviewVerdict} onChange={e => setAiReviewVerdict(e.target.value as 'correct' | 'incorrect')}><option value="correct">正しい</option><option value="incorrect">誤り</option></select></label><label className="field">レビュー理由<textarea rows={3} maxLength={5000} value={aiReviewNote} onChange={e => setAiReviewNote(e.target.value)} placeholder="例：対象業種ではない、決裁者が明確" /></label></div><div className="actions"><button disabled={busy} onClick={() => void saveAiReview()}>レビューを保存</button></div>{aiReview && <p className="muted text-sm mt-3">最終レビュー：{aiReview.verdict === 'correct' ? '正しい' : '誤り'} / {new Date(aiReview.updated_at).toLocaleString('ja-JP')}</p>}</section>}
+    {selected && <section className="panel mt-7"><h2>案件管理</h2><p className="muted mt-2 text-sm">商談後の見込み、次の対応、受注・失注を企業ごとに記録します。</p><div className="detail-grid mt-4"><label className="field">案件名<input maxLength={300} value={dealTitle} onChange={e => setDealTitle(e.target.value)} placeholder="例：採用支援サービス導入" /></label><label className="field">段階<select value={dealStage} onChange={e => setDealStage(e.target.value as Deal['stage'])}><option value="lead">見込み</option><option value="proposal">提案</option><option value="negotiation">交渉</option><option value="won">受注</option><option value="lost">失注</option></select></label><label className="field">見込金額（円）<input type="number" min={0} value={dealAmount} onChange={e => setDealAmount(Number(e.target.value))} /></label><label className="field">受注見込日<input type="date" value={dealCloseDate} onChange={e => setDealCloseDate(e.target.value)} /></label><label className="field">担当者<input maxLength={200} value={dealOwner} onChange={e => setDealOwner(e.target.value)} /></label><label className="field">次の対応<textarea rows={2} maxLength={5000} value={dealNextStep} onChange={e => setDealNextStep(e.target.value)} /></label>{dealStage === 'lost' && <label className="field">失注理由<textarea rows={2} maxLength={500} value={dealLostReason} onChange={e => setDealLostReason(e.target.value)} /></label>}</div><div className="actions"><button disabled={busy || !dealTitle.trim()} onClick={() => void createDeal()}>案件を追加</button></div>{deals.map(deal => <article className="job-row" key={deal.id}><div><strong>{deal.title}</strong><p className="muted text-sm">{({ lead: '見込み', proposal: '提案', negotiation: '交渉', won: '受注', lost: '失注' }[deal.stage])} / {deal.expected_amount.toLocaleString()}円 / {deal.owner || '担当未設定'}</p>{deal.next_step && <p className="text-sm">次の対応：{deal.next_step}</p>}</div><span className="badge">{deal.expected_close_date || '日付未設定'}</span></article>)}{deals.length === 0 && <p className="muted mt-4">登録済み案件はありません。</p>}</section>}
+    {selected && <section className="panel mt-7"><h2>営業文面 A/Bテスト</h2><p className="muted mt-2 text-sm">同じ種別のテンプレートを2案用意し、企業IDで均等に割り当てます。送信後の返信・商談・成約を案ごとに比較します。</p><div className="detail-grid mt-4"><label className="field">テスト名<input maxLength={200} value={experimentName} onChange={e => setExperimentName(e.target.value)} placeholder="例：9月件名比較" /></label><label className="field">A案<select value={experimentA} onChange={e => setExperimentA(e.target.value)}><option value="">選択してください</option>{outreachTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label><label className="field">B案<select value={experimentB} onChange={e => setExperimentB(e.target.value)}><option value="">選択してください</option>{outreachTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label></div><div className="actions"><button disabled={busy || !experimentName.trim() || !experimentA || !experimentB || experimentA === experimentB} onClick={() => void createExperiment()}>A/Bテストを作成</button></div><div className="detail-grid mt-4"><label className="field">利用するA/Bテスト<select value={experimentId} onChange={e => void loadExperimentResults(e.target.value)}><option value="">選択してください</option>{experiments.filter(item => item.active).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><div className="actions self-end"><button className="secondary" disabled={busy || !selectedDraft || !experimentId} onClick={() => void applyExperiment()}>現在の文面へ均等割当を適用</button></div></div>{experimentId && <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>案</th><th>送信済み</th><th>返信</th><th>商談</th><th>成約</th><th>返信率</th></tr></thead><tbody>{experimentResults.map(item => <tr key={item.variant}><td>{item.variant}案</td><td>{item.delivered}</td><td>{item.replied}</td><td>{item.meetings}</td><td>{item.won}</td><td>{item.reply_rate}%</td></tr>)}</tbody></table></div>}</section>}
     {selected && <section className="panel mt-7"><h2>活動履歴</h2><div className="detail-grid"><label className="field">活動種別<select value={activityType} onChange={e => setActivityType(e.target.value)}><option value="note">メモ</option><option value="call">電話</option><option value="email">メール</option><option value="form">フォーム</option><option value="sns">SNS</option><option value="meeting">商談</option></select></label><label className="field">活動内容<textarea rows={3} value={activityNote} onChange={e => setActivityNote(e.target.value)} /></label></div><div className="actions"><button disabled={busy || !activityNote.trim()} onClick={() => void addActivity()}>履歴を追加</button></div>{activities.map(item => <article className="job-row" key={item.id}><div><strong>{item.activity_type}</strong><p>{item.note}</p></div><time className="muted text-sm">{new Date(item.created_at).toLocaleString('ja-JP')}</time></article>)}</section>}
   </>
 }

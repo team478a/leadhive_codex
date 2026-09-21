@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { allPages, api, download, errorMessage, upload } from './api'
 import { Field } from './forms'
-import type { CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
+import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
-  serper: 'Google検索（Serper）', google_places: 'Google Maps / Places',
+  serper: 'Google検索（Serper）', google_places: 'Google Maps / Places', gbizinfo: 'gBizINFO（法人情報）',
   url: 'URL直接入力', csv: 'CSVインポート',
 }
 const statusNames = { running: '実行中', completed: '完了', failed: '失敗' }
@@ -37,6 +37,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [schedules, setSchedules] = useState<SearchSchedule[]>([])
   const [analytics, setAnalytics] = useState<SearchAnalytics[]>([])
   const [performance, setPerformance] = useState<CollectionPerformance[]>([])
+  const [reviewAnalytics, setReviewAnalytics] = useState<AiReviewAnalytics[]>([])
   const [scheduleName, setScheduleName] = useState('定期検索')
   const [intervalHours, setIntervalHours] = useState(168)
   const [companyLimit, setCompanyLimit] = useState(10000)
@@ -52,17 +53,18 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const suggestedKeywordText = suggestedKeywords.join('\n')
 
   const reload = useCallback(async () => {
-    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); return }
-    const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics, nextPerformance] = await Promise.all([
+    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); setReviewAnalytics([]); return }
+    const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics, nextPerformance, nextReviewAnalytics] = await Promise.all([
       allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
       api<OperationJob[]>(`/projects/${projectId}/operations`),
       api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
       api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
       api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
+      api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`),
     ])
     setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations); setSchedules(nextSchedules)
-    setAnalytics(nextAnalytics); setPerformance(nextPerformance)
+    setAnalytics(nextAnalytics); setPerformance(nextPerformance); setReviewAnalytics(nextReviewAnalytics)
   }, [projectId])
 
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
@@ -159,7 +161,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   async function createSchedule() {
     setError(''); setNotice('')
     try {
-      if (source !== 'serper' && source !== 'google_places') throw new Error('検索収集の条件を選択してください。')
+      if (!['serper', 'google_places', 'gbizinfo'].includes(source)) throw new Error('検索収集の条件を選択してください。')
       await api(`/projects/${projectId}/search-schedules`, 'POST', {
         name: scheduleName, source,
         keywords: keywords.split('\n').map(value => value.trim()).filter(Boolean),
@@ -195,21 +197,21 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
           <textarea required rows={8} value={keywords} onChange={e => setKeywords(e.target.value)}
             placeholder={source === 'url' ? 'https://example.com' : '検索キーワード'} />
         </Field>}
-        {(source === 'serper' || source === 'google_places') && <div className="grid gap-5 sm:grid-cols-2">
+        {(['serper', 'google_places', 'gbizinfo'].includes(source)) && <div className="grid gap-5 sm:grid-cols-2">
           <Field label="地域"><input required maxLength={500} value={region} onChange={e => setRegion(e.target.value)} /></Field>
           <Field label="キーワードごとの最大件数"><input type="number" min={1}
             max={source === 'google_places' ? 60 : 100} value={maxResults}
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>
         </div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所' }).map(([field, label]) => <Field key={field} label={label}><select required value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
-        <div className="actions"><button type="submit">{loading ? (source === 'serper' || source === 'google_places' ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
+        <div className="actions"><button type="submit">{loading ? (['serper', 'google_places', 'gbizinfo'].includes(source) ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
       </fieldset>
     </form>
     <div className="panel"><h2>定期収集テンプレート</h2><p className="muted mt-2 text-sm">現在の検索条件を保存し、ワーカーで定期実行します。</p>
       <Field label="テンプレート名"><input maxLength={200} value={scheduleName} onChange={e => setScheduleName(e.target.value)} /></Field>
       <div className="grid gap-4 sm:grid-cols-2"><Field label="実行間隔（時間）"><input type="number" min={1} max={720} value={intervalHours} onChange={e => setIntervalHours(Number(e.target.value))} /></Field>
         <Field label="プロジェクト企業上限"><input type="number" min={1} max={100000} value={companyLimit} onChange={e => setCompanyLimit(Number(e.target.value))} /></Field></div>
-      <button type="button" disabled={source !== 'serper' && source !== 'google_places'} onClick={() => void createSchedule()}>現在の検索条件を保存</button>
+      <button type="button" disabled={!['serper', 'google_places', 'gbizinfo'].includes(source)} onClick={() => void createSchedule()}>現在の検索条件を保存</button>
       {schedules.map(schedule => <article className="job-row block" key={schedule.id}><div className="flex justify-between gap-3"><strong>{schedule.name}</strong><span className="badge">{schedule.active ? '有効' : '停止中'}</span></div>
         <p className="muted my-2 text-sm">{schedule.keywords.join(' / ')}・{schedule.interval_hours}時間ごと・上限{schedule.company_limit}社</p>
         <p className="muted text-sm">次回 {new Date(schedule.next_run_at).toLocaleString('ja-JP')}</p>{schedule.last_error && <p className="error mt-2 mb-0">{schedule.last_error}</p>}
@@ -224,6 +226,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       </article>)}
       {analytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-3">テンプレート別成果</h3><table><thead><tr><th>テンプレート</th><th>検索数</th><th>発見</th><th>保存</th><th>保存率</th><th>重複率</th><th>公式外</th><th>エラー</th></tr></thead>
         <tbody>{analytics.map(item => <tr key={item.schedule_id}><td>{item.name}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.duplicate_rate}%</td><td>{item.excluded_count}</td><td>{item.error_count}</td></tr>)}</tbody></table></div>}
+      {reviewAnalytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-2">AI判定レビュー精度</h3><p className="muted mb-3 text-sm">人手レビューを検索語ごとに集計しています。精度が低い検索語はターゲット条件の見直し候補です。</p><table><thead><tr><th>検索語</th><th>レビュー数</th><th>正しい</th><th>精度</th></tr></thead><tbody>{reviewAnalytics.map(item => <tr key={item.source_keyword}><td>{item.source_keyword}</td><td>{item.reviewed_count}</td><td>{item.correct_count}</td><td>{item.accuracy_rate}%</td></tr>)}</tbody></table></div>}
       {performance.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-2">収集精度・速度の実績</h3><p className="muted mb-3 text-sm">保存率が低い検索語、公式外が多い検索語、時間がかかる収集元を比較して、検索条件を見直せます。</p><table><thead><tr><th>収集元</th><th>検索語</th><th>実行</th><th>発見</th><th>保存</th><th>保存率</th><th>公式外率</th><th>重複</th><th>エラー</th><th>平均時間</th></tr></thead>
         <tbody>{performance.map(item => <tr key={`${item.source}:${item.keyword}`}><td>{sourceNames[item.source]}</td><td>{item.keyword || '検索語なし'}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.excluded_rate}%</td><td>{item.duplicate_count}</td><td>{item.error_count}</td><td>{(item.average_processing_ms / 1000).toFixed(1)}秒</td></tr>)}</tbody></table></div>}
     </div></section>

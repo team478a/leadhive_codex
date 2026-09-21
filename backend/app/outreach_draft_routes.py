@@ -82,6 +82,8 @@ def record_draft_approval(
         subject=draft.subject,
         body=draft.body,
         delivered_at=delivered_at,
+        experiment_id=draft.experiment_id,
+        experiment_variant=draft.experiment_variant,
     )
     db.add(approval)
     return approval

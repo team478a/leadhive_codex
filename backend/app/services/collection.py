@@ -218,3 +218,41 @@ def search_google_places(keyword: str, region: str, max_results: int) -> list[Ca
             "Google Places検索に失敗しました。設定を確認してください。"
         ) from exc
     return candidates[:max_results]
+
+
+def search_gbizinfo(keyword: str, region: str, max_results: int) -> list[Candidate]:
+    """Search the official gBizINFO corporate registry using its REST API token."""
+    if not settings.gbizinfo_api_token:
+        raise ExternalServiceError("gBizINFO APIトークンが設定されていません。")
+    try:
+        with httpx.Client(timeout=settings.external_api_timeout_seconds) as client:
+            response = client.get(
+                settings.gbizinfo_api_base_url.rstrip("/"),
+                headers={"X-hojinInfo-api-token": settings.gbizinfo_api_token},
+                params={
+                    "name": keyword,
+                    "location": region,
+                    "page": 1,
+                    "size": min(max_results, 100),
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+    except (httpx.HTTPError, ValueError) as exc:
+        logger.error("external API error: provider=gbizinfo type=%s", type(exc).__name__)
+        raise ExternalServiceError("gBizINFO検索に失敗しました。設定を確認してください。") from exc
+    raw_items = data.get("hojin-infos") or data.get("corporations") or data.get("items") or []
+    candidates = []
+    for item in raw_items[:max_results]:
+        if not isinstance(item, dict):
+            continue
+        name = str(
+            item.get("name") or item.get("corporateName") or item.get("corporate_name") or ""
+        ).strip()
+        if not name:
+            continue
+        address = str(
+            item.get("location") or item.get("headOfficeLocation") or item.get("address") or ""
+        ).strip()
+        candidates.append(Candidate(company_name=name[:500], address=address[:5000]))
+    return candidates

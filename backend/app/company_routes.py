@@ -907,7 +907,7 @@ def list_company_details(
         "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
     ]
     | None = None,
-    source: Literal["serper", "google_places", "url", "csv"] | None = None,
+    source: Literal["serper", "google_places", "gbizinfo", "url", "csv"] | None = None,
     keyword: str | None = Query(None, max_length=200),
     assignee: str | None = Query(None, max_length=200),
     followup: Literal["overdue", "today", "upcoming", "unset"] | None = None,
@@ -1358,3 +1358,4 @@ def dashboard(db: Session = Depends(get_db), user: User = Depends(current_user))
         overdue_followups=overdue_followups,
         due_today_followups=due_today_followups,
     )
+

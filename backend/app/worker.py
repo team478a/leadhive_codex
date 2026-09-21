@@ -25,7 +25,12 @@ from app.models import (
     TargetProfile,
 )
 from app.operation_routes import refresh_company_ids
-from app.services.collection import ExternalServiceError, search_google_places, search_serper
+from app.services.collection import (
+    ExternalServiceError,
+    search_gbizinfo,
+    search_google_places,
+    search_serper,
+)
 from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
 from app.services.inbound_email import sync_inbound_mail
 
@@ -387,7 +392,11 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     job.total_count = len(keywords)
     db.commit()
     if not payload.get("company_limit"):
-        search = search_serper if payload["source"] == "serper" else search_google_places
+        search = {
+            "serper": search_serper,
+            "google_places": search_google_places,
+            "gbizinfo": search_gbizinfo,
+        }[payload["source"]]
         collections = [
             start_job(
                 db,
@@ -453,7 +462,11 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             search_schedule_id=schedule_id,
         )
         try:
-            search = search_serper if payload["source"] == "serper" else search_google_places
+            search = {
+                "serper": search_serper,
+                "google_places": search_google_places,
+                "gbizinfo": search_gbizinfo,
+            }[payload["source"]]
             candidates = search(keyword, payload["region"], max_results)
             save_candidates(db, collection, candidates, keyword)
             if not progress(db, job, worker_id, True):

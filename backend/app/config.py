@@ -14,6 +14,8 @@ class Settings(BaseSettings):
     session_hours: int = 12
     serper_api_key: str = ""
     google_places_api_key: str = ""
+    gbizinfo_api_token: str = ""
+    gbizinfo_api_base_url: str = "https://api.info.gbiz.go.jp/hojin/v2/hojin"
     external_api_timeout_seconds: float = 20.0
     scraper_timeout_seconds: float = 15.0
     scraper_max_bytes: int = 2_000_000

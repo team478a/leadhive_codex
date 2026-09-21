@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
@@ -98,7 +98,7 @@ class CompanyOut(BaseModel):
     address: str
     phone: str
     email: str
-    source: Literal["serper", "google_places", "url", "csv"]
+    source: Literal["serper", "google_places", "gbizinfo", "url", "csv"]
     source_keyword: str
     status: str
     notes: str
@@ -149,7 +149,7 @@ class CollectionJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     project_id: UUID
-    source: Literal["serper", "google_places", "url", "csv"]
+    source: Literal["serper", "google_places", "gbizinfo", "url", "csv"]
     keyword: str
     region: str
     status: Literal["running", "completed", "failed"]
@@ -172,7 +172,7 @@ class CsvPreviewOut(BaseModel):
 
 
 class SearchCollectionInput(Input):
-    source: Literal["serper", "google_places"]
+    source: Literal["serper", "google_places", "gbizinfo"]
     keywords: Annotated[list[Keyword], Field(min_length=1, max_length=20)]
     region: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
     max_results: int = Field(default=20, ge=1, le=100)
@@ -599,7 +599,10 @@ class NotificationOut(BaseModel):
     email_delivery_id: UUID | None
     inbound_email_id: UUID | None
     notification_type: Literal[
-        "followup_overdue", "operation_failed", "email_delivery_failed", "inbound_reply_received",
+        "followup_overdue",
+        "operation_failed",
+        "email_delivery_failed",
+        "inbound_reply_received",
         "followup_due_today",
     ]
     title: str
@@ -660,7 +663,7 @@ class ReplyQueueItemOut(BaseModel):
 class OperationJobInput(Input):
     operation_type: Literal["collect_search", "web_analysis", "ai_analysis"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
-    source: Literal["serper", "google_places"] | None = None
+    source: Literal["serper", "google_places", "gbizinfo"] | None = None
     keywords: list[Keyword] = Field(default_factory=list, max_length=20)
     region: str = Field(default="", max_length=500)
     max_results: int = Field(default=20, ge=1, le=100)
@@ -711,7 +714,7 @@ class DashboardOut(BaseModel):
 
 class SearchScheduleInput(Input):
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
-    source: Literal["serper", "google_places"]
+    source: Literal["serper", "google_places", "gbizinfo"]
     keywords: list[Keyword] = Field(min_length=1, max_length=20)
     region: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]
     max_results: int = Field(default=20, ge=1, le=100)
@@ -780,6 +783,75 @@ class CollectionPerformanceOut(BaseModel):
     save_rate: float
     excluded_rate: float
     average_processing_ms: int
+
+
+class AiReviewInput(Input):
+    verdict: Literal["correct", "incorrect"]
+    note: str = Field(default="", max_length=5000)
+
+
+class AiReviewOut(AiReviewInput):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    company_id: UUID
+    reviewer_id: UUID | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AiReviewAnalyticsOut(BaseModel):
+    source_keyword: str
+    reviewed_count: int
+    correct_count: int
+    accuracy_rate: float
+
+
+class DealInput(Input):
+    title: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
+    stage: Literal["lead", "proposal", "negotiation", "won", "lost"] = "lead"
+    expected_amount: int = Field(default=0, ge=0, le=10_000_000_000)
+    expected_close_date: date | None = None
+    owner: str = Field(default="", max_length=200)
+    next_step: str = Field(default="", max_length=5000)
+    lost_reason: str = Field(default="", max_length=500)
+
+
+class DealOut(DealInput):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    company_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class OutreachExperimentInput(Input):
+    name: Name
+    template_a_id: UUID
+    template_b_id: UUID
+    active: bool = True
+
+
+class OutreachExperimentOut(OutreachExperimentInput):
+    model_config = ConfigDict(from_attributes=True)
+    id: UUID
+    project_id: UUID
+    created_at: datetime
+    updated_at: datetime
+
+
+class OutreachExperimentAssignmentOut(BaseModel):
+    experiment_id: UUID
+    variant: Literal["A", "B"]
+    template: OutreachTemplateOut
+
+
+class OutreachExperimentResultOut(BaseModel):
+    variant: Literal["A", "B"]
+    delivered: int
+    replied: int
+    meetings: int
+    won: int
+    reply_rate: float
 
 
 class CompanyFilterValues(Input):

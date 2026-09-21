@@ -30,6 +30,7 @@ from app.services.collection import (
     parse_csv_with_mapping,
     parse_urls,
     read_csv,
+    search_gbizinfo,
     search_google_places,
     search_serper,
 )
@@ -252,10 +253,12 @@ def collect_search(
     for keyword in body.keywords:
         job = start_job(db, project_id, body.source, keyword, body.region)
         try:
-            if body.source == "serper":
-                candidates = search_serper(keyword, body.region, body.max_results)
-            else:
-                candidates = search_google_places(keyword, body.region, body.max_results)
+            search = {
+                "serper": search_serper,
+                "google_places": search_google_places,
+                "gbizinfo": search_gbizinfo,
+            }[body.source]
+            candidates = search(keyword, body.region, body.max_results)
             jobs.append(save_candidates(db, job, candidates, keyword))
         except ExternalServiceError as exc:
             jobs.append(fail_job(db, job, exc.public_message))

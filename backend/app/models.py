@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean,
@@ -113,7 +113,8 @@ class Company(Timestamps, Base):
             postgresql_where=text("address <> ''"),
         ),
         CheckConstraint(
-            "source IN ('serper', 'google_places', 'url', 'csv')", name="ck_company_source"
+            "source IN ('serper', 'google_places', 'gbizinfo', 'url', 'csv')",
+            name="ck_company_source",
         ),
         CheckConstraint(
             "analysis_status IN ('pending', 'running', 'completed', 'failed', 'skipped', "
@@ -232,6 +233,62 @@ class ContactPerson(Timestamps, Base):
     notes: Mapped[str] = mapped_column(Text, default="")
 
 
+class AiReview(Timestamps, Base):
+    __tablename__ = "ai_reviews"
+    __table_args__ = (
+        CheckConstraint("verdict IN ('correct', 'incorrect')", name="ck_ai_review_verdict"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), unique=True, index=True
+    )
+    reviewer_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    verdict: Mapped[str] = mapped_column(String(20))
+    note: Mapped[str] = mapped_column(Text, default="")
+
+
+class Deal(Timestamps, Base):
+    __tablename__ = "deals"
+    __table_args__ = (
+        CheckConstraint(
+            "stage IN ('lead', 'proposal', 'negotiation', 'won', 'lost')", name="ck_deal_stage"
+        ),
+        CheckConstraint("expected_amount >= 0", name="ck_deal_expected_amount"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    title: Mapped[str] = mapped_column(String(300))
+    stage: Mapped[str] = mapped_column(String(20), default="lead", index=True)
+    expected_amount: Mapped[int] = mapped_column(Integer, default=0)
+    expected_close_date: Mapped[date | None] = mapped_column()
+    owner: Mapped[str] = mapped_column(String(200), default="")
+    next_step: Mapped[str] = mapped_column(Text, default="")
+    lost_reason: Mapped[str] = mapped_column(String(500), default="")
+
+
+class OutreachExperiment(Timestamps, Base):
+    __tablename__ = "outreach_experiments"
+    __table_args__ = (
+        CheckConstraint("template_a_id <> template_b_id", name="ck_experiment_distinct_templates"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    name: Mapped[str] = mapped_column(String(200))
+    template_a_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("outreach_templates.id", ondelete="RESTRICT"), index=True
+    )
+    template_b_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("outreach_templates.id", ondelete="RESTRICT"), index=True
+    )
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class OutreachDraft(Timestamps, Base):
     __tablename__ = "outreach_drafts"
     __table_args__ = (
@@ -252,6 +309,10 @@ class OutreachDraft(Timestamps, Base):
     body: Mapped[str] = mapped_column(Text)
     ai_provider: Mapped[str] = mapped_column(String(50), default="")
     ai_model: Mapped[str] = mapped_column(String(100), default="")
+    experiment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("outreach_experiments.id", ondelete="SET NULL"), index=True
+    )
+    experiment_variant: Mapped[str] = mapped_column(String(1), default="")
 
 
 class OutreachTemplate(Timestamps, Base):
@@ -294,6 +355,10 @@ class OutreachDraftApproval(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
+    experiment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("outreach_experiments.id", ondelete="SET NULL"), index=True
+    )
+    experiment_variant: Mapped[str] = mapped_column(String(1), default="")
 
 
 class OutreachConversion(Base):
@@ -522,7 +587,7 @@ class CollectionJob(Base):
     __tablename__ = "collection_jobs"
     __table_args__ = (
         CheckConstraint(
-            "source IN ('serper', 'google_places', 'url', 'csv')", name="ck_job_source"
+            "source IN ('serper', 'google_places', 'gbizinfo', 'url', 'csv')", name="ck_job_source"
         ),
         CheckConstraint("status IN ('running', 'completed', 'failed')", name="ck_job_status"),
         CheckConstraint(
@@ -600,7 +665,9 @@ class OperationJob(Base):
 class SearchSchedule(Timestamps, Base):
     __tablename__ = "search_schedules"
     __table_args__ = (
-        CheckConstraint("source IN ('serper', 'google_places')", name="ck_search_schedule_source"),
+        CheckConstraint(
+            "source IN ('serper', 'google_places', 'gbizinfo')", name="ck_search_schedule_source"
+        ),
         CheckConstraint("max_results BETWEEN 1 AND 100", name="ck_search_schedule_max_results"),
         CheckConstraint("interval_hours BETWEEN 1 AND 720", name="ck_search_schedule_interval"),
         CheckConstraint("company_limit BETWEEN 1 AND 100000", name="ck_search_schedule_limit"),

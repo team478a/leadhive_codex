@@ -30,7 +30,7 @@ export interface ProjectMember {
   id: string; project_id: string; user_id: string; email: string
   role: 'owner' | 'editor' | 'viewer'; created_at: string
 }
-export type CollectionSource = 'serper' | 'google_places' | 'url' | 'csv'
+export type CollectionSource = 'serper' | 'google_places' | 'gbizinfo' | 'url' | 'csv'
 export interface CollectionJob {
   id: string; project_id: string; source: CollectionSource; keyword: string; region: string
   status: 'running' | 'completed' | 'failed'; found_count: number; saved_count: number
@@ -38,6 +38,7 @@ export interface CollectionJob {
   error_message: string
   created_at: string; finished_at: string | null
 }
+export interface AiReviewAnalytics { source_keyword: string; reviewed_count: number; correct_count: number; accuracy_rate: number }
 export interface CollectionPerformance {
   source: CollectionSource; keyword: string; run_count: number; found_count: number
   saved_count: number; duplicate_count: number; excluded_count: number; error_count: number
@@ -91,6 +92,10 @@ export interface DataQuality {
 export interface DuplicateCandidate {
   left: Company; right: Company; reasons: Array<'email' | 'phone' | 'name_address'>
 }
+export interface AiReview { id: string; company_id: string; reviewer_id: string | null; verdict: 'correct' | 'incorrect'; note: string; created_at: string; updated_at: string }
+export interface Deal { id: string; company_id: string; title: string; stage: 'lead' | 'proposal' | 'negotiation' | 'won' | 'lost'; expected_amount: number; expected_close_date: string | null; owner: string; next_step: string; lost_reason: string; created_at: string; updated_at: string }
+export interface OutreachExperiment { id: string; project_id: string; name: string; template_a_id: string; template_b_id: string; active: boolean; created_at: string; updated_at: string }
+export interface OutreachExperimentResult { variant: 'A' | 'B'; delivered: number; replied: number; meetings: number; won: number; reply_rate: number }
 export interface Activity {
   id: string; company_id: string
   activity_type: 'note' | 'call' | 'email' | 'form' | 'sns' | 'meeting' | 'status_change'
@@ -154,7 +159,7 @@ export interface OperationJob {
 }
 export interface SearchSchedule {
   id: string; project_id: string; name: string
-  source: 'serper' | 'google_places'; keywords: string[]; region: string
+  source: 'serper' | 'google_places' | 'gbizinfo'; keywords: string[]; region: string
   max_results: number; interval_hours: number; company_limit: number; active: boolean
   next_run_at: string; last_enqueued_at: string | null; last_error: string
   created_at: string; updated_at: string
