@@ -149,6 +149,13 @@ export interface FormCodexTask { item_id: string; batch_id: string; company_id: 
 export interface FormField { name: string; label: string; field_type: 'text' | 'email' | 'tel' | 'textarea' | 'select'; required: boolean; value: string; options: string[] }
 export interface FormPreview { form_url: string; action_url: string; fields: FormField[] }
 export interface FormDelivery { id: string; draft_id: string; company_id: string; delivery_method: 'direct' | 'codex_assisted'; status: 'pending' | 'submitted' | 'failed'; action_url: string; response_status: number | null; submitted_at: string | null; error_message: string; result_note: string; created_at: string }
+
+export type FormStatus = 'UNANALYZED' | 'READY' | 'REVIEW_REQUIRED' | 'BLOCKED' | 'STALE' | 'ERROR'
+export type FormMappedKey = 'company_name' | 'department' | 'position' | 'contact_name' | 'last_name' | 'first_name' | 'furigana' | 'email' | 'phone' | 'postal_code' | 'prefecture' | 'city' | 'address' | 'building' | 'website' | 'contact_category' | 'subject' | 'message' | 'privacy_consent' | 'newsletter_consent' | 'other' | 'unknown'
+export interface FormProfileField { id: string; form_profile_id: string; position: number; selector: string; label: string; name: string; field_type: string; required: boolean; mapped_key: FormMappedKey; confidence: number; decision_source: 'DOM' | 'RULE' | 'JEV' | 'OPENAI' | 'MANUAL'; recommended_value: string; options: Array<{ value?: string; label?: string }>; placeholder: string; aria_label: string; surrounding_text: string; created_at: string; updated_at: string }
+export interface FormProfile { id: string; company_id: string; form_url: string; form_index: number; form_status: FormStatus; sales_contact_status: 'ALLOWED' | 'PROHIBITED' | 'UNCERTAIN'; captcha_type: 'CAPTCHA_NONE' | 'CAPTCHA_RECAPTCHA' | 'CAPTCHA_HCAPTCHA' | 'CAPTCHA_TURNSTILE' | 'CAPTCHA_OTHER'; confirmation_page: boolean | null; is_primary: boolean; form_found: boolean; page_kind: string; fingerprint: string; analysis_version: string; analysis_provider: string; last_analyzed_at: string | null; analysis_duration_ms: number; error_message: string; created_at: string; updated_at: string; fields: FormProfileField[] }
+export interface FormProfileSummary { company_id: string; profile_id: string; form_status: FormStatus; form_found: boolean; sales_contact_status: FormProfile['sales_contact_status']; captcha_type: FormProfile['captcha_type']; last_analyzed_at: string | null }
+export interface FormAnalysisLog { id: string; company_id: string; form_profile_id: string | null; actor_user_id: string | null; event_type: string; provider: string; duration_ms: number; usage: Record<string, unknown>; estimated_cost: number | null; confidence: number | null; details: Record<string, unknown>; created_at: string }
 export interface FormAssist { company_name: string; form_url: string; body: string; instructions: string }
 export interface Notification {
   id: string; project_id: string; company_id: string | null; operation_job_id: string | null
@@ -170,7 +177,7 @@ export interface OutreachQueueItem {
 }
 export interface OperationJob {
   id: string; project_id: string
-  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis'
+  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence'
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_count: number; processed_count: number; success_count: number; failed_count: number
   cancel_requested: boolean; attempt_count: number; acknowledged_at: string | null; error_message: string

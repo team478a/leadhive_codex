@@ -54,6 +54,18 @@
   .detail-grid { @apply mt-6 grid gap-6 border-t border-[#e8ece6] pt-6 lg:grid-cols-2; }
   .detail-grid h3 { @apply mb-3 text-sm font-semibold text-[#45644e]; }
   .detail-grid p { @apply mb-2 leading-relaxed; }
+  .form-profile-card { @apply mt-5 rounded-xl border border-[#e0e6df] p-4; }
+  .form-profile-summary { @apply mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#58705f]; }
+  .form-status { @apply inline-flex rounded-full px-2.5 py-1 text-xs font-semibold; }
+  .form-status.ready { @apply bg-emerald-50 text-emerald-700; }
+  .form-status.review_required, .form-status.stale { @apply bg-amber-50 text-amber-800; }
+  .form-status.blocked, .form-status.error { @apply bg-red-50 text-red-700; }
+  .form-status.unanalyzed { @apply bg-slate-100 text-slate-600; }
+  .form-field-table { @apply min-w-[980px]; }
+  .form-field-table select, .form-field-table input { @apply min-w-40; }
+  .required-mark { @apply mt-1 inline-block text-xs font-semibold text-red-700; }
+  .form-analysis-log { @apply max-h-64 overflow-y-auto rounded-lg bg-[#f7f9f6] p-3; }
+  .form-analysis-log p { @apply grid gap-2 border-b border-[#e0e6df] py-2 text-xs last:border-0 md:grid-cols-[11rem_1fr_8rem_6rem]; }
   .login-layout { @apply min-h-screen md:grid md:grid-cols-2; }
   .login-intro { @apply flex flex-col justify-between gap-12 bg-[#173c35] p-9 text-white lg:p-16; }
   .login-intro h1 { @apply mb-6 text-3xl leading-relaxed lg:text-4xl; }

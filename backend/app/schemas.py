@@ -39,6 +39,14 @@ from app.schema_core import (
     ProjectOut,
     UserOut,
 )
+from app.schema_form_intelligence import (
+    FormAnalysisLogOut,
+    FormFieldCorrectionInput,
+    FormIntelligenceJobInput,
+    FormProfileFieldOut,
+    FormProfileOut,
+    FormProfileSummaryOut,
+)
 from app.schema_outreach import (
     EmailCampaignCreateInput,
     EmailCampaignOut,
@@ -185,6 +193,12 @@ __all__ = [
     "FormCodexTaskUpdateInput",
     "FormDeliveryBatchItemOut",
     "FormDeliveryBatchOut",
+    "FormProfileOut",
+    "FormProfileFieldOut",
+    "FormProfileSummaryOut",
+    "FormAnalysisLogOut",
+    "FormFieldCorrectionInput",
+    "FormIntelligenceJobInput",
     "ApplicationSettingsInput",
     "ApplicationSettingsOut",
     "SmtpSettingsInput",

@@ -64,7 +64,7 @@ class ReplyQueueItemOut(BaseModel):
 
 
 class OperationJobInput(Input):
-    operation_type: Literal["collect_search", "web_analysis", "ai_analysis"]
+    operation_type: Literal["collect_search", "web_analysis", "ai_analysis", "form_intelligence"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
     source: Literal["serper", "google_places", "gbizinfo"] | None = None
     keywords: list[Keyword] = Field(default_factory=list, max_length=20)

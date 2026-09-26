@@ -19,6 +19,7 @@ from app.company_workflow_routes import router as company_workflow_router
 from app.config import settings
 from app.database import SessionLocal
 from app.form_batch_routes import router as form_batch_router
+from app.form_intelligence_routes import router as form_intelligence_router
 from app.improvement_routes import router as improvement_router
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
@@ -101,4 +102,5 @@ app.include_router(operation_router)
 app.include_router(notification_router)
 app.include_router(improvement_router)
 app.include_router(form_batch_router)
+app.include_router(form_intelligence_router)
 app.include_router(outreach_draft_router)

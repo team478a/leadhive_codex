@@ -72,7 +72,8 @@ class OperationJob(Base):
     __tablename__ = "operation_jobs"
     __table_args__ = (
         CheckConstraint(
-            "operation_type IN ('collect_search', 'web_analysis', 'ai_analysis', 'form_delivery')",
+            "operation_type IN ('collect_search', 'web_analysis', 'ai_analysis', 'form_delivery', "
+            "'form_intelligence')",
             name="ck_operation_job_type",
         ),
         CheckConstraint(

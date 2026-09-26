@@ -9,6 +9,7 @@ import { CompanyFilters } from './CompanyFilters'
 import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
 import { CompanyFormDeliveryPanel } from './CompanyFormDeliveryPanel'
 import { CompanyFormBatchesPanel } from './CompanyFormBatchesPanel'
+import { CompanyFormIntelligencePanel } from './CompanyFormIntelligencePanel'
 import { CompanyEmailDeliveryPanel } from './CompanyEmailDeliveryPanel'
 import { CompanyEmailCampaignsPanel } from './CompanyEmailCampaignsPanel'
 import { CompanyList } from './CompanyList'
@@ -20,7 +21,7 @@ import { CompanyReplyQueuePanel } from './CompanyReplyQueuePanel'
 import { CompanySavedFiltersPanel } from './CompanySavedFiltersPanel'
 import { CompanyAiReviewPanel, CompanyExperimentPanel } from './CompanyOptimizationPanels'
 import { companyQueryString, defaultCompanyFilters, emptyContact } from './companyPageShared'
-import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAssist, FormDelivery, FormPreview, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAnalysisLog, FormAssist, FormDelivery, FormMappedKey, FormPreview, FormProfile, FormProfileField, FormProfileSummary, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 type Filters = CompanyFilterValues
 
@@ -106,6 +107,9 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const [formCodexTasks, setFormCodexTasks] = useState<FormCodexTask[]>([])
   const [formBatchTemplateId, setFormBatchTemplateId] = useState('')
   const [formBatchConfirmed, setFormBatchConfirmed] = useState(false)
+  const [formProfileSummaries, setFormProfileSummaries] = useState<Record<string, FormProfileSummary>>({})
+  const [formProfiles, setFormProfiles] = useState<FormProfile[]>([])
+  const [formAnalysisLogs, setFormAnalysisLogs] = useState<FormAnalysisLog[]>([])
   const [draftApprovals, setDraftApprovals] = useState<OutreachDraftApproval[]>([])
   const [templateName, setTemplateName] = useState('')
   const [selectedDraft, setSelectedDraft] = useState<OutreachDraft | null>(null)
@@ -134,8 +138,8 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   const openedFollowupCompanyId = useRef<string | null>(null)
   const query = useMemo(() => companyQueryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
-    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setFormCodexTasks([]); setEmailCampaigns([]); setDealPipeline(null); return }
-    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextFormCodexTasks, nextDealPipeline] = await Promise.all([
+    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setFormCodexTasks([]); setEmailCampaigns([]); setFormProfileSummaries({}); setDealPipeline(null); return }
+    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextFormCodexTasks, nextDealPipeline, nextFormProfileSummaries] = await Promise.all([
       api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
@@ -150,11 +154,13 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       api<EmailCampaign[]>(`/projects/${projectId}/email-campaigns`),
       api<FormCodexTask[]>(`/projects/${projectId}/form-codex-queue`),
       api<DealPipeline>(`/projects/${projectId}/deal-pipeline`),
+      api<FormProfileSummary[]>(`/projects/${projectId}/form-profiles/summary`),
     ])
     setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
     setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
     setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setFollowupTasks(nextFollowupTasks); setReplyQueue(nextReplyQueue); setChecked([])
     setFormBatches(nextFormBatches); setFormCodexTasks(nextFormCodexTasks); setOutreachTemplates(nextOutreachTemplates); setEmailCampaigns(nextEmailCampaigns); setDealPipeline(nextDealPipeline); setRefreshSchedule(nextRefreshSchedule)
+    setFormProfileSummaries(Object.fromEntries(nextFormProfileSummaries.map(item => [item.company_id, item])))
     if (nextRefreshSchedule) {
       setRefreshInterval(nextRefreshSchedule.interval_hours)
       setRefreshStaleDays(nextRefreshSchedule.stale_days)
@@ -188,7 +194,7 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
   }, [initialFollowupCompanyId, followupTasks])
   useEffect(() => {
     if (!selected) {
-      setAiReview(null); setDeals([]); setExperiments([]); setExperimentResults([])
+      setAiReview(null); setDeals([]); setExperiments([]); setExperimentResults([]); setFormProfiles([]); setFormAnalysisLogs([])
       return
     }
     Promise.all([
@@ -210,11 +216,12 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
     setProtectedFields(company.protected_fields)
     setDoNotContact(company.do_not_contact); setExclusionReason(company.exclusion_reason)
     setContactQuality(company.contact_quality_status)
-    const [nextActivities, nextContacts, nextDrafts, nextTemplates] = await Promise.all([
+    const [nextActivities, nextContacts, nextDrafts, nextTemplates, nextFormProfiles] = await Promise.all([
       api<Activity[]>(`/companies/${company.id}/activities`),
       api<ContactPerson[]>(`/companies/${company.id}/contacts`),
       api<OutreachDraft[]>(`/companies/${company.id}/outreach-drafts`),
       api<OutreachTemplate[]>(`/projects/${company.project_id}/outreach-templates`),
+      api<FormProfile[]>(`/companies/${company.id}/form-profiles`),
     ])
     const firstDraft = nextDrafts[0] ?? null
     const [nextDelivery, nextFormDelivery, nextApprovals] = await Promise.all([
@@ -225,6 +232,9 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       firstDraft ? api<OutreachDraftApproval[]>(`/outreach-drafts/${firstDraft.id}/approvals`) : Promise.resolve([]),
     ])
     setActivities(nextActivities); setContacts(nextContacts); setOutreachDrafts(nextDrafts); setOutreachTemplates(nextTemplates); setDraftApprovals(nextApprovals)
+    setFormProfiles(nextFormProfiles)
+    const primaryProfile = nextFormProfiles.find(item => item.is_primary) ?? nextFormProfiles[0]
+    setFormAnalysisLogs(primaryProfile ? await api<FormAnalysisLog[]>(`/form-profiles/${primaryProfile.id}/logs`) : [])
     setSelectedDraft(firstDraft); setEmailDelivery(nextDelivery); setFormDelivery(nextFormDelivery); setDeliveryRecipient(company.email)
     setDeliverySchedule(''); setDeliveryConfirmed(false); setFormPreview(null); setFormValues({}); setFormConfirmed(false); setAssistOutcome('pending'); setAssistNote(''); setAssistConfirmed(false); setDraftContactId(''); setDraftInstruction('')
   }
@@ -266,6 +276,57 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
         company_ids: checked, assignee: bulkAssignee,
       })
       await reload(); setNotice(`${checked.length}社の担当者を更新しました。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function loadSelectedFormProfiles(company: Company) {
+    const profiles = await api<FormProfile[]>(`/companies/${company.id}/form-profiles`)
+    setFormProfiles(profiles)
+    const primary = profiles.find(item => item.is_primary) ?? profiles[0]
+    setFormAnalysisLogs(primary ? await api<FormAnalysisLog[]>(`/form-profiles/${primary.id}/logs`) : [])
+    if (primary) {
+      setFormProfileSummaries(current => ({ ...current, [company.id]: {
+        company_id: company.id, profile_id: primary.id, form_status: primary.form_status,
+        form_found: primary.form_found, sales_contact_status: primary.sales_contact_status,
+        captcha_type: primary.captcha_type, last_analyzed_at: primary.last_analyzed_at,
+      } }))
+    }
+  }
+  async function analyzeSelectedForm() {
+    if (!selected) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const profiles = await api<FormProfile[]>(`/companies/${selected.id}/form-intelligence/analyze`, 'POST')
+      setFormProfiles(profiles)
+      const primary = profiles.find(item => item.is_primary) ?? profiles[0]
+      setFormAnalysisLogs(primary ? await api<FormAnalysisLog[]>(`/form-profiles/${primary.id}/logs`) : [])
+      if (primary) setFormProfileSummaries(current => ({ ...current, [selected.id]: { company_id: selected.id, profile_id: primary.id, form_status: primary.form_status, form_found: primary.form_found, sales_contact_status: primary.sales_contact_status, captcha_type: primary.captcha_type, last_analyzed_at: primary.last_analyzed_at } }))
+      setNotice(`${profiles.length}件のフォーム候補を解析しました。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function enqueueSelectedFormAnalysis() {
+    if (!projectId || checked.length === 0) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const job = await api<OperationJob>(`/projects/${projectId}/form-intelligence/jobs`, 'POST', { company_ids: checked, force: false })
+      setNotice(`${checked.length}社のフォーム解析を登録しました（ジョブ ${job.id.slice(0, 8)}）。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function selectPrimaryForm(profile: FormProfile) {
+    if (!selected) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api<FormProfile>(`/form-profiles/${profile.id}/select-primary`, 'POST')
+      await loadSelectedFormProfiles(selected)
+      setNotice('優先フォームを変更しました。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function correctFormField(field: FormProfileField, mappedKey: FormMappedKey, recommendedValue: string) {
+    if (!selected) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      await api<FormProfileField>(`/form-profile-fields/${field.id}`, 'PATCH', { mapped_key: mappedKey, recommended_value: recommendedValue, reason: '管理画面で修正' })
+      await loadSelectedFormProfiles(selected)
+      setNotice('フォーム項目の判定を修正しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function addActivity() {
@@ -821,11 +882,13 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       page={page}
       busy={busy}
       bulkAssignee={bulkAssignee}
+      formProfiles={formProfileSummaries}
       setChecked={setChecked}
       setBulkAssignee={setBulkAssignee}
       setPage={setPage}
       onBulkStatus={nextStatus => void bulkStatus(nextStatus)}
       onAssign={() => void assignSelected()}
+      onAnalyzeSelected={() => void enqueueSelectedFormAnalysis()}
       onOpen={company => void open(company)}
     />
     {selected && <CompanyDetailsPanel
@@ -851,6 +914,15 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       onSaveContactControl={() => void saveContactControl()}
       onSaveStatus={() => void save()}
       onClose={() => setSelected(null)}
+    />}
+    {selected && <CompanyFormIntelligencePanel
+      company={selected}
+      profiles={formProfiles}
+      logs={formAnalysisLogs}
+      busy={busy}
+      onAnalyze={() => void analyzeSelectedForm()}
+      onSelectPrimary={profile => void selectPrimaryForm(profile)}
+      onCorrect={(field, mappedKey, recommendedValue) => void correctFormField(field, mappedKey, recommendedValue)}
     />}
     {selected && <CompanyContactsPanel
       contacts={contacts}

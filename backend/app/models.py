@@ -13,6 +13,7 @@ from app.model_core import (
     Timestamps,
     User,
 )
+from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_operations import (
     AnalysisRefreshSchedule,
     CollectionJob,
@@ -63,6 +64,9 @@ __all__ = [
     "FormDelivery",
     "FormDeliveryBatch",
     "FormDeliveryBatchItem",
+    "FormProfile",
+    "FormProfileField",
+    "FormAnalysisLog",
     "ApplicationSettings",
     "SmtpSettings",
     "InboundMailSettings",

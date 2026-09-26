@@ -35,6 +35,7 @@ from app.services.collection import (
 )
 from app.services.collection_jobs import fail_job, save_candidates, start_job
 from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
+from app.services.form_intelligence import analyze_company_forms
 from app.services.inbound_email import sync_inbound_mail
 from app.services.operations import refresh_company_ids
 from app.services.web_analysis import analyze
@@ -610,6 +611,24 @@ def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     db.commit()
 
 
+def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])][:100]
+    companies = db.scalars(
+        select(Company)
+        .where(Company.project_id == job.project_id, Company.id.in_(company_ids))
+        .order_by(Company.created_at, Company.id)
+    ).all()
+    job.total_count = len(companies)
+    db.commit()
+    for company in companies:
+        if stop_requested(db, job, worker_id):
+            return
+        profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
+        success = bool(profiles) and any(profile.form_status != "ERROR" for profile in profiles)
+        if not progress(db, job, worker_id, success):
+            return
+
+
 def run_once() -> bool:
     with SessionLocal() as db:
         apply_application_settings(db)
@@ -634,6 +653,7 @@ def run_once() -> bool:
                 "web_analysis": run_web,
                 "ai_analysis": run_ai,
                 "form_delivery": run_form_delivery,
+                "form_intelligence": run_form_intelligence,
             }[job.operation_type](db, job, worker_id)
             db.refresh(job)
             if job.status == "running" and job.worker_id == worker_id:
