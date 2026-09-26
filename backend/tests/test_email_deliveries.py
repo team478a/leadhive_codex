@@ -116,9 +116,9 @@ def test_approved_email_delivery_snapshots_sends_and_records_activity(auth, db, 
     ]
     company.status = "won"
     db.commit()
-    assert auth.get("/api/outreach-effectiveness-analytics", params={"days": 30}).json()[
-        "items"
-    ][0] == {
+    assert auth.get("/api/outreach-effectiveness-analytics", params={"days": 30}).json()["items"][
+        0
+    ] == {
         "approval_type": "email",
         "subject": "サービスのご相談",
         "approvals": 1,

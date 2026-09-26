@@ -60,9 +60,7 @@ class FormProfileOut(BaseModel):
     company_id: UUID
     form_url: str
     form_index: int
-    form_status: Literal[
-        "UNANALYZED", "READY", "REVIEW_REQUIRED", "BLOCKED", "STALE", "ERROR"
-    ]
+    form_status: Literal["UNANALYZED", "READY", "REVIEW_REQUIRED", "BLOCKED", "STALE", "ERROR"]
     sales_contact_status: Literal["ALLOWED", "PROHIBITED", "UNCERTAIN"]
     captcha_type: Literal[
         "CAPTCHA_NONE",

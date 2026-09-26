@@ -38,10 +38,16 @@ def upgrade():
         sa.Column("analysis_duration_ms", sa.Integer(), nullable=False),
         sa.Column("error_message", sa.String(length=500), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.CheckConstraint("analysis_duration_ms >= 0", name="ck_form_profile_duration"),
         sa.CheckConstraint("form_index >= 0", name="ck_form_profile_form_index"),
@@ -67,7 +73,9 @@ def upgrade():
     )
     op.create_index("ix_form_profiles_company_id", "form_profiles", ["company_id"])
     op.create_index("ix_form_profiles_form_status", "form_profiles", ["form_status"])
-    op.create_index("ix_form_profiles_sales_contact_status", "form_profiles", ["sales_contact_status"])
+    op.create_index(
+        "ix_form_profiles_sales_contact_status", "form_profiles", ["sales_contact_status"]
+    )
     op.create_index("ix_form_profiles_is_primary", "form_profiles", ["is_primary"])
     op.create_index("ix_form_profiles_last_analyzed_at", "form_profiles", ["last_analyzed_at"])
 
@@ -90,10 +98,16 @@ def upgrade():
         sa.Column("aria_label", sa.String(length=500), nullable=False),
         sa.Column("surrounding_text", sa.Text(), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.Column(
-            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.CheckConstraint("position >= 0", name="ck_form_profile_field_position"),
         sa.CheckConstraint(
@@ -107,7 +121,9 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("form_profile_id", "position", name="uq_form_profile_field_position"),
     )
-    op.create_index("ix_form_profile_fields_form_profile_id", "form_profile_fields", ["form_profile_id"])
+    op.create_index(
+        "ix_form_profile_fields_form_profile_id", "form_profile_fields", ["form_profile_id"]
+    )
     op.create_index("ix_form_profile_fields_mapped_key", "form_profile_fields", ["mapped_key"])
 
     op.create_table(
@@ -124,7 +140,10 @@ def upgrade():
         sa.Column("confidence", sa.Float(), nullable=True),
         sa.Column("details", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column(
-            "created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
         ),
         sa.CheckConstraint("duration_ms >= 0", name="ck_form_analysis_log_duration"),
         sa.CheckConstraint(
@@ -144,7 +163,9 @@ def upgrade():
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_form_analysis_logs_company_id", "form_analysis_logs", ["company_id"])
-    op.create_index("ix_form_analysis_logs_form_profile_id", "form_analysis_logs", ["form_profile_id"])
+    op.create_index(
+        "ix_form_analysis_logs_form_profile_id", "form_analysis_logs", ["form_profile_id"]
+    )
     op.create_index("ix_form_analysis_logs_actor_user_id", "form_analysis_logs", ["actor_user_id"])
     op.create_index("ix_form_analysis_logs_event_type", "form_analysis_logs", ["event_type"])
 

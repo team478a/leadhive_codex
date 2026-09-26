@@ -68,9 +68,7 @@ class FormProfile(Timestamps, Base):
     form_url: Mapped[str] = mapped_column(Text)
     form_index: Mapped[int] = mapped_column(Integer, default=0)
     form_status: Mapped[str] = mapped_column(String(30), default="UNANALYZED", index=True)
-    sales_contact_status: Mapped[str] = mapped_column(
-        String(20), default="UNCERTAIN", index=True
-    )
+    sales_contact_status: Mapped[str] = mapped_column(String(20), default="UNCERTAIN", index=True)
     captcha_type: Mapped[str] = mapped_column(String(30), default="CAPTCHA_NONE")
     confirmation_page: Mapped[bool | None] = mapped_column(Boolean)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, index=True)

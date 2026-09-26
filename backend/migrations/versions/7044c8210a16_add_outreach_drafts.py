@@ -33,16 +33,10 @@ def upgrade():
             server_default=sa.text("now()"),
             nullable=False,
         ),
-        sa.CheckConstraint(
-            "channel IN ('email', 'form', 'sns')", name="ck_outreach_draft_channel"
-        ),
+        sa.CheckConstraint("channel IN ('email', 'form', 'sns')", name="ck_outreach_draft_channel"),
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(
-            ["contact_person_id"], ["contact_people.id"], ondelete="SET NULL"
-        ),
-        sa.ForeignKeyConstraint(
-            ["created_by_user_id"], ["users.id"], ondelete="SET NULL"
-        ),
+        sa.ForeignKeyConstraint(["contact_person_id"], ["contact_people.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_outreach_drafts_company_id", "outreach_drafts", ["company_id"])

@@ -30,9 +30,22 @@ def upgrade():
         sa.Column("worker_id", sa.Uuid(), nullable=True),
         sa.Column("lease_expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("error_message", sa.String(length=500), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
-        sa.CheckConstraint("status IN ('queued', 'running', 'sent', 'failed', 'cancelled')", name="ck_email_delivery_status"),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.CheckConstraint(
+            "status IN ('queued', 'running', 'sent', 'failed', 'cancelled')",
+            name="ck_email_delivery_status",
+        ),
         sa.CheckConstraint("attempt_count >= 0", name="ck_email_delivery_attempt_count"),
         sa.ForeignKeyConstraint(["company_id"], ["companies.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["created_by_user_id"], ["users.id"], ondelete="SET NULL"),
@@ -41,9 +54,13 @@ def upgrade():
         sa.UniqueConstraint("draft_id", name="uq_email_delivery_draft"),
     )
     op.create_index("ix_email_deliveries_company_id", "email_deliveries", ["company_id"])
-    op.create_index("ix_email_deliveries_created_by_user_id", "email_deliveries", ["created_by_user_id"])
+    op.create_index(
+        "ix_email_deliveries_created_by_user_id", "email_deliveries", ["created_by_user_id"]
+    )
     op.create_index("ix_email_deliveries_draft_id", "email_deliveries", ["draft_id"])
-    op.create_index("ix_email_deliveries_lease_expires_at", "email_deliveries", ["lease_expires_at"])
+    op.create_index(
+        "ix_email_deliveries_lease_expires_at", "email_deliveries", ["lease_expires_at"]
+    )
     op.create_index("ix_email_deliveries_scheduled_for", "email_deliveries", ["scheduled_for"])
     op.create_index("ix_email_deliveries_status", "email_deliveries", ["status"])
 

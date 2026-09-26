@@ -11,9 +11,7 @@ from app.models import (
 )
 
 
-def latest_eligible_approval(
-    db, company_id, occurred_at: datetime
-) -> OutreachDraftApproval | None:
+def latest_eligible_approval(db, company_id, occurred_at: datetime) -> OutreachDraftApproval | None:
     return db.scalar(
         select(OutreachDraftApproval)
         .join(OutreachDraft, OutreachDraft.id == OutreachDraftApproval.draft_id)

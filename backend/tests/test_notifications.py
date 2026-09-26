@@ -46,8 +46,10 @@ def test_notifications_are_deduplicated_and_can_be_read(auth, users, db):
         email="info@due-today.example",
         source="url",
         status="replied",
-        next_followup_at=(now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-                          + timedelta(days=1, hours=-1)),
+        next_followup_at=(
+            now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
+            + timedelta(days=1, hours=-1)
+        ),
     )
     db.add(due_today)
     operation = OperationJob(

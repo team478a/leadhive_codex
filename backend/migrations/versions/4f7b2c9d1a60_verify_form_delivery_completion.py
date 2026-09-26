@@ -27,9 +27,7 @@ def upgrade() -> None:
     )
     op.add_column(
         "form_deliveries",
-        sa.Column(
-            "completion_evidence", sa.String(length=500), nullable=False, server_default=""
-        ),
+        sa.Column("completion_evidence", sa.String(length=500), nullable=False, server_default=""),
     )
 
 

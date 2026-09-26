@@ -131,9 +131,7 @@ def update_application_settings(
     return application_settings_out(saved)
 
 
-@router.post(
-    "/application-settings/test/{service}", response_model=ServiceConnectionTestOut
-)
+@router.post("/application-settings/test/{service}", response_model=ServiceConnectionTestOut)
 def test_application_service(
     service: Literal["serper", "google_places", "openai", "gbizinfo"],
     db: Session = Depends(get_db),
@@ -172,10 +170,7 @@ def smtp_out(value: SmtpSettings) -> SmtpSettingsOut:
 
 
 def form_sender_out(value: FormSenderSettings | None) -> FormSenderSettingsOut:
-    data = {
-        key: getattr(value, key, "")
-        for key in FormSenderSettingsInput.model_fields
-    }
+    data = {key: getattr(value, key, "") for key in FormSenderSettingsInput.model_fields}
     return FormSenderSettingsOut(
         **data,
         updated_at=value.updated_at if value else None,
@@ -222,9 +217,7 @@ def get_smtp_settings(db: Session = Depends(get_db), user: User = Depends(curren
 
 
 @router.get("/form-sender-settings", response_model=FormSenderSettingsOut)
-def get_form_sender_settings(
-    db: Session = Depends(get_db), user: User = Depends(current_admin)
-):
+def get_form_sender_settings(db: Session = Depends(get_db), user: User = Depends(current_admin)):
     return form_sender_out(db.get(FormSenderSettings, 1))
 
 

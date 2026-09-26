@@ -63,7 +63,8 @@ def upgrade():
     )
     op.add_column("email_deliveries", sa.Column("unsubscribe_token", sa.String(64), nullable=True))
     op.execute(
-        "UPDATE email_deliveries SET unsubscribe_token = md5(random()::text || clock_timestamp()::text || id::text)"
+        "UPDATE email_deliveries SET unsubscribe_token = "
+        "md5(random()::text || clock_timestamp()::text || id::text)"
     )
     op.alter_column("email_deliveries", "unsubscribe_token", nullable=False)
     op.create_index("ix_email_deliveries_campaign_id", "email_deliveries", ["campaign_id"])

@@ -11,7 +11,9 @@ depends_on = None
 
 def upgrade():
     op.add_column("inbound_emails", sa.Column("handled_by_user_id", sa.Uuid(), nullable=True))
-    op.add_column("inbound_emails", sa.Column("handled_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column(
+        "inbound_emails", sa.Column("handled_at", sa.DateTime(timezone=True), nullable=True)
+    )
     op.create_foreign_key(
         "fk_inbound_emails_handled_by_user_id",
         "inbound_emails",

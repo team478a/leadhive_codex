@@ -84,9 +84,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_form_deliveries_form_profile_id", table_name="form_deliveries")
-    op.drop_constraint(
-        "fk_form_deliveries_form_profile_id", "form_deliveries", type_="foreignkey"
-    )
+    op.drop_constraint("fk_form_deliveries_form_profile_id", "form_deliveries", type_="foreignkey")
     op.drop_column("form_deliveries", "field_mapping_snapshot")
     op.drop_column("form_deliveries", "profile_fingerprint")
     op.drop_column("form_deliveries", "form_profile_id")

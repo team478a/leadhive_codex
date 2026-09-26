@@ -11,9 +11,7 @@ depends_on = None
 
 def upgrade():
     op.add_column("notifications", sa.Column("email_delivery_id", sa.Uuid(), nullable=True))
-    op.create_index(
-        "ix_notifications_email_delivery_id", "notifications", ["email_delivery_id"]
-    )
+    op.create_index("ix_notifications_email_delivery_id", "notifications", ["email_delivery_id"])
     op.create_foreign_key(
         "fk_notifications_email_delivery_id_email_deliveries",
         "notifications",

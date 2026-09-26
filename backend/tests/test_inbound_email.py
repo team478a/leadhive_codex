@@ -132,11 +132,14 @@ def test_inbound_reply_notifies_project_owner_and_editors(auth, users, db, monke
         if item["notification_type"] == "inbound_reply_received"
     )["inbound_email_id"] == str(notifications[0].inbound_email_id)
     assert inbound_email.sync_inbound_mail(db, force=True) == 0
-    assert db.scalar(
-        select(func.count())
-        .select_from(Notification)
-        .where(Notification.notification_type == "inbound_reply_received")
-    ) == 2
+    assert (
+        db.scalar(
+            select(func.count())
+            .select_from(Notification)
+            .where(Notification.notification_type == "inbound_reply_received")
+        )
+        == 2
+    )
 
 
 def test_inbound_sync_matches_contact_and_preserves_later_sales_status(auth, db, monkeypatch):
