@@ -136,3 +136,11 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           npm test
+
+  windows-package:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and verify the Windows distribution package
+        shell: powershell
+        run: .\scripts\package-windows.ps1

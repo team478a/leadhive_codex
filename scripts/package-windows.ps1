@@ -119,6 +119,17 @@ Compress-Archive -LiteralPath $stageRoot -DestinationPath $zipPath -CompressionL
 $zipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash.ToLowerInvariant()
 [IO.File]::WriteAllText($checksumPath, "$zipHash  $([IO.Path]::GetFileName($zipPath))`r`n", $utf8WithoutBom)
 
+$checksumRecord = (Get-Content -LiteralPath $checksumPath -Raw).Trim()
+if ($checksumRecord -notmatch '^([0-9a-fA-F]{64})  (.+)$') {
+    throw "The package checksum record is invalid."
+}
+$recordedZipHash = $Matches[1].ToLowerInvariant()
+$recordedZipName = $Matches[2]
+$verifiedZipHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $zipPath).Hash.ToLowerInvariant()
+if ($recordedZipName -ne [IO.Path]::GetFileName($zipPath) -or $recordedZipHash -ne $verifiedZipHash) {
+    throw "The package checksum verification failed."
+}
+
 $verificationRoot = Join-Path $outputDirectory "$packageName-verification"
 Assert-InOutputDirectory $verificationRoot
 if (Test-Path $verificationRoot) { Remove-Item -LiteralPath $verificationRoot -Recurse -Force }
@@ -139,6 +150,43 @@ try {
         if (-not (Test-Path (Join-Path $extractedRoot $requiredFile) -PathType Leaf)) {
             throw "Package verification failed. Missing: $requiredFile"
         }
+    }
+
+    $manifestPath = Join-Path $extractedRoot "MANIFEST-SHA256.txt"
+    $manifestEntries = @{}
+    foreach ($manifestLine in Get-Content -LiteralPath $manifestPath) {
+        if ($manifestLine -notmatch '^([0-9a-fA-F]{64})  (.+)$') {
+            throw "Package manifest contains an invalid record: $manifestLine"
+        }
+
+        $expectedHash = $Matches[1].ToLowerInvariant()
+        $relativePath = $Matches[2].Replace('\', '/')
+        if ($manifestEntries.ContainsKey($relativePath)) {
+            throw "Package manifest contains a duplicate path: $relativePath"
+        }
+
+        $manifestEntries[$relativePath] = $expectedHash
+        $packagedPath = Join-Path $extractedRoot $relativePath.Replace('/', '\')
+        if (-not (Test-Path -LiteralPath $packagedPath -PathType Leaf)) {
+            throw "Package manifest references a missing file: $relativePath"
+        }
+
+        $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $packagedPath).Hash.ToLowerInvariant()
+        if ($actualHash -ne $expectedHash) {
+            throw "Package manifest hash verification failed: $relativePath"
+        }
+    }
+
+    $packagedFiles = Get-ChildItem $extractedRoot -Recurse -File | ForEach-Object {
+        $_.FullName.Substring($extractedRoot.Length + 1).Replace('\', '/')
+    } | Where-Object { $_ -ne "MANIFEST-SHA256.txt" }
+    foreach ($packagedFile in $packagedFiles) {
+        if (-not $manifestEntries.ContainsKey($packagedFile)) {
+            throw "Package contains a file that is absent from the manifest: $packagedFile"
+        }
+    }
+    if ($manifestEntries.Count -ne @($packagedFiles).Count) {
+        throw "Package manifest file count does not match the archive contents."
     }
 
     $parseErrors = @()
