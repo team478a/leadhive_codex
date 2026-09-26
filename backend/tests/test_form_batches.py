@@ -48,6 +48,7 @@ def add_ready_profiles(db, companies):
             form_url=company.contact_url,
             form_index=0,
             form_status="READY",
+            delivery_supported=True,
             sales_contact_status="ALLOWED",
             captcha_type="CAPTCHA_NONE",
             confirmation_page=False,

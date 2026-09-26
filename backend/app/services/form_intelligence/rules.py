@@ -88,6 +88,25 @@ def normalize(value: str) -> str:
 
 def dom_mapping(field_type: str, name: str) -> tuple[str, float] | None:
     normalized_name = normalize(name)
+    exact_names = {
+        "name": "contact_name",
+        "your-name": "contact_name",
+        "fullname": "contact_name",
+        "full-name": "contact_name",
+        "contact-name": "contact_name",
+        "corporate": "company_name",
+        "corporation": "company_name",
+        "company-name": "company_name",
+        "company_name": "company_name",
+        "mail": "email",
+        "your-email": "email",
+        "reply-to": "email",
+        "reply_to": "email",
+        "your-subject": "subject",
+        "your-message": "message",
+    }
+    if normalized_name in exact_names:
+        return exact_names[normalized_name], 0.98
     if field_type == "email":
         return "email", 1.0
     if field_type == "tel":
@@ -101,9 +120,14 @@ def dom_mapping(field_type: str, name: str) -> tuple[str, float] | None:
 
 def rule_mapping(text: str, field_type: str) -> tuple[str, float]:
     normalized = normalize(text)
-    for mapped_key, aliases in FIELD_RULES:
-        if any(normalize(alias) in normalized for alias in aliases):
-            return mapped_key, 0.9
+    matches = [
+        (len(normalize(alias)), mapped_key)
+        for mapped_key, aliases in FIELD_RULES
+        for alias in aliases
+        if normalize(alias) in normalized
+    ]
+    if matches:
+        return max(matches, key=lambda item: item[0])[1], 0.9
     if field_type == "textarea":
         return "message", 0.75
     return "unknown", 0.0

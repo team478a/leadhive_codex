@@ -29,9 +29,7 @@ from app.services.form_intelligence import analyze_company_forms
 router = APIRouter(prefix="/api")
 
 
-def _owned_profile(
-    profile_id: UUID, db: Session, user: User, *, write: bool = True
-) -> FormProfile:
+def _owned_profile(profile_id: UUID, db: Session, user: User, *, write: bool = True) -> FormProfile:
     profile = db.get(FormProfile, profile_id)
     if profile is None:
         raise HTTPException(404, "Form Profileが見つかりません。")
@@ -133,9 +131,7 @@ def enqueue_form_intelligence(
     company_ids = list(dict.fromkeys(body.company_ids))
     count = len(
         db.scalars(
-            select(Company.id).where(
-                Company.project_id == project_id, Company.id.in_(company_ids)
-            )
+            select(Company.id).where(Company.project_id == project_id, Company.id.in_(company_ids))
         ).all()
     )
     if count != len(company_ids):
@@ -193,12 +189,18 @@ def correct_form_field(
         not profile.form_found
         or profile.sales_contact_status == "UNCERTAIN"
         or profile.captcha_type != "CAPTCHA_NONE"
+        or not profile.delivery_supported
         or profile.confirmation_page is None
         or any(item.mapped_key == "unknown" or item.confidence < 0.8 for item in required_fields)
     ):
         profile.form_status = "REVIEW_REQUIRED"
+        if not profile.delivery_supported and not profile.review_reason:
+            profile.review_reason = "このフォームはブラウザまたはCodex支援での操作が必要です。"
+        elif any(item.mapped_key == "unknown" or item.confidence < 0.8 for item in required_fields):
+            profile.review_reason = "必須項目の自動マッピングを確定できません。"
     else:
         profile.form_status = "READY"
+        profile.review_reason = ""
     db.add(
         FormAnalysisLog(
             company_id=profile.company_id,

@@ -65,12 +65,50 @@ def preview(profile_id=None):
     )
 
 
+def test_checkbox_and_radio_groups_are_previewed_as_choices():
+    html = """
+    <form method="post" action="/send">
+      <label><input type="radio" name="category" value="sales" required>サービス</label>
+      <label><input type="radio" name="category" value="other">その他</label>
+      <label><input type="checkbox" name="privacy" value="agree" required>同意する</label>
+      <textarea name="message" required></textarea>
+      <button type="submit" name="step" value="confirm">確認する</button>
+    </form>
+    """
+    profile_fields = [
+        SimpleNamespace(
+            name="category",
+            mapped_key="contact_category",
+            confidence=0.9,
+            decision_source="RULE",
+            recommended_value="sales",
+            required=True,
+        ),
+        SimpleNamespace(
+            name="privacy",
+            mapped_key="privacy_consent",
+            confidence=0.9,
+            decision_source="RULE",
+            recommended_value="agree",
+            required=True,
+        ),
+    ]
+    parsed = _parse_form(html, "https://example.com/contact", profile_fields=profile_fields)
+    fields = {field.name: field for field in parsed.fields}
+    assert fields["category"].field_type == "select"
+    assert fields["category"].options == ["sales", "other"]
+    assert fields["category"].value == "sales"
+    assert fields["privacy"].field_type == "select"
+    assert fields["privacy"].value == "agree"
+
+
 def add_ready_profile(db, company):
     profile = FormProfile(
         company_id=company.id,
         form_url=company.contact_url,
         form_index=0,
         form_status="READY",
+        delivery_supported=True,
         sales_contact_status="ALLOWED",
         captcha_type="CAPTCHA_NONE",
         confirmation_page=False,

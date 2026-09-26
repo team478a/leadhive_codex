@@ -1,12 +1,15 @@
 from contextlib import nullcontext
 from types import SimpleNamespace
 
+from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from app import worker
 from app.models import Company, FormAnalysisLog, OperationJob
 from app.services.form_intelligence import analyzer
+from app.services.form_intelligence.compatibility import assess_delivery_compatibility
 from app.services.form_intelligence.fingerprint import form_fingerprint
+from app.services.form_intelligence.rules import dom_mapping, rule_mapping
 from app.services.scraper import FetchedPage, ScrapeError
 
 
@@ -87,6 +90,7 @@ def test_analyze_form_profile_and_manual_correction(auth, db, monkeypatch):
     assert profile["sales_contact_status"] == "ALLOWED"
     assert profile["captcha_type"] == "CAPTCHA_NONE"
     assert profile["confirmation_page"] is False
+    assert profile["review_reason"] == ""
     assert profile["is_primary"] is True
     fields = {item["name"]: item for item in profile["fields"]}
     assert fields["corporation"]["mapped_key"] == "company_name"
@@ -110,9 +114,7 @@ def test_analyze_form_profile_and_manual_correction(auth, db, monkeypatch):
     assert corrected.status_code == 200
     assert corrected.json()["decision_source"] == "MANUAL"
     assert corrected.json()["mapped_key"] == "contact_name"
-    log = db.scalar(
-        select(FormAnalysisLog).where(FormAnalysisLog.event_type == "manual_corrected")
-    )
+    log = db.scalar(select(FormAnalysisLog).where(FormAnalysisLog.event_type == "manual_corrected"))
     assert log and log.details["before"]["mapped_key"] == "company_name"
     FakeFetcher.pages["https://form-intelligence.example/contact"] = FakeFetcher.pages[
         "https://form-intelligence.example/contact"
@@ -173,6 +175,27 @@ def test_bulk_form_intelligence_job(auth, db, monkeypatch):
     db.refresh(job)
     assert job.status == "completed" and job.success_count == 1
 
+
+def test_review_reason_is_saved_for_browser_only_form(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<a href="/contact">お問い合わせ</a>',
+            "https://form-intelligence.example/contact": """
+                <form method="get">
+                  <input name="email" type="email" required>
+                  <textarea name="message" required></textarea>
+                  <button type="submit">送信する</button>
+                </form>
+            """,
+        },
+    )
+    profile = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    assert profile["form_status"] == "REVIEW_REQUIRED"
+    assert "POST形式" in profile["review_reason"]
+
+
 def test_fingerprint_is_stable_and_sensitive_to_structure():
     fields = [
         {
@@ -188,3 +211,33 @@ def test_fingerprint_is_stable_and_sensitive_to_structure():
     assert form_fingerprint(fields) == form_fingerprint([dict(fields[0])])
     changed = [dict(fields[0], required=False)]
     assert form_fingerprint(fields) != form_fingerprint(changed)
+
+
+def test_delivery_compatibility_reports_browser_only_forms():
+    def assess(markup: str):
+        form = BeautifulSoup(markup, "html.parser").select_one("form")
+        return assess_delivery_compatibility(form, "https://example.com/contact")
+
+    assert assess('<form method="post"><input name="email"><button>送信</button></form>').supported
+    assert "POST" in assess('<form><input name="email"></form>').reason
+    assert (
+        "ファイル"
+        in assess(
+            '<form method="post" enctype="multipart/form-data">'
+            '<input name="file" type="file"></form>'
+        ).reason
+    )
+    assert (
+        "外部サイト"
+        in assess(
+            '<form method="post" action="https://other.example/send"><input name="email"></form>'
+        ).reason
+    )
+    assert "name属性" in assess('<form method="post"><input type="text"></form>').reason
+
+
+def test_field_mapping_prefers_specific_labels_and_common_names():
+    assert rule_mapping("お名前", "text")[0] == "contact_name"
+    assert rule_mapping("会社名", "text")[0] == "company_name"
+    assert dom_mapping("text", "mail")[0] == "email"
+    assert dom_mapping("text", "corporate")[0] == "company_name"

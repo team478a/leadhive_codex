@@ -77,6 +77,11 @@ def _ready_profile(db: Session, company: Company) -> tuple[FormProfile, list[For
             STATUS_MESSAGES.get(profile.form_status, "このフォームは自動送信できません。"),
             profile.form_status.lower(),
         )
+    if not profile.delivery_supported:
+        raise FormDeliveryError(
+            profile.review_reason or "このフォームは再解析またはCodex支援が必要です。",
+            "manual_required",
+        )
     if profile.sales_contact_status != "ALLOWED":
         raise FormDeliveryError("営業利用可否を確認してください。", "manual_required")
     if profile.captcha_type != "CAPTCHA_NONE":
@@ -164,8 +169,7 @@ def inspect_delivery_profile(
     preview = replace(
         preview,
         fields=[
-            replace(field, value=values.get(field.name, field.value))
-            for field in preview.fields
+            replace(field, value=values.get(field.name, field.value)) for field in preview.fields
         ],
     )
     return DeliveryProfileContext(

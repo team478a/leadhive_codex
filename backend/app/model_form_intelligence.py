@@ -81,6 +81,8 @@ class FormProfile(Timestamps, Base):
     analysis_provider: Mapped[str] = mapped_column(String(50), default="rule")
     last_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     analysis_duration_ms: Mapped[int] = mapped_column(Integer, default=0)
+    delivery_supported: Mapped[bool] = mapped_column(Boolean, default=False)
+    review_reason: Mapped[str] = mapped_column(String(500), default="")
     error_message: Mapped[str] = mapped_column(String(500), default="")
 
 

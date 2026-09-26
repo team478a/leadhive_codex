@@ -80,6 +80,8 @@ class FormProfileOut(BaseModel):
     analysis_provider: str
     last_analyzed_at: datetime | None
     analysis_duration_ms: int
+    delivery_supported: bool
+    review_reason: str
     error_message: str
     created_at: datetime
     updated_at: datetime

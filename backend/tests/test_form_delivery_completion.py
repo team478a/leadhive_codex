@@ -11,7 +11,7 @@ INITIAL_FORM = """
   <input type="hidden" name="csrf" value="initial-token">
   <input name="name" required>
   <textarea name="message" required></textarea>
-  <button type="submit">確認</button>
+  <button type="submit" name="step" value="confirm">確認</button>
 </form>
 """
 
@@ -46,6 +46,7 @@ class FakeClient:
 
 class FakeFetcher:
     responses: list[FakeResponse] = []
+    html = INITIAL_FORM
     instance = None
 
     def __init__(self):
@@ -53,19 +54,27 @@ class FakeFetcher:
         type(self).instance = self
 
     def fetch_html(self, url):
-        return FetchedPage(url, INITIAL_FORM)
+        return FetchedPage(url, self.html)
 
     def close(self):
         pass
 
 
-def run_submission(monkeypatch, responses, *, confirmation_expected=False):
+def run_submission(
+    monkeypatch,
+    responses,
+    *,
+    confirmation_expected=False,
+    html=INITIAL_FORM,
+    values=None,
+):
     FakeFetcher.responses = responses
+    FakeFetcher.html = html
     monkeypatch.setattr(form_delivery, "SafeFetcher", FakeFetcher)
     monkeypatch.setattr(form_delivery_result, "validate_public_url", lambda url: url)
     return submit_form(
         "https://example.com/contact",
-        {"name": "営業担当", "message": "お問い合わせ本文"},
+        values or {"name": "営業担当", "message": "お問い合わせ本文"},
         confirmation_expected=confirmation_expected,
     )
 
@@ -79,6 +88,7 @@ def test_direct_submission_requires_positive_completion_evidence(monkeypatch):
     assert result.completion_evidence == "送信完了メッセージ"
     assert result.final_url == "https://example.com/thanks"
     assert result.confirmation_used is False
+    assert FakeFetcher.instance.client.calls[0][2]["step"] == "confirm"
 
 
 def test_confirmation_page_is_submitted_once_and_verified(monkeypatch):
@@ -171,3 +181,27 @@ def test_external_confirmation_action_is_blocked(monkeypatch):
             confirmation_expected=True,
         )
     assert error.value.code == "manual_required"
+
+
+def test_choice_values_and_named_submit_button_are_posted(monkeypatch):
+    html = """
+    <form action="/contact" method="post">
+      <input type="radio" name="category" value="sales" required>
+      <input type="radio" name="category" value="other">
+      <input type="checkbox" name="privacy" value="agree" required>
+      <textarea name="message" required></textarea>
+      <button type="submit" name="step" value="confirm">確認する</button>
+    </form>
+    """
+    run_submission(
+        monkeypatch,
+        [FakeResponse("https://example.com/thanks", 200, "送信完了しました")],
+        html=html,
+        values={"category": "sales", "privacy": "agree", "message": "本文"},
+    )
+    assert FakeFetcher.instance.client.calls[0][2] == {
+        "category": "sales",
+        "privacy": "agree",
+        "message": "本文",
+        "step": "confirm",
+    }

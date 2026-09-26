@@ -10,6 +10,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import Company, FormAnalysisLog, FormProfile, FormProfileField, Project
+from app.services.form_intelligence.compatibility import assess_delivery_compatibility
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.providers import (
     AmbiguousField,
@@ -26,7 +27,7 @@ from app.services.form_intelligence.rules import (
 from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "1.0"
+ANALYSIS_VERSION = "1.1"
 MAX_CONTACT_PAGES = 8
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 
@@ -152,9 +153,10 @@ def parse_form_fields(form: Tag) -> list[dict]:
             )
         else:
             options = [_option(item) for item in element.select("option")]
-            required = element.has_attr("required") or str(
-                element.get("aria-required") or ""
-            ).lower() == "true"
+            required = (
+                element.has_attr("required")
+                or str(element.get("aria-required") or "").lower() == "true"
+            )
         position = len(fields)
         label = _field_label(element, form)
         parent = element.find_parent(["div", "p", "li", "td", "fieldset"])
@@ -235,10 +237,16 @@ def _profile_status(
     captcha: str,
     confirmation: bool | None,
     fields: list[dict],
+    delivery_supported: bool,
 ) -> str:
     if sales_status == "PROHIBITED":
         return "BLOCKED"
-    if not form_found or sales_status == "UNCERTAIN" or captcha != "CAPTCHA_NONE":
+    if (
+        not form_found
+        or sales_status == "UNCERTAIN"
+        or captcha != "CAPTCHA_NONE"
+        or not delivery_supported
+    ):
         return "REVIEW_REQUIRED"
     relevant = [
         item
@@ -251,6 +259,33 @@ def _profile_status(
     ):
         return "REVIEW_REQUIRED"
     return "READY"
+
+
+def _review_reason(
+    form_found: bool,
+    sales_status: str,
+    captcha: str,
+    confirmation: bool | None,
+    fields: list[dict],
+    compatibility_reason: str,
+) -> str:
+    if not form_found:
+        return "送信可能なフォームが見つかりません。"
+    if sales_status == "UNCERTAIN":
+        return "営業目的で利用できるか確認が必要です。"
+    if captcha != "CAPTCHA_NONE":
+        return "CAPTCHAがあるためCodex支援が必要です。"
+    if compatibility_reason:
+        return compatibility_reason
+    if confirmation is None:
+        return "送信ボタンを判定できないため確認が必要です。"
+    if any(
+        item["required"] and (item["mapped_key"] == "unknown" or item["confidence"] < 0.8)
+        for item in fields
+        if item["field_type"] not in {"hidden", "submit", "button", "reset", "image"}
+    ):
+        return "必須項目の自動マッピングを確定できません。"
+    return ""
 
 
 def _log(
@@ -295,6 +330,8 @@ def _upsert_profile(
     confirmation: bool | None,
     duration_ms: int,
     provider_name: str,
+    delivery_supported: bool = False,
+    compatibility_reason: str = "",
     error_message: str = "",
 ) -> FormProfile:
     profile = db.scalar(
@@ -322,7 +359,14 @@ def _upsert_profile(
     status = (
         "ERROR"
         if error_message
-        else _profile_status(form_found, sales_status, captcha, confirmation, fields)
+        else _profile_status(
+            form_found,
+            sales_status,
+            captcha,
+            confirmation,
+            fields,
+            delivery_supported,
+        )
     )
     if (
         status != "BLOCKED"
@@ -342,6 +386,19 @@ def _upsert_profile(
     profile.analysis_provider = provider_name
     profile.last_analyzed_at = datetime.now(timezone.utc)
     profile.analysis_duration_ms = max(0, duration_ms)
+    profile.delivery_supported = delivery_supported
+    profile.review_reason = (
+        _review_reason(
+            form_found,
+            sales_status,
+            captcha,
+            confirmation,
+            fields,
+            compatibility_reason,
+        )[:500]
+        if status == "REVIEW_REQUIRED"
+        else ""
+    )
     profile.error_message = error_message[:500]
     db.execute(delete(FormProfileField).where(FormProfileField.form_profile_id == profile.id))
     for item in fields:
@@ -433,6 +490,7 @@ def analyze_company_forms(db: Session, company: Company, force: bool = False) ->
                     continue
                 for form_index, form in enumerate(forms):
                     form_started = time.monotonic()
+                    compatibility = assess_delivery_compatibility(form, url)
                     fields = parse_form_fields(form)
                     sales_status, prohibition = sales_contact_status(
                         f"{text} {form.get_text(' ', strip=True)}", True
@@ -507,6 +565,12 @@ def analyze_company_forms(db: Session, company: Company, force: bool = False) ->
                             item["recommended_value"] = value
                             if value:
                                 item["confidence"] = max(item["confidence"], confidence)
+                        if (
+                            item["mapped_key"] == "privacy_consent"
+                            and item["options"]
+                            and not item["recommended_value"]
+                        ):
+                            item["recommended_value"] = str(item["options"][0].get("value") or "")
                         _log(
                             db,
                             company.id,
@@ -537,6 +601,8 @@ def analyze_company_forms(db: Session, company: Company, force: bool = False) ->
                         confirmation=confirmation,
                         duration_ms=round((time.monotonic() - form_started) * 1000),
                         provider_name=provider_name,
+                        delivery_supported=compatibility.supported,
+                        compatibility_reason=compatibility.reason,
                     )
                     profiles.append(profile)
                     seen.add((url, form_index))

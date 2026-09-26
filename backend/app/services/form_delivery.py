@@ -61,6 +61,34 @@ def _profile_metadata(profile_fields: list[Any] | None) -> dict[str, Any]:
     }
 
 
+def _option_value(option) -> str:
+    if option.has_attr("value"):
+        return str(option.get("value") or "")[:200]
+    return option.get_text(" ", strip=True)[:200]
+
+
+def _submit_payload(form) -> dict[str, str]:
+    controls = []
+    for control in form.select("button, input[type='submit'], input[type='image']"):
+        if control.name == "button" and str(control.get("type") or "submit").lower() != "submit":
+            continue
+        label = str(control.get_text(" ", strip=True) or control.get("value") or "").lower()
+        if any(value in label for value in ("戻る", "修正", "キャンセル", "back", "edit")):
+            continue
+        controls.append((control, label))
+    preferred = [
+        control
+        for control, label in controls
+        if any(value in label for value in ("送信", "確認", "submit", "send", "confirm", "次へ"))
+    ]
+    selected = (
+        preferred[0] if len(preferred) == 1 else controls[0][0] if len(controls) == 1 else None
+    )
+    if selected is None or not selected.get("name"):
+        return {}
+    return {str(selected.get("name")): str(selected.get("value") or "")}
+
+
 def _parse_form(
     html: str,
     form_url: str,
@@ -84,6 +112,11 @@ def _parse_form(
             "CAPTCHA付きフォームは自動送信できません。Codex支援を利用してください。",
             "manual_required",
         )
+    if str(form.get("enctype") or "").lower() == "multipart/form-data":
+        raise FormDeliveryError(
+            "ファイル送信用フォームは自動送信できません。Codex支援を利用してください。",
+            "manual_required",
+        )
     action_url = urljoin(form_url, str(form.get("action") or form_url))
     origin = urlsplit(form_url).hostname
     if (
@@ -97,12 +130,56 @@ def _parse_form(
     fingerprint = form_fingerprint(analysis_fields)
     metadata = _profile_metadata(profile_fields)
     fields: list[FormField] = []
+    grouped: set[tuple[str, str]] = set()
     for element in form.select("input[name], textarea[name], select[name]"):
         if element.has_attr("disabled"):
             continue
         name = str(element.get("name") or "").strip()
         raw_type = str(element.get("type") or "text").lower()
-        if not name or raw_type in {"submit", "button", "reset", "file", "image"}:
+        if not name or raw_type in {"submit", "button", "reset", "image"}:
+            continue
+        if raw_type in {"file", "password"}:
+            raise FormDeliveryError(
+                "ファイルまたはパスワード入力を含むフォームは自動送信できません。",
+                "manual_required",
+            )
+        profile_field = metadata.get(name)
+        if raw_type in {"checkbox", "radio"}:
+            group_key = (raw_type, name)
+            if group_key in grouped:
+                continue
+            grouped.add(group_key)
+            group = [
+                item
+                for item in form.select("input[name]")
+                if str(item.get("type") or "text").lower() == raw_type
+                and str(item.get("name") or "").strip() == name
+            ]
+            options = [_option_value(item) or "on" for item in group]
+            selected = next((item for item in group if item.has_attr("checked")), None)
+            value = _option_value(selected) if selected else ""
+            if profile_field and getattr(profile_field, "recommended_value", ""):
+                value = str(profile_field.recommended_value)
+            fields.append(
+                FormField(
+                    name=name,
+                    label=_label(element, form),
+                    field_type="select",
+                    required=(
+                        any(
+                            item.has_attr("required")
+                            or str(item.get("aria-required") or "").lower() == "true"
+                            for item in group
+                        )
+                        or bool(getattr(profile_field, "required", False))
+                    ),
+                    value=value[:2000],
+                    options=list(dict.fromkeys(options)),
+                    mapped_key=str(getattr(profile_field, "mapped_key", "unknown")),
+                    confidence=float(getattr(profile_field, "confidence", 0)),
+                    decision_source=str(getattr(profile_field, "decision_source", "")),
+                )
+            )
             continue
         if element.name == "textarea":
             field_type = "textarea"
@@ -112,28 +189,16 @@ def _parse_form(
             field_type = raw_type
         elif raw_type == "hidden":
             continue
-        elif raw_type in {"checkbox", "radio", "password"}:
-            raise FormDeliveryError(
-                "選択式またはパスワード入力を含むフォームは自動送信できません。",
-                "manual_required",
-            )
         else:
             field_type = "text"
-
-        def option_value(option) -> str:
-            if option.has_attr("value"):
-                return str(option.get("value") or "")[:200]
-            return option.get_text(" ", strip=True)[:200]
-
-        options = [value for option in element.select("option") if (value := option_value(option))]
+        options = [value for option in element.select("option") if (value := _option_value(option))]
         if element.name == "textarea":
             value = element.get_text()
         elif element.name == "select":
             selected = element.select_one("option[selected]") or element.select_one("option")
-            value = option_value(selected) if selected else ""
+            value = _option_value(selected) if selected else ""
         else:
             value = str(element.get("value") or "")
-        profile_field = metadata.get(name)
         if profile_field and getattr(profile_field, "recommended_value", ""):
             value = str(profile_field.recommended_value)
         fields.append(
@@ -235,7 +300,11 @@ def submit_form(
             if form
             else {}
         )
-        payload = hidden | {key: value[:2000] for key, value in values.items() if key in allowed}
+        payload = (
+            hidden
+            | {key: value[:2000] for key, value in values.items() if key in allowed}
+            | (_submit_payload(form) if form else {})
+        )
         submission = submit_and_verify(
             fetcher,
             preview.action_url,
