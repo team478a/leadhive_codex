@@ -46,8 +46,9 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, on
         {!profile.is_primary && <button className="secondary" disabled={busy} onClick={() => onSelectPrimary(profile)}>優先フォームにする</button>}
       </div>
       <div className="form-profile-summary">
-        <span>フォーム: {profile.form_found ? 'あり' : '未検出'}</span><span>営業可否: {salesNames[profile.sales_contact_status]}</span><span>CAPTCHA: {captchaNames[profile.captcha_type]}</span><span>確認画面: {profile.confirmation_page === true ? 'あり' : profile.confirmation_page === false ? 'なし' : '不明'}</span><span>解析: {profile.last_analyzed_at ? new Date(profile.last_analyzed_at).toLocaleString('ja-JP') : '—'}</span><span>{profile.analysis_duration_ms} ms</span>
+        <span>フォーム: {profile.form_found ? 'あり' : '未検出'}</span><span>営業可否: {salesNames[profile.sales_contact_status]}</span><span>通常送信: {profile.delivery_supported ? '対応' : '要支援'}</span><span>CAPTCHA: {captchaNames[profile.captcha_type]}</span><span>確認画面: {profile.confirmation_page === true ? 'あり' : profile.confirmation_page === false ? 'なし' : '不明'}</span><span>解析: {profile.last_analyzed_at ? new Date(profile.last_analyzed_at).toLocaleString('ja-JP') : '—'}</span><span>{profile.analysis_duration_ms} ms</span>
       </div>
+      {profile.review_reason && <p className="notice mt-3">要確認の理由：{profile.review_reason}</p>}
       {profile.error_message && <p className="error mt-3">{profile.error_message}</p>}
       {profile.fields.length > 0 && <div className="company-table-wrap mt-4"><table className="company-table form-field-table"><thead><tr><th>元の項目</th><th>種類</th><th>標準マッピング</th><th>確度・根拠</th><th>推奨値</th><th></th></tr></thead><tbody>
         {profile.fields.map(field => {
