@@ -25,6 +25,7 @@ from app.schemas import (
     OperationJobOut,
 )
 from app.security import current_user
+from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
 
@@ -257,7 +258,8 @@ def reanalyze_data_quality(
         operation_type="web_analysis",
         payload={"company_ids": [str(item) for item in company_ids], "force": True},
     )
-    db.add(job)
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "Web解析がすでに実行待ちです。")
     db.commit()
     db.refresh(job)
     return job

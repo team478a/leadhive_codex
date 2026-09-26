@@ -39,6 +39,7 @@ from app.services.form_profile_delivery import (
     primary_form_profiles,
     profile_form_url,
 )
+from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
 
@@ -435,9 +436,9 @@ def execute_form_batch(
             "created_by_user_id": str(user.id),
         },
     )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "別の一括フォームDMがすでに実行待ちです。")
     batch.status = "running"
-    db.add(job)
-    db.flush()
     batch.operation_job_id = job.id
     db.commit()
     db.refresh(batch)

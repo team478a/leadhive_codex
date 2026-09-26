@@ -25,7 +25,7 @@ from app.schemas import (
     SearchScheduleOut,
 )
 from app.security import current_user
-from app.services.operations import refresh_company_ids
+from app.services.operations import add_operation_job, refresh_company_ids
 
 router = APIRouter(prefix="/api")
 
@@ -130,11 +130,12 @@ def run_analysis_refresh_schedule(
         operation_type="web_analysis",
         payload={"company_ids": [str(item) for item in company_ids], "force": True},
     )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "Web解析がすでに実行待ちです。")
     now = datetime.now(timezone.utc)
     schedule.last_enqueued_at = now
     schedule.next_run_at = now + timedelta(hours=schedule.interval_hours)
     schedule.last_error = ""
-    db.add(job)
     db.commit()
     db.refresh(job)
     return job
@@ -318,9 +319,10 @@ def run_search_schedule(
             "schedule_id": str(schedule.id),
         },
     )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "検索収集がすでに実行待ちです。")
     schedule.last_enqueued_at = datetime.now(timezone.utc)
     schedule.next_run_at = schedule.last_enqueued_at + timedelta(hours=schedule.interval_hours)
-    db.add(job)
     db.commit()
     db.refresh(job)
     return job
@@ -345,7 +347,8 @@ def enqueue_operation(
         raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
     payload = body.model_dump(mode="json", exclude={"operation_type"})
     job = OperationJob(project_id=project_id, operation_type=body.operation_type, payload=payload)
-    db.add(job)
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
     db.commit()
     db.refresh(job)
     return job
@@ -403,8 +406,9 @@ def retry_operation(
         operation_type=source.operation_type,
         payload=source.payload,
     )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
     source.acknowledged_at = datetime.now(timezone.utc)
-    db.add(job)
     db.commit()
     db.refresh(job)
     return job

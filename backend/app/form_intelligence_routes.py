@@ -25,6 +25,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.form_intelligence import analyze_company_forms
+from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
 
@@ -150,7 +151,8 @@ def enqueue_form_intelligence(
         operation_type="form_intelligence",
         payload={"company_ids": [str(item) for item in company_ids], "force": body.force},
     )
-    db.add(job)
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
     db.commit()
     db.refresh(job)
     return job

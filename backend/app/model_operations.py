@@ -6,9 +6,11 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
@@ -86,6 +88,13 @@ class OperationJob(Base):
             name="ck_operation_job_counts",
         ),
         CheckConstraint("attempt_count >= 0", name="ck_operation_job_attempt_count"),
+        Index(
+            "uq_operation_jobs_active_project_type",
+            "project_id",
+            "operation_type",
+            unique=True,
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     project_id: Mapped[uuid.UUID] = mapped_column(

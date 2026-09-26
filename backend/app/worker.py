@@ -38,10 +38,11 @@ from app.services.contact_permission import evaluate_contact_permission
 from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
 from app.services.form_intelligence import analyze_company_forms
 from app.services.inbound_email import sync_inbound_mail
-from app.services.operations import refresh_company_ids
+from app.services.operations import add_operation_job, refresh_company_ids
 from app.services.web_analysis import analyze
 
 logger = logging.getLogger("leadhive")
+EMAIL_CLAIM_LOCK_ID = 4_781_001
 
 
 def lease_deadline() -> datetime:
@@ -137,25 +138,34 @@ def recover_stale_email_deliveries(db) -> int:
 
 def claim_email_delivery(db) -> EmailDelivery | None:
     now = datetime.now(timezone.utc)
+    db.execute(select(func.pg_advisory_xact_lock(EMAIL_CLAIM_LOCK_ID)))
     limits = email_delivery_limits(db)
-    sent_today = db.scalar(
+    delivery_activity_at = func.coalesce(EmailDelivery.sent_at, EmailDelivery.started_at)
+    active_today = db.scalar(
         select(func.count())
         .select_from(EmailDelivery)
         .where(
-            EmailDelivery.status == "sent",
-            EmailDelivery.sent_at >= now - timedelta(days=1),
+            EmailDelivery.status.in_(("running", "sent")),
+            delivery_activity_at >= now - timedelta(days=1),
         )
     )
-    if sent_today >= limits.max_emails_per_day:
+    if active_today >= limits.max_emails_per_day:
+        db.commit()
         return None
     if limits.minimum_interval_seconds:
-        last_sent_at = db.scalar(
-            select(EmailDelivery.sent_at)
-            .where(EmailDelivery.status == "sent", EmailDelivery.sent_at.is_not(None))
-            .order_by(EmailDelivery.sent_at.desc())
+        last_activity_at = db.scalar(
+            select(delivery_activity_at)
+            .where(
+                EmailDelivery.status.in_(("running", "sent")),
+                delivery_activity_at.is_not(None),
+            )
+            .order_by(delivery_activity_at.desc())
             .limit(1)
         )
-        if last_sent_at and last_sent_at > now - timedelta(seconds=limits.minimum_interval_seconds):
+        if last_activity_at and last_activity_at > now - timedelta(
+            seconds=limits.minimum_interval_seconds
+        ):
+            db.commit()
             return None
     delivery = db.scalar(
         select(EmailDelivery)
@@ -178,6 +188,8 @@ def claim_email_delivery(db) -> EmailDelivery | None:
         delivery.finished_at = None
         db.commit()
         db.refresh(delivery)
+    else:
+        db.commit()
     return delivery
 
 
@@ -344,20 +356,21 @@ def enqueue_due_schedules(db) -> int:
         if company_count >= schedule.company_limit:
             schedule.last_error = "企業保存上限に達したため、定期実行を見送りました。"
             continue
-        db.add(
-            OperationJob(
-                project_id=schedule.project_id,
-                operation_type="collect_search",
-                payload={
-                    "source": schedule.source,
-                    "keywords": schedule.keywords,
-                    "region": schedule.region,
-                    "max_results": schedule.max_results,
-                    "company_limit": schedule.company_limit,
-                    "schedule_id": str(schedule.id),
-                },
-            )
+        job = OperationJob(
+            project_id=schedule.project_id,
+            operation_type="collect_search",
+            payload={
+                "source": schedule.source,
+                "keywords": schedule.keywords,
+                "region": schedule.region,
+                "max_results": schedule.max_results,
+                "company_limit": schedule.company_limit,
+                "schedule_id": str(schedule.id),
+            },
         )
+        if not add_operation_job(db, job):
+            schedule.last_error = "前回の検索収集が実行中のため、今回の定期実行を見送りました。"
+            continue
         schedule.last_enqueued_at = now
         schedule.last_error = ""
         enqueued += 1
@@ -395,13 +408,14 @@ def enqueue_due_refresh_schedules(db) -> int:
         if not company_ids:
             schedule.last_error = ""
             continue
-        db.add(
-            OperationJob(
-                project_id=schedule.project_id,
-                operation_type="web_analysis",
-                payload={"company_ids": [str(item) for item in company_ids], "force": True},
-            )
+        job = OperationJob(
+            project_id=schedule.project_id,
+            operation_type="web_analysis",
+            payload={"company_ids": [str(item) for item in company_ids], "force": True},
         )
+        if not add_operation_job(db, job):
+            schedule.last_error = "前回のWeb解析が実行中のため、今回の自動再解析を見送りました。"
+            continue
         schedule.last_enqueued_at = now
         schedule.last_error = ""
         enqueued += 1
