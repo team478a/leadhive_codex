@@ -71,7 +71,7 @@ This document records the result of integration STEP 1 through STEP 5. No merge 
 | Existing migration semantics | PASS: 0 AST changes compared with the start SHA |
 | E2E Desktop | PASS |
 | E2E Mobile | PASS |
-| GitHub Actions | PASS: all 5 jobs on STEP 3 verified implementation HEAD |
+| GitHub Actions | PASS: all 5 jobs on STEP 5 verified implementation HEAD |
 
 GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36242596514>
 
