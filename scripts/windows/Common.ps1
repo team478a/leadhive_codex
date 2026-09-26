@@ -11,6 +11,23 @@ function Resolve-LeadHiveComposeProject {
     $owner = (& docker volume inspect $volumeName --format '{{ index .Labels "com.docker.compose.project" }}' 2>$null)
     if ($LASTEXITCODE -eq 0 -and $owner -in @("leadhive", "leadhive-local")) {
         $script:LeadHiveProject = $owner.Trim()
+        $dbContainer = (& docker ps -aq `
+            --filter "label=com.docker.compose.project=$script:LeadHiveProject" `
+            --filter "label=com.docker.compose.service=db" | Select-Object -First 1)
+        $legacyEnv = Join-Path $script:LeadHiveRoot ".env"
+        if ($dbContainer -and (Test-Path $legacyEnv -PathType Leaf)) {
+            $databasePassword = ((& docker inspect $dbContainer --format '{{range .Config.Env}}{{println .}}{{end}}') |
+                Where-Object { $_ -like "POSTGRES_PASSWORD=*" } | Select-Object -First 1)
+            $databasePassword = ($databasePassword -split "=", 2)[1]
+            $localPassword = ((Get-Content $script:LeadHiveEnv -ErrorAction SilentlyContinue |
+                Where-Object { $_ -like "POSTGRES_PASSWORD=*" } | Select-Object -First 1) -split "=", 2)[1]
+            $legacyPassword = ((Get-Content $legacyEnv |
+                Where-Object { $_ -like "POSTGRES_PASSWORD=*" } | Select-Object -First 1) -split "=", 2)[1]
+            if ($databasePassword -and $localPassword -cne $databasePassword -and
+                $legacyPassword -ceq $databasePassword) {
+                $script:LeadHiveEnv = $legacyEnv
+            }
+        }
     }
 }
 
