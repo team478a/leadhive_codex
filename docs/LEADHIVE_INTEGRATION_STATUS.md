@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records the result of integration STEP 1 and STEP 2. No merge into `main`, branch deletion, STEP 3 implementation, Form Intelligence implementation, or Phase 6 real-data validation was performed.
+This document records the result of integration STEP 1 through STEP 3. No merge into `main`, branch deletion, new Form Intelligence implementation, or Phase 6 real-data validation was performed.
 
 ## Integration baseline
 
@@ -15,7 +15,7 @@ This document records the result of integration STEP 1 and STEP 2. No merge into
 | `origin/main` HEAD at start | `b66ed40c533476d2adb7ad74940e6b9f86faa34b` |
 | Existing remote `codex/*` branches at start | 33 |
 | Existing branches contained by the baseline | `main` and all 33 remote `codex/*` branches |
-| Verified implementation HEAD | `cc877b37c549bb3c0c564c098073bfda1d91a149` |
+| STEP 3 verified implementation HEAD | `edbab5f5b576301425457513568ef3505b6f6218` |
 
 ## STEP 2 changes
 
@@ -24,13 +24,22 @@ This document records the result of integration STEP 1 and STEP 2. No merge into
 - Split GitHub Actions into independent `backend-lint`, `backend-tests`, `migration-validation`, `frontend`, and `e2e` jobs so failures are isolated.
 - Added an explicit `alembic upgrade head` before the GitHub Actions E2E run.
 
+## STEP 3 changes
+
+- Added `evaluate_contact_permission` as the single contact decision service. It returns `ALLOWED`, `PROHIBITED`, or `UNCERTAIN` with a stable reason code and reads the existing Company, Suppression, contact quality, and Form Profile facts without storing a duplicate canonical result.
+- Applied the decision to individual email, email retry, email campaigns, email worker delivery, direct form delivery, Codex-assisted form delivery, bulk form creation and retry, and form worker delivery.
+- Added a final worker check so a destination added to the Suppression List after approval cannot be sent.
+- Routed uncertain forms to manual review and kept prohibited forms blocked. CAPTCHA, stale, unanalysed, and unsupported forms are never automatically submitted.
+- Added representative outsider, viewer, and editor write-access tests and enabled PATCH in CORS preflight handling.
+- Added no migration and changed no database model.
+
 ## Verification
 
 | Check | Result |
 | --- | --- |
 | Ruff check | PASS: 0 errors |
-| Ruff format check | PASS: 140 files already formatted |
-| Backend tests | PASS: 126 passed, 2 deprecation warnings |
+| Ruff format check | PASS: 142 files already formatted |
+| Backend tests | PASS: 131 passed, 2 deprecation warnings |
 | Frontend typecheck | PASS |
 | Frontend lint | PASS |
 | Frontend build | PASS |
@@ -40,9 +49,9 @@ This document records the result of integration STEP 1 and STEP 2. No merge into
 | Existing migration semantics | PASS: 0 AST changes compared with the start SHA |
 | E2E Desktop | PASS |
 | E2E Mobile | PASS |
-| GitHub Actions | PASS: all 5 jobs on verified implementation HEAD |
+| GitHub Actions | PASS: all 5 jobs on STEP 3 verified implementation HEAD |
 
-GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36236486187>
+GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36240005661>
 
 ## Unresolved items
 
@@ -50,4 +59,4 @@ GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/
 - GitHub Actions reports the scheduled `ubuntu-latest` migration to Ubuntu 26. Pin or validate the runner image before that migration if deterministic runner behavior is required.
 - Two backend test deprecation warnings remain in Starlette/httpx and AnyIO compatibility paths. They do not fail the suite.
 
-No blocking error remains in STEP 1 or STEP 2. The branch is ready to begin STEP 3 under a separate instruction.
+No blocking error remains in STEP 1 through STEP 3. The branch is ready to begin STEP 4 under a separate instruction.
