@@ -1,17 +1,17 @@
 # LeadHive 統合実行計画
 
-前提: 監査時点では何もmergeしていない。全旧 `codex/*` は `codex/smtp-settings-ui@b6b56c2` に含まれるため、個別branch mergeは行わない。
+前提: 監査時点では何もmergeしていない。全旧 `codex/*` は監査対象のcode baseline `codex/smtp-settings-ui@b6b56c2` に含まれる。統合作業点は監査文書のpush後に `origin/codex/smtp-settings-ui` を再取得して固定し、個別branch mergeは行わない。
 
 ## STEP 1: 統合作業点を固定する
 
-- merge対象: なし。`origin/codex/smtp-settings-ui@b6b56c2` から `codex/integration` を作成する。
+- merge対象: なし。`origin/codex/smtp-settings-ui` の監査文書を含む最新HEADを記録し、そこから `codex/integration` を作成する。
 - 想定conflict: なし。mainと全旧branchはancestor。
 - Migration: 49 revisions、head `8e2c4a7f1b90` を変更せず固定する。
 - 実行確認:
   - `git fetch origin --prune`
   - `git merge-base --is-ancestor origin/main origin/codex/smtp-settings-ui`
   - 全remote `codex/*` がintegration HEADのancestorであることを再確認する。
-- rollback: branchを作るだけなのでmainへの影響なし。問題時はintegration branchを破棄し、`b6b56c2` へ戻る。
+- rollback: branchを作るだけなのでmainへの影響なし。問題時はintegration branchを破棄し、STEP開始時に記録したremote HEADへ戻る。
 
 完了条件: integration HEAD、監査文書commit、対象remote refsを記録する。
 
