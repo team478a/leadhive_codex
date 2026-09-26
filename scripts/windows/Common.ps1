@@ -90,3 +90,16 @@ function Start-LeadHiveBrowser([string]$Url) {
     Start-Process $Url
     Write-Host "LeadHive is ready: $Url" -ForegroundColor Green
 }
+
+function Install-LeadHiveCodexSkill {
+    $source = Join-Path $script:LeadHiveRoot ".agents\skills\leadhive-form-submit"
+    if (-not (Test-Path (Join-Path $source "SKILL.md") -PathType Leaf)) {
+        Write-Host "Codex Skill was not included in this package." -ForegroundColor Yellow
+        return
+    }
+    $skillRoot = Join-Path $HOME ".agents\skills"
+    $destination = Join-Path $skillRoot "leadhive-form-submit"
+    New-Item -ItemType Directory -Path $destination -Force | Out-Null
+    Copy-Item -Path (Join-Path $source "*") -Destination $destination -Recurse -Force
+    Write-Host "Codex Skill installed: $destination" -ForegroundColor Green
+}

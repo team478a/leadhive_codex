@@ -56,6 +56,7 @@ $fixedFiles = @(
     "frontend/vite.config.ts"
 )
 $directoryPrefixes = @(
+    ".agents/skills/leadhive-form-submit/",
     "backend/app/",
     "backend/migrations/",
     "frontend/src/",
@@ -131,6 +132,7 @@ try {
         "backend\Dockerfile",
         "frontend\Dockerfile",
         "scripts\windows\DockerSetup.ps1",
+        ".agents\skills\leadhive-form-submit\SKILL.md",
         "README-FIRST.txt",
         "MANIFEST-SHA256.txt"
     )) {

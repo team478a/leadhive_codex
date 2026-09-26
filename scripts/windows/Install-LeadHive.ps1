@@ -7,6 +7,9 @@ Ensure-DockerDesktop
 Write-Step "Creating local security settings"
 New-LeadHiveEnvironment
 
+Write-Step "Installing the LeadHive Codex Skill"
+Install-LeadHiveCodexSkill
+
 Write-Step "Building LeadHive (the first run can take several minutes)"
 Invoke-LeadHiveCompose build --pull
 
@@ -31,3 +34,4 @@ if ($userStatus -eq "no-users") {
 Write-Step "Installation completed"
 Start-LeadHiveBrowser $url
 Write-Host "Keep the .env.local file and the Docker volume when moving or updating LeadHive."
+Write-Host "If the LeadHive Form Submit skill is not visible, restart Codex once."

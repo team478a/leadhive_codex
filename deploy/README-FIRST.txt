@@ -11,6 +11,9 @@ LeadHive Windows ローカル版
 4. 画面の案内に沿って管理者メールアドレスとパスワードを設定します。
 5. ブラウザが開いたら、作成したアカウントでログインします。
 
+インストーラーは「LeadHive Form Submit」Codex Skillもユーザー領域へ配置します。
+Codexに表示されない場合は、Codexを一度再起動してください。
+
 WSL 2の有効化後に再起動を求められた場合は、Windowsを再起動してから
 「Install-LeadHive.cmd」をもう一度実行してください。
 
@@ -20,6 +23,12 @@ WSL 2の有効化後に再起動を求められた場合は、Windowsを再起�
 - Stop-LeadHive.cmd   : 停止する（データは残ります）
 - Update-LeadHive.cmd : 新しい配布パッケージへ更新する
 - Backup-LeadHive.cmd : データと暗号化キーをバックアップする
+
+Codex支援フォーム
+------------------
+「承認してCodexタスクをコピー」を押し、確認後にコピーされた内容をCodexへ
+貼り付けます。JavaScriptやiframeのフォームを一件ずつ操作できます。
+CAPTCHAが表示された場合はCodexが停止するため、画面上で人が完了してください。
 
 大切なデータ
 ------------

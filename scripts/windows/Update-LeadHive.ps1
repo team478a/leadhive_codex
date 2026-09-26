@@ -5,6 +5,9 @@ if (-not (Test-Path $script:LeadHiveEnv)) {
     throw "LeadHive is not installed. Run Install-LeadHive.cmd first."
 }
 
+Write-Step "Updating the LeadHive Codex Skill"
+Install-LeadHiveCodexSkill
+
 Write-Step "Building the updated application"
 Invoke-LeadHiveCompose build --pull
 Invoke-LeadHiveCompose up -d --wait db

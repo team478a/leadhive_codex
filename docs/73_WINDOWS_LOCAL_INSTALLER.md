@@ -8,6 +8,8 @@
 
 Docker Desktop、Python、Node.js、PostgreSQLを事前に個別インストールする必要はない。LeadHiveのデータ、APIキー、メール設定は利用者のPC内へ保存される。
 
+Codex支援フォームを使う場合は、同じWindowsユーザーでCodexを利用できることが必要。LeadHive専用Skillはインストーラーが自動配置する。
+
 ## 初回インストール
 
 1. GitHubのLeadHiveリポジトリをZIPでダウンロードし、通常のフォルダーへ展開する。
@@ -17,6 +19,8 @@ Docker Desktop、Python、Node.js、PostgreSQLを事前に個別インストー�
 5. 再起動を求められた場合はWindowsを再起動し、もう一度`Install-LeadHive.cmd`を実行する。
 6. 初回だけ管理者メールアドレスと12文字以上のパスワードを入力する。
 7. ブラウザでLeadHiveが自動的に開いたらログインする。
+
+インストーラーは`leadhive-form-submit` Skillを`%USERPROFILE%\.agents\skills`へ配置する。Skillがすぐ表示されない場合はCodexを一度再起動する。`Update-LeadHive.cmd`はアプリと一緒にSkillも更新する。
 
 初回はコンテナイメージの取得とビルドを行うため、数分かかる場合がある。2回目以降は`Start-LeadHive.cmd`で起動する。
 
@@ -76,4 +80,4 @@ Composeプロジェクト名とDBボリューム名は固定されているた�
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts\package-windows.ps1
 ```
 
-`dist`フォルダーへコミット番号付きZIPと`.sha256`ファイルを出力する。ZIPにはGit管理済みの実行必須ファイルだけを含め、`.env`、`.env.local`、仮想環境、`node_modules`、テスト結果、既存データは含めない。ZIP内の全ファイルには`MANIFEST-SHA256.txt`を付与する。
+`dist`フォルダーへコミット番号付きZIPと`.sha256`ファイルを出力する。ZIPにはGit管理済みの実行必須ファイルとLeadHive専用Codex Skillだけを含め、`.env`、`.env.local`、仮想環境、`node_modules`、テスト結果、既存データは含めない。ZIP内の全ファイルには`MANIFEST-SHA256.txt`を付与する。
