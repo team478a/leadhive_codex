@@ -141,7 +141,17 @@ def _validated_target(url: str) -> tuple[str, str]:
     raw_parsed = urlsplit(url.strip())
     if raw_parsed.username or raw_parsed.password:
         raise ScrapeError("認証情報を含むURLは解析できません。")
-    normalized, _ = canonicalize_url(url)
+    canonical, _ = canonicalize_url(url)
+    canonical_parsed = urlsplit(canonical)
+    normalized = urlunsplit(
+        (
+            canonical_parsed.scheme,
+            canonical_parsed.netloc,
+            raw_parsed.path,
+            raw_parsed.query,
+            "",
+        )
+    )
     parsed = urlsplit(normalized)
     try:
         port = parsed.port

@@ -83,7 +83,9 @@ def test_target_validation_blocks_private_network_and_unsafe_urls(monkeypatch):
         "getaddrinfo",
         lambda *args: [(2, 1, 6, "", ("93.184.216.34", 443))],
     )
-    assert scraper._validated_target("HTTPS://WWW.Example.COM/")[0] == "https://www.example.com"
+    assert scraper._validated_target("HTTPS://WWW.Example.COM/?page=1#section")[0] == (
+        "https://www.example.com/?page=1"
+    )
 
 
 def test_aggregator_detection_is_domain_exact():
