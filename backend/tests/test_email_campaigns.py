@@ -84,3 +84,27 @@ def test_campaign_pause_resume_followup_and_unsubscribe(auth, db, monkeypatch):
     db.refresh(sent_company)
     assert sent_company.do_not_contact
     assert db.query(SuppressionEntry).filter_by(email=sent_company.email).count() == 1
+
+
+def test_campaign_skips_suppressed_company(auth, db):
+    project, companies, template = make_campaign_project(auth, db)
+    db.add(
+        SuppressionEntry(
+            project_id=companies[0].project_id,
+            domain=companies[0].domain,
+            reason="キャンペーン対象外",
+        )
+    )
+    db.commit()
+    created = auth.post(
+        f"/api/projects/{project['id']}/email-campaigns",
+        json={
+            "name": "抑止確認",
+            "template_id": template["id"],
+            "company_ids": [str(company.id) for company in companies],
+            "confirmed": True,
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["queued_count"] == 1
+    assert created.json()["skipped_count"] == 1

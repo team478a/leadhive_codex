@@ -1,7 +1,7 @@
 from contextlib import nullcontext
 
 from app import worker
-from app.models import Company, FormProfile, FormProfileField
+from app.models import Company, FormProfile, FormProfileField, SuppressionEntry
 from app.services import bulk_form_delivery, form_profile_delivery
 from app.services.form_delivery import FormField, FormPreview, FormSubmissionResult
 
@@ -88,6 +88,14 @@ def test_approved_bulk_form_delivery(auth, db, monkeypatch):
     batch = created.json()
     assert sum(item["status"] == "queued" for item in batch["items"]) == 2
     assert sum(item["status"] == "skipped" for item in batch["items"]) == 1
+    db.add(
+        SuppressionEntry(
+            project_id=companies[0].project_id,
+            domain=companies[0].domain,
+            reason="一括送信の実行前に抑止",
+        )
+    )
+    db.commit()
     preview = FormPreview(
         form_url="https://batch-a.example/contact",
         action_url="https://batch-a.example/contact",
@@ -131,12 +139,50 @@ def test_approved_bulk_form_delivery(auth, db, monkeypatch):
     assert executed.json()["operation_job_id"]
     assert worker.run_once()
     completed = auth.get(f"/api/projects/{project['id']}/form-delivery-batches").json()[0]
-    assert sum(item["status"] == "submitted" for item in completed["items"]) == 2
+    assert sum(item["status"] == "submitted" for item in completed["items"]) == 1
+    assert sum(item["status"] == "skipped" for item in completed["items"]) == 2
     assert completed["status"] == "completed"
     submitted_urls = {
         item["form_url"] for item in completed["items"] if item["status"] == "submitted"
     }
-    assert submitted_urls == {profile.form_url for profile in profiles}
+    assert submitted_urls == {profiles[1].form_url}
+
+
+def test_form_batch_write_access_for_viewer_and_editor(auth, users, db):
+    project, companies, template = make_project_and_companies(auth, db)
+    payload = {
+        "template_id": template["id"],
+        "company_ids": [str(companies[0].id)],
+    }
+
+    def login(user):
+        assert (
+            auth.post(
+                "/api/auth/login",
+                json={"email": user.email, "password": "test-only-long-password"},
+            ).status_code
+            == 200
+        )
+
+    auth.post(
+        f"/api/projects/{project['id']}/members",
+        json={"email": users[1].email, "role": "viewer"},
+    )
+    login(users[1])
+    assert (
+        auth.post(f"/api/projects/{project['id']}/form-delivery-batches", json=payload).status_code
+        == 404
+    )
+    login(users[0])
+    auth.post(
+        f"/api/projects/{project['id']}/members",
+        json={"email": users[1].email, "role": "editor"},
+    )
+    login(users[1])
+    assert (
+        auth.post(f"/api/projects/{project['id']}/form-delivery-batches", json=payload).status_code
+        == 201
+    )
 
 
 def test_failed_form_batch_item_can_be_requeued(auth, db, monkeypatch):

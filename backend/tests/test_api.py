@@ -188,6 +188,15 @@ def test_origin_protection_and_safe_validation(auth):
     )
     assert response.status_code == 201
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    preflight = auth.options(
+        "/api/companies/00000000-0000-0000-0000-000000000000/sales",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "PATCH",
+        },
+    )
+    assert preflight.status_code == 200
+    assert "PATCH" in preflight.headers["access-control-allow-methods"]
     response = auth.post("/api/auth/login", json={"email": "invalid", "password": "private-value"})
     assert response.status_code == 422
     assert "private-value" not in response.text

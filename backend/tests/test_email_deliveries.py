@@ -13,6 +13,7 @@ from app.models import (
     OutreachDraft,
     OutreachDraftApproval,
     SmtpSettings,
+    SuppressionEntry,
 )
 from app.services.email_delivery import EmailDeliveryError
 
@@ -238,6 +239,95 @@ def test_email_delivery_rejects_unknown_recipient_and_contact_suppression(auth, 
             json={"recipient_email": company.email, "confirmed": True},
         ).status_code
         == 409
+    )
+    company.do_not_contact = False
+    db.add(
+        SuppressionEntry(
+            project_id=company.project_id,
+            email=company.email,
+            reason="配信停止",
+        )
+    )
+    db.commit()
+    suppressed = auth.post(
+        f"/api/outreach-drafts/{draft.id}/email-delivery",
+        json={"recipient_email": company.email, "confirmed": True},
+    )
+    assert suppressed.status_code == 409
+    assert "Suppression List" in suppressed.json()["detail"]
+
+
+def test_email_worker_rechecks_suppression_before_send(auth, db, monkeypatch):
+    _, company, draft = make_draft(auth, db)
+    created = auth.post(
+        f"/api/outreach-drafts/{draft.id}/email-delivery",
+        json={"recipient_email": company.email, "confirmed": True},
+    )
+    assert created.status_code == 202
+    db.add(
+        SuppressionEntry(
+            project_id=company.project_id,
+            domain=company.domain,
+            reason="予約後に連絡禁止へ登録",
+        )
+    )
+    db.commit()
+    sent = []
+    monkeypatch.setattr(worker, "send_email", lambda *args: sent.append(args))
+    delivery = worker.claim_email_delivery(db)
+    assert delivery is not None
+    worker.run_email_delivery(db, delivery)
+    db.refresh(delivery)
+    assert delivery.status == "failed"
+    assert "Suppression List" in delivery.error_message
+    assert sent == []
+
+
+def test_email_delivery_write_access_for_outsider_viewer_and_editor(auth, users, db):
+    project, company, draft = make_draft(auth, db)
+
+    def login(user):
+        assert (
+            auth.post(
+                "/api/auth/login",
+                json={"email": user.email, "password": "test-only-long-password"},
+            ).status_code
+            == 200
+        )
+
+    login(users[1])
+    payload = {"recipient_email": company.email, "confirmed": True}
+    assert (
+        auth.post(f"/api/outreach-drafts/{draft.id}/email-delivery", json=payload).status_code
+        == 404
+    )
+
+    login(users[0])
+    assert (
+        auth.post(
+            f"/api/projects/{project['id']}/members",
+            json={"email": users[1].email, "role": "viewer"},
+        ).status_code
+        == 201
+    )
+    login(users[1])
+    assert (
+        auth.post(f"/api/outreach-drafts/{draft.id}/email-delivery", json=payload).status_code
+        == 404
+    )
+
+    login(users[0])
+    assert (
+        auth.post(
+            f"/api/projects/{project['id']}/members",
+            json={"email": users[1].email, "role": "editor"},
+        ).status_code
+        == 201
+    )
+    login(users[1])
+    assert (
+        auth.post(f"/api/outreach-drafts/{draft.id}/email-delivery", json=payload).status_code
+        == 202
     )
 
 
