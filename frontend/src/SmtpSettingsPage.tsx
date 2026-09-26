@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { ServiceSetupGuide } from './ServiceSetupGuide'
-import type { ApplicationService, ApplicationSettings, InboundEmail, InboundEmailCompanyCandidate, InboundMailSettings, ServiceConnectionTest, SmtpSettings } from './types'
+import type { ApplicationService, ApplicationSettings, FormSenderSettings, InboundEmail, InboundEmailCompanyCandidate, InboundMailSettings, ServiceConnectionTest, SmtpSettings } from './types'
 
 const empty = {
   host: '', port: 587, username: '', from_email: '', from_name: 'LeadHive',
@@ -13,6 +13,10 @@ const inboundEmpty = {
   host: '', port: 993, username: '', mailbox: 'INBOX', use_ssl: true,
   timeout_seconds: 20, poll_interval_seconds: 300, active: false,
 }
+const formSenderEmpty = {
+  company_name: '', department: '', position: '', contact_name: '', last_name: '', first_name: '',
+  furigana: '', email: '', phone: '', postal_code: '', prefecture: '', city: '', address: '', building: '', website: '',
+}
 
 export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: string }) {
   const [applicationForm, setApplicationForm] = useState(applicationEmpty)
@@ -21,6 +25,8 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
   const [form, setForm] = useState(empty)
   const [password, setPassword] = useState('')
   const [configured, setConfigured] = useState(false)
+  const [formSender, setFormSender] = useState(formSenderEmpty)
+  const [formSenderUpdatedAt, setFormSenderUpdatedAt] = useState<string | null>(null)
   const [recipient, setRecipient] = useState(defaultRecipient)
   const [inboundForm, setInboundForm] = useState(inboundEmpty)
   const [inboundPassword, setInboundPassword] = useState('')
@@ -48,6 +54,11 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
         minimum_interval_seconds: value.minimum_interval_seconds,
       })
       setConfigured(value.password_configured)
+    }).catch(e => setError(errorMessage(e)))
+    api<FormSenderSettings>('/admin/form-sender-settings').then(value => {
+      const { updated_at, ...fields } = value
+      setFormSender(fields)
+      setFormSenderUpdatedAt(updated_at)
     }).catch(e => setError(errorMessage(e)))
     api<InboundMailSettings | null>('/admin/inbound-mail-settings').then(value => {
       if (!value) return
@@ -91,6 +102,15 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
       })
       setConfigured(saved.password_configured); setPassword('')
       setNotice('SMTP設定を保存しました。パスワードは再表示されません。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function saveFormSender() {
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const saved = await api<FormSenderSettings>('/admin/form-sender-settings', 'PUT', formSender)
+      const { updated_at, ...fields } = saved
+      setFormSender(fields); setFormSenderUpdatedAt(updated_at)
+      setNotice('フォーム送信者情報を保存しました。解析済みフォームの初期値と一括送信に使用します。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function sendTest() {
@@ -155,6 +175,11 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
     <ServiceSetupGuide settings={applicationSettings} testingService={testingService} testResults={serviceTests} onTest={(service, label) => void testService(service, label)} />
     <div className="detail-grid mt-5"><label className="field">公開アプリURL<input type="url" value={applicationForm.public_app_url} onChange={e => setApplicationForm({ ...applicationForm, public_app_url: e.target.value })} placeholder="https://app.example.com" /></label><label className="field">OpenAIモデル<input value={applicationForm.openai_model} onChange={e => setApplicationForm({ ...applicationForm, openai_model: e.target.value })} placeholder="gpt-5.6-luna" /></label><label className="field">gBizINFO API URL<input type="url" value={applicationForm.gbizinfo_api_base_url} onChange={e => setApplicationForm({ ...applicationForm, gbizinfo_api_base_url: e.target.value })} /></label><label className="field">OpenAI APIキー <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.openai_api_key_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.openai_api_key} onChange={e => setApplicationSecrets({ ...applicationSecrets, openai_api_key: e.target.value })} autoComplete="new-password" /></label><label className="field">Serper APIキー <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.serper_api_key_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.serper_api_key} onChange={e => setApplicationSecrets({ ...applicationSecrets, serper_api_key: e.target.value })} autoComplete="new-password" /></label><label className="field">Google Places APIキー <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.google_places_api_key_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.google_places_api_key} onChange={e => setApplicationSecrets({ ...applicationSecrets, google_places_api_key: e.target.value })} autoComplete="new-password" /></label><label className="field">gBizINFO APIトークン <span className="muted text-xs">（{applicationSettings ? settingSource(applicationSettings.gbizinfo_api_token_source) : '確認中'}。変更時だけ入力）</span><input type="password" value={applicationSecrets.gbizinfo_api_token} onChange={e => setApplicationSecrets({ ...applicationSecrets, gbizinfo_api_token: e.target.value })} autoComplete="new-password" /></label></div>
     <div className="actions"><button disabled={busy} onClick={() => void saveApplication()}>全体設定を保存</button></div>
+    <div className="mt-7 border-t pt-5"><h2>フォーム送信者情報</h2>
+    <p className="muted mt-2">問い合わせフォームへ入力する自社情報です。Form Intelligenceの項目判定に合わせて単発送信の初期値と一括フォームDMへ使用します。</p>
+    <div className="settings-save-status ready"><div><strong>保存状態</strong><p>空欄の項目は自動入力されず、必須の場合はCodex支援へ回ります。</p></div><span>{formSenderUpdatedAt ? `最終保存：${new Date(formSenderUpdatedAt).toLocaleString('ja-JP')}` : 'DB保存：まだありません'}</span></div>
+    <div className="detail-grid mt-5"><label className="field">会社名<input value={formSender.company_name} onChange={e => setFormSender({ ...formSender, company_name: e.target.value })} /></label><label className="field">部署<input value={formSender.department} onChange={e => setFormSender({ ...formSender, department: e.target.value })} /></label><label className="field">役職<input value={formSender.position} onChange={e => setFormSender({ ...formSender, position: e.target.value })} /></label><label className="field">担当者名<input value={formSender.contact_name} onChange={e => setFormSender({ ...formSender, contact_name: e.target.value })} /></label><label className="field">姓<input value={formSender.last_name} onChange={e => setFormSender({ ...formSender, last_name: e.target.value })} /></label><label className="field">名<input value={formSender.first_name} onChange={e => setFormSender({ ...formSender, first_name: e.target.value })} /></label><label className="field">フリガナ<input value={formSender.furigana} onChange={e => setFormSender({ ...formSender, furigana: e.target.value })} /></label><label className="field">メールアドレス<input type="email" value={formSender.email} onChange={e => setFormSender({ ...formSender, email: e.target.value })} /></label><label className="field">電話番号<input type="tel" value={formSender.phone} onChange={e => setFormSender({ ...formSender, phone: e.target.value })} /></label><label className="field">郵便番号<input value={formSender.postal_code} onChange={e => setFormSender({ ...formSender, postal_code: e.target.value })} /></label><label className="field">都道府県<input value={formSender.prefecture} onChange={e => setFormSender({ ...formSender, prefecture: e.target.value })} /></label><label className="field">市区町村<input value={formSender.city} onChange={e => setFormSender({ ...formSender, city: e.target.value })} /></label><label className="field">住所<input value={formSender.address} onChange={e => setFormSender({ ...formSender, address: e.target.value })} /></label><label className="field">建物名<input value={formSender.building} onChange={e => setFormSender({ ...formSender, building: e.target.value })} /></label><label className="field">Webサイト<input type="url" value={formSender.website} onChange={e => setFormSender({ ...formSender, website: e.target.value })} /></label></div>
+    <div className="actions"><button disabled={busy} onClick={() => void saveFormSender()}>フォーム送信者情報を保存</button></div></div>
     <div className="mt-7 border-t pt-5"><h2>メール送信設定</h2>
     <p className="muted mt-2">承認済みメールとテストメールに使うSMTPサーバーを設定します。パスワードは暗号化して保存され、画面には再表示されません。</p>
     <div className="detail-grid mt-5"><label className="field">SMTPホスト<input required value={form.host} onChange={e => setForm({ ...form, host: e.target.value })} placeholder="smtp.example.com" /></label><label className="field">ポート<input type="number" min={1} max={65535} value={form.port} onChange={e => setForm({ ...form, port: Number(e.target.value) })} /></label><label className="field">ユーザー名<input value={form.username} onChange={e => setForm({ ...form, username: e.target.value })} autoComplete="username" /></label><label className="field">パスワード{configured && <span className="muted text-xs">（設定済み。変更時だけ入力）</span>}<input type="password" value={password} onChange={e => setPassword(e.target.value)} autoComplete="new-password" /></label><label className="field">送信元メールアドレス<input type="email" required value={form.from_email} onChange={e => setForm({ ...form, from_email: e.target.value })} /></label><label className="field">送信者名<input maxLength={200} value={form.from_name} onChange={e => setForm({ ...form, from_name: e.target.value })} /></label><label className="field">接続タイムアウト（秒）<input type="number" min={1} max={120} value={form.timeout_seconds} onChange={e => setForm({ ...form, timeout_seconds: Number(e.target.value) })} /></label><label className="field">24時間の送信上限<input type="number" min={1} max={10000} value={form.max_emails_per_day} onChange={e => setForm({ ...form, max_emails_per_day: Number(e.target.value) })} /></label><label className="field">メール間隔（秒）<input type="number" min={0} max={3600} value={form.minimum_interval_seconds} onChange={e => setForm({ ...form, minimum_interval_seconds: Number(e.target.value) })} /></label><label className="checkbox-row mt-7"><input type="checkbox" checked={form.use_starttls} onChange={e => setForm({ ...form, use_starttls: e.target.checked })} />STARTTLSを使用する</label></div>

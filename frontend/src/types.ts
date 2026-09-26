@@ -17,6 +17,12 @@ export interface SmtpSettings {
   use_starttls: boolean; timeout_seconds: number; password_configured: boolean; updated_at: string
   max_emails_per_day: number; minimum_interval_seconds: number
 }
+export interface FormSenderSettings {
+  company_name: string; department: string; position: string; contact_name: string
+  last_name: string; first_name: string; furigana: string; email: string; phone: string
+  postal_code: string; prefecture: string; city: string; address: string; building: string
+  website: string; updated_at: string | null
+}
 export interface ProfileInput {
   profile_name: string
   description: string
@@ -146,9 +152,9 @@ export interface EmailCampaign { id: string; project_id: string; template_id: st
 export interface FormDeliveryBatchItem { id: string; company_id: string; draft_id: string | null; form_delivery_id: string | null; status: 'queued' | 'submitted' | 'failed' | 'manual_required' | 'skipped'; reason: string; submitted_at: string | null; created_at: string; company_name: string; form_url: string }
 export interface FormDeliveryBatch { id: string; project_id: string; template_id: string; status: 'ready' | 'running' | 'completed' | 'cancelled'; operation_job_id: string | null; created_at: string; updated_at: string; items: FormDeliveryBatchItem[] }
 export interface FormCodexTask { item_id: string; batch_id: string; company_id: string; company_name: string; form_url: string; body: string; reason: string; instructions: string; codex_status: 'open' | 'running' | 'submitted' | 'failed'; codex_assignee: string }
-export interface FormField { name: string; label: string; field_type: 'text' | 'email' | 'tel' | 'textarea' | 'select'; required: boolean; value: string; options: string[] }
-export interface FormPreview { form_url: string; action_url: string; fields: FormField[] }
-export interface FormDelivery { id: string; draft_id: string; company_id: string; delivery_method: 'direct' | 'codex_assisted'; status: 'pending' | 'submitted' | 'failed'; action_url: string; response_status: number | null; submitted_at: string | null; error_message: string; result_note: string; created_at: string }
+export interface FormField { name: string; label: string; field_type: 'text' | 'email' | 'tel' | 'textarea' | 'select'; required: boolean; value: string; options: string[]; mapped_key: string; confidence: number; decision_source: string }
+export interface FormPreview { form_url: string; action_url: string; fields: FormField[]; form_profile_id: string | null; form_status: FormStatus; fingerprint: string }
+export interface FormDelivery { id: string; draft_id: string; company_id: string; form_profile_id: string | null; delivery_method: 'direct' | 'codex_assisted'; status: 'pending' | 'submitted' | 'failed'; action_url: string; response_status: number | null; submitted_at: string | null; error_message: string; result_note: string; profile_fingerprint: string; field_mapping_snapshot: Array<Record<string, unknown>>; created_at: string }
 
 export type FormStatus = 'UNANALYZED' | 'READY' | 'REVIEW_REQUIRED' | 'BLOCKED' | 'STALE' | 'ERROR'
 export type FormMappedKey = 'company_name' | 'department' | 'position' | 'contact_name' | 'last_name' | 'first_name' | 'furigana' | 'email' | 'phone' | 'postal_code' | 'prefecture' | 'city' | 'address' | 'building' | 'website' | 'contact_category' | 'subject' | 'message' | 'privacy_consent' | 'newsletter_consent' | 'other' | 'unknown'
