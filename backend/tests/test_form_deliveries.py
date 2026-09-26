@@ -151,8 +151,16 @@ def test_form_preview_and_confirmed_delivery(auth, db, monkeypatch):
     db.commit()
     assist = auth.get(f"/api/outreach-drafts/{draft.id}/form-assist")
     assert assist.status_code == 200
-    assert assist.json()["form_url"] == company.contact_url
-    assert draft.body in assist.json()["instructions"] or assist.json()["body"] == draft.body
+    assist_payload = assist.json()
+    assert assist_payload["form_url"] == company.contact_url
+    assert assist_payload["skill_name"] == "leadhive-form-submit"
+    assert assist_payload["task_reference"] == f"draft:{draft.id}"
+    assert assist_payload["submission_authorized"] is False
+    assert assist_payload["sender_values"]["contact_name"] == "営業担当"
+    assert assist_payload["fields"][0]["mapped_key"] == "contact_name"
+    assert assist_payload["fields"][0]["value"] == "営業担当"
+    assert assist_payload["fields"][1]["value"] == draft.body
+    assert draft.body == assist_payload["body"]
     monkeypatch.setattr(
         form_profile_delivery,
         "inspect_form",

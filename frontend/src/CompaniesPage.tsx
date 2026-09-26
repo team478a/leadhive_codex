@@ -21,6 +21,7 @@ import { CompanyReplyQueuePanel } from './CompanyReplyQueuePanel'
 import { CompanySavedFiltersPanel } from './CompanySavedFiltersPanel'
 import { CompanyAiReviewPanel, CompanyExperimentPanel } from './CompanyOptimizationPanels'
 import { companyQueryString, defaultCompanyFilters, emptyContact } from './companyPageShared'
+import { approvedCodexFormTask } from './formCodexTask'
 import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAnalysisLog, FormAssist, FormDelivery, FormMappedKey, FormPreview, FormProfile, FormProfileField, FormProfileSummary, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 type Filters = CompanyFilterValues
@@ -468,8 +469,13 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
     setBusy(true); setError(''); setNotice('')
     try {
       const assist = await api<FormAssist>(`/outreach-drafts/${selectedDraft.id}/form-assist`)
-      await navigator.clipboard.writeText(`${assist.instructions}\n\n会社: ${assist.company_name}\nフォームURL: ${assist.form_url}\n\n本文:\n${assist.body}`)
-      setNotice('Codex支援用の操作指示をコピーしました。Codexでブラウザ操作を依頼してください。')
+      if (!window.confirm(`「${assist.company_name}」のフォームへCodexが入力し、最終送信を一度だけ実行することを承認しますか？`)) return
+      const delivery = await api<FormDelivery>(`/outreach-drafts/${selectedDraft.id}/form-assist-delivery`, 'POST', {
+        status: 'pending', note: 'Codex Skillへ送信承認済みタスクを引き渡し', confirmed: true,
+      })
+      setFormDelivery(delivery); setAssistOutcome('pending'); setAssistNote(''); setAssistConfirmed(false)
+      await navigator.clipboard.writeText(approvedCodexFormTask(assist))
+      setNotice('送信承認済みのCodex Skillタスクをコピーしました。Codexへ貼り付けて実行してください。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function recordFormAssistDelivery() {
@@ -614,10 +620,16 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function copyBatchCodexTask(task: FormCodexTask) {
+    if (!window.confirm(`「${task.company_name}」のフォームへCodexが入力し、最終送信を一度だけ実行することを承認しますか？`)) return
+    setBusy(true); setError(''); setNotice('')
     try {
-      await navigator.clipboard.writeText(`${task.instructions}\n\n会社: ${task.company_name}\nフォームURL: ${task.form_url}\n保留理由: ${task.reason}\n\n本文:\n${task.body}`)
-      setNotice(`${task.company_name}のCodex支援用指示をコピーしました。`)
-    } catch { setError('クリップボードへのコピーに失敗しました。') }
+      const updated = task.codex_status === 'open'
+        ? await api<FormCodexTask>(`/form-codex-queue/${task.item_id}`, 'POST', { status: 'running' })
+        : task
+      setFormCodexTasks(formCodexTasks.map(item => item.item_id === updated.item_id ? updated : item))
+      await navigator.clipboard.writeText(approvedCodexFormTask(updated))
+      setNotice(`${task.company_name}の送信承認済みCodex Skillタスクをコピーし、作業中にしました。`)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
 
   async function updateFormCodexTask(task: FormCodexTask, status: 'running' | 'submitted' | 'failed') {

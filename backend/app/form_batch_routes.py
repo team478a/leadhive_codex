@@ -30,6 +30,7 @@ from app.schemas import (
     FormDeliveryBatchOut,
 )
 from app.security import current_user
+from app.services.form_codex import build_codex_form_payload
 from app.services.form_delivery import FormDeliveryError
 from app.services.form_profile_delivery import (
     mapping_snapshot,
@@ -194,25 +195,29 @@ def list_form_codex_queue(
         .limit(100)
     ).all()
     profiles = primary_form_profiles(db, [company.id for _, _, company, _ in rows])
-    return [
-        FormCodexTaskOut(
-            item_id=item.id,
-            batch_id=batch.id,
-            company_id=company.id,
-            company_name=company.company_name,
-            form_url=display_form_url(company, profiles.get(company.id)),
-            body=draft.body,
-            reason=item.reason,
-            instructions=(
-                "Codexのコンピューター操作でフォームを開き、本文を入力してください。"
-                "CAPTCHA、送信前確認、規約同意、最終送信は人が画面で確認し、"
-                "送信後はLeadHiveの企業詳細で結果を記録します。"
-            ),
-            codex_status=item.codex_status,
-            codex_assignee=item.codex_assignee,
+    tasks = []
+    for item, batch, company, draft in rows:
+        payload = build_codex_form_payload(db, company, draft, fallback_reason=item.reason)
+        tasks.append(
+            FormCodexTaskOut(
+                item_id=item.id,
+                batch_id=batch.id,
+                company_id=company.id,
+                company_name=company.company_name,
+                form_url=display_form_url(company, profiles.get(company.id)),
+                task_reference=f"batch-item:{item.id}",
+                skill_name=payload.skill_name,
+                subject=payload.subject,
+                body=draft.body,
+                reason=item.reason,
+                sender_values=payload.sender_values,
+                fields=payload.fields,
+                instructions=payload.instructions,
+                codex_status=item.codex_status,
+                codex_assignee=item.codex_assignee,
+            )
         )
-        for item, batch, company, draft in rows
-    ]
+    return tasks
 
 
 @router.post("/form-codex-queue/{item_id}", response_model=FormCodexTaskOut)
@@ -326,15 +331,21 @@ def update_form_codex_task(
             )
         )
         db.commit()
+    payload = build_codex_form_payload(db, company, draft, fallback_reason=item.reason)
     return FormCodexTaskOut(
         item_id=item.id,
         batch_id=batch.id,
         company_id=company.id,
         company_name=company.company_name,
         form_url=form_url,
+        task_reference=f"batch-item:{item.id}",
+        skill_name=payload.skill_name,
+        subject=payload.subject,
         body=draft.body,
         reason=item.reason,
-        instructions="Codex支援フォームの結果をLeadHiveへ記録します。",
+        sender_values=payload.sender_values,
+        fields=payload.fields,
+        instructions=payload.instructions,
         codex_status=item.codex_status,
         codex_assignee=item.codex_assignee,
     )

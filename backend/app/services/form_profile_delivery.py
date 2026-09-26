@@ -98,7 +98,7 @@ def _ready_profile(db: Session, company: Company) -> tuple[FormProfile, list[For
     return profile, fields
 
 
-def _sender_values(settings: FormSenderSettings | None) -> dict[str, str]:
+def sender_values(settings: FormSenderSettings | None) -> dict[str, str]:
     if settings is None:
         return {}
     values = {
@@ -133,7 +133,7 @@ def mapped_values(
     draft: OutreachDraft,
     settings: FormSenderSettings | None,
 ) -> dict[str, str]:
-    sources = _sender_values(settings) | {
+    sources = sender_values(settings) | {
         "subject": draft.subject.strip(),
         "message": draft.body.strip(),
     }

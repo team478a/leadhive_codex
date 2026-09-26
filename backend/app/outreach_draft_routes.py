@@ -44,6 +44,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.ai import AiAnalysisError, OutreachContext, get_ai_provider
+from app.services.form_codex import build_codex_form_payload
 from app.services.form_delivery import FormDeliveryError, submit_form
 from app.services.form_profile_delivery import (
     inspect_delivery_profile,
@@ -309,6 +310,8 @@ def get_form_preview(
     company = db.get(Company, draft.company_id)
     if company is None:
         raise HTTPException(409, "企業情報が見つかりません。")
+    if company.do_not_contact:
+        raise HTTPException(409, "連絡禁止の企業にはフォーム送信できません。")
     try:
         context = inspect_delivery_profile(db, company, draft)
         preview = context.preview
@@ -336,22 +339,26 @@ def get_form_assist(
     company = db.get(Company, draft.company_id)
     if company is None:
         raise HTTPException(409, "企業情報が見つかりません。")
+    if company.do_not_contact:
+        raise HTTPException(409, "連絡禁止の企業はCodex支援へ引き渡せません。")
     try:
         form_url = profile_form_url(db, company)
     except FormDeliveryError as exc:
         raise HTTPException(409, exc.public_message) from exc
     if not form_url:
         raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
-    instructions = (
-        "ブラウザで次の問い合わせフォームを開き、入力項目を確認してください。"
-        "CAPTCHA、ログイン、規約上の制限がなければ、下記文面を問い合わせ本文へ入力し、"
-        "送信前に内容を画面で確認してください。送信は利用者の明示確認後に一度だけ実行します。"
-    )
+    payload = build_codex_form_payload(db, company, draft)
     return FormAssistOut(
+        task_reference=f"draft:{draft.id}",
+        skill_name=payload.skill_name,
         company_name=company.company_name,
         form_url=form_url,
+        subject=payload.subject,
         body=draft.body,
-        instructions=instructions,
+        reason=payload.reason,
+        sender_values=payload.sender_values,
+        fields=payload.fields,
+        instructions=payload.instructions,
     )
 
 

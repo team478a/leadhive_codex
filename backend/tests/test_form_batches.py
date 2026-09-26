@@ -96,13 +96,13 @@ def test_approved_bulk_form_delivery(auth, db, monkeypatch):
                 name="message",
                 label="お問い合わせ内容",
                 field_type="textarea",
-                    required=True,
-                    value="",
-                    options=[],
-                    mapped_key="message",
-                    confidence=0.95,
-                    decision_source="RULE",
-                )
+                required=True,
+                value="",
+                options=[],
+                mapped_key="message",
+                confidence=0.95,
+                decision_source="RULE",
+            )
         ],
         form_status="READY",
         fingerprint="f" * 64,
@@ -183,6 +183,11 @@ def test_codex_queue_tracks_work_and_result(auth, db, monkeypatch):
     ).json()
     assert batch["items"][0]["status"] == "manual_required"
     task = auth.get(f"/api/projects/{project['id']}/form-codex-queue").json()[0]
+    assert task["skill_name"] == "leadhive-form-submit"
+    assert task["task_reference"] == f"batch-item:{task['item_id']}"
+    assert task["submission_authorized"] is False
+    assert task["fields"] == []
+    assert "$leadhive-form-submit" in task["instructions"]
     running = auth.post(f"/api/form-codex-queue/{task['item_id']}", json={"status": "running"})
     assert running.status_code == 200 and running.json()["codex_status"] == "running"
     assert (

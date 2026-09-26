@@ -170,10 +170,28 @@ class FormDeliveryOut(BaseModel):
     created_at: datetime
 
 
+class FormCodexFieldOut(BaseModel):
+    position: int
+    label: str
+    name: str
+    field_type: str
+    required: bool
+    mapped_key: str
+    value: str
+    options: list[str]
+
+
 class FormAssistOut(BaseModel):
+    task_reference: str
+    skill_name: str
+    submission_authorized: bool = False
     company_name: str
     form_url: str
+    subject: str
     body: str
+    reason: str
+    sender_values: dict[str, str]
+    fields: list[FormCodexFieldOut]
     instructions: str
 
 
@@ -225,8 +243,14 @@ class FormCodexTaskOut(BaseModel):
     company_id: UUID
     company_name: str
     form_url: str
+    task_reference: str
+    skill_name: str
+    submission_authorized: bool = False
+    subject: str
     body: str
     reason: str
+    sender_values: dict[str, str]
+    fields: list[FormCodexFieldOut]
     instructions: str
     codex_status: Literal["open", "running", "submitted", "failed"]
     codex_assignee: str

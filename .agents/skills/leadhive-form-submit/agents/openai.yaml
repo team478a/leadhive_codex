@@ -1,0 +1,6 @@
+interface:
+  display_name: "LeadHive Form Submit"
+  short_description: "Safely execute one approved LeadHive contact form"
+  default_prompt: "Use $leadhive-form-submit to execute this approved LeadHive form task."
+policy:
+  allow_implicit_invocation: false
