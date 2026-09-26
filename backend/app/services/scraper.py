@@ -170,6 +170,11 @@ def _validated_target(url: str) -> tuple[str, str]:
     return normalized, hostname
 
 
+def validate_public_url(url: str) -> str:
+    """Return a normalized public URL after applying the scraper's SSRF checks."""
+    return _validated_target(url)[0]
+
+
 class SafeFetcher:
     def __init__(self):
         self.client = httpx.Client(

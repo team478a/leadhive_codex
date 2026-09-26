@@ -3,7 +3,7 @@ from contextlib import nullcontext
 from app import worker
 from app.models import Company, FormProfile, FormProfileField
 from app.services import bulk_form_delivery, form_profile_delivery
-from app.services.form_delivery import FormField, FormPreview
+from app.services.form_delivery import FormField, FormPreview, FormSubmissionResult
 
 
 def make_project_and_companies(auth, db):
@@ -110,7 +110,10 @@ def test_approved_bulk_form_delivery(auth, db, monkeypatch):
     monkeypatch.setattr(
         bulk_form_delivery,
         "submit_form",
-        lambda _url, _values, **_kwargs: (preview, 200),
+        lambda _url, _values, **_kwargs: (
+            preview,
+            FormSubmissionResult(200, "https://batch-a.example/thanks", False, "完了URL"),
+        ),
     )
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     assert (

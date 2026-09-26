@@ -159,6 +159,9 @@ class FormDeliveryOut(BaseModel):
     status: Literal["pending", "submitted", "failed"]
     action_url: str
     response_status: int | None
+    final_url: str
+    confirmation_used: bool
+    completion_evidence: str
     submitted_at: datetime | None
     error_message: str
     result_note: str

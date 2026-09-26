@@ -5,16 +5,14 @@ from uuid import UUID
 
 from bs4 import BeautifulSoup
 
+from app.services.form_delivery_result import (
+    FormDeliveryError,
+    FormSubmissionResult,
+    submit_and_verify,
+)
 from app.services.form_intelligence.analyzer import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.scraper import SafeFetcher, ScrapeError
-
-
-class FormDeliveryError(Exception):
-    def __init__(self, public_message: str, code: str = ""):
-        super().__init__(public_message)
-        self.public_message = public_message
-        self.code = code
 
 
 @dataclass(frozen=True)
@@ -59,9 +57,7 @@ def _has_captcha(form) -> bool:
 
 def _profile_metadata(profile_fields: list[Any] | None) -> dict[str, Any]:
     return {
-        str(field.name): field
-        for field in profile_fields or []
-        if str(getattr(field, "name", ""))
+        str(field.name): field for field in profile_fields or [] if str(getattr(field, "name", ""))
     }
 
 
@@ -123,6 +119,7 @@ def _parse_form(
             )
         else:
             field_type = "text"
+
         def option_value(option) -> str:
             if option.has_attr("value"):
                 return str(option.get("value") or "")[:200]
@@ -133,11 +130,7 @@ def _parse_form(
             value = element.get_text()
         elif element.name == "select":
             selected = element.select_one("option[selected]") or element.select_one("option")
-            value = (
-                option_value(selected)
-                if selected
-                else ""
-            )
+            value = option_value(selected) if selected else ""
         else:
             value = str(element.get("value") or "")
         profile_field = metadata.get(name)
@@ -205,7 +198,8 @@ def submit_form(
     profile_fields: list[Any] | None = None,
     form_profile_id: UUID | None = None,
     expected_fingerprint: str = "",
-) -> tuple[FormPreview, int]:
+    confirmation_expected: bool = False,
+) -> tuple[FormPreview, FormSubmissionResult]:
     fetcher = SafeFetcher()
     try:
         page = fetcher.fetch_html(form_url)
@@ -242,15 +236,14 @@ def submit_form(
             else {}
         )
         payload = hidden | {key: value[:2000] for key, value in values.items() if key in allowed}
-        try:
-            response = fetcher.client.post(preview.action_url, data=payload, follow_redirects=False)
-        except Exception as exc:
-            raise FormDeliveryError("フォームへの送信に失敗しました。") from exc
-        if response.status_code >= 400:
-            raise FormDeliveryError(
-                f"フォームへの送信に失敗しました（HTTP {response.status_code}）。"
-            )
-        return preview, response.status_code
+        submission = submit_and_verify(
+            fetcher,
+            preview.action_url,
+            payload,
+            original_form_url=preview.form_url,
+            confirmation_expected=confirmation_expected,
+        )
+        return preview, submission
     except ScrapeError as exc:
         raise FormDeliveryError(exc.public_message) from exc
     finally:

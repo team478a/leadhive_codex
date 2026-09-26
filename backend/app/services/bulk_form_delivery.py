@@ -58,13 +58,14 @@ def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: U
             item.status = "manual_required"
             item.reason = f"手動入力が必要です: {', '.join(missing[:3])}"
             return True
-        preview, response_status = submit_form(
+        preview, submission = submit_form(
             context.profile.form_url,
             values,
             form_index=context.profile.form_index,
             profile_fields=context.fields,
             form_profile_id=context.profile.id,
             expected_fingerprint=context.profile.fingerprint,
+            confirmation_expected=context.profile.confirmation_page is True,
         )
     except FormDeliveryError as exc:
         if context is not None:
@@ -82,7 +83,10 @@ def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: U
         form_url=preview.form_url,
         action_url=preview.action_url,
         delivery_method="direct",
-        response_status=response_status,
+        response_status=submission.response_status,
+        final_url=submission.final_url,
+        confirmation_used=submission.confirmation_used,
+        completion_evidence=submission.completion_evidence,
         submitted_at=datetime.now(timezone.utc),
         profile_fingerprint=context.profile.fingerprint,
         field_mapping_snapshot=mapping_snapshot(context.fields),

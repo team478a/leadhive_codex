@@ -14,7 +14,7 @@ from app.models import (
     OutreachDraft,
 )
 from app.services import form_profile_delivery
-from app.services.form_delivery import FormField, FormPreview, _parse_form
+from app.services.form_delivery import FormField, FormPreview, FormSubmissionResult, _parse_form
 
 
 def make_form_draft(auth, db):
@@ -129,7 +129,10 @@ def test_form_preview_and_confirmed_delivery(auth, db, monkeypatch):
     monkeypatch.setattr(
         outreach_draft_routes,
         "submit_form",
-        lambda _url, values, **_kwargs: (calls.append(values) or preview(profile.id), 200),
+        lambda _url, values, **_kwargs: (
+            calls.append(values) or preview(profile.id),
+            FormSubmissionResult(200, "https://example.com/thanks", False, "完了メッセージ"),
+        ),
     )
     assert (
         auth.post(
@@ -145,6 +148,7 @@ def test_form_preview_and_confirmed_delivery(auth, db, monkeypatch):
     assert submitted.status_code == 201 and submitted.json()["status"] == "submitted"
     assert submitted.json()["form_profile_id"] == str(profile.id)
     assert submitted.json()["profile_fingerprint"] == "f" * 64
+    assert submitted.json()["completion_evidence"] == "完了メッセージ"
     assert calls == [{"name": "営業担当", "message": draft.body}]
     db.refresh(company)
     assert company.status == "approached"
