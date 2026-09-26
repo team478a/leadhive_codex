@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records the result of integration STEP 1 through STEP 6. No merge into `main`, branch deletion, new Form Intelligence implementation, or Phase 6 real-data validation was performed.
+This document records the result of integration STEP 1 through STEP 8. No merge into `main`, branch deletion, duplicate Form Intelligence Phase 1, or Phase 6 real-data validation was performed.
 
 ## Integration baseline
 
@@ -18,6 +18,7 @@ This document records the result of integration STEP 1 through STEP 6. No merge 
 | STEP 5 verified implementation HEAD | `6cbd04fcb145d9eab0bb6545958512fb7fcf3da3` |
 | STEP 6 verified implementation HEAD | `824e80a016dd84486aa5351b6847b6ef5e433f77` |
 | STEP 7 preparation HEAD | `611d4c85064c5de3e9d85f7662de81b6b695d13e` |
+| STEP 8 verified implementation HEAD | `ea70234a1ac4f87acc5fee94fb22bda0773df84f` |
 
 ## STEP 2 changes
 
@@ -74,13 +75,24 @@ This document records the result of integration STEP 1 through STEP 6. No merge 
 - The separate development `.env` OpenAI credential passed the safe provider connectivity check. It was not copied into the installed local environment or committed.
 - The 100+100 real-data run, human review, `phase6-review.csv`, `phase6-report.json`, and final sanitized summary have not yet been produced.
 
+## STEP 8 changes
+
+- Accepted the existing Form Intelligence implementation without adding a second Phase 1, database model, or Migration.
+- Verified page discovery, form detection, DOM/rule mapping, prohibition text, all supported CAPTCHA categories, multiple forms, primary selection, Fingerprint changes, `STALE`, manual-correction preservation, background processing, and project role isolation.
+- Restricted Decision Provider results to the ambiguous field positions that were actually sent for classification. A provider response can no longer overwrite a DOM/rule-confirmed field.
+- Recognized the common `h-captcha` class as hCaptcha instead of the generic CAPTCHA category.
+- Kept JEV as a non-network placeholder until its connection contract is defined.
+- Reused `FormProfileField` with `decision_source=MANUAL` and `FormAnalysisLog.manual_corrected`; a separate `FormManualCorrection` model is not currently needed.
+- Documented the acceptance decision, safety boundaries, test evidence, and remaining static-HTML limitations in `80_FORM_INTELLIGENCE_ACCEPTANCE.md`.
+
 ## Verification
 
 | Check | Result |
 | --- | --- |
 | Ruff check | PASS: 0 errors |
 | Ruff format check | PASS: 145 files already formatted |
-| Backend tests | PASS: 136 passed, 2 deprecation warnings |
+| Backend tests | PASS: 150 passed, 2 deprecation warnings |
+| Form Intelligence focused tests | PASS: 16 passed |
 | Representative CRUD tests | PASS: 30 passed, 2 deprecation warnings |
 | Two-worker concurrency tests | PASS: 5 passed, 2 deprecation warnings |
 | Frontend typecheck | PASS |
@@ -95,11 +107,11 @@ This document records the result of integration STEP 1 through STEP 6. No merge 
 | E2E Desktop | PASS |
 | E2E Mobile | PASS |
 | Windows distribution package | PASS: ZIP checksum, 189 manifest entries, required files, PowerShell syntax, and Compose configuration |
-| GitHub Actions | PASS: all 6 jobs on STEP 6 verified implementation HEAD |
+| GitHub Actions | PASS: all 6 jobs on STEP 8 verified implementation HEAD |
 | Phase 6 focused tests | PASS: 11 AI and Phase 6 tests |
 | Phase 6 installed-local preflight | BLOCKED: validation user, Serper key, and OpenAI key are unset |
 
-GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36245164980>
+GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36279974954>
 
 ## Unresolved items
 
@@ -108,4 +120,4 @@ GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/
 - Two backend test deprecation warnings remain in Starlette/httpx and AnyIO compatibility paths. They do not fail the suite.
 - STEP 7 real-data execution requires a local validation user and working Serper/OpenAI credentials. The run must remain marked incomplete until 100 SNS companies, 100 transport companies, and the human review are complete.
 
-No blocking error remains in STEP 1 through STEP 6. STEP 7 preparation is complete, but its real-data execution is waiting for the three preflight prerequisites listed above.
+No blocking error remains in STEP 1 through STEP 6 or the Form Intelligence acceptance in STEP 8. STEP 7 preparation is complete, but its real-data execution is waiting for the three preflight prerequisites listed above.
