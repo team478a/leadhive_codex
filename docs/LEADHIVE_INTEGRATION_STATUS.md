@@ -17,6 +17,7 @@ This document records the result of integration STEP 1 through STEP 6. No merge 
 | Existing branches contained by the baseline | `main` and all 33 remote `codex/*` branches |
 | STEP 5 verified implementation HEAD | `6cbd04fcb145d9eab0bb6545958512fb7fcf3da3` |
 | STEP 6 verified implementation HEAD | `824e80a016dd84486aa5351b6847b6ef5e433f77` |
+| STEP 7 preparation HEAD | `611d4c85064c5de3e9d85f7662de81b6b695d13e` |
 
 ## STEP 2 changes
 
@@ -60,6 +61,19 @@ This document records the result of integration STEP 1 through STEP 6. No merge 
 - Generated `LeadHive-Windows-Local-824e80a.zip` locally. It contains 189 manifested files and has SHA-256 `41b4e7764b47b28ff8ccf3639c7f7688babca800e407b504a926e29b7a0deebc`.
 - Added no migration and changed no database model or existing local data.
 
+## STEP 7 progress
+
+- Updated the Phase 6 CLI to use API keys encrypted in administrator-managed application settings, with environment variables retained as fallback values.
+- Fixed collection limits so a `--limit` run cannot request more candidates than the remaining allowance, and verified that a resumed collection does not add companies after reaching the limit.
+- Preserved the three human-review fields when export is rerun after a partial or interrupted validation.
+- Added duplicate, exclusion, web failure, AI failure, pipeline success, reviewed-rank accuracy, token usage, and optional estimated-cost metrics.
+- Added `phase6-ai-usage.csv` for provider token usage and `phase6-summary.md` for an aggregate-only summary without company names, domains, contacts, or acquired page text.
+- Verified provider-error recovery and continued collection through automated PostgreSQL tests.
+- Rebuilt the local API and worker images. Both services and PostgreSQL are healthy.
+- Ran the installed local preflight on 2026-09-26. PostgreSQL, both required system profiles, and the output directory passed. The installed local environment currently has zero users and no saved Serper or OpenAI keys, so the preflight correctly returned `ready: false` without making collection requests.
+- The separate development `.env` OpenAI credential passed the safe provider connectivity check. It was not copied into the installed local environment or committed.
+- The 100+100 real-data run, human review, `phase6-review.csv`, `phase6-report.json`, and final sanitized summary have not yet been produced.
+
 ## Verification
 
 | Check | Result |
@@ -82,6 +96,8 @@ This document records the result of integration STEP 1 through STEP 6. No merge 
 | E2E Mobile | PASS |
 | Windows distribution package | PASS: ZIP checksum, 189 manifest entries, required files, PowerShell syntax, and Compose configuration |
 | GitHub Actions | PASS: all 6 jobs on STEP 6 verified implementation HEAD |
+| Phase 6 focused tests | PASS: 11 AI and Phase 6 tests |
+| Phase 6 installed-local preflight | BLOCKED: validation user, Serper key, and OpenAI key are unset |
 
 GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36245164980>
 
@@ -90,5 +106,6 @@ GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/
 - GitHub Actions reports that Node.js 20 based actions are currently forced to Node.js 24. The affected action major versions should be updated when supported versions are available or selected.
 - GitHub Actions reports the scheduled `ubuntu-latest` migration to Ubuntu 26. Pin or validate the runner image before that migration if deterministic runner behavior is required.
 - Two backend test deprecation warnings remain in Starlette/httpx and AnyIO compatibility paths. They do not fail the suite.
+- STEP 7 real-data execution requires a local validation user and working Serper/OpenAI credentials. The run must remain marked incomplete until 100 SNS companies, 100 transport companies, and the human review are complete.
 
-No blocking error remains in STEP 1 through STEP 6. The branch is ready to begin STEP 7 under a separate instruction.
+No blocking error remains in STEP 1 through STEP 6. STEP 7 preparation is complete, but its real-data execution is waiting for the three preflight prerequisites listed above.
