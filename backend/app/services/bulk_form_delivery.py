@@ -12,6 +12,7 @@ from app.models import (
     OutreachDraft,
     OutreachDraftApproval,
 )
+from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_delivery import FormDeliveryError, FormPreview, submit_form
 from app.services.form_profile_delivery import (
     inspect_delivery_profile,
@@ -38,8 +39,17 @@ def body_values(preview: FormPreview, body: str) -> tuple[dict[str, str], list[s
 def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: UUID | None) -> bool:
     company = db.get(Company, item.company_id)
     draft = db.get(OutreachDraft, item.draft_id) if item.draft_id else None
-    if company is None or draft is None or company.do_not_contact:
+    if company is None or draft is None:
         item.status, item.reason = "skipped", "送信対象ではありません。"
+        return True
+    permission = evaluate_contact_permission(
+        db, company.project_id, company.id, "form", company.contact_url
+    )
+    if permission.status == "PROHIBITED":
+        item.status, item.reason = "skipped", permission.message
+        return True
+    if permission.requires_review:
+        item.status, item.reason = "manual_required", permission.message
         return True
     if db.scalar(
         select(FormDelivery.id).where(

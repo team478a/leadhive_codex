@@ -44,6 +44,10 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.ai import AiAnalysisError, OutreachContext, get_ai_provider
+from app.services.contact_permission import (
+    ContactPermissionDecision,
+    evaluate_contact_permission,
+)
 from app.services.form_codex import build_codex_form_payload
 from app.services.form_delivery import FormDeliveryError, submit_form
 from app.services.form_profile_delivery import (
@@ -237,6 +241,21 @@ def validate_channel(company: Company, channel: str):
         raise HTTPException(409, "選択した連絡経路の連絡先が登録されていません。")
 
 
+def require_contact_permission(
+    db: Session,
+    company: Company,
+    channel: str,
+    destination: str = "",
+    *,
+    allow_uncertain: bool = False,
+) -> ContactPermissionDecision:
+    decision = evaluate_contact_permission(db, company.project_id, company.id, channel, destination)
+    if decision.status == "PROHIBITED" or (decision.status == "UNCERTAIN" and not allow_uncertain):
+        status_code = 409 if decision.status == "PROHIBITED" else 422
+        raise HTTPException(status_code, decision.message)
+    return decision
+
+
 @router.get("/companies/{company_id}/outreach-drafts", response_model=list[OutreachDraftOut])
 def list_outreach_drafts(
     company_id: UUID,
@@ -310,8 +329,7 @@ def get_form_preview(
     company = db.get(Company, draft.company_id)
     if company is None:
         raise HTTPException(409, "企業情報が見つかりません。")
-    if company.do_not_contact:
-        raise HTTPException(409, "連絡禁止の企業にはフォーム送信できません。")
+    require_contact_permission(db, company, "form", company.contact_url)
     try:
         context = inspect_delivery_profile(db, company, draft)
         preview = context.preview
@@ -339,8 +357,7 @@ def get_form_assist(
     company = db.get(Company, draft.company_id)
     if company is None:
         raise HTTPException(409, "企業情報が見つかりません。")
-    if company.do_not_contact:
-        raise HTTPException(409, "連絡禁止の企業はCodex支援へ引き渡せません。")
+    require_contact_permission(db, company, "form", company.contact_url, allow_uncertain=True)
     try:
         form_url = profile_form_url(db, company)
     except FormDeliveryError as exc:
@@ -391,14 +408,17 @@ def record_form_assist_delivery(
     company = db.get(Company, draft.company_id)
     if company is None:
         raise HTTPException(409, "企業情報が見つかりません。")
-    try:
-        form_url = profile_form_url(db, company)
-    except FormDeliveryError as exc:
-        raise HTTPException(409, exc.public_message) from exc
+    if body.status != "failed":
+        require_contact_permission(db, company, "form", company.contact_url, allow_uncertain=True)
+        try:
+            form_url = profile_form_url(db, company)
+        except FormDeliveryError as exc:
+            raise HTTPException(409, exc.public_message) from exc
+    else:
+        profile = primary_form_profile(db, company.id)
+        form_url = profile.form_url if profile and profile.form_found else company.contact_url
     if not form_url:
         raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
-    if company.do_not_contact:
-        raise HTTPException(409, "連絡禁止の企業にはフォーム送信を記録できません。")
     delivery = db.scalar(select(FormDelivery).where(FormDelivery.draft_id == draft.id))
     if delivery is not None and delivery.delivery_method != "codex_assisted":
         raise HTTPException(409, "この文面はLeadHiveから既にフォーム送信済みです。")
@@ -484,8 +504,7 @@ def create_form_delivery(
     company = db.get(Company, draft.company_id)
     if company is None:
         raise HTTPException(409, "企業情報が見つかりません。")
-    if company.do_not_contact:
-        raise HTTPException(409, "連絡禁止の企業にはフォーム送信できません。")
+    require_contact_permission(db, company, "form", company.contact_url)
     if db.scalar(select(FormDelivery.id).where(FormDelivery.draft_id == draft.id)):
         raise HTTPException(409, "この文面は既にフォーム送信済みです。")
     context = None
@@ -568,12 +587,11 @@ def create_email_delivery(
     company = db.get(Company, draft.company_id)
     if company is None:
         raise HTTPException(409, "企業情報が見つかりません。")
-    if company.do_not_contact:
-        raise HTTPException(409, "連絡禁止の企業にはメール送信できません。")
     existing = db.scalar(select(EmailDelivery).where(EmailDelivery.draft_id == draft.id))
     if existing:
         raise HTTPException(409, "この文面は既に送信予約または送信済みです。")
     recipient_email = str(body.recipient_email)
+    require_contact_permission(db, company, "email", recipient_email)
     delivery = EmailDelivery(
         draft_id=draft.id,
         company_id=company.id,
@@ -622,8 +640,9 @@ def retry_email_delivery(
     if delivery.status != "failed":
         raise HTTPException(409, "失敗したメール送信だけを再送できます。")
     company = db.get(Company, delivery.company_id)
-    if company is None or company.do_not_contact:
-        raise HTTPException(409, "連絡禁止または削除済みの企業には再送できません。")
+    if company is None:
+        raise HTTPException(409, "削除済みの企業には再送できません。")
+    require_contact_permission(db, company, "email", delivery.recipient_email)
     delivery.status = "queued"
     delivery.scheduled_for = delivery_time(body.scheduled_for)
     delivery.confirmed_at = datetime.now(timezone.utc)
@@ -650,11 +669,17 @@ def generate_outreach_draft(
     user: User = Depends(current_user),
 ):
     company = owned_company(company_id, db, user)
-    if company.do_not_contact:
-        raise HTTPException(409, "連絡禁止の企業には営業文面を生成できません。")
     if company.ai_status != "completed":
         raise HTTPException(409, "先にAI企業分析を完了してください。")
     validate_channel(company, body.channel)
+    destination = company.email if body.channel == "email" else company.contact_url
+    require_contact_permission(
+        db,
+        company,
+        body.channel,
+        destination,
+        allow_uncertain=body.channel == "form",
+    )
     project = db.get(Project, company.project_id)
     if project is None:
         raise HTTPException(409, "プロジェクトが見つかりません。")

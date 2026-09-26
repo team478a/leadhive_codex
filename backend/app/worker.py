@@ -34,6 +34,7 @@ from app.services.collection import (
     search_serper,
 )
 from app.services.collection_jobs import fail_job, save_candidates, start_job
+from app.services.contact_permission import evaluate_contact_permission
 from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
 from app.services.form_intelligence import analyze_company_forms
 from app.services.inbound_email import sync_inbound_mail
@@ -211,6 +212,18 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
     worker_id = delivery.worker_id
     logger.info("email delivery start: id=%s", delivery.id)
     try:
+        company = db.get(Company, delivery.company_id)
+        if company is None:
+            raise EmailDeliveryError("送信対象の企業が見つかりません。")
+        permission = evaluate_contact_permission(
+            db,
+            company.project_id,
+            company.id,
+            "email",
+            delivery.recipient_email,
+        )
+        if not permission.allowed:
+            raise EmailDeliveryError(permission.message)
         send_email(
             db,
             str(delivery.id),

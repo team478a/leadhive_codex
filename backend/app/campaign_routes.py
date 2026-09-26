@@ -20,6 +20,7 @@ from app.models import (
 from app.project_access import project_access
 from app.schemas import EmailCampaignCreateInput, EmailCampaignOut
 from app.security import current_user
+from app.services.contact_permission import evaluate_contact_permission
 
 router = APIRouter(prefix="/api")
 
@@ -112,7 +113,8 @@ def create_campaign(
     db.flush()
     scheduled_for = body.scheduled_for or datetime.now(timezone.utc)
     for company in companies:
-        if company.do_not_contact or not company.email.strip():
+        permission = evaluate_contact_permission(db, project_id, company.id, "email", company.email)
+        if not permission.allowed:
             continue
         exists = db.scalar(
             select(EmailDelivery.id)

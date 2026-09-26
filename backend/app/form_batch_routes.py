@@ -30,6 +30,7 @@ from app.schemas import (
     FormDeliveryBatchOut,
 )
 from app.security import current_user
+from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_codex import build_codex_form_payload
 from app.services.form_delivery import FormDeliveryError
 from app.services.form_profile_delivery import (
@@ -125,14 +126,15 @@ def create_form_batch(
     for company in companies:
         status, reason, draft_id = "queued", "", None
         profile = profiles.get(company.id)
-        if company.do_not_contact:
-            status, reason = "skipped", "連絡禁止の企業です。"
-        elif profile and (
-            profile.form_status == "BLOCKED" or profile.sales_contact_status == "PROHIBITED"
-        ):
-            status, reason = "skipped", "営業目的の送信が禁止されているフォームです。"
-        elif profile is None and not company.contact_url:
-            status, reason = "skipped", "問い合わせフォームURLがありません。"
+        permission = evaluate_contact_permission(
+            db,
+            project_id,
+            company.id,
+            "form",
+            profile.form_url if profile else company.contact_url,
+        )
+        if permission.status == "PROHIBITED":
+            status, reason = "skipped", permission.message
         elif db.scalar(
             select(FormDelivery.id).where(
                 FormDelivery.company_id == company.id, FormDelivery.status == "submitted"
@@ -140,18 +142,8 @@ def create_form_batch(
         ):
             status, reason = "skipped", "この企業にはフォーム送信済みです。"
         else:
-            if profile is None:
-                status, reason = "manual_required", "フォーム解析が未実行です。"
-            elif profile.form_status != "READY":
-                status, reason = (
-                    "manual_required",
-                    {
-                        "REVIEW_REQUIRED": "フォーム内容の確認が必要です。",
-                        "STALE": "フォームが変更されています。再解析してください。",
-                        "ERROR": "フォーム解析に失敗しています。",
-                        "UNANALYZED": "フォーム解析が未実行です。",
-                    }.get(profile.form_status, "Codex支援が必要です。"),
-                )
+            if permission.requires_review:
+                status, reason = "manual_required", permission.message
             draft = OutreachDraft(
                 company_id=company.id,
                 created_by_user_id=user.id,
@@ -242,10 +234,19 @@ def update_form_codex_task(
     draft = db.get(OutreachDraft, item.draft_id) if item.draft_id else None
     if company is None or draft is None:
         raise HTTPException(409, "送信対象の情報が見つかりません。")
-    try:
-        form_url = profile_form_url(db, company)
-    except FormDeliveryError as exc:
-        raise HTTPException(409, exc.public_message) from exc
+    if body.status != "failed":
+        permission = evaluate_contact_permission(
+            db, batch.project_id, company.id, "form", company.contact_url
+        )
+        if permission.status == "PROHIBITED":
+            raise HTTPException(409, permission.message)
+        try:
+            form_url = profile_form_url(db, company)
+        except FormDeliveryError as exc:
+            raise HTTPException(409, exc.public_message) from exc
+    else:
+        profile = primary_form_profile(db, company.id)
+        form_url = profile.form_url if profile and profile.form_found else company.contact_url
     item.codex_status = body.status
     item.codex_assignee = user.email
     if body.status == "running":
@@ -371,6 +372,14 @@ def retry_form_batch_item(
         raise HTTPException(409, "失敗したフォーム送信だけを再試行できます。")
     if batch.status == "cancelled":
         raise HTTPException(409, "中止済みの一括フォームDMは再試行できません。")
+    company = db.get(Company, item.company_id)
+    if company is None:
+        raise HTTPException(409, "送信対象の企業が見つかりません。")
+    permission = evaluate_contact_permission(
+        db, batch.project_id, company.id, "form", company.contact_url
+    )
+    if not permission.allowed:
+        raise HTTPException(409, permission.message)
     item.status = "queued"
     item.reason = ""
     item.submitted_at = None
