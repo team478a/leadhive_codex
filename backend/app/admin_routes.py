@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models import (
     ApplicationSettings,
     Company,
+    FormSenderSettings,
     InboundEmail,
     InboundMailSettings,
     Project,
@@ -21,6 +22,8 @@ from app.models import (
 from app.schemas import (
     ApplicationSettingsInput,
     ApplicationSettingsOut,
+    FormSenderSettingsInput,
+    FormSenderSettingsOut,
     InboundEmailCompanyCandidateOut,
     InboundEmailMatchInput,
     InboundEmailOut,
@@ -168,6 +171,17 @@ def smtp_out(value: SmtpSettings) -> SmtpSettingsOut:
     )
 
 
+def form_sender_out(value: FormSenderSettings | None) -> FormSenderSettingsOut:
+    data = {
+        key: getattr(value, key, "")
+        for key in FormSenderSettingsInput.model_fields
+    }
+    return FormSenderSettingsOut(
+        **data,
+        updated_at=value.updated_at if value else None,
+    )
+
+
 def inbound_mail_out(value: InboundMailSettings) -> InboundMailSettingsOut:
     return InboundMailSettingsOut(
         host=value.host,
@@ -205,6 +219,32 @@ def inbound_email_out(value: InboundEmail, company_name: str = "") -> InboundEma
 def get_smtp_settings(db: Session = Depends(get_db), user: User = Depends(current_admin)):
     saved = db.get(SmtpSettings, 1)
     return smtp_out(saved) if saved else None
+
+
+@router.get("/form-sender-settings", response_model=FormSenderSettingsOut)
+def get_form_sender_settings(
+    db: Session = Depends(get_db), user: User = Depends(current_admin)
+):
+    return form_sender_out(db.get(FormSenderSettings, 1))
+
+
+@router.put("/form-sender-settings", response_model=FormSenderSettingsOut)
+def update_form_sender_settings(
+    body: FormSenderSettingsInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
+):
+    saved = db.get(FormSenderSettings, 1)
+    if saved is None:
+        saved = FormSenderSettings(id=1)
+        db.add(saved)
+    for field in FormSenderSettingsInput.model_fields:
+        setattr(saved, field, getattr(body, field).strip())
+    saved.updated_by_user_id = user.id
+    db.commit()
+    db.refresh(saved)
+    logger.info("form sender settings updated: user_id=%s", user.id)
+    return form_sender_out(saved)
 
 
 @router.put("/smtp-settings", response_model=SmtpSettingsOut)

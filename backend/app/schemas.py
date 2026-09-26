@@ -100,6 +100,8 @@ from app.schema_reporting import (
 from app.schema_settings import (
     ApplicationSettingsInput,
     ApplicationSettingsOut,
+    FormSenderSettingsInput,
+    FormSenderSettingsOut,
     InboundEmailCompanyCandidateOut,
     InboundEmailMatchInput,
     InboundEmailOut,
@@ -201,6 +203,8 @@ __all__ = [
     "FormIntelligenceJobInput",
     "ApplicationSettingsInput",
     "ApplicationSettingsOut",
+    "FormSenderSettingsInput",
+    "FormSenderSettingsOut",
     "SmtpSettingsInput",
     "SmtpSettingsOut",
     "SmtpTestInput",

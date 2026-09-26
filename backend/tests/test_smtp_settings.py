@@ -1,7 +1,7 @@
 from cryptography.fernet import Fernet
 
 from app import admin_routes
-from app.models import ApplicationSettings, InboundMailSettings, SmtpSettings
+from app.models import ApplicationSettings, FormSenderSettings, InboundMailSettings, SmtpSettings
 from app.services import application_settings, email_delivery
 
 
@@ -180,3 +180,25 @@ def test_admin_can_run_service_connection_test(auth, users, db, monkeypatch):
     assert response.json()["service"] == "serper"
     assert response.json()["ok"] is True
     assert calls == ["serper"]
+
+
+def test_admin_can_manage_form_sender_settings(auth, users, db):
+    assert auth.get("/api/admin/form-sender-settings").status_code == 404
+    users[0].is_admin = True
+    db.commit()
+    empty = auth.get("/api/admin/form-sender-settings")
+    assert empty.status_code == 200 and empty.json()["company_name"] == ""
+    saved = auth.put(
+        "/api/admin/form-sender-settings",
+        json={
+            "company_name": "LeadHive株式会社",
+            "department": "営業部",
+            "contact_name": "蜂須賀 太郎",
+            "email": "sales@example.com",
+            "phone": "03-1234-5678",
+            "website": "https://example.com",
+        },
+    )
+    assert saved.status_code == 200
+    assert saved.json()["company_name"] == "LeadHive株式会社"
+    assert db.get(FormSenderSettings, 1).email == "sales@example.com"

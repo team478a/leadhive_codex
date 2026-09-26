@@ -13,6 +13,7 @@ from app.models import (
     ContactPerson,
     EmailDelivery,
     FormDelivery,
+    FormProfileField,
     OutreachDraft,
     OutreachDraftApproval,
     OutreachTemplate,
@@ -43,7 +44,14 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.ai import AiAnalysisError, OutreachContext, get_ai_provider
-from app.services.form_delivery import FormDeliveryError, inspect_form, submit_form
+from app.services.form_delivery import FormDeliveryError, submit_form
+from app.services.form_profile_delivery import (
+    inspect_delivery_profile,
+    mapping_snapshot,
+    mark_profile_changed,
+    primary_form_profile,
+    profile_form_url,
+)
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
@@ -299,16 +307,20 @@ def get_form_preview(
     if draft.channel != "form":
         raise HTTPException(409, "フォーム文面だけを送信できます。")
     company = db.get(Company, draft.company_id)
-    if company is None or not company.contact_url:
-        raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
+    if company is None:
+        raise HTTPException(409, "企業情報が見つかりません。")
     try:
-        preview = inspect_form(company.contact_url)
+        context = inspect_delivery_profile(db, company, draft)
+        preview = context.preview
     except FormDeliveryError as exc:
         raise HTTPException(422, exc.public_message) from exc
     return FormPreviewOut(
         form_url=preview.form_url,
         action_url=preview.action_url,
         fields=[FormFieldOut(**field.__dict__) for field in preview.fields],
+        form_profile_id=preview.form_profile_id,
+        form_status=preview.form_status,
+        fingerprint=preview.fingerprint,
     )
 
 
@@ -322,7 +334,13 @@ def get_form_assist(
     if draft.channel != "form":
         raise HTTPException(409, "フォーム文面だけをCodex支援へ渡せます。")
     company = db.get(Company, draft.company_id)
-    if company is None or not company.contact_url:
+    if company is None:
+        raise HTTPException(409, "企業情報が見つかりません。")
+    try:
+        form_url = profile_form_url(db, company)
+    except FormDeliveryError as exc:
+        raise HTTPException(409, exc.public_message) from exc
+    if not form_url:
         raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
     instructions = (
         "ブラウザで次の問い合わせフォームを開き、入力項目を確認してください。"
@@ -331,7 +349,7 @@ def get_form_assist(
     )
     return FormAssistOut(
         company_name=company.company_name,
-        form_url=company.contact_url,
+        form_url=form_url,
         body=draft.body,
         instructions=instructions,
     )
@@ -364,7 +382,13 @@ def record_form_assist_delivery(
     if draft.channel != "form":
         raise HTTPException(409, "フォーム文面だけをCodex支援送信として記録できます。")
     company = db.get(Company, draft.company_id)
-    if company is None or not company.contact_url:
+    if company is None:
+        raise HTTPException(409, "企業情報が見つかりません。")
+    try:
+        form_url = profile_form_url(db, company)
+    except FormDeliveryError as exc:
+        raise HTTPException(409, exc.public_message) from exc
+    if not form_url:
         raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
     if company.do_not_contact:
         raise HTTPException(409, "連絡禁止の企業にはフォーム送信を記録できません。")
@@ -374,26 +398,45 @@ def record_form_assist_delivery(
     if delivery is not None and delivery.status == "submitted":
         raise HTTPException(409, "この文面は既にフォーム送信済みです。")
     submitted_at = datetime.now(timezone.utc) if body.status == "submitted" else None
+    profile = primary_form_profile(db, company.id)
+    profile_fields = (
+        list(
+            db.scalars(
+                select(FormProfileField)
+                .where(FormProfileField.form_profile_id == profile.id)
+                .order_by(FormProfileField.position)
+            ).all()
+        )
+        if profile
+        else []
+    )
     if delivery is None:
         delivery = FormDelivery(
             draft_id=draft.id,
             company_id=company.id,
             created_by_user_id=user.id,
-            form_url=company.contact_url,
+            form_url=form_url,
             delivery_method="codex_assisted",
             status=body.status,
             submitted_at=submitted_at,
             result_note=body.note,
+            form_profile_id=profile.id if profile else None,
+            profile_fingerprint=profile.fingerprint if profile else "",
+            field_mapping_snapshot=mapping_snapshot(profile_fields),
         )
         db.add(delivery)
     else:
         delivery.status = body.status
         delivery.submitted_at = submitted_at
         delivery.result_note = body.note
+        delivery.form_url = form_url
+        delivery.form_profile_id = profile.id if profile else None
+        delivery.profile_fingerprint = profile.fingerprint if profile else ""
+        delivery.field_mapping_snapshot = mapping_snapshot(profile_fields)
     if body.status == "submitted":
         record_draft_approval(db, draft, user, "form_codex", delivered_at=submitted_at)
     outcome_label = {"pending": "保留", "submitted": "送信済み", "failed": "失敗"}[body.status]
-    note = f"Codex支援フォーム送信を{outcome_label}として記録: {company.contact_url}"
+    note = f"Codex支援フォーム送信を{outcome_label}として記録: {form_url}"
     if body.note:
         note = f"{note}（{body.note}）"
     db.add(Activity(company_id=company.id, activity_type="form", note=note))
@@ -432,15 +475,26 @@ def create_form_delivery(
     if draft.channel != "form":
         raise HTTPException(409, "フォーム文面だけを送信できます。")
     company = db.get(Company, draft.company_id)
-    if company is None or not company.contact_url:
-        raise HTTPException(409, "問い合わせフォームURLが登録されていません。")
+    if company is None:
+        raise HTTPException(409, "企業情報が見つかりません。")
     if company.do_not_contact:
         raise HTTPException(409, "連絡禁止の企業にはフォーム送信できません。")
     if db.scalar(select(FormDelivery.id).where(FormDelivery.draft_id == draft.id)):
         raise HTTPException(409, "この文面は既にフォーム送信済みです。")
+    context = None
     try:
-        preview, response_status = submit_form(company.contact_url, body.field_values)
+        context = inspect_delivery_profile(db, company, draft)
+        preview, response_status = submit_form(
+            context.profile.form_url,
+            body.field_values,
+            form_index=context.profile.form_index,
+            profile_fields=context.fields,
+            form_profile_id=context.profile.id,
+            expected_fingerprint=context.profile.fingerprint,
+        )
     except FormDeliveryError as exc:
+        if context is not None:
+            mark_profile_changed(db, context.profile, exc)
         logger.warning(
             "form delivery failed: company_id=%s type=%s", company.id, type(exc).__name__
         )
@@ -448,12 +502,15 @@ def create_form_delivery(
     delivery = FormDelivery(
         draft_id=draft.id,
         company_id=company.id,
+        form_profile_id=context.profile.id,
         created_by_user_id=user.id,
         form_url=preview.form_url,
         action_url=preview.action_url,
         delivery_method="direct",
         response_status=response_status,
         submitted_at=datetime.now(timezone.utc),
+        profile_fingerprint=context.profile.fingerprint,
+        field_mapping_snapshot=mapping_snapshot(context.fields),
     )
     db.add(delivery)
     record_draft_approval(db, draft, user, "form_direct", delivered_at=delivery.submitted_at)

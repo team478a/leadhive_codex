@@ -36,6 +36,7 @@ from app.model_outreach import (
 )
 from app.model_settings import (
     ApplicationSettings,
+    FormSenderSettings,
     InboundEmail,
     InboundMailSettings,
     Notification,
@@ -68,6 +69,7 @@ __all__ = [
     "FormProfileField",
     "FormAnalysisLog",
     "ApplicationSettings",
+    "FormSenderSettings",
     "SmtpSettings",
     "InboundMailSettings",
     "InboundEmail",

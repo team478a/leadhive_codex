@@ -14,6 +14,7 @@ os.environ["DATABASE_URL"] = url
 from app.database import SessionLocal  # noqa: E402
 from app.models import (  # noqa: E402
     AuthSession,
+    FormSenderSettings,
     InboundEmail,
     InboundMailSettings,
     Project,
@@ -36,6 +37,7 @@ with SessionLocal() as db:
             )
         )
     elif sys.argv[1] == "cleanup":
+        db.execute(delete(FormSenderSettings))
         db.execute(delete(SmtpSettings))
         db.execute(delete(InboundEmail))
         db.execute(delete(InboundMailSettings))

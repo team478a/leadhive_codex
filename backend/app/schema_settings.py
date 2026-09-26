@@ -74,6 +74,28 @@ class SmtpTestInput(Input):
     recipient_email: EmailStr
 
 
+class FormSenderSettingsInput(Input):
+    company_name: str = Field(default="", max_length=500)
+    department: str = Field(default="", max_length=500)
+    position: str = Field(default="", max_length=500)
+    contact_name: str = Field(default="", max_length=500)
+    last_name: str = Field(default="", max_length=200)
+    first_name: str = Field(default="", max_length=200)
+    furigana: str = Field(default="", max_length=500)
+    email: str = Field(default="", max_length=320)
+    phone: str = Field(default="", max_length=100)
+    postal_code: str = Field(default="", max_length=20)
+    prefecture: str = Field(default="", max_length=20)
+    city: str = Field(default="", max_length=500)
+    address: str = Field(default="", max_length=1000)
+    building: str = Field(default="", max_length=500)
+    website: str = Field(default="", max_length=2000)
+
+
+class FormSenderSettingsOut(FormSenderSettingsInput):
+    updated_at: datetime | None = None
+
+
 class InboundMailSettingsInput(Input):
     host: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)]
     port: int = Field(ge=1, le=65535)

@@ -1,8 +1,20 @@
+from dataclasses import replace
+from types import SimpleNamespace
+
 from sqlalchemy import select
 
 from app import outreach_draft_routes
-from app.models import Activity, Company, FormDelivery, OutreachDraft
-from app.services.form_delivery import FormField, FormPreview
+from app.models import (
+    Activity,
+    Company,
+    FormDelivery,
+    FormProfile,
+    FormProfileField,
+    FormSenderSettings,
+    OutreachDraft,
+)
+from app.services import form_profile_delivery
+from app.services.form_delivery import FormField, FormPreview, _parse_form
 
 
 def make_form_draft(auth, db):
@@ -29,32 +41,95 @@ def make_form_draft(auth, db):
     return company, draft
 
 
-def preview():
+def preview(profile_id=None):
     return FormPreview(
         form_url="https://form-delivery.example/contact",
         action_url="https://form-delivery.example/contact/send",
         fields=[
-            FormField("name", "お名前", "text", True, "", []),
-            FormField("message", "お問い合わせ内容", "textarea", True, "", []),
+            FormField("name", "お名前", "text", True, "", [], "contact_name", 0.95, "RULE"),
+            FormField(
+                "message",
+                "お問い合わせ内容",
+                "textarea",
+                True,
+                "",
+                [],
+                "message",
+                0.95,
+                "RULE",
+            ),
         ],
+        form_profile_id=profile_id,
+        form_status="READY",
+        fingerprint="f" * 64,
     )
+
+
+def add_ready_profile(db, company):
+    profile = FormProfile(
+        company_id=company.id,
+        form_url=company.contact_url,
+        form_index=0,
+        form_status="READY",
+        sales_contact_status="ALLOWED",
+        captcha_type="CAPTCHA_NONE",
+        confirmation_page=False,
+        is_primary=True,
+        form_found=True,
+        fingerprint="f" * 64,
+    )
+    db.add(profile)
+    db.flush()
+    db.add_all(
+        [
+            FormProfileField(
+                form_profile_id=profile.id,
+                position=0,
+                name="name",
+                field_type="text",
+                required=True,
+                mapped_key="contact_name",
+                confidence=0.95,
+            ),
+            FormProfileField(
+                form_profile_id=profile.id,
+                position=1,
+                name="message",
+                field_type="textarea",
+                required=True,
+                mapped_key="message",
+                confidence=0.95,
+            ),
+        ]
+    )
+    db.commit()
+    return profile
 
 
 def test_form_preview_and_confirmed_delivery(auth, db, monkeypatch):
     company, draft = make_form_draft(auth, db)
+    profile = add_ready_profile(db, company)
+    db.add(FormSenderSettings(id=1, contact_name="営業担当"))
+    db.commit()
     assist = auth.get(f"/api/outreach-drafts/{draft.id}/form-assist")
     assert assist.status_code == 200
     assert assist.json()["form_url"] == company.contact_url
     assert draft.body in assist.json()["instructions"] or assist.json()["body"] == draft.body
-    monkeypatch.setattr(outreach_draft_routes, "inspect_form", lambda _url: preview())
+    monkeypatch.setattr(
+        form_profile_delivery,
+        "inspect_form",
+        lambda _url, **_kwargs: preview(profile.id),
+    )
     shown = auth.get(f"/api/outreach-drafts/{draft.id}/form-preview")
     assert shown.status_code == 200 and shown.json()["fields"][0]["name"] == "name"
+    assert shown.json()["fields"][0]["value"] == "営業担当"
+    assert shown.json()["form_profile_id"] == str(profile.id)
 
     calls = []
     monkeypatch.setattr(
         outreach_draft_routes,
         "submit_form",
-        lambda _url, values: (calls.append(values) or preview(), 200),
+        lambda _url, values, **_kwargs: (calls.append(values) or preview(profile.id), 200),
     )
     assert (
         auth.post(
@@ -68,6 +143,8 @@ def test_form_preview_and_confirmed_delivery(auth, db, monkeypatch):
         json={"field_values": {"name": "営業担当", "message": draft.body}, "confirmed": True},
     )
     assert submitted.status_code == 201 and submitted.json()["status"] == "submitted"
+    assert submitted.json()["form_profile_id"] == str(profile.id)
+    assert submitted.json()["profile_fingerprint"] == "f" * 64
     assert calls == [{"name": "営業担当", "message": draft.body}]
     db.refresh(company)
     assert company.status == "approached"
@@ -129,3 +206,72 @@ def test_codex_assisted_form_delivery_result_updates_sales_status(auth, db):
         ).status_code
         == 409
     )
+
+
+def test_direct_delivery_requires_ready_profile(auth, db):
+    company, draft = make_form_draft(auth, db)
+    profile = add_ready_profile(db, company)
+    profile.form_status = "STALE"
+    db.commit()
+    response = auth.get(f"/api/outreach-drafts/{draft.id}/form-preview")
+    assert response.status_code == 422
+    assert "再解析" in response.json()["detail"]
+
+
+def test_changed_form_fingerprint_marks_profile_stale(auth, db, monkeypatch):
+    company, draft = make_form_draft(auth, db)
+    profile = add_ready_profile(db, company)
+    changed = replace(preview(profile.id), fingerprint="0" * 64)
+    monkeypatch.setattr(
+        form_profile_delivery,
+        "inspect_form",
+        lambda _url, **_kwargs: changed,
+    )
+    response = auth.get(f"/api/outreach-drafts/{draft.id}/form-preview")
+    assert response.status_code == 422
+    db.refresh(profile)
+    assert profile.form_status == "STALE"
+
+
+def test_profile_form_index_and_recommended_option_are_used():
+    html = """
+      <form method="get"><input name="q"></form>
+      <form method="post" action="/contact/send">
+        <label for="kind">お問い合わせ種別</label>
+        <select id="kind" name="kind" required>
+          <option value="">選択してください</option>
+          <option value="sales">営業提案</option>
+        </select>
+        <textarea name="message" aria-required="true"></textarea>
+        <button type="submit">送信</button>
+      </form>
+    """
+    fields = [
+        SimpleNamespace(
+            name="kind",
+            mapped_key="contact_category",
+            confidence=0.95,
+            decision_source="RULE",
+            recommended_value="sales",
+            required=True,
+        ),
+        SimpleNamespace(
+            name="message",
+            mapped_key="message",
+            confidence=0.95,
+            decision_source="RULE",
+            recommended_value="",
+            required=True,
+        ),
+    ]
+    result = _parse_form(
+        html,
+        "https://example.com/contact",
+        form_index=1,
+        profile_fields=fields,
+    )
+    assert result.action_url == "https://example.com/contact/send"
+    assert result.fields[0].options == ["sales"]
+    assert result.fields[0].value == "sales"
+    assert result.fields[1].required is True
+    assert len(result.fingerprint) == 64

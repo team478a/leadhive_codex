@@ -13,6 +13,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -214,6 +215,9 @@ class FormDelivery(Timestamps, Base):
     company_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"), index=True
     )
+    form_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("form_profiles.id", ondelete="SET NULL"), index=True
+    )
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
@@ -225,6 +229,8 @@ class FormDelivery(Timestamps, Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     error_message: Mapped[str] = mapped_column(String(500), default="")
     result_note: Mapped[str] = mapped_column(String(500), default="")
+    profile_fingerprint: Mapped[str] = mapped_column(String(64), default="")
+    field_mapping_snapshot: Mapped[list] = mapped_column(JSONB, default=list)
 
 
 class FormDeliveryBatch(Timestamps, Base):

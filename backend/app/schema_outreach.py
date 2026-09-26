@@ -124,12 +124,18 @@ class FormFieldOut(BaseModel):
     required: bool
     value: str
     options: list[str] = []
+    mapped_key: str = "unknown"
+    confidence: float = 0
+    decision_source: str = ""
 
 
 class FormPreviewOut(BaseModel):
     form_url: str
     action_url: str
     fields: list[FormFieldOut]
+    form_profile_id: UUID | None = None
+    form_status: str = "UNANALYZED"
+    fingerprint: str = ""
 
 
 class FormDeliveryCreateInput(Input):
@@ -148,6 +154,7 @@ class FormDeliveryOut(BaseModel):
     id: UUID
     draft_id: UUID
     company_id: UUID
+    form_profile_id: UUID | None
     delivery_method: Literal["direct", "codex_assisted"]
     status: Literal["pending", "submitted", "failed"]
     action_url: str
@@ -155,6 +162,8 @@ class FormDeliveryOut(BaseModel):
     submitted_at: datetime | None
     error_message: str
     result_note: str
+    profile_fingerprint: str
+    field_mapping_snapshot: list
     created_at: datetime
 
 

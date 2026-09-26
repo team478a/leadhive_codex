@@ -62,6 +62,32 @@ class SmtpSettings(Timestamps, Base):
     )
 
 
+class FormSenderSettings(Timestamps, Base):
+    """Identity values used to prefill approved inquiry forms."""
+
+    __tablename__ = "form_sender_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    company_name: Mapped[str] = mapped_column(String(500), default="")
+    department: Mapped[str] = mapped_column(String(500), default="")
+    position: Mapped[str] = mapped_column(String(500), default="")
+    contact_name: Mapped[str] = mapped_column(String(500), default="")
+    last_name: Mapped[str] = mapped_column(String(200), default="")
+    first_name: Mapped[str] = mapped_column(String(200), default="")
+    furigana: Mapped[str] = mapped_column(String(500), default="")
+    email: Mapped[str] = mapped_column(String(320), default="")
+    phone: Mapped[str] = mapped_column(String(100), default="")
+    postal_code: Mapped[str] = mapped_column(String(20), default="")
+    prefecture: Mapped[str] = mapped_column(String(20), default="")
+    city: Mapped[str] = mapped_column(String(500), default="")
+    address: Mapped[str] = mapped_column(String(1000), default="")
+    building: Mapped[str] = mapped_column(String(500), default="")
+    website: Mapped[str] = mapped_column(String(2000), default="")
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+
+
 class InboundMailSettings(Timestamps, Base):
     __tablename__ = "inbound_mail_settings"
     __table_args__ = (

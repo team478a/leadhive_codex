@@ -116,7 +116,7 @@ def _option(element: Tag) -> dict[str, str]:
     return {"value": str(element.get("value") or label)[:500], "label": label}
 
 
-def _parse_fields(form: Tag) -> list[dict]:
+def parse_form_fields(form: Tag) -> list[dict]:
     fields: list[dict] = []
     grouped: set[tuple[str, str]] = set()
     elements = form.select("input, textarea, select, button")
@@ -433,7 +433,7 @@ def analyze_company_forms(db: Session, company: Company, force: bool = False) ->
                     continue
                 for form_index, form in enumerate(forms):
                     form_started = time.monotonic()
-                    fields = _parse_fields(form)
+                    fields = parse_form_fields(form)
                     sales_status, prohibition = sales_contact_status(
                         f"{text} {form.get_text(' ', strip=True)}", True
                     )

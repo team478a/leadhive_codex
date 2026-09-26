@@ -12,7 +12,13 @@ from app.models import (
     OutreachDraft,
     OutreachDraftApproval,
 )
-from app.services.form_delivery import FormDeliveryError, FormPreview, inspect_form, submit_form
+from app.services.form_delivery import FormDeliveryError, FormPreview, submit_form
+from app.services.form_profile_delivery import (
+    inspect_delivery_profile,
+    mapping_snapshot,
+    mark_profile_changed,
+    required_missing,
+)
 
 
 def body_values(preview: FormPreview, body: str) -> tuple[dict[str, str], list[str]]:
@@ -42,15 +48,27 @@ def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: U
     ):
         item.status, item.reason = "skipped", "この企業にはフォーム送信済みです。"
         return True
+    context = None
     try:
-        preview = inspect_form(company.contact_url)
-        values, missing = body_values(preview, draft.body)
+        context = inspect_delivery_profile(db, company, draft)
+        preview = context.preview
+        values = context.values
+        missing = required_missing(preview, values)
         if missing:
             item.status = "manual_required"
             item.reason = f"手動入力が必要です: {', '.join(missing[:3])}"
             return True
-        preview, response_status = submit_form(company.contact_url, values)
+        preview, response_status = submit_form(
+            context.profile.form_url,
+            values,
+            form_index=context.profile.form_index,
+            profile_fields=context.fields,
+            form_profile_id=context.profile.id,
+            expected_fingerprint=context.profile.fingerprint,
+        )
     except FormDeliveryError as exc:
+        if context is not None:
+            mark_profile_changed(db, context.profile, exc)
         item.status, item.reason = "manual_required", exc.public_message
         return True
     except Exception:
@@ -59,12 +77,15 @@ def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: U
     delivery = FormDelivery(
         draft_id=draft.id,
         company_id=company.id,
+        form_profile_id=context.profile.id,
         created_by_user_id=user_id,
         form_url=preview.form_url,
         action_url=preview.action_url,
         delivery_method="direct",
         response_status=response_status,
         submitted_at=datetime.now(timezone.utc),
+        profile_fingerprint=context.profile.fingerprint,
+        field_mapping_snapshot=mapping_snapshot(context.fields),
     )
     db.add(delivery)
     db.flush()

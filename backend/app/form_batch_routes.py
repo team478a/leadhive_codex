@@ -12,6 +12,7 @@ from app.models import (
     FormDelivery,
     FormDeliveryBatch,
     FormDeliveryBatchItem,
+    FormProfileField,
     OperationJob,
     OutreachDraft,
     OutreachDraftApproval,
@@ -29,8 +30,19 @@ from app.schemas import (
     FormDeliveryBatchOut,
 )
 from app.security import current_user
+from app.services.form_delivery import FormDeliveryError
+from app.services.form_profile_delivery import (
+    mapping_snapshot,
+    primary_form_profile,
+    primary_form_profiles,
+    profile_form_url,
+)
 
 router = APIRouter(prefix="/api")
+
+
+def display_form_url(company: Company, profile=None) -> str:
+    return profile.form_url if profile and profile.form_found else company.contact_url
 
 
 def batch_out(db: Session, batch: FormDeliveryBatch) -> FormDeliveryBatchOut:
@@ -40,6 +52,7 @@ def batch_out(db: Session, batch: FormDeliveryBatch) -> FormDeliveryBatchOut:
         .where(FormDeliveryBatchItem.batch_id == batch.id)
         .order_by(FormDeliveryBatchItem.created_at, FormDeliveryBatchItem.id)
     ).all()
+    profiles = primary_form_profiles(db, [company.id for _, company in rows])
     return FormDeliveryBatchOut(
         id=batch.id,
         project_id=batch.project_id,
@@ -59,7 +72,7 @@ def batch_out(db: Session, batch: FormDeliveryBatch) -> FormDeliveryBatchOut:
                 submitted_at=item.submitted_at,
                 created_at=item.created_at,
                 company_name=company.company_name,
-                form_url=company.contact_url,
+                form_url=display_form_url(company, profiles.get(company.id)),
             )
             for item, company in rows
         ],
@@ -102,6 +115,7 @@ def create_form_batch(
     ).all()
     if len(companies) != len(set(body.company_ids)):
         raise HTTPException(422, "対象企業にアクセスできません。")
+    profiles = primary_form_profiles(db, [company.id for company in companies])
     batch = FormDeliveryBatch(
         project_id=project_id, template_id=template.id, created_by_user_id=user.id
     )
@@ -109,9 +123,14 @@ def create_form_batch(
     db.flush()
     for company in companies:
         status, reason, draft_id = "queued", "", None
+        profile = profiles.get(company.id)
         if company.do_not_contact:
             status, reason = "skipped", "連絡禁止の企業です。"
-        elif not company.contact_url:
+        elif profile and (
+            profile.form_status == "BLOCKED" or profile.sales_contact_status == "PROHIBITED"
+        ):
+            status, reason = "skipped", "営業目的の送信が禁止されているフォームです。"
+        elif profile is None and not company.contact_url:
             status, reason = "skipped", "問い合わせフォームURLがありません。"
         elif db.scalar(
             select(FormDelivery.id).where(
@@ -120,6 +139,18 @@ def create_form_batch(
         ):
             status, reason = "skipped", "この企業にはフォーム送信済みです。"
         else:
+            if profile is None:
+                status, reason = "manual_required", "フォーム解析が未実行です。"
+            elif profile.form_status != "READY":
+                status, reason = (
+                    "manual_required",
+                    {
+                        "REVIEW_REQUIRED": "フォーム内容の確認が必要です。",
+                        "STALE": "フォームが変更されています。再解析してください。",
+                        "ERROR": "フォーム解析に失敗しています。",
+                        "UNANALYZED": "フォーム解析が未実行です。",
+                    }.get(profile.form_status, "Codex支援が必要です。"),
+                )
             draft = OutreachDraft(
                 company_id=company.id,
                 created_by_user_id=user.id,
@@ -162,13 +193,14 @@ def list_form_codex_queue(
         .order_by(FormDeliveryBatchItem.created_at, FormDeliveryBatchItem.id)
         .limit(100)
     ).all()
+    profiles = primary_form_profiles(db, [company.id for _, _, company, _ in rows])
     return [
         FormCodexTaskOut(
             item_id=item.id,
             batch_id=batch.id,
             company_id=company.id,
             company_name=company.company_name,
-            form_url=company.contact_url,
+            form_url=display_form_url(company, profiles.get(company.id)),
             body=draft.body,
             reason=item.reason,
             instructions=(
@@ -205,6 +237,10 @@ def update_form_codex_task(
     draft = db.get(OutreachDraft, item.draft_id) if item.draft_id else None
     if company is None or draft is None:
         raise HTTPException(409, "送信対象の情報が見つかりません。")
+    try:
+        form_url = profile_form_url(db, company)
+    except FormDeliveryError as exc:
+        raise HTTPException(409, exc.public_message) from exc
     item.codex_status = body.status
     item.codex_assignee = user.email
     if body.status == "running":
@@ -214,16 +250,31 @@ def update_form_codex_task(
         if delivery and delivery.delivery_method != "codex_assisted":
             raise HTTPException(409, "この文面はLeadHiveから既にフォーム送信済みです。")
         sent_at = datetime.now(timezone.utc)
+        profile = primary_form_profile(db, company.id)
+        profile_fields = (
+            list(
+                db.scalars(
+                    select(FormProfileField)
+                    .where(FormProfileField.form_profile_id == profile.id)
+                    .order_by(FormProfileField.position)
+                ).all()
+            )
+            if profile
+            else []
+        )
         if delivery is None:
             delivery = FormDelivery(
                 draft_id=draft.id,
                 company_id=company.id,
                 created_by_user_id=user.id,
-                form_url=company.contact_url,
+                form_url=form_url,
                 delivery_method="codex_assisted",
                 status="submitted",
                 submitted_at=sent_at,
                 result_note=body.note,
+                form_profile_id=profile.id if profile else None,
+                profile_fingerprint=profile.fingerprint if profile else "",
+                field_mapping_snapshot=mapping_snapshot(profile_fields),
             )
             db.add(delivery)
             db.flush()
@@ -233,6 +284,10 @@ def update_form_codex_task(
                 sent_at,
                 body.note,
             )
+            delivery.form_url = form_url
+            delivery.form_profile_id = profile.id if profile else None
+            delivery.profile_fingerprint = profile.fingerprint if profile else ""
+            delivery.field_mapping_snapshot = mapping_snapshot(profile_fields)
         item.status, item.form_delivery_id, item.submitted_at = "submitted", delivery.id, sent_at
         db.add(
             OutreachDraftApproval(
@@ -276,7 +331,7 @@ def update_form_codex_task(
         batch_id=batch.id,
         company_id=company.id,
         company_name=company.company_name,
-        form_url=company.contact_url,
+        form_url=form_url,
         body=draft.body,
         reason=item.reason,
         instructions="Codex支援フォームの結果をLeadHiveへ記録します。",

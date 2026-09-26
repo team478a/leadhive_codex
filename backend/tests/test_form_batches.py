@@ -1,8 +1,8 @@
 from contextlib import nullcontext
 
 from app import worker
-from app.models import Company
-from app.services import bulk_form_delivery
+from app.models import Company, FormProfile, FormProfileField
+from app.services import bulk_form_delivery, form_profile_delivery
 from app.services.form_delivery import FormField, FormPreview
 
 
@@ -40,8 +40,42 @@ def make_project_and_companies(auth, db):
     return project, companies, template
 
 
+def add_ready_profiles(db, companies):
+    profiles = []
+    for company in companies:
+        profile = FormProfile(
+            company_id=company.id,
+            form_url=company.contact_url,
+            form_index=0,
+            form_status="READY",
+            sales_contact_status="ALLOWED",
+            captcha_type="CAPTCHA_NONE",
+            confirmation_page=False,
+            is_primary=True,
+            form_found=True,
+            fingerprint="f" * 64,
+        )
+        db.add(profile)
+        db.flush()
+        db.add(
+            FormProfileField(
+                form_profile_id=profile.id,
+                position=0,
+                name="message",
+                field_type="textarea",
+                required=True,
+                mapped_key="message",
+                confidence=0.95,
+            )
+        )
+        profiles.append(profile)
+    db.commit()
+    return profiles
+
+
 def test_approved_bulk_form_delivery(auth, db, monkeypatch):
     project, companies, template = make_project_and_companies(auth, db)
+    profiles = add_ready_profiles(db, companies[:2])
     created = auth.post(
         f"/api/projects/{project['id']}/form-delivery-batches",
         json={
@@ -61,14 +95,23 @@ def test_approved_bulk_form_delivery(auth, db, monkeypatch):
                 name="message",
                 label="お問い合わせ内容",
                 field_type="textarea",
-                required=True,
-                value="",
-                options=[],
-            )
+                    required=True,
+                    value="",
+                    options=[],
+                    mapped_key="message",
+                    confidence=0.95,
+                    decision_source="RULE",
+                )
         ],
+        form_status="READY",
+        fingerprint="f" * 64,
     )
-    monkeypatch.setattr(bulk_form_delivery, "inspect_form", lambda _url: preview)
-    monkeypatch.setattr(bulk_form_delivery, "submit_form", lambda _url, _values: (preview, 200))
+    monkeypatch.setattr(form_profile_delivery, "inspect_form", lambda _url, **_kwargs: preview)
+    monkeypatch.setattr(
+        bulk_form_delivery,
+        "submit_form",
+        lambda _url, _values, **_kwargs: (preview, 200),
+    )
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     assert (
         auth.post(
@@ -86,18 +129,23 @@ def test_approved_bulk_form_delivery(auth, db, monkeypatch):
     completed = auth.get(f"/api/projects/{project['id']}/form-delivery-batches").json()[0]
     assert sum(item["status"] == "submitted" for item in completed["items"]) == 2
     assert completed["status"] == "completed"
+    submitted_urls = {
+        item["form_url"] for item in completed["items"] if item["status"] == "submitted"
+    }
+    assert submitted_urls == {profile.form_url for profile in profiles}
 
 
 def test_failed_form_batch_item_can_be_requeued(auth, db, monkeypatch):
     project, companies, template = make_project_and_companies(auth, db)
+    add_ready_profiles(db, companies[:1])
     batch = auth.post(
         f"/api/projects/{project['id']}/form-delivery-batches",
         json={"template_id": template["id"], "company_ids": [str(companies[0].id)]},
     ).json()
     monkeypatch.setattr(
-        bulk_form_delivery,
+        form_profile_delivery,
         "inspect_form",
-        lambda _url: (_ for _ in ()).throw(RuntimeError("temporary failure")),
+        lambda _url, **_kwargs: (_ for _ in ()).throw(RuntimeError("temporary failure")),
     )
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     assert (
@@ -129,24 +177,7 @@ def test_codex_queue_tracks_work_and_result(auth, db, monkeypatch):
         f"/api/projects/{project['id']}/form-delivery-batches",
         json={"template_id": template["id"], "company_ids": [str(companies[0].id)]},
     ).json()
-    preview = FormPreview(
-        form_url=companies[0].contact_url,
-        action_url=companies[0].contact_url,
-        fields=[
-            FormField(
-                name="name", label="お名前", field_type="text", required=True, value="", options=[]
-            )
-        ],
-    )
-    monkeypatch.setattr(bulk_form_delivery, "inspect_form", lambda _url: preview)
-    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
-    assert (
-        auth.post(
-            f"/api/form-delivery-batches/{batch['id']}/execute", json={"confirmed": True}
-        ).status_code
-        == 200
-    )
-    assert worker.run_once()
+    assert batch["items"][0]["status"] == "manual_required"
     task = auth.get(f"/api/projects/{project['id']}/form-codex-queue").json()[0]
     running = auth.post(f"/api/form-codex-queue/{task['item_id']}", json={"status": "running"})
     assert running.status_code == 200 and running.json()["codex_status"] == "running"
