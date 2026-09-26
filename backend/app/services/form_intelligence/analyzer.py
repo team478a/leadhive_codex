@@ -206,7 +206,7 @@ def parse_form_fields(form: Tag) -> list[dict]:
 
 def _captcha_type(html: str) -> str:
     value = html.lower()
-    if "hcaptcha" in value:
+    if "hcaptcha" in value or "h-captcha" in value:
         return "CAPTCHA_HCAPTCHA"
     if "turnstile" in value or "cf-turnstile" in value:
         return "CAPTCHA_TURNSTILE"
@@ -529,7 +529,12 @@ def analyze_company_forms(db: Session, company: Company, force: bool = False) ->
                                 )
                             )
                             provider_name = batch.provider
-                            by_position = {item.position: item for item in batch.decisions}
+                            ambiguous_positions = {item.position for item in ambiguous}
+                            by_position = {
+                                item.position: item
+                                for item in batch.decisions
+                                if item.position in ambiguous_positions
+                            }
                             for item in fields:
                                 decision = by_position.get(item["position"])
                                 if decision:
