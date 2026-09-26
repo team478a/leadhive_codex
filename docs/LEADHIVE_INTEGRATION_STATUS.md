@@ -2,7 +2,7 @@
 
 ## Scope
 
-This document records the result of integration STEP 1 through STEP 5. No merge into `main`, branch deletion, new Form Intelligence implementation, or Phase 6 real-data validation was performed.
+This document records the result of integration STEP 1 through STEP 6. No merge into `main`, branch deletion, new Form Intelligence implementation, or Phase 6 real-data validation was performed.
 
 ## Integration baseline
 
@@ -16,6 +16,7 @@ This document records the result of integration STEP 1 through STEP 5. No merge 
 | Existing remote `codex/*` branches at start | 33 |
 | Existing branches contained by the baseline | `main` and all 33 remote `codex/*` branches |
 | STEP 5 verified implementation HEAD | `6cbd04fcb145d9eab0bb6545958512fb7fcf3da3` |
+| STEP 6 verified implementation HEAD | `824e80a016dd84486aa5351b6847b6ef5e433f77` |
 
 ## STEP 2 changes
 
@@ -51,6 +52,14 @@ This document records the result of integration STEP 1 through STEP 5. No merge 
 - Added real PostgreSQL concurrency tests for simultaneous enqueue, five operation types, expired operation leases, scheduled search, Email Delivery claiming, and expired Email Delivery recovery.
 - Added Migration `c1d9f6a2b4e8`; no existing Migration was modified.
 
+## STEP 6 changes
+
+- Ran the complete backend, frontend, migration, desktop E2E, and mobile E2E verification set against the integration candidate.
+- Strengthened the Windows distribution builder so it verifies the saved ZIP checksum, every manifest hash, missing files, unlisted files, PowerShell syntax, required files, and the packaged Compose configuration after extraction.
+- Added a `windows-package` GitHub Actions job on `windows-latest`, closing the Windows distribution validation gap recorded by the branch audit.
+- Generated `LeadHive-Windows-Local-824e80a.zip` locally. It contains 189 manifested files and has SHA-256 `41b4e7764b47b28ff8ccf3639c7f7688babca800e407b504a926e29b7a0deebc`.
+- Added no migration and changed no database model or existing local data.
+
 ## Verification
 
 | Check | Result |
@@ -71,9 +80,10 @@ This document records the result of integration STEP 1 through STEP 5. No merge 
 | Existing migration semantics | PASS: 0 AST changes compared with the start SHA |
 | E2E Desktop | PASS |
 | E2E Mobile | PASS |
-| GitHub Actions | PASS: all 5 jobs on STEP 5 verified implementation HEAD |
+| Windows distribution package | PASS: ZIP checksum, 189 manifest entries, required files, PowerShell syntax, and Compose configuration |
+| GitHub Actions | PASS: all 6 jobs on STEP 6 verified implementation HEAD |
 
-GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36242596514>
+GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36245164980>
 
 ## Unresolved items
 
@@ -81,4 +91,4 @@ GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/
 - GitHub Actions reports the scheduled `ubuntu-latest` migration to Ubuntu 26. Pin or validate the runner image before that migration if deterministic runner behavior is required.
 - Two backend test deprecation warnings remain in Starlette/httpx and AnyIO compatibility paths. They do not fail the suite.
 
-No blocking error remains in STEP 1 through STEP 5. The branch is ready to begin STEP 6 under a separate instruction.
+No blocking error remains in STEP 1 through STEP 6. The branch is ready to begin STEP 7 under a separate instruction.
