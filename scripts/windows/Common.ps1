@@ -5,6 +5,15 @@ $script:LeadHiveEnv = Join-Path $script:LeadHiveRoot ".env.local"
 $script:LeadHiveCompose = Join-Path $script:LeadHiveRoot "compose.local.yaml"
 $script:LeadHiveProject = "leadhive-local"
 
+function Resolve-LeadHiveComposeProject {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return }
+    $volumeName = "leadhive-local-postgres-data"
+    $owner = (& docker volume inspect $volumeName --format '{{ index .Labels "com.docker.compose.project" }}' 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $owner -in @("leadhive", "leadhive-local")) {
+        $script:LeadHiveProject = $owner.Trim()
+    }
+}
+
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
 }
@@ -21,10 +30,12 @@ function Assert-Docker {
     if ($LASTEXITCODE -ne 0) {
         throw "Docker Desktop is not running. Start Docker Desktop and try again."
     }
+    Resolve-LeadHiveComposeProject
 }
 
 function Invoke-LeadHiveCompose {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$ComposeArguments)
+    Resolve-LeadHiveComposeProject
     & docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv -f $script:LeadHiveCompose @ComposeArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Docker Compose command failed."
