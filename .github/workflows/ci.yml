@@ -80,6 +80,7 @@ jobs:
           backend/.venv/bin/python -m alembic -c backend/alembic.ini downgrade base
           backend/.venv/bin/python -m alembic -c backend/alembic.ini upgrade head
           backend/.venv/bin/python -m alembic -c backend/alembic.ini check
+          backend/.venv/bin/python backend/scripts/verify_database_state.py
 
   frontend:
     runs-on: ubuntu-latest
