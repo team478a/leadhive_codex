@@ -57,6 +57,13 @@ class AnalysisContext:
 
 
 @dataclass(frozen=True)
+class AiUsage:
+    input_tokens: int
+    output_tokens: int
+    total_tokens: int
+
+
+@dataclass(frozen=True)
 class OutreachContext:
     channel: Literal["email", "form", "sns"]
     company_name: str
@@ -110,8 +117,10 @@ class OpenAiProvider(AiProvider):
             raise AiAnalysisError("OpenAI APIキーが設定されていません。")
         self.model = model
         self.client = OpenAI(api_key=api_key, timeout=timeout, max_retries=1)
+        self.last_usage: AiUsage | None = None
 
     def analyze(self, context: AnalysisContext) -> AnalysisDecision:
+        self.last_usage = None
         try:
             response = self.client.responses.parse(
                 model=self.model,
@@ -126,6 +135,12 @@ class OpenAiProvider(AiProvider):
                 text_format=AnalysisDecision,
                 max_output_tokens=2_000,
             )
+            if response.usage is not None:
+                self.last_usage = AiUsage(
+                    input_tokens=response.usage.input_tokens,
+                    output_tokens=response.usage.output_tokens,
+                    total_tokens=response.usage.total_tokens,
+                )
             if response.output_parsed is None:
                 raise AiAnalysisError("AIが判定結果を返しませんでした。")
             return response.output_parsed

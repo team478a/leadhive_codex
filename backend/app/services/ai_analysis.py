@@ -1,15 +1,36 @@
 """Business logic for structured AI analysis of a company."""
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.models import Company, Project, TargetProfile
-from app.services.ai import AiAnalysisError, AnalysisContext, get_ai_provider, rank_for_score
+from app.services.ai import (
+    AiAnalysisError,
+    AiUsage,
+    AnalysisContext,
+    get_ai_provider,
+    rank_for_score,
+)
 
 logger = logging.getLogger("leadhive")
+AiUsageCallback = Callable[[UUID, str, str, str, AiUsage], None]
+
+
+def notify_usage(callback: AiUsageCallback | None, company_id: UUID, provider, status: str) -> None:
+    usage = getattr(provider, "last_usage", None)
+    if callback is None or usage is None:
+        return
+    try:
+        callback(company_id, provider.name, provider.model, status, usage)
+    except Exception as exc:
+        logger.warning(
+            "AI usage recording failed: company_id=%s type=%s", company_id, type(exc).__name__
+        )
 
 
 def context_for(company: Company, project: Project, profile: TargetProfile) -> AnalysisContext:
@@ -41,7 +62,12 @@ def context_for(company: Company, project: Project, profile: TargetProfile) -> A
 
 
 def analyze_company_ai(
-    db: Session, company: Company, project: Project, profile: TargetProfile, force: bool = False
+    db: Session,
+    company: Company,
+    project: Project,
+    profile: TargetProfile,
+    force: bool = False,
+    usage_callback: AiUsageCallback | None = None,
 ) -> Company:
     if company.ai_status == "completed" and not force:
         return company
@@ -63,6 +89,7 @@ def analyze_company_ai(
     company.ai_error = ""
     db.commit()
     logger.info("AI analysis start: company_id=%s", company.id)
+    provider = None
     try:
         provider = get_ai_provider()
         result = provider.analyze(context_for(company, project, profile))
@@ -83,9 +110,11 @@ def analyze_company_ai(
         company.ai_analyzed_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(company)
+        notify_usage(usage_callback, company.id, provider, "completed")
         logger.info("AI analysis end: company_id=%s status=completed", company.id)
         return company
     except AiAnalysisError as exc:
+        notify_usage(usage_callback, company.id, provider, "failed")
         db.rollback()
         company = db.get(Company, company.id)
         company.ai_status = "failed"

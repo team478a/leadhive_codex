@@ -1,17 +1,18 @@
 from uuid import uuid4
 
-from app.models import Company
+from app.models import Company, Project, TargetProfile
 from app.services import ai_analysis
-from app.services.ai import AiAnalysisError, AnalysisDecision, rank_for_score
+from app.services.ai import AiAnalysisError, AiUsage, AnalysisDecision, rank_for_score
 
 
 class FakeProvider:
     name = "fake"
     model = "fake-v1"
 
-    def __init__(self, result=None, error=None):
+    def __init__(self, result=None, error=None, usage=None):
         self.result = result
         self.error = error
+        self.last_usage = usage
         self.contexts = []
 
     def analyze(self, context):
@@ -133,3 +134,25 @@ def test_batch_ai_analysis_and_access_isolation(auth, users, db, monkeypatch):
 def test_rank_thresholds_are_profile_driven_and_safe():
     assert rank_for_score(90, {"rank_thresholds": {"A": 95, "B": 70, "C": 50}}) == "B"
     assert rank_for_score(65, {"rank_thresholds": {"A": 40, "B": 80, "C": 60}}) == "B"
+
+
+def test_ai_analysis_reports_provider_usage(db, auth, monkeypatch):
+    project_data = make_project(auth)
+    company_data = make_analyzable_company(auth, db, project_data["id"])
+    company = db.get(Company, company_data["id"])
+    project = db.get(Project, project_data["id"])
+    profile = db.get(TargetProfile, project.target_profile_id)
+    provider = FakeProvider(decision(), usage=AiUsage(1200, 300, 1500))
+    monkeypatch.setattr(ai_analysis, "get_ai_provider", lambda: provider)
+    recorded = []
+
+    result = ai_analysis.analyze_company_ai(
+        db,
+        company,
+        project,
+        profile,
+        usage_callback=lambda *values: recorded.append(values),
+    )
+
+    assert result.ai_status == "completed"
+    assert recorded == [(company.id, "fake", "fake-v1", "completed", AiUsage(1200, 300, 1500))]

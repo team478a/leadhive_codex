@@ -9,7 +9,9 @@ from sqlalchemy import func, select
 from app.config import settings
 from app.database import SessionLocal
 from app.models import Company, Project, TargetProfile, User
+from app.services.ai import AiUsage
 from app.services.ai_analysis import analyze_company_ai
+from app.services.application_settings import apply_application_settings
 from app.services.collection import ExternalServiceError, search_serper
 from app.services.collection_jobs import fail_job, save_candidates, start_job
 from app.services.web_analysis import analyze
@@ -53,6 +55,12 @@ COHORTS = (
         copy_from="transport_recruiting",
     ),
 )
+
+
+def apply_phase6_settings(db) -> None:
+    """Load administrator-managed provider settings for this CLI process."""
+
+    apply_application_settings(db)
 
 
 def build_preflight(db, email: str, output: Path) -> dict:
@@ -164,8 +172,6 @@ def collect_cohort(db, cohort: Cohort, project: Project, limit: int) -> None:
     )
     if existing and existing >= limit:
         return
-    remaining = limit - (existing or 0)
-    per_query = min(20, max(10, remaining))
     for region in cohort.regions:
         for keyword in cohort.keywords:
             count = db.scalar(
@@ -173,6 +179,7 @@ def collect_cohort(db, cohort: Cohort, project: Project, limit: int) -> None:
             )
             if count >= limit:
                 return
+            per_query = min(20, limit - count)
             job = start_job(db, project.id, "serper", keyword, region)
             try:
                 candidates = search_serper(keyword, region, per_query)
@@ -238,7 +245,45 @@ def run_web(db, project: Project, limit: int) -> None:
         analyze(db, company)
 
 
-def run_ai(db, project: Project, profile: TargetProfile, limit: int) -> None:
+AI_USAGE_FIELDS = (
+    "company_id",
+    "provider",
+    "model",
+    "status",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+)
+
+
+def append_ai_usage(
+    path: Path,
+    company_id,
+    provider: str,
+    model: str,
+    status: str,
+    usage: AiUsage,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists() or path.stat().st_size == 0
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=AI_USAGE_FIELDS)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(
+            {
+                "company_id": company_id,
+                "provider": provider,
+                "model": model,
+                "status": status,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "total_tokens": usage.total_tokens,
+            }
+        )
+
+
+def run_ai(db, project: Project, profile: TargetProfile, limit: int, usage_path: Path) -> None:
     companies = db.scalars(
         select(Company)
         .where(
@@ -250,7 +295,15 @@ def run_ai(db, project: Project, profile: TargetProfile, limit: int) -> None:
         .limit(limit)
     ).all()
     for company in companies:
-        analyze_company_ai(db, company, project, profile)
+        analyze_company_ai(
+            db,
+            company,
+            project,
+            profile,
+            usage_callback=lambda company_id, provider, model, status, usage: append_ai_usage(
+                usage_path, company_id, provider, model, status, usage
+            ),
+        )
 
 
 EXPORT_FIELDS = (
@@ -271,11 +324,27 @@ EXPORT_FIELDS = (
     "review_rank_correct",
     "review_notes",
 )
+REVIEW_FIELDS = ("review_is_target", "review_rank_correct", "review_notes")
+
+
+def load_manual_reviews(path: Path) -> dict[tuple[str, str], dict[str, str]]:
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        rows = csv.DictReader(handle)
+        return {
+            (row.get("cohort", ""), row.get("company_id", "")): {
+                field: row.get(field, "") for field in REVIEW_FIELDS
+            }
+            for row in rows
+            if row.get("cohort") and row.get("company_id")
+        }
 
 
 def export_review(db, projects, output: Path, limit: int) -> Path:
     output.mkdir(parents=True, exist_ok=True)
     path = output / "phase6-review.csv"
+    manual_reviews = load_manual_reviews(path)
     with path.open("w", encoding="utf-8-sig", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=EXPORT_FIELDS)
         writer.writeheader()
@@ -288,6 +357,7 @@ def export_review(db, projects, output: Path, limit: int) -> Path:
                 .limit(limit)
             ).all()
             for company in companies:
+                manual_review = manual_reviews.get((cohort.key, str(company.id)), {})
                 writer.writerow(
                     {
                         "cohort": cohort.key,
@@ -312,9 +382,9 @@ def export_review(db, projects, output: Path, limit: int) -> Path:
                         "analysis_status": company.analysis_status,
                         "ai_status": company.ai_status,
                         "ai_reason": company.ai_reason,
-                        "review_is_target": "",
-                        "review_rank_correct": "",
-                        "review_notes": "",
+                        "review_is_target": manual_review.get("review_is_target", ""),
+                        "review_rank_correct": manual_review.get("review_rank_correct", ""),
+                        "review_notes": manual_review.get("review_notes", ""),
                     }
                 )
     return path
@@ -333,7 +403,44 @@ def rate(numerator: int, denominator: int) -> float | None:
     return round(numerator / denominator * 100, 1) if denominator else None
 
 
-def build_report(review_path: Path) -> dict:
+def build_usage_report(
+    usage_path: Path,
+    input_cost_per_million_usd: float | None,
+    output_cost_per_million_usd: float | None,
+) -> dict:
+    rows = []
+    if usage_path.exists():
+        with usage_path.open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    input_tokens = sum(int(row["input_tokens"]) for row in rows)
+    output_tokens = sum(int(row["output_tokens"]) for row in rows)
+    estimated_cost = None
+    if input_cost_per_million_usd is not None and output_cost_per_million_usd is not None:
+        estimated_cost = round(
+            input_tokens / 1_000_000 * input_cost_per_million_usd
+            + output_tokens / 1_000_000 * output_cost_per_million_usd,
+            6,
+        )
+    return {
+        "requests": len(rows),
+        "completed_requests": sum(row["status"] == "completed" for row in rows),
+        "failed_requests": sum(row["status"] == "failed" for row in rows),
+        "models": sorted({row["model"] for row in rows if row["model"]}),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": sum(int(row["total_tokens"]) for row in rows),
+        "estimated_cost_usd": estimated_cost,
+        "input_cost_per_million_usd": input_cost_per_million_usd,
+        "output_cost_per_million_usd": output_cost_per_million_usd,
+    }
+
+
+def build_report(
+    review_path: Path,
+    usage_path: Path | None = None,
+    input_cost_per_million_usd: float | None = None,
+    output_cost_per_million_usd: float | None = None,
+) -> dict:
     with review_path.open(encoding="utf-8-sig", newline="") as handle:
         rows = list(csv.DictReader(handle))
     report = {"cohorts": {}}
@@ -343,19 +450,39 @@ def build_report(review_path: Path) -> dict:
         reviewed = [(row, label) for row, label in reviewed if label is not None]
         a_reviewed = [(row, label) for row, label in reviewed if row["rank"] == "A"]
         excluded_reviewed = [(row, label) for row, label in reviewed if row["rank"] == "対象外"]
+        rank_reviewed = [truth(row["review_rank_correct"]) for row in items]
+        rank_reviewed = [value for value in rank_reviewed if value is not None]
+        domains = [row["domain"] for row in items if row["domain"]]
         report["cohorts"][cohort.key] = {
             "companies": len(items),
+            "unique_domains": len(set(domains)),
+            "duplicate_rate": rate(len(domains) - len(set(domains)), len(domains)),
             "web_completed_rate": rate(
                 sum(r["analysis_status"] == "completed" for r in items), len(items)
+            ),
+            "web_failure_rate": rate(
+                sum(r["analysis_status"] in {"failed", "skipped"} for r in items), len(items)
             ),
             "ai_completed_rate": rate(
                 sum(r["ai_status"] == "completed" for r in items), len(items)
             ),
+            "ai_failure_rate": rate(
+                sum(r["ai_status"] in {"failed", "skipped"} for r in items), len(items)
+            ),
+            "pipeline_success_rate": rate(
+                sum(
+                    r["analysis_status"] == "completed" and r["ai_status"] == "completed"
+                    for r in items
+                ),
+                len(items),
+            ),
             "predicted_target_rate": rate(sum(r["is_target"] == "True" for r in items), len(items)),
+            "predicted_exclusion_rate": rate(sum(r["rank"] == "対象外" for r in items), len(items)),
             "contact_rate": rate(sum(r["contact_available"] == "True" for r in items), len(items)),
             "sns_rate": rate(sum(r["sns_available"] == "True" for r in items), len(items)),
             "human_reviewed": len(reviewed),
             "actual_target_rate": rate(sum(label for _, label in reviewed), len(reviewed)),
+            "reviewed_rank_accuracy": rate(sum(rank_reviewed), len(rank_reviewed)),
             "a_rank_precision": rate(sum(label for _, label in a_reviewed), len(a_reviewed)),
             "false_exclusion_rate": rate(
                 sum(label for _, label in excluded_reviewed), len(excluded_reviewed)
@@ -376,7 +503,49 @@ def build_report(review_path: Path) -> dict:
         "different_decisions": changed,
         "difference_rate": rate(changed, len(shared)),
     }
+    report["ai_usage"] = build_usage_report(
+        usage_path or review_path.with_name("phase6-ai-usage.csv"),
+        input_cost_per_million_usd,
+        output_cost_per_million_usd,
+    )
     return report
+
+
+def write_sanitized_summary(report: dict, path: Path) -> Path:
+    def percent(value) -> str:
+        return "n/a" if value is None else f"{value}%"
+
+    lines = [
+        "# Phase 6 sanitized summary",
+        "",
+        "This file contains aggregate metrics only. Company names, domains, contacts, "
+        "and page text are omitted.",
+        "",
+        "| Cohort | Companies | Pipeline success | Duplicates | AI failures | Human reviewed |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for cohort in COHORTS:
+        metrics = report["cohorts"][cohort.key]
+        lines.append(
+            f"| {cohort.key} | {metrics['companies']} | "
+            f"{percent(metrics['pipeline_success_rate'])} | {percent(metrics['duplicate_rate'])} | "
+            f"{percent(metrics['ai_failure_rate'])} | {metrics['human_reviewed']} |"
+        )
+    usage = report["ai_usage"]
+    lines.extend(
+        [
+            "",
+            "## AI usage",
+            "",
+            f"- Requests: {usage['requests']}",
+            f"- Input tokens: {usage['input_tokens']}",
+            f"- Output tokens: {usage['output_tokens']}",
+            f"- Estimated cost (USD): {usage['estimated_cost_usd']}",
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
 
 
 def main():
@@ -389,27 +558,47 @@ def main():
     )
     parser.add_argument("--limit", type=int, default=100, choices=range(1, 101))
     parser.add_argument("--output", type=Path, default=Path("phase6-results"))
+    parser.add_argument("--ai-input-cost-per-million-usd", type=float)
+    parser.add_argument("--ai-output-cost-per-million-usd", type=float)
     args = parser.parse_args()
+    rates = (args.ai_input_cost_per_million_usd, args.ai_output_cost_per_million_usd)
+    if sum(rate is not None for rate in rates) == 1:
+        parser.error("Specify both AI input and output costs, or omit both")
+    if any(rate is not None and rate < 0 for rate in rates):
+        parser.error("AI token costs must be zero or greater")
     if args.stage == "preflight":
         with SessionLocal() as db:
+            apply_phase6_settings(db)
             result = build_preflight(db, args.user, args.output)
         print(json.dumps(result, ensure_ascii=False, indent=2))
         raise SystemExit(0 if result["ready"] else 2)
     if not args.user:
         parser.error("--user is required unless --stage preflight is used")
     review = args.output / "phase6-review.csv"
+    usage = args.output / "phase6-ai-usage.csv"
     if args.stage == "report":
         if not review.exists():
             parser.error(f"Review CSV not found: {review}")
+        report = build_report(
+            review,
+            usage,
+            args.ai_input_cost_per_million_usd,
+            args.ai_output_cost_per_million_usd,
+        )
         report_path = args.output / "phase6-report.json"
         report_path.write_text(
-            json.dumps(build_report(review), ensure_ascii=False, indent=2), encoding="utf-8"
+            json.dumps(report, ensure_ascii=False, indent=2),
+            encoding="utf-8",
         )
+        write_sanitized_summary(report, args.output / "phase6-summary.md")
         print(report_path)
         return
-    if args.stage in {"all", "collect"} and not settings.serper_api_key:
-        parser.error("SERPER_API_KEY is required for collection")
     with SessionLocal() as db:
+        apply_phase6_settings(db)
+        if args.stage in {"all", "collect"} and not settings.serper_api_key:
+            parser.error("SERPER_API_KEY is required for collection")
+        if args.stage in {"all", "ai"} and not settings.openai_api_key:
+            parser.error("OPENAI_API_KEY is required for AI analysis")
         projects = ensure_projects(db, get_user(db, args.user))
         if args.stage in {"all", "collect"}:
             for cohort in COHORTS:
@@ -423,12 +612,18 @@ def main():
                 run_web(db, project, args.limit)
         if args.stage in {"all", "ai"}:
             for project, profile in projects.values():
-                run_ai(db, project, profile, args.limit)
+                run_ai(db, project, profile, args.limit, usage)
         review = export_review(db, projects, args.output, args.limit)
     if args.stage == "all":
-        report = build_report(review)
+        report = build_report(
+            review,
+            usage,
+            args.ai_input_cost_per_million_usd,
+            args.ai_output_cost_per_million_usd,
+        )
         report_path = args.output / "phase6-report.json"
         report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_sanitized_summary(report, args.output / "phase6-summary.md")
         print(report_path)
     else:
         print(review)
