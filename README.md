@@ -2,6 +2,8 @@
 
 LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を解析し、AIで営業適性を判定して優先順位付きリストを作成するBtoB営業リスト収集基盤です。
 
+初めて利用する方は [`docs/82_LEADHIVE_USER_MANUAL.md`](docs/82_LEADHIVE_USER_MANUAL.md) を参照してください。
+
 メール・フォーム送信と追客の運用手順は [`docs/41_SMTP_SETTINGS_MANAGEMENT.md`](docs/41_SMTP_SETTINGS_MANAGEMENT.md) から [`docs/65_BULK_FORM_DELIVERY.md`](docs/66_DELIVERY_CAMPAIGNS_AND_PIPELINE.md) を参照してください。
 
 ## 開発方針

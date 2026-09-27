@@ -33,6 +33,7 @@ $rootFiles = @(
     "Backup-LeadHive.cmd",
     "Diagnose-LeadHive.cmd",
     "Install-LeadHive.cmd",
+    "Open-Manual.cmd",
     "README.md",
     "Restore-LeadHive.cmd",
     "Start-LeadHive.cmd",
@@ -49,6 +50,7 @@ $fixedFiles = @(
     "deploy/nginx.conf",
     "deploy/README-FIRST.txt",
     "docs/73_WINDOWS_LOCAL_INSTALLER.md",
+    "docs/82_LEADHIVE_USER_MANUAL.md",
     "frontend/.dockerignore",
     "frontend/Dockerfile",
     "frontend/index.html",
@@ -141,6 +143,7 @@ try {
     $extractedRoot = Join-Path $verificationRoot $packageName
     foreach ($requiredFile in @(
         "Install-LeadHive.cmd",
+        "Open-Manual.cmd",
         "Diagnose-LeadHive.cmd",
         "Restore-LeadHive.cmd",
         "compose.local.yaml",
@@ -149,6 +152,7 @@ try {
         "scripts\windows\DockerSetup.ps1",
         ".agents\skills\leadhive-form-submit\SKILL.md",
         "README-FIRST.txt",
+        "docs\82_LEADHIVE_USER_MANUAL.md",
         "MANIFEST-SHA256.txt"
     )) {
         if (-not (Test-Path (Join-Path $extractedRoot $requiredFile) -PathType Leaf)) {

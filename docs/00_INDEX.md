@@ -13,6 +13,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 ## 推奨読了順
 
+利用者は最初に `82_LEADHIVE_USER_MANUAL.md` を参照してください。以下は開発・仕様確認向けです。
+
 1. `01_VISION_AND_SCOPE.md`
 2. `02_FUNCTIONAL_REQUIREMENTS.md`
 3. `03_TARGET_PROFILE_DESIGN.md`
@@ -93,6 +95,7 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `79_CODEX_FORM_SKILL_HANDOFF.md`
 - `80_FORM_INTELLIGENCE_ACCEPTANCE.md`
 - `81_RELEASE_HARDENING_AND_MAIN_PR.md`
+- `82_LEADHIVE_USER_MANUAL.md`
 
 ## 基本原則
 

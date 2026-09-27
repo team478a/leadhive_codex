@@ -3,6 +3,13 @@ LeadHive Windows ローカル版
 
 このフォルダーは、そのままWindows PCへ展開して使用できます。
 
+詳しい利用方法
+--------------
+初めて使う方は「Open-Manual.cmd」をダブルクリックし、表示されるマニュアルを
+上から順にお読みください。
+最短の開始手順、企業収集、メール・フォーム送信、バックアップ、困ったときの
+確認方法をまとめています。
+
 初回インストール
 ----------------
 1. フォルダーをOneDrive内ではない通常の場所へ展開します。
@@ -19,6 +26,7 @@ WSL 2の有効化後に再起動を求められた場合は、Windowsを再起�
 
 日常の操作
 ----------
+- Open-Manual.cmd     : 利用マニュアルをメモ帳で開く
 - Start-LeadHive.cmd  : 起動してブラウザを開く
 - Stop-LeadHive.cmd   : 停止する（データは残ります）
 - Update-LeadHive.cmd : 新しい配布パッケージへ更新する
@@ -39,4 +47,5 @@ PC交換やアップデートの前には「Backup-LeadHive.cmd」を実行し�
 起動できない場合は「Diagnose-LeadHive.cmd」で診断ファイルを作成してください。
 
 通常の接続先: http://localhost:8787
-詳細: docs\73_WINDOWS_LOCAL_INSTALLER.md
+利用マニュアル: docs\82_LEADHIVE_USER_MANUAL.md
+導入・復元の詳細: docs\73_WINDOWS_LOCAL_INSTALLER.md
