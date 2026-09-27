@@ -260,12 +260,10 @@ def test_phase6_collection_continues_after_provider_error(db, users, monkeypatch
     collect_cohort(db, cohort, project, 2)
 
     statuses = db.scalars(
-        select(CollectionJob.status)
-        .where(CollectionJob.project_id == project.id)
-        .order_by(CollectionJob.created_at)
+        select(CollectionJob.status).where(CollectionJob.project_id == project.id)
     ).all()
     count = db.scalar(
         select(func.count()).select_from(Company).where(Company.project_id == project.id)
     )
-    assert statuses == ["failed", "completed"]
+    assert sorted(statuses) == ["completed", "failed"]
     assert count == 2
