@@ -10,7 +10,9 @@ Phase 6の100社+100社実データ検証は、検証利用者とSerper/OpenAI A
 
 ## 差分確認
 
-ハードニング実装候補: `d058fe0d24fcf3d43f70ea755831191e4e7534e9`
+ハードニングruntime実装: `d058fe0d24fcf3d43f70ea755831191e4e7534e9`
+
+全検証・統合準備文書HEAD: `accf075b7aa2ac73eac8e47d14c8ec5bf45d1aee`
 
 | 項目 | 結果 |
 | --- | --- |
@@ -35,8 +37,8 @@ mainはintegrationの分岐後に進んでおらず、現在のGit履歴上は�
 
 ## Windows配布候補
 
-- ZIP: `LeadHive-Windows-Local-d058fe0.zip`
-- SHA-256: `752bc94c3a947a53f8303d8fcc2c2217f37ff66569daecdd736ba422670a4458`
+- ZIP: `LeadHive-Windows-Local-accf075.zip`
+- SHA-256: `8a9a915e751c3fae8f9bd136f6835185d5e2f546a35389de83010c4b80e3114d`
 - ZIP checksum、全manifest hash、未登録ファイル、必須ファイル、PowerShell構文、Compose構成を検証済み
 
 クリーンな別Windows PCでの初回導入、Docker Desktop自動導入、バックアップからの実復元は最終リリースsmoke testとして残る。現在の利用データを破壊して確認しない。

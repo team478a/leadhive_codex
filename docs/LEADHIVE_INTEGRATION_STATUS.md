@@ -19,6 +19,7 @@ This document records the result of integration STEP 1 through STEP 8. No merge 
 | STEP 6 verified implementation HEAD | `824e80a016dd84486aa5351b6847b6ef5e433f77` |
 | STEP 7 preparation HEAD | `611d4c85064c5de3e9d85f7662de81b6b695d13e` |
 | STEP 8 verified implementation HEAD | `ea70234a1ac4f87acc5fee94fb22bda0773df84f` |
+| Release hardening verified HEAD | `accf075b7aa2ac73eac8e47d14c8ec5bf45d1aee` |
 
 ## STEP 2 changes
 
@@ -85,16 +86,27 @@ This document records the result of integration STEP 1 through STEP 8. No merge 
 - Reused `FormProfileField` with `decision_source=MANUAL` and `FormAnalysisLog.manual_corrected`; a separate `FormManualCorrection` model is not currently needed.
 - Documented the acceptance decision, safety boundaries, test evidence, and remaining static-HTML limitations in `80_FORM_INTELLIGENCE_ACCEPTANCE.md`.
 
+## Release hardening
+
+- Added dedicated desktop and mobile Form Intelligence browser tests for multiple profiles, primary selection, manual correction, audit logs, and viewer read-only behavior.
+- Disabled Form Intelligence mutation controls for project viewers while preserving result visibility.
+- Updated GitHub Actions to the Node.js 24 compatible v7 action generation and pinned Linux jobs to Ubuntu 24.04.
+- Added `httpx2` and updated Starlette TestClient support, eliminating the two prior backend deprecation warnings.
+- Added Windows diagnostic and confirmation-gated database restore tools. Restore creates a safety backup before replacing the database.
+- Built and verified `LeadHive-Windows-Local-accf075.zip` with SHA-256 `8a9a915e751c3fae8f9bd136f6835185d5e2f546a35389de83010c4b80e3114d`.
+- Confirmed that `origin/main` still equals the original merge base, has zero unique commits, and produces no merge-tree conflict markers against the integration candidate.
+- Prepared the main PR description, merge checklist, backup/restore procedure, and rollback plan in `81_RELEASE_HARDENING_AND_MAIN_PR.md`. No merge was performed.
+
 ## Verification
 
 | Check | Result |
 | --- | --- |
 | Ruff check | PASS: 0 errors |
-| Ruff format check | PASS: 145 files already formatted |
-| Backend tests | PASS: 150 passed, 2 deprecation warnings |
+| Ruff format check | PASS |
+| Backend tests | PASS: 150 passed, 0 warnings |
 | Form Intelligence focused tests | PASS: 16 passed |
-| Representative CRUD tests | PASS: 30 passed, 2 deprecation warnings |
-| Two-worker concurrency tests | PASS: 5 passed, 2 deprecation warnings |
+| Representative CRUD tests | PASS: 30 passed |
+| Two-worker concurrency tests | PASS: 5 passed |
 | Frontend typecheck | PASS |
 | Frontend lint | PASS |
 | Frontend build | PASS |
@@ -104,20 +116,18 @@ This document records the result of integration STEP 1 through STEP 8. No merge 
 | Fresh database schema verification | PASS: 35 tables, 73 foreign keys, 0 schema errors, 0 orphan rows |
 | Existing-data snapshot verification | PASS: restored `8e2c4a7f1b90` snapshot upgraded to `c1d9f6a2b4e8`; row count 2, 35 tables, 73 foreign keys, 0 schema errors, 0 orphan rows |
 | Existing migration semantics | PASS: 0 AST changes compared with the start SHA |
-| E2E Desktop | PASS |
-| E2E Mobile | PASS |
-| Windows distribution package | PASS: ZIP checksum, 189 manifest entries, required files, PowerShell syntax, and Compose configuration |
-| GitHub Actions | PASS: all 6 jobs on STEP 8 verified implementation HEAD |
+| E2E Desktop | PASS: core workflow and Form Intelligence |
+| E2E Mobile | PASS: core workflow and Form Intelligence |
+| Windows distribution package | PASS: ZIP checksum, 193 manifest entries, required files, PowerShell syntax, and Compose configuration |
+| GitHub Actions | PASS: all 6 jobs on release hardening verified HEAD |
 | Phase 6 focused tests | PASS: 11 AI and Phase 6 tests |
 | Phase 6 installed-local preflight | BLOCKED: validation user, Serper key, and OpenAI key are unset |
 
-GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36279974954>
+GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36281777389>
 
 ## Unresolved items
 
-- GitHub Actions reports that Node.js 20 based actions are currently forced to Node.js 24. The affected action major versions should be updated when supported versions are available or selected.
-- GitHub Actions reports the scheduled `ubuntu-latest` migration to Ubuntu 26. Pin or validate the runner image before that migration if deterministic runner behavior is required.
-- Two backend test deprecation warnings remain in Starlette/httpx and AnyIO compatibility paths. They do not fail the suite.
 - STEP 7 real-data execution requires a local validation user and working Serper/OpenAI credentials. The run must remain marked incomplete until 100 SNS companies, 100 transport companies, and the human review are complete.
+- A clean secondary Windows PC still needs the final install, backup, and restore smoke test before release distribution.
 
-No blocking error remains in STEP 1 through STEP 6 or the Form Intelligence acceptance in STEP 8. STEP 7 preparation is complete, but its real-data execution is waiting for the three preflight prerequisites listed above.
+No code or automated-test blocker remains in STEP 1 through STEP 6, Form Intelligence acceptance, or release hardening. STEP 7 real-data execution and the clean-PC Windows smoke test remain before the final main merge decision.
