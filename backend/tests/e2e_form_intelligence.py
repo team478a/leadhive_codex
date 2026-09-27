@@ -1,0 +1,144 @@
+"""Seed deterministic Form Intelligence records in the dedicated browser test DB."""
+
+import os
+import sys
+from datetime import UTC, datetime
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.engine import make_url
+
+url = os.environ["TEST_DATABASE_URL"]
+if not (make_url(url).database or "").endswith("_test"):
+    raise RuntimeError("Browser tests require a dedicated _test database")
+os.environ["DATABASE_URL"] = url
+
+from app.database import SessionLocal  # noqa: E402
+from app.models import (  # noqa: E402
+    Company,
+    FormAnalysisLog,
+    FormProfile,
+    FormProfileField,
+    Project,
+    User,
+)
+
+if len(sys.argv) != 3 or sys.argv[1] != "seed":
+    raise RuntimeError("Expected: seed <company-id>")
+
+email = os.environ["E2E_EMAIL"]
+if not email.startswith("e2e-") or not email.endswith("@example.com"):
+    raise RuntimeError("Only temporary e2e accounts may seed Form Intelligence data")
+
+company_id = UUID(sys.argv[2])
+now = datetime.now(UTC)
+
+with SessionLocal() as db:
+    user = db.scalar(select(User).where(User.email == email))
+    company = db.scalar(
+        select(Company)
+        .join(Project, Project.id == Company.project_id)
+        .where(Company.id == company_id, Project.user_id == user.id if user else False)
+    )
+    if user is None or company is None:
+        raise RuntimeError("The E2E company does not belong to the temporary account")
+
+    primary = FormProfile(
+        company_id=company.id,
+        form_url=f"{company.website_url.rstrip('/')}/contact",
+        form_index=0,
+        form_status="READY",
+        sales_contact_status="ALLOWED",
+        captcha_type="CAPTCHA_NONE",
+        confirmation_page=False,
+        is_primary=True,
+        form_found=True,
+        page_kind="general",
+        fingerprint="a" * 64,
+        analysis_version="1.0",
+        analysis_provider="rule",
+        last_analyzed_at=now,
+        analysis_duration_ms=42,
+        delivery_supported=True,
+        review_reason="",
+        error_message="",
+    )
+    secondary = FormProfile(
+        company_id=company.id,
+        form_url=f"{company.website_url.rstrip('/')}/partner",
+        form_index=0,
+        form_status="REVIEW_REQUIRED",
+        sales_contact_status="ALLOWED",
+        captcha_type="CAPTCHA_HCAPTCHA",
+        confirmation_page=False,
+        is_primary=False,
+        form_found=True,
+        page_kind="partnership",
+        fingerprint="b" * 64,
+        analysis_version="1.0",
+        analysis_provider="rule",
+        last_analyzed_at=now,
+        analysis_duration_ms=55,
+        delivery_supported=True,
+        review_reason="CAPTCHAがあるためブラウザでの確認が必要です。",
+        error_message="",
+    )
+    db.add_all([primary, secondary])
+    db.flush()
+    db.add_all(
+        [
+            FormProfileField(
+                form_profile_id=primary.id,
+                position=0,
+                selector='input[name="company"]',
+                label="会社名",
+                name="company",
+                field_type="text",
+                required=True,
+                mapped_key="company_name",
+                confidence=0.98,
+                decision_source="RULE",
+                recommended_value="",
+                options=[],
+                placeholder="",
+                aria_label="",
+                surrounding_text="会社名",
+            ),
+            FormProfileField(
+                form_profile_id=secondary.id,
+                position=0,
+                selector='input[name="department_code"]',
+                label="部署コード",
+                name="department_code",
+                field_type="text",
+                required=True,
+                mapped_key="unknown",
+                confidence=0.4,
+                decision_source="RULE",
+                recommended_value="",
+                options=[],
+                placeholder="",
+                aria_label="",
+                surrounding_text="部署コード",
+            ),
+            FormAnalysisLog(
+                company_id=company.id,
+                form_profile_id=primary.id,
+                event_type="analysis_completed",
+                provider="rule",
+                duration_ms=42,
+                usage={},
+                details={"form_status": "READY"},
+            ),
+            FormAnalysisLog(
+                company_id=company.id,
+                form_profile_id=secondary.id,
+                event_type="analysis_completed",
+                provider="rule",
+                duration_ms=55,
+                usage={},
+                details={"form_status": "REVIEW_REQUIRED"},
+            ),
+        ]
+    )
+    db.commit()

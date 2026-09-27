@@ -22,17 +22,19 @@ import { CompanySavedFiltersPanel } from './CompanySavedFiltersPanel'
 import { CompanyAiReviewPanel, CompanyExperimentPanel } from './CompanyOptimizationPanels'
 import { companyQueryString, defaultCompanyFilters, emptyContact } from './companyPageShared'
 import { approvedCodexFormTask } from './formCodexTask'
-import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAnalysisLog, FormAssist, FormDelivery, FormMappedKey, FormPreview, FormProfile, FormProfileField, FormProfileSummary, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAnalysisLog, FormAssist, FormDelivery, FormMappedKey, FormPreview, FormProfile, FormProfileField, FormProfileSummary, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ProjectMember, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 type Filters = CompanyFilterValues
 
-export function CompaniesPage({ projects, initialProjectId, initialReplyInboundEmailId, initialFollowupCompanyId }: {
+export function CompaniesPage({ projects, projectRoles, initialProjectId, initialReplyInboundEmailId, initialFollowupCompanyId }: {
   projects: Project[]
+  projectRoles: Record<string, ProjectMember['role']>
   initialProjectId: string
   initialReplyInboundEmailId: string | null
   initialFollowupCompanyId: string | null
 }) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
+  const readOnly = projectRoles[projectId] === 'viewer'
   const [draft, setDraft] = useState<Filters>(defaultCompanyFilters)
   const [filters, setFilters] = useState<Filters>(defaultCompanyFilters)
   const [companies, setCompanies] = useState<Company[]>([])
@@ -895,6 +897,7 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       busy={busy}
       bulkAssignee={bulkAssignee}
       formProfiles={formProfileSummaries}
+      readOnly={readOnly}
       setChecked={setChecked}
       setBulkAssignee={setBulkAssignee}
       setPage={setPage}
@@ -932,6 +935,7 @@ export function CompaniesPage({ projects, initialProjectId, initialReplyInboundE
       profiles={formProfiles}
       logs={formAnalysisLogs}
       busy={busy}
+      readOnly={readOnly}
       onAnalyze={() => void analyzeSelectedForm()}
       onSelectPrimary={profile => void selectPrimaryForm(profile)}
       onCorrect={(field, mappedKey, recommendedValue) => void correctFormField(field, mappedKey, recommendedValue)}
