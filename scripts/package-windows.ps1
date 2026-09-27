@@ -31,8 +31,10 @@ New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 $rootFiles = @(
     ".dockerignore",
     "Backup-LeadHive.cmd",
+    "Diagnose-LeadHive.cmd",
     "Install-LeadHive.cmd",
     "README.md",
+    "Restore-LeadHive.cmd",
     "Start-LeadHive.cmd",
     "Stop-LeadHive.cmd",
     "Update-LeadHive.cmd",
@@ -139,6 +141,8 @@ try {
     $extractedRoot = Join-Path $verificationRoot $packageName
     foreach ($requiredFile in @(
         "Install-LeadHive.cmd",
+        "Diagnose-LeadHive.cmd",
+        "Restore-LeadHive.cmd",
         "compose.local.yaml",
         "backend\Dockerfile",
         "frontend\Dockerfile",

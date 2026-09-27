@@ -23,6 +23,8 @@ WSL 2の有効化後に再起動を求められた場合は、Windowsを再起�
 - Stop-LeadHive.cmd   : 停止する（データは残ります）
 - Update-LeadHive.cmd : 新しい配布パッケージへ更新する
 - Backup-LeadHive.cmd : データと暗号化キーをバックアップする
+- Restore-LeadHive.cmd: 最新バックアップを確認付きで復元する
+- Diagnose-LeadHive.cmd: Docker・WSL・LeadHiveの状態を診断する
 
 Codex支援フォーム
 ------------------
@@ -34,6 +36,7 @@ CAPTCHAが表示された場合はCodexが停止するため、画面上で人�
 ------------
 「.env.local」には暗号化キーが保存されます。削除したり他人へ渡したりしないでください。
 PC交換やアップデートの前には「Backup-LeadHive.cmd」を実行してください。
+起動できない場合は「Diagnose-LeadHive.cmd」で診断ファイルを作成してください。
 
 通常の接続先: http://localhost:8787
 詳細: docs\73_WINDOWS_LOCAL_INSTALLER.md

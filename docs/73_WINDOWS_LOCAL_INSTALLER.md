@@ -48,6 +48,8 @@ Docker Desktopは、個人利用、教育、非商用オープンソース、条
 | `Stop-LeadHive.cmd` | LeadHiveを停止する。データは残る |
 | `Update-LeadHive.cmd` | 新しいソースへ更新後、DB更新と再起動を行う |
 | `Backup-LeadHive.cmd` | DBと暗号化キーを`backups`フォルダーへ保存する |
+| `Restore-LeadHive.cmd` | 最新バックアップを確認付きで復元する。復元前にも安全バックアップを作成する |
+| `Diagnose-LeadHive.cmd` | Docker・WSL・LeadHiveの状態を秘密情報なしの診断ファイルへ出力する |
 
 起動URLは通常`http://localhost:8787`。8787番ポートが使用中の場合、初回インストール時に8788〜8797から空いている番号を自動選択する。
 
@@ -58,6 +60,21 @@ Docker Desktopは、個人利用、教育、非商用オープンソース、条
 - 手動バックアップ：展開フォルダー直下の`backups`
 
 `.env.local`を失うと管理画面で保存したAPIキーやメールパスワードを復号できない。PC交換やフォルダー削除の前に`Backup-LeadHive.cmd`を実行し、生成された`.dump`と`.env.local`の両方を別媒体へ保管する。
+
+## 復元
+
+1. `Restore-LeadHive.cmd`をダブルクリックすると、`backups`内の最新dumpが選ばれる。
+2. 表示されたファイルを確認し、`RESTORE`と入力する。
+3. 現在のDBが安全バックアップされた後、選択したdumpが復元される。
+4. Migrationと再起動が完了し、ブラウザが開くまで待つ。
+
+別のdumpを使う場合は、dumpファイルを`Restore-LeadHive.cmd`へドラッグして実行する。PC移行ではdumpだけでなく、同時に保存された`.env.local`も必要になる。
+
+## 起動できない場合
+
+`Diagnose-LeadHive.cmd`を実行すると、`diagnostics`フォルダーへ状態確認ファイルを作成する。このファイルには`.env.local`の値、APIキー、メールパスワード、企業データを出力しない。
+
+Docker Desktopでruntime pathやsocketのエラーが表示された場合は、Docker Desktopの完全終了と再起動、Windows再起動、Docker Desktop標準診断の順で確認する。Factory resetはDocker volumeを消す可能性があるため、バックアップを確保した最後の手段とする。
 
 ## アップデート
 

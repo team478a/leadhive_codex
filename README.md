@@ -74,6 +74,8 @@ Windows初心者向けのローカル導入は[Windowsローカルインスト�
 
 リポジトリをZIPで展開して`Install-LeadHive.cmd`をダブルクリックします。Docker Desktopが未導入なら、公式利用条件への同意後にウィザードが自動導入します。Python、Node.js、PostgreSQLの個別セットアップも不要です。2回目以降は`Start-LeadHive.cmd`で起動できます。
 
+バックアップは`Backup-LeadHive.cmd`、確認付き復元は`Restore-LeadHive.cmd`、DockerやWSLの状態確認は`Diagnose-LeadHive.cmd`から実行できます。
+
 構成:
 
 - `backend/app`: 設定、DBモデル、認証、REST API、ユーザー作成CLI
