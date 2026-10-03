@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { allPages, api, ApiError, errorMessage } from './api'
 import { Field, ProfileForm, ProjectForm } from './forms'
 import { CollectionPage } from './CollectionPage'
+import { ApprovalQueuePage } from './ApprovalQueuePage'
 import { CompaniesPage } from './CompaniesPage'
 import { DashboardPage } from './DashboardPage'
 import { EmailDeliveriesPage } from './EmailDeliveriesPage'
@@ -46,7 +47,7 @@ type Editor = { type: 'project'; value?: Project } | { type: 'profile'; value?: 
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings'>('projects')
+  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals'>('projects')
   const [collectionProjectId, setCollectionProjectId] = useState('')
   const [replyInboundEmailId, setReplyInboundEmailId] = useState<string | null>(null)
   const [followupCompanyId, setFollowupCompanyId] = useState<string | null>(null)
@@ -143,6 +144,9 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         <button className={tab === 'deliveries' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('deliveries'); setEditor(null); setNotice('')
         }}>✉ メール配信状況</button>
+        <button className={tab === 'approvals' ? 'nav-item selected' : 'nav-item'} onClick={() => {
+          setTab('approvals'); setEditor(null); setNotice('')
+        }}>✓ 承認キュー</button>
         {user.is_admin && <button className={tab === 'settings' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('settings'); setEditor(null); setNotice('')
         }}>⚙ 運用設定</button>}
@@ -154,8 +158,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         })}>ログアウト</button></div>
     </aside>
     <main className="workspace"><header><p className="eyebrow">YOUR WORKSPACE</p>
-      <div className="page-heading"><div><h1>{tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
-        <p className="muted">{tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
+      <div className="page-heading"><div><h1>{tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
+        <p className="muted">{tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
         {!editor && (tab === 'projects' || tab === 'profiles') && <button disabled={!loaded || loading || busy} onClick={() => {
           setEditor({ type: tab === 'projects' ? 'project' : 'profile' }); setNotice('')
         }}>＋ {tab === 'projects' ? 'プロジェクトを作成' : 'プロファイルを作成'}</button>}
@@ -198,7 +202,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
           <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'deliveries' ?
-          <EmailDeliveriesPage projects={projects} /> : loaded && <>
+          <EmailDeliveriesPage projects={projects} /> : loaded && tab === 'approvals' ?
+          <ApprovalQueuePage projects={projects} projectRoles={projectRoles} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>
           <p className="muted mb-5">標準プロファイルは複製して編集できます。案件専用の条件も、複製して設定してください。</p>
           {profiles.length === 0 && <p className="panel empty">プロファイルがありません。新規作成してください。</p>}
