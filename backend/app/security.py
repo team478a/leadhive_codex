@@ -18,6 +18,9 @@ def token_digest(token: str) -> str:
 
 
 def current_user(request: Request, db: Session = Depends(get_db)) -> User:
+    from app.services.approval_principals import reject_agent_on_human_route
+
+    reject_agent_on_human_route(request, db)
     token = request.cookies.get(COOKIE_NAME)
     session = db.get(AuthSession, token_digest(token)) if token else None
     if session is None or session.expires_at <= datetime.now(timezone.utc):

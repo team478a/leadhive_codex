@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from app.admin_routes import router as admin_router
 from app.ai_routes import router as ai_router
 from app.analysis_routes import router as analysis_router
+from app.approval_routes import router as approval_router
 from app.campaign_routes import router as campaign_router
 from app.collection_routes import router as collection_router
 from app.company_quality_routes import router as company_quality_router
@@ -25,6 +26,7 @@ from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
 from app.routes import router
+from app.services.approval_principals import reject_mixed_credentials
 
 logger = logging.getLogger("leadhive")
 
@@ -38,7 +40,13 @@ async def lifespan(_app: FastAPI):
     yield
 
 
-app = FastAPI(title="LeadHive V2", version="0.1.0", lifespan=lifespan)
+app = FastAPI(
+    title="LeadHive V2",
+    version="0.1.0",
+    lifespan=lifespan,
+    dependencies=[Depends(reject_mixed_credentials)],
+)
+app.include_router(approval_router)
 
 
 app.add_middleware(

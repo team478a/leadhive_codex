@@ -40,6 +40,9 @@ def health(db: Session = Depends(get_db)):
 
 @router.post("/auth/login", response_model=UserOut)
 def login(body: Login, request: Request, response: Response, db: Session = Depends(get_db)):
+    from app.services.approval_principals import reject_agent_on_human_route
+
+    reject_agent_on_human_route(request, db)
     user = db.scalar(select(User).where(User.email == str(body.email).lower()))
     valid = password_hasher.verify(body.password, user.password_hash if user else DUMMY_HASH)
     if user is None or not valid:

@@ -1,3 +1,11 @@
+from app.model_approval import (
+    AgentCredential,
+    AgentIdentity,
+    AgentProjectGrant,
+    ApprovalRequest,
+    HumanApprovalProof,
+    OutreachAuditEvent,
+)
 from app.model_company import (
     Activity,
     AiReview,
@@ -44,6 +52,12 @@ from app.model_settings import (
 )
 
 __all__ = [
+    "AgentCredential",
+    "AgentIdentity",
+    "AgentProjectGrant",
+    "ApprovalRequest",
+    "HumanApprovalProof",
+    "OutreachAuditEvent",
     "Timestamps",
     "User",
     "TargetProfile",

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = False
     session_hours: int = 12
+    agent_features_enabled: bool = False
     serper_api_key: str = ""
     google_places_api_key: str = ""
     gbizinfo_api_token: str = ""
