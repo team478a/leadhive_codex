@@ -141,6 +141,9 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Verify instance isolation without Docker or external services
+        shell: powershell
+        run: .\scripts\tests\instance-identity.tests.ps1
       - name: Build and verify the Windows distribution package
         shell: powershell
         run: .\scripts\package-windows.ps1

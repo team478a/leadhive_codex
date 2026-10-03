@@ -12,7 +12,7 @@ Codex支援フォームを使う場合は、同じWindowsユーザーでCodexを
 
 ## 初回インストール
 
-1. GitHubのLeadHiveリポジトリをZIPでダウンロードし、通常のフォルダーへ展開する。
+1. 管理担当者から検証済みの配布ZIP（VERSION・manifest付き）を受け取り、OneDrive外の通常のフォルダーへ展開する。GitHubのソースZIPは使用しない。
 2. `Install-LeadHive.cmd`をダブルクリックする。
 3. Docker Desktopが未導入の場合、表示された公式利用条件を確認して同意する。
 4. WSL 2の有効化でWindowsの管理者確認が表示された場合は許可する。
@@ -46,12 +46,14 @@ Docker Desktopは、個人利用、教育、非商用オープンソース、条
 | --- | --- |
 | `Start-LeadHive.cmd` | LeadHiveを起動してブラウザを開く |
 | `Stop-LeadHive.cmd` | LeadHiveを停止する。データは残る |
-| `Update-LeadHive.cmd` | 新しいソースへ更新後、DB更新と再起動を行う |
+| `Update-LeadHive.cmd` | 検証済みの新配布ファイルへ置換後、停止・安全backup・DB更新を実行する。元の.env.localを保持し、他社の設定をコピーしない |
 | `Backup-LeadHive.cmd` | DBと暗号化キーを`backups`フォルダーへ保存する |
 | `Restore-LeadHive.cmd` | 最新バックアップを確認付きで復元する。復元前にも安全バックアップを作成する |
 | `Diagnose-LeadHive.cmd` | Docker・WSL・LeadHiveの状態を秘密情報なしの診断ファイルへ出力する |
 | `Adopt-LeadHive.cmd` | 既存環境を確認して環境IDを登録する。DBやキーを置き換えず、サービスも起動しない |
-| `Resume-LeadHive.cmd` | 保守後のworker再開。未解決配送を検査し、人の確認後だけ再開 |
+| `Resume-LeadHive.cmd` | 保守後のworker再開。送信停止時は配送待ちを保持して収集・解析だけ再開 |
+| `Stop-LeadHiveOutbound.cmd` | 送信停止を保存しサービスを再作成。workerは停止したまま |
+| `Open-QuickStart.cmd` | 初心者向け収集・準備専用ガイドを開く |
 | `Import-LeadHiveBackup.cmd` | 停止済み元PCの検証済みbackupを専用の新PCへ移行 |
 | `Repair-LeadHiveInstance.cmd` | 初回登録が途中で失敗し、正しいラベル付きDB volumeが残っている場合の登録完了 |
 
@@ -94,9 +96,9 @@ identity登録が途中で失敗した場合は`Repair-LeadHiveInstance.cmd`で�
 ### workerを再開
 
 backup・update・restore後は、検索スケジュールや収集を含むworker全体が停止している。通常のStartやInstallでも、この停止状態を引き継ぐ。
-`Resume-LeadHive.cmd`は未処理・実行中・失敗配送、未完了campaign/form batchを検査する。該当があれば再開を拒否する。
+`Resume-LeadHive.cmd`は未処理・実行中・失敗配送、未完了campaign/form batchを検査する。G1.3の送信停止時は履歴を保持して収集・解析だけ再開できる。送信有効時は該当があれば再開を拒否する。初期提供では送信停止を解除しない。
 特に失敗履歴には送信結果不明が含まれ得るため、上書き・削除・単純retryで解除しない。管理担当者が外部送信履歴と突合する必要がある。現段階ではその自動照合・解除UIは未実装。
-該当がない場合も、外部送信履歴と元PC停止を確認し、表示された環境IDを含む確認文字列を入力して再開する。
+送信停止の場合や該当がない場合も、外部送信履歴と元PC停止を確認し、表示された環境IDを含む確認文字列を入力して再開する。
 保守失敗が残っている場合は、先に更新/復元の問題を解決する。Startはアプリも自動再開しない。
 
 ## 起動できない場合
