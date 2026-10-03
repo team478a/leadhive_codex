@@ -6,6 +6,7 @@ $script:LeadHiveCompose = Join-Path $script:LeadHiveRoot "compose.local.yaml"
 $script:LeadHiveProject = "leadhive-local"
 
 . (Join-Path $PSScriptRoot "InstanceIdentity.ps1")
+. (Join-Path $PSScriptRoot "Maintenance.ps1")
 
 function Resolve-LeadHiveComposeProject { Assert-LeadHiveInstance | Out-Null }
 
@@ -30,6 +31,10 @@ function Assert-Docker {
 function Invoke-LeadHiveCompose {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$ComposeArguments)
     Resolve-LeadHiveComposeProject
+    $values = Read-LeadHiveEnvironment
+    Get-LeadHiveDatabaseName | Out-Null
+    if ($values['LEADHIVE_WORKER_PAUSED'] -eq 'true' -and $ComposeArguments -contains 'up' -and
+        $ComposeArguments -contains 'worker') { throw 'Worker is paused. Use Resume-LeadHive.cmd after recovery review.' }
     & docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv -f $script:LeadHiveCompose @ComposeArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Docker Compose command failed."

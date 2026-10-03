@@ -657,6 +657,8 @@ def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 
 
 def run_once() -> bool:
+    if settings.worker_paused:
+        return False
     with SessionLocal() as db:
         apply_application_settings(db)
         enqueue_due_schedules(db)
@@ -710,6 +712,8 @@ def main():
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--poll-seconds", type=float, default=2.0)
     args = parser.parse_args()
+    if settings.worker_paused:
+        raise SystemExit("Worker is paused for maintenance. Review recovery before resuming.")
     while True:
         worked = run_once()
         if args.once:

@@ -2,10 +2,13 @@ $ErrorActionPreference = "Stop"
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
 $outputDirectory = Join-Path $repositoryRoot "dist"
-$commit = (& git -C $repositoryRoot rev-parse --short HEAD).Trim()
+$commit = (& git -C $repositoryRoot rev-parse HEAD).Trim()
 if (-not $commit) { throw "Git commit could not be determined." }
+if (@(& git -C $repositoryRoot status --porcelain --untracked-files=normal).Count -gt 0) {
+    throw "Distribution requires a clean committed release. Commit or review changes before packaging."
+}
 
-$packageName = "LeadHive-Windows-Local-$commit"
+$packageName = "LeadHive-Windows-Local-$($commit.Substring(0, 12))"
 $stageRoot = Join-Path $outputDirectory $packageName
 $zipPath = Join-Path $outputDirectory "$packageName.zip"
 $checksumPath = "$zipPath.sha256"
@@ -27,9 +30,21 @@ if (Test-Path $stageRoot) { Remove-Item -LiteralPath $stageRoot -Recurse -Force 
 if (Test-Path $zipPath) { Remove-Item -LiteralPath $zipPath -Force }
 if (Test-Path $checksumPath) { Remove-Item -LiteralPath $checksumPath -Force }
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
+$snapshotRoot = Join-Path $outputDirectory "$packageName-source"
+$snapshotZip = Join-Path $outputDirectory "$packageName-source.zip"
+Assert-InOutputDirectory $snapshotRoot
+Assert-InOutputDirectory $snapshotZip
+if (Test-Path $snapshotRoot) { Remove-Item -LiteralPath $snapshotRoot -Recurse -Force }
+if (Test-Path $snapshotZip) { Remove-Item -LiteralPath $snapshotZip -Force }
+& git -C $repositoryRoot archive --format=zip --output=$snapshotZip $commit
+if ($LASTEXITCODE -ne 0) { throw "Cannot export the committed release." }
+Expand-Archive -LiteralPath $snapshotZip -DestinationPath $snapshotRoot
 
 $rootFiles = @(
     "Adopt-LeadHive.cmd",
+    "Import-LeadHiveBackup.cmd",
+    "Repair-LeadHiveInstance.cmd",
+    "Resume-LeadHive.cmd",
     ".dockerignore",
     "Backup-LeadHive.cmd",
     "Diagnose-LeadHive.cmd",
@@ -77,7 +92,7 @@ $selectedFiles = $trackedFiles | Where-Object {
 } | Sort-Object -Unique
 
 foreach ($relativePath in $selectedFiles) {
-    $sourcePath = Join-Path $repositoryRoot $relativePath
+    $sourcePath = Join-Path $snapshotRoot $relativePath
     if (-not (Test-Path $sourcePath -PathType Leaf)) {
         throw "Tracked package file was not found: $relativePath"
     }
@@ -86,6 +101,8 @@ foreach ($relativePath in $selectedFiles) {
     New-Item -ItemType Directory -Path $destinationParent -Force | Out-Null
     Copy-Item -LiteralPath $sourcePath -Destination $destinationPath
 }
+Remove-Item -LiteralPath $snapshotRoot -Recurse -Force
+Remove-Item -LiteralPath $snapshotZip -Force
 
 $readmeSource = Join-Path $stageRoot "deploy\README-FIRST.txt"
 Move-Item -LiteralPath $readmeSource -Destination (Join-Path $stageRoot "README-FIRST.txt")
@@ -100,7 +117,8 @@ $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
 [IO.File]::WriteAllText((Join-Path $stageRoot "VERSION.txt"), $versionText, $utf8WithoutBom)
 
 $forbiddenFiles = Get-ChildItem $stageRoot -Recurse -Force | Where-Object {
-    $_.Name -in @(".env", ".env.local") -or
+    $_.Name -like ".env*" -or $_.Name -like "*.dump*" -or
+    $_.Name -in @("secrets.json", "credentials.json") -or
     $_.FullName -match "([\\/])node_modules([\\/]|$)" -or
     $_.FullName -match "([\\/])\.venv([\\/]|$)"
 }
@@ -143,6 +161,10 @@ try {
     Expand-Archive -LiteralPath $zipPath -DestinationPath $verificationRoot
     $extractedRoot = Join-Path $verificationRoot $packageName
     foreach ($requiredFile in @(
+        "Adopt-LeadHive.cmd",
+        "Import-LeadHiveBackup.cmd",
+        "Repair-LeadHiveInstance.cmd",
+        "Resume-LeadHive.cmd",
         "Install-LeadHive.cmd",
         "Open-Manual.cmd",
         "Diagnose-LeadHive.cmd",
@@ -151,6 +173,8 @@ try {
         "backend\Dockerfile",
         "frontend\Dockerfile",
         "scripts\windows\DockerSetup.ps1",
+        "scripts\windows\InstanceIdentity.ps1",
+        "scripts\windows\Adopt-LeadHive.ps1",
         ".agents\skills\leadhive-form-submit\SKILL.md",
         "README-FIRST.txt",
         "docs\82_LEADHIVE_USER_MANUAL.md",
@@ -216,6 +240,7 @@ try {
         $verificationSettings = @(
             "POSTGRES_PASSWORD=package-verification-only",
             "SETTINGS_ENCRYPTION_KEY=AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+            "LEADHIVE_DATA_VOLUME=leadhive-package-validation-data",
             "LEADHIVE_PORT=18787",
             "CORS_ORIGINS=http://localhost:18787,http://127.0.0.1:18787",
             "PUBLIC_APP_URL=http://localhost:18787"
