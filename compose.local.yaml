@@ -77,4 +77,5 @@ services:
 
 volumes:
   postgres_data:
-    name: ${LEADHIVE_DATA_VOLUME:-leadhive-local-postgres-data}
+    external: true
+    name: ${LEADHIVE_DATA_VOLUME:?Run Install-LeadHive.cmd or Adopt-LeadHive.cmd first}

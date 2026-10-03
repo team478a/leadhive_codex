@@ -29,6 +29,7 @@ if (Test-Path $checksumPath) { Remove-Item -LiteralPath $checksumPath -Force }
 New-Item -ItemType Directory -Path $stageRoot -Force | Out-Null
 
 $rootFiles = @(
+    "Adopt-LeadHive.cmd",
     ".dockerignore",
     "Backup-LeadHive.cmd",
     "Diagnose-LeadHive.cmd",

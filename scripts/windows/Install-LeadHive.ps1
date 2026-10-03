@@ -5,7 +5,14 @@ Write-Host "LeadHive local installer" -ForegroundColor Green
 Ensure-DockerDesktop
 
 Write-Step "Creating local security settings"
-New-LeadHiveEnvironment
+$createdEnvironment = New-LeadHiveEnvironment
+if ($createdEnvironment) {
+    Register-LeadHiveInstance -CreateNew
+} else {
+    Assert-LeadHiveInstance | Out-Null
+}
+$values = Read-LeadHiveEnvironment
+if ($values['LEADHIVE_MAINTENANCE_REQUIRED'] -eq 'true') { throw 'Incomplete maintenance must be recovered before installation.' }
 
 Write-Step "Installing the LeadHive Codex Skill"
 Install-LeadHiveCodexSkill
@@ -20,7 +27,11 @@ Write-Step "Updating the database"
 Invoke-LeadHiveCompose run --rm migrate
 
 Write-Step "Starting LeadHive"
-Invoke-LeadHiveCompose up -d api worker web
+$values = Read-LeadHiveEnvironment
+if ($values['LEADHIVE_MAINTENANCE_REQUIRED'] -eq 'true') { throw 'Maintenance recovery is required. Installation will not resume services.' }
+if ($values['LEADHIVE_WORKER_PAUSED'] -eq 'true') {
+    Invoke-LeadHiveCompose up -d api web
+} else { Invoke-LeadHiveCompose up -d api worker web }
 $url = Wait-LeadHive
 
 $userStatus = (& docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv -f $script:LeadHiveCompose exec -T api python -m app.cli --status).Trim()

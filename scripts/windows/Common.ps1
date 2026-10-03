@@ -5,31 +5,9 @@ $script:LeadHiveEnv = Join-Path $script:LeadHiveRoot ".env.local"
 $script:LeadHiveCompose = Join-Path $script:LeadHiveRoot "compose.local.yaml"
 $script:LeadHiveProject = "leadhive-local"
 
-function Resolve-LeadHiveComposeProject {
-    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) { return }
-    $volumeName = "leadhive-local-postgres-data"
-    $owner = (& docker volume inspect $volumeName --format '{{ index .Labels "com.docker.compose.project" }}' 2>$null)
-    if ($LASTEXITCODE -eq 0 -and $owner -in @("leadhive", "leadhive-local")) {
-        $script:LeadHiveProject = $owner.Trim()
-        $dbContainer = (& docker ps -aq `
-            --filter "label=com.docker.compose.project=$script:LeadHiveProject" `
-            --filter "label=com.docker.compose.service=db" | Select-Object -First 1)
-        $legacyEnv = Join-Path $script:LeadHiveRoot ".env"
-        if ($dbContainer -and (Test-Path $legacyEnv -PathType Leaf)) {
-            $databasePassword = ((& docker inspect $dbContainer --format '{{range .Config.Env}}{{println .}}{{end}}') |
-                Where-Object { $_ -like "POSTGRES_PASSWORD=*" } | Select-Object -First 1)
-            $databasePassword = ($databasePassword -split "=", 2)[1]
-            $localPassword = ((Get-Content $script:LeadHiveEnv -ErrorAction SilentlyContinue |
-                Where-Object { $_ -like "POSTGRES_PASSWORD=*" } | Select-Object -First 1) -split "=", 2)[1]
-            $legacyPassword = ((Get-Content $legacyEnv |
-                Where-Object { $_ -like "POSTGRES_PASSWORD=*" } | Select-Object -First 1) -split "=", 2)[1]
-            if ($databasePassword -and $localPassword -cne $databasePassword -and
-                $legacyPassword -ceq $databasePassword) {
-                $script:LeadHiveEnv = $legacyEnv
-            }
-        }
-    }
-}
+. (Join-Path $PSScriptRoot "InstanceIdentity.ps1")
+
+function Resolve-LeadHiveComposeProject { Assert-LeadHiveInstance | Out-Null }
 
 function Write-Step([string]$Message) {
     Write-Host "`n==> $Message" -ForegroundColor Cyan
@@ -47,7 +25,6 @@ function Assert-Docker {
     if ($LASTEXITCODE -ne 0) {
         throw "Docker Desktop is not running. Start Docker Desktop and try again."
     }
-    Resolve-LeadHiveComposeProject
 }
 
 function Invoke-LeadHiveCompose {
@@ -67,7 +44,10 @@ function Get-LeadHivePort {
 }
 
 function New-LeadHiveEnvironment {
-    if (Test-Path $script:LeadHiveEnv) { return }
+    if (Test-Path $script:LeadHiveEnv) { return $false }
+    if (Get-LeadHiveVolume "leadhive-local-postgres-data") {
+        throw "An existing legacy database was found. Copy its original environment and run Adopt-LeadHive.cmd."
+    }
 
     $port = 8787
     while ($port -le 8797) {
@@ -87,7 +67,11 @@ function New-LeadHiveEnvironment {
     [Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($keyBytes)
     $encryptionKey = [Convert]::ToBase64String($keyBytes).Replace('+', '-').Replace('/', '_')
 
+    $instanceId = [Guid]::NewGuid().ToString("N")
     $contents = @"
+LEADHIVE_INSTANCE_ID=$instanceId
+LEADHIVE_PROJECT_NAME=leadhive-$instanceId
+LEADHIVE_DATA_VOLUME=leadhive-$instanceId-data
 POSTGRES_PASSWORD=$databasePassword
 SETTINGS_ENCRYPTION_KEY=$encryptionKey
 LEADHIVE_PORT=$port
@@ -96,6 +80,7 @@ PUBLIC_APP_URL=http://localhost:$port
 "@
     $utf8WithoutBom = New-Object System.Text.UTF8Encoding($false)
     [IO.File]::WriteAllText($script:LeadHiveEnv, $contents, $utf8WithoutBom)
+    return $true
 }
 
 function Wait-LeadHive {
