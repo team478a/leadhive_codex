@@ -1,5 +1,6 @@
 x-backend-environment: &backend-environment
   APP_ENV: production
+  OUTBOUND_ENABLED: ${LEADHIVE_OUTBOUND_ENABLED:-false}
   DATABASE_URL: postgresql+psycopg://postgres:${POSTGRES_PASSWORD}@db:5432/${LEADHIVE_DATABASE_NAME:-leadhive_v2}
   CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:8787,http://127.0.0.1:8787}
   COOKIE_SECURE: "false"

@@ -7,6 +7,7 @@ from cryptography.fernet import Fernet, InvalidToken
 
 from app.config import settings
 from app.models import SmtpSettings
+from app.services.outbound_guard import require_outbound_enabled
 
 
 class EmailDeliveryError(Exception):
@@ -94,6 +95,7 @@ def email_delivery_limits(db) -> EmailDeliveryLimits:
 def send_with_configuration(
     config: SmtpConfiguration, message_id: str, recipient_email: str, subject: str, body: str
 ) -> None:
+    require_outbound_enabled()
     if not config.host or not config.from_email:
         raise EmailDeliveryError("メール送信設定が未完了です。")
     message = EmailMessage()
@@ -112,16 +114,19 @@ def send_with_configuration(
                 client.starttls()
             if config.username:
                 client.login(config.username, config.password)
+            require_outbound_enabled()
             client.send_message(message)
     except (OSError, smtplib.SMTPException) as exc:
         raise EmailDeliveryError("メール送信に失敗しました。") from exc
 
 
 def send_email(db, delivery_id: str, recipient_email: str, subject: str, body: str) -> None:
+    require_outbound_enabled()
     send_with_configuration(smtp_configuration(db), delivery_id, recipient_email, subject, body)
 
 
 def send_test_email(db, recipient_email: str) -> None:
+    require_outbound_enabled()
     send_with_configuration(
         smtp_configuration(db),
         "smtp-test",

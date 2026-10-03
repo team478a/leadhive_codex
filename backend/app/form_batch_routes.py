@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import (
     Activity,
@@ -40,6 +41,7 @@ from app.services.form_profile_delivery import (
     profile_form_url,
 )
 from app.services.operations import add_operation_job
+from app.services.outbound_guard import require_outbound_enabled
 
 router = APIRouter(prefix="/api")
 
@@ -174,6 +176,8 @@ def list_form_codex_queue(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     project_access(project_id, db, user, write=False)
+    if not settings.outbound_enabled:
+        return []
     rows = db.execute(
         select(FormDeliveryBatchItem, FormDeliveryBatch, Company, OutreachDraft)
         .join(FormDeliveryBatch, FormDeliveryBatch.id == FormDeliveryBatchItem.batch_id)
@@ -220,6 +224,7 @@ def update_form_codex_task(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    require_outbound_enabled()
     item = db.get(FormDeliveryBatchItem, item_id)
     if item is None:
         raise HTTPException(404, "Codex支援フォームが見つかりません。")
@@ -360,6 +365,7 @@ def retry_form_batch_item(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    require_outbound_enabled()
     if not body.confirmed:
         raise HTTPException(422, "対象フォームを確認して再試行を承認してください。")
     item = db.get(FormDeliveryBatchItem, item_id)
@@ -397,6 +403,7 @@ def execute_form_batch(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    require_outbound_enabled()
     if not body.confirmed:
         raise HTTPException(422, "対象件数と文面を確認して一括送信を承認してください。")
     batch = db.get(FormDeliveryBatch, batch_id)

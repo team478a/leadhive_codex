@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Company, FormProfileField, FormSenderSettings, OutreachDraft
 from app.services.form_profile_delivery import primary_form_profile, sender_values
+from app.services.outbound_guard import require_outbound_enabled
 
 CODEX_FORM_SKILL = "leadhive-form-submit"
 CODEX_FORM_INSTRUCTIONS = (
@@ -43,6 +44,7 @@ def build_codex_form_payload(
     *,
     fallback_reason: str = "Codexによるブラウザ操作が必要です。",
 ) -> CodexFormPayload:
+    require_outbound_enabled()
     profile = primary_form_profile(db, company.id)
     profile_fields = (
         list(

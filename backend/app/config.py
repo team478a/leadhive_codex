@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     session_hours: int = 12
     agent_features_enabled: bool = False
     worker_paused: bool = False
+    outbound_enabled: bool = False
     serper_api_key: str = ""
     google_places_api_key: str = ""
     gbizinfo_api_token: str = ""

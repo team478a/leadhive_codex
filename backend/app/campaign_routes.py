@@ -21,6 +21,7 @@ from app.project_access import project_access
 from app.schemas import EmailCampaignCreateInput, EmailCampaignOut
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
+from app.services.outbound_guard import require_outbound_enabled
 
 router = APIRouter(prefix="/api")
 
@@ -90,6 +91,7 @@ def create_campaign(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    require_outbound_enabled()
     if not body.confirmed:
         raise HTTPException(422, "対象企業と文面を確認して一括メール送信を承認してください。")
     project_access(project_id, db, user)
@@ -171,6 +173,8 @@ def change_campaign(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    if action == "resume":
+        require_outbound_enabled()
     if action not in {"pause", "resume"}:
         raise HTTPException(404, "操作が見つかりません。")
     campaign = db.get(EmailCampaign, campaign_id)

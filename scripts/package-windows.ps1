@@ -45,6 +45,7 @@ $rootFiles = @(
     "Import-LeadHiveBackup.cmd",
     "Repair-LeadHiveInstance.cmd",
     "Resume-LeadHive.cmd",
+    "Stop-LeadHiveOutbound.cmd",
     ".dockerignore",
     "Backup-LeadHive.cmd",
     "Diagnose-LeadHive.cmd",

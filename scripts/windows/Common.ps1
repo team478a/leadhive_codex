@@ -79,6 +79,7 @@ LEADHIVE_PROJECT_NAME=leadhive-$instanceId
 LEADHIVE_DATA_VOLUME=leadhive-$instanceId-data
 POSTGRES_PASSWORD=$databasePassword
 SETTINGS_ENCRYPTION_KEY=$encryptionKey
+LEADHIVE_OUTBOUND_ENABLED=false
 LEADHIVE_PORT=$port
 CORS_ORIGINS=http://localhost:$port,http://127.0.0.1:$port
 PUBLIC_APP_URL=http://localhost:$port

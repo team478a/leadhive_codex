@@ -379,13 +379,16 @@ APIキーは保存後に再表示されません。空欄のまま再保存す�
 | `Restore-LeadHive.cmd` | 最新または指定バックアップを確認付きで復元 |
 | `Update-LeadHive.cmd` | 新版へDB更新を適用して再起動 |
 | `Diagnose-LeadHive.cmd` | Docker、WSL、LeadHiveの診断ファイルを作成 |
+| `Resume-LeadHive.cmd` | 保守後のworkerを履歴確認後に再開 |
+| `Import-LeadHiveBackup.cmd` | 元PCを停止して新PCへ検証済みbackupを移行 |
+| `Repair-LeadHiveInstance.cmd` | 検証可能な初回登録失敗を復旧 |
 
 業務データはDockerボリューム、DBパスワードと暗号化キーはLeadHiveフォルダー直下の`.env.local`にあります。`.env.local`を失うと保存済みAPIキーやメールパスワードを復号できません。
 
 ### 更新前
 
 1. `Backup-LeadHive.cmd`を実行します。
-2. `backups`に`.dump`と`.env.local`があることを確認します。
+2. `backups`に同名の`.dump`、`.dump.env.local`、`.dump.identity.json`があることを確認します。
 3. 新版ZIPを新しいフォルダーへ展開します。
 4. 旧フォルダーの`.env.local`を新版フォルダー直下へコピーします。
 5. `Update-LeadHive.cmd`を実行します。
@@ -395,9 +398,14 @@ APIキーは保存後に再表示されません。空欄のまま再保存す�
 1. `Restore-LeadHive.cmd`をダブルクリックします。
 2. 表示されたバックアップを確認します。
 3. `RESTORE`と入力します。
-4. Migrationと再起動が終わり、ブラウザが開くまで待ちます。
+4. 別の新規DBへの復元と内容検証が成功し、画面のURLが表示されるまで待ちます。元DBは残ります。
+5. workerは停止したままです。配送履歴を確認して`Resume-LeadHive.cmd`を実行します。
 
-別のバックアップを使う場合は、`.dump`ファイルを`Restore-LeadHive.cmd`へドラッグします。PC移行には同時に保存した`.env.local`も必要です。
+別のバックアップを使う場合は、`.dump`を`Restore-LeadHive.cmd`へドラッグします。環境ID・キー・内容ハッシュが一致しない場合や、検証報告がない旧backupは停止します。
+新PCへの移行は、元PCを停止してから`.dump`を`Import-LeadHiveBackup.cmd`へ渡します。通常インストールで別の環境IDを作らず、元のキーを保持してください。
+未処理や失敗配送がある場合、Resumeは再開を拒否します。送信済みか分からないものはretryせず管理担当者へ相談してください。backup・更新・復元後のworker停止中は、定期収集も停止しています。
+
+環境IDのない旧版は、元の設定を保持して`Adopt-LeadHive.cmd`で引き継いでから更新します。[Windows導入ガイド](73_WINDOWS_LOCAL_INSTALLER.md)の手順に従ってください。
 
 ## 15. 困ったとき
 
@@ -451,3 +459,15 @@ Docker Desktopの「Factory reset」はDockerボリュームを削除する可�
 - メールキャンペーン・送信運用: [66_DELIVERY_CAMPAIGNS_AND_PIPELINE.md](66_DELIVERY_CAMPAIGNS_AND_PIPELINE.md)
 - 運用設定: [67_APPLICATION_SETTINGS_MANAGEMENT.md](67_APPLICATION_SETTINGS_MANAGEMENT.md)
 - Form Intelligence受入結果: [80_FORM_INTELLIGENCE_ACCEPTANCE.md](80_FORM_INTELLIGENCE_ACCEPTANCE.md)
+
+### 復元・別PC移行後の認証と承認
+
+バックアップに含まれたログインsession、再認証challenge、Agent credential、未処理・承認済みApprovalRequestは復元時に失効します。再ログインし、Agentを利用する場合は管理者が既存のcredential発行APIで再発行してください（Agent管理UIは未実装）。営業提案は再作成してHumanが再承認します。過去の文面・承認者・承認日時・監査履歴は保存されます。workerは別途確認して再開するまで停止したままです。
+
+### 収集専用運用（G1.3）
+
+配布の初期設定は外部送信停止です。収集・解析・企業管理・文面準備・Human承認は利用できますが、メール・フォーム・SMTPテスト・Codex送信支援は実行できません。画面上部で停止状態を確認できます。
+
+停止するには`Stop-LeadHiveOutbound.cmd`を実行してください。サービスを停止・再作成するため一時的に画面が切れ、workerは停止します。その後`Resume-LeadHive.cmd`で確認すると、送信停止を保持したまま収集・解析workerを再開できます。古い配送待ちは削除・自動再送されません。
+
+環境ファイルの編集だけでは稼働中processに反映されません。別PC・古いcontainer・コピー済みCodexタスクの停止は別途確認してください。初期提供では送信停止を解除しません。

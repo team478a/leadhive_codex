@@ -72,3 +72,11 @@ def auth(client, users):
         == 200
     )
     return client
+
+
+@pytest.fixture(autouse=True)
+def legacy_delivery_test_mode(monkeypatch):
+    # Existing executor tests explicitly opt in; production/default remains OFF.
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "outbound_enabled", True)

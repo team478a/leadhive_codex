@@ -50,10 +50,10 @@ function Get-LeadHiveInstance {
     # Compose gives inherited environment variables priority over --env-file.
     foreach ($name in @('POSTGRES_PASSWORD', 'SETTINGS_ENCRYPTION_KEY', 'LEADHIVE_INSTANCE_ID',
             'LEADHIVE_PROJECT_NAME', 'LEADHIVE_DATA_VOLUME', 'LEADHIVE_PORT', 'CORS_ORIGINS',
-            'PUBLIC_APP_URL', 'LEADHIVE_DATABASE_NAME', 'LEADHIVE_WORKER_PAUSED')) {
+            'PUBLIC_APP_URL', 'LEADHIVE_DATABASE_NAME', 'LEADHIVE_WORKER_PAUSED', 'LEADHIVE_OUTBOUND_ENABLED', 'OUTBOUND_ENABLED')) {
         $inherited = [Environment]::GetEnvironmentVariable($name)
         if ($null -ne $inherited -and ($inherited -cne $values[$name] -or
-            $name -in @('LEADHIVE_DATABASE_NAME', 'LEADHIVE_WORKER_PAUSED'))) {
+            $name -in @('LEADHIVE_DATABASE_NAME', 'LEADHIVE_WORKER_PAUSED', 'LEADHIVE_OUTBOUND_ENABLED', 'OUTBOUND_ENABLED'))) {
             throw "An inherited environment setting conflicts with this deployment."
         }
     }

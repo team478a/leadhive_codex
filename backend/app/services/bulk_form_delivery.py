@@ -20,6 +20,7 @@ from app.services.form_profile_delivery import (
     mark_profile_changed,
     required_missing,
 )
+from app.services.outbound_guard import require_outbound_enabled
 
 
 def body_values(preview: FormPreview, body: str) -> tuple[dict[str, str], list[str]]:
@@ -37,6 +38,7 @@ def body_values(preview: FormPreview, body: str) -> tuple[dict[str, str], list[s
 
 
 def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: UUID | None) -> bool:
+    require_outbound_enabled()
     company = db.get(Company, item.company_id)
     draft = db.get(OutreachDraft, item.draft_id) if item.draft_id else None
     if company is None or draft is None:

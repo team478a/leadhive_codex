@@ -39,6 +39,7 @@ from app.services.email_delivery import EmailDeliveryError, email_delivery_limit
 from app.services.form_intelligence import analyze_company_forms
 from app.services.inbound_email import sync_inbound_mail
 from app.services.operations import add_operation_job, refresh_company_ids
+from app.services.outbound_guard import require_outbound_enabled
 from app.services.web_analysis import analyze
 
 logger = logging.getLogger("leadhive")
@@ -81,6 +82,11 @@ def recover_stale_jobs(db) -> tuple[int, int]:
         select(OperationJob)
         .where(
             OperationJob.status == "running",
+            OperationJob.operation_type.in_(
+                ("collect_search", "web_analysis", "ai_analysis", "form_intelligence")
+            )
+            if not settings.outbound_enabled
+            else True,
             OperationJob.lease_expires_at < datetime.now(timezone.utc),
         )
         .with_for_update(skip_locked=True)
@@ -137,6 +143,8 @@ def recover_stale_email_deliveries(db) -> int:
 
 
 def claim_email_delivery(db) -> EmailDelivery | None:
+    if not settings.outbound_enabled:
+        return None
     now = datetime.now(timezone.utc)
     db.execute(select(func.pg_advisory_xact_lock(EMAIL_CLAIM_LOCK_ID)))
     limits = email_delivery_limits(db)
@@ -221,6 +229,7 @@ def delivery_body_with_unsubscribe(delivery: EmailDelivery) -> str:
 
 
 def run_email_delivery(db, delivery: EmailDelivery) -> None:
+    require_outbound_enabled()
     worker_id = delivery.worker_id
     logger.info("email delivery start: id=%s", delivery.id)
     try:
@@ -427,7 +436,14 @@ def enqueue_due_refresh_schedules(db) -> int:
 def claim_job(db) -> OperationJob | None:
     job = db.scalar(
         select(OperationJob)
-        .where(OperationJob.status == "queued")
+        .where(
+            OperationJob.status == "queued",
+            OperationJob.operation_type.in_(
+                ("collect_search", "web_analysis", "ai_analysis", "form_intelligence")
+            )
+            if not settings.outbound_enabled
+            else True,
+        )
         .order_by(OperationJob.created_at, OperationJob.id)
         .with_for_update(skip_locked=True)
         .limit(1)
@@ -604,6 +620,7 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 
 
 def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    require_outbound_enabled()
     batch_id = uuid.UUID(job.payload["batch_id"])
     batch = db.get(FormDeliveryBatch, batch_id)
     if batch is None or batch.status == "cancelled":
@@ -664,7 +681,8 @@ def run_once() -> bool:
         enqueue_due_schedules(db)
         enqueue_due_refresh_schedules(db)
         recover_stale_jobs(db)
-        recover_stale_email_deliveries(db)
+        if settings.outbound_enabled:
+            recover_stale_email_deliveries(db)
         if sync_inbound_mail(db):
             return True
         delivery = claim_email_delivery(db)

@@ -361,3 +361,8 @@ def remove_project_member(
         raise HTTPException(404, "プロジェクトメンバーが見つかりません。")
     db.delete(member)
     db.commit()
+
+
+@router.get("/outreach-execution-status")
+def outreach_execution_status(user: User = Depends(current_user)):
+    return {"outbound_enabled": settings.outbound_enabled}

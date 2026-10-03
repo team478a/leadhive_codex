@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { allPages, api, ApiError, errorMessage } from './api'
 import { Field, ProfileForm, ProjectForm } from './forms'
+import { OutboundStatus } from './OutboundStatus'
 import { CollectionPage } from './CollectionPage'
 import { ApprovalQueuePage } from './ApprovalQueuePage'
 import { CompaniesPage } from './CompaniesPage'
@@ -157,7 +158,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           await api('/auth/logout', 'POST'); onLogout()
         })}>ログアウト</button></div>
     </aside>
-    <main className="workspace"><header><p className="eyebrow">YOUR WORKSPACE</p>
+    <main className="workspace"><OutboundStatus /><header><p className="eyebrow">YOUR WORKSPACE</p>
       <div className="page-heading"><div><h1>{tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
         <p className="muted">{tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
         {!editor && (tab === 'projects' || tab === 'profiles') && <button disabled={!loaded || loading || busy} onClick={() => {

@@ -12,6 +12,7 @@ from app.services.form_delivery_result import (
 )
 from app.services.form_intelligence.analyzer import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
+from app.services.outbound_guard import require_outbound_enabled
 from app.services.scraper import SafeFetcher, ScrapeError
 
 
@@ -265,6 +266,7 @@ def submit_form(
     expected_fingerprint: str = "",
     confirmation_expected: bool = False,
 ) -> tuple[FormPreview, FormSubmissionResult]:
+    require_outbound_enabled()
     fetcher = SafeFetcher()
     try:
         page = fetcher.fetch_html(form_url)

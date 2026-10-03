@@ -5,6 +5,7 @@ from urllib.parse import urljoin, urlsplit
 from bs4 import BeautifulSoup
 
 from app.config import settings
+from app.services.outbound_guard import require_outbound_enabled
 from app.services.scraper import SafeFetcher, ScrapeError, validate_public_url
 
 
@@ -111,10 +112,12 @@ def _read_response(response) -> _ResponsePage:
 def _request_result(
     fetcher: SafeFetcher, method: str, url: str, payload: dict[str, str]
 ) -> _ResponsePage:
+    require_outbound_enabled()
     current_url = url
     current_method = method
     current_payload = payload
     for _ in range(6):
+        require_outbound_enabled()
         normalized = _same_delivery_origin(current_url, url)
         try:
             with fetcher.client.stream(
@@ -226,6 +229,7 @@ def submit_and_verify(
     original_form_url: str,
     confirmation_expected: bool,
 ) -> FormSubmissionResult:
+    require_outbound_enabled()
     result_page = _request_result(fetcher, "POST", action_url, payload)
     if _has_validation_error(result_page):
         raise FormDeliveryError(

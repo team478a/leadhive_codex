@@ -24,6 +24,7 @@ $values['LEADHIVE_PROJECT_NAME'] = "leadhive-$id"
 $values['LEADHIVE_DATA_VOLUME'] = "leadhive-$id-data"
 $values['LEADHIVE_DATABASE_NAME'] = 'leadhive_v2'
 $values['LEADHIVE_WORKER_PAUSED'] = 'true'
+$values['LEADHIVE_OUTBOUND_ENABLED'] = 'false'
 $values['LEADHIVE_MAINTENANCE_REQUIRED'] = 'true'
 $lines = foreach ($name in $values.Keys) { "$name=$($values[$name])" }
 [IO.File]::WriteAllText($script:LeadHiveEnv, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
