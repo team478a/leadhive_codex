@@ -21,7 +21,7 @@ Write-Step "Building LeadHive (the first run can take several minutes)"
 Invoke-LeadHiveCompose build --pull
 
 Write-Step "Starting the database"
-Invoke-LeadHiveCompose up -d --wait db
+Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--wait', 'db')
 
 Write-Step "Updating the database"
 Invoke-LeadHiveCompose run --rm migrate
@@ -30,8 +30,8 @@ Write-Step "Starting LeadHive"
 $values = Read-LeadHiveEnvironment
 if ($values['LEADHIVE_MAINTENANCE_REQUIRED'] -eq 'true') { throw 'Maintenance recovery is required. Installation will not resume services.' }
 if ($values['LEADHIVE_WORKER_PAUSED'] -eq 'true') {
-    Invoke-LeadHiveCompose up -d api web
-} else { Invoke-LeadHiveCompose up -d api worker web }
+    Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'web')
+} else { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'worker', 'web') }
 $url = Wait-LeadHive
 
 $userStatus = (& docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv -f $script:LeadHiveCompose exec -T api python -m app.cli --status).Trim()

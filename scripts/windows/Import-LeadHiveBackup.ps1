@@ -36,7 +36,7 @@ try {
     }
     Invoke-LeadHiveCompose stop api worker web
     Invoke-LeadHiveCompose build
-    Invoke-LeadHiveCompose up -d --wait db
+    Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--wait', 'db')
     Restore-LeadHiveIntoNewDatabase $resolvedBackup
     Complete-LeadHiveMaintenance
 } finally {

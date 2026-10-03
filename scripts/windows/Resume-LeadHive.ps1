@@ -21,12 +21,12 @@ try {
     if ($sendingEnabled -and ($blockers.PSObject.Properties | Measure-Object -Property Value -Sum).Sum -gt 0) { throw 'Delivery state changed during review.' }
     if (-not $sendingEnabled) {
         Set-LeadHiveEnvironmentValue 'LEADHIVE_OUTBOUND_ENABLED' 'false'
-        Invoke-LeadHiveCompose up -d --force-recreate api web
+        Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--force-recreate', 'api', 'web')
         Wait-LeadHive | Out-Null
         Write-Host 'Collection/analysis worker only. All LeadHive outbound execution remains disabled.'
     }
     Set-LeadHiveEnvironmentValue 'LEADHIVE_WORKER_PAUSED' 'false'
-    try { Invoke-LeadHiveCompose up -d --force-recreate worker } catch {
+    try { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--force-recreate', 'worker') } catch {
         Set-LeadHiveEnvironmentValue 'LEADHIVE_WORKER_PAUSED' 'true'
         Invoke-LeadHiveCompose stop worker
         throw

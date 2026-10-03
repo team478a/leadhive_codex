@@ -10,11 +10,11 @@ $values = Read-LeadHiveEnvironment
 if ($values['LEADHIVE_MAINTENANCE_REQUIRED'] -eq 'true') {
     throw 'Maintenance failed or recovery is incomplete. Services will not restart automatically.'
 }
-Invoke-LeadHiveCompose up -d db
+Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'db')
 Invoke-LeadHiveCompose run --rm migrate
 if ($values['LEADHIVE_WORKER_PAUSED'] -eq 'true') {
-    Invoke-LeadHiveCompose up -d api web
+    Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'web')
     Write-Host 'Worker remains paused. Use Resume-LeadHive.cmd after review.'
-} else { Invoke-LeadHiveCompose up -d api worker web }
+} else { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'worker', 'web') }
 $url = Wait-LeadHive
 Start-LeadHiveBrowser $url

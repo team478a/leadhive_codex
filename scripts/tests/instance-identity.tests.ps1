@@ -101,6 +101,20 @@ try {
         $instance = Assert-LeadHiveInstance
         if ($instance.Id -cne ('a' * 32) -or $global:G1MockFakeVolumes.Count -ne 2) { throw 'Binding failed' }
     }
+    Check 'Compose detach flag survives PowerShell common parameter binding' {
+        Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--wait', 'db')
+        $call = $global:G1MockCalls[-1]
+        if ($call -notcontains '-d' -or ($call[-4..-1] -join ' ') -ne 'up -d --wait db') {
+            throw 'Detached Compose arguments were lost.'
+        }
+    }
+    Check 'production detached starts use explicit argument arrays' {
+        foreach ($file in Get-ChildItem (Join-Path $repository 'scripts/windows') -Filter '*.ps1') {
+            if ((Get-Content -LiteralPath $file.FullName -Raw) -match 'Invoke-LeadHiveCompose\s+up\s+-d\b') {
+                throw 'PowerShell would consume Docker -d as Debug.'
+            }
+        }
+    }
     Check 'repeat registration preserves volumes' {
         Register-LeadHiveInstance
         if ($global:G1MockFakeVolumes.Count -ne 2) { throw 'Unexpected new volume' }

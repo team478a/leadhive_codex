@@ -76,13 +76,13 @@ function Suspend-LeadHiveForMaintenance {
     Set-LeadHiveEnvironmentValue 'LEADHIVE_WORKER_PAUSED' 'true'
     Set-LeadHiveEnvironmentValue 'LEADHIVE_MAINTENANCE_REQUIRED' 'true'
     Invoke-LeadHiveCompose stop api worker web
-    Invoke-LeadHiveCompose up -d --wait db
+    Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--wait', 'db')
 }
 
 function Complete-LeadHiveMaintenance {
     # Worker stays paused until a separate reviewed Resume operation.
     try {
-        Invoke-LeadHiveCompose up -d --force-recreate api web
+        Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--force-recreate', 'api', 'web')
         $url = Wait-LeadHive
         Set-LeadHiveEnvironmentValue 'LEADHIVE_MAINTENANCE_REQUIRED' 'false'
     } catch {
