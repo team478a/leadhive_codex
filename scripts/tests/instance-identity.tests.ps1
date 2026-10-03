@@ -227,6 +227,21 @@ try {
             if ($result[0] -ne $false) { throw 'Concurrent maintenance allowed' }
         } finally { $lock.ReleaseMutex(); $lock.Dispose() }
     }
+    Check 'installation path lock serializes imports before environment creation' {
+        $lock = Enter-LeadHiveInstallationLock
+        try {
+            $digest = Get-LeadHiveDigest ([IO.Path]::GetFullPath($script:LeadHiveEnv).ToUpperInvariant())
+            $runspace = [PowerShell]::Create()
+            $runspace.AddScript('$m = New-Object Threading.Mutex($false, "Global\LeadHive-Installation-' + $digest + '"); try { $m.WaitOne(0) } finally { $m.Dispose() }') | Out-Null
+            $result = $runspace.Invoke(); $runspace.Dispose()
+            if ($result[0] -ne $false) { throw 'Concurrent import path writes allowed' }
+        } finally { $lock.ReleaseMutex(); $lock.Dispose() }
+    }
+    Check 'import obtains path and instance locks before writing environment' {
+        $text = Get-Content (Join-Path $repository 'scripts/windows/Import-LeadHiveBackup.ps1') -Raw
+        if ($text.IndexOf('Enter-LeadHiveInstallationLock') -gt $text.IndexOf('[IO.File]::WriteAllText') -or
+            $text.IndexOf('Enter-LeadHiveMaintenanceLock') -gt $text.IndexOf('[IO.File]::WriteAllText')) { throw 'Import lock obtained too late' }
+    }
     Check 'maintenance pauses worker before stopping services' {
         Suspend-LeadHiveForMaintenance
         $values = Read-LeadHiveEnvironment

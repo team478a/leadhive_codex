@@ -1,8 +1,19 @@
-function Enter-LeadHiveMaintenanceLock {
-    $instance = Get-LeadHiveInstance
-    $mutex = New-Object Threading.Mutex($false, "Global\LeadHive-Maintenance-$($instance.Id)")
+function Enter-LeadHiveMaintenanceLock([string]$InstanceId = '') {
+    if (-not $InstanceId) { $InstanceId = (Get-LeadHiveInstance).Id }
+    if ($InstanceId -notmatch '^[a-f0-9]{32}$') { throw 'Invalid maintenance instance ID.' }
+    $mutex = New-Object Threading.Mutex($false, "Global\LeadHive-Maintenance-$InstanceId")
     try { $locked = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked = $true }
     if (-not $locked) { $mutex.Dispose(); throw 'Another backup/update/recovery operation is running.' }
+    return $mutex
+}
+
+function Enter-LeadHiveInstallationLock {
+    # Before an environment exists, different imported IDs must still serialize writes to this path.
+    $path = [IO.Path]::GetFullPath($script:LeadHiveEnv).ToUpperInvariant()
+    $digest = Get-LeadHiveDigest $path
+    $mutex = New-Object Threading.Mutex($false, "Global\LeadHive-Installation-$digest")
+    try { $locked = $mutex.WaitOne(0) } catch [Threading.AbandonedMutexException] { $locked = $true }
+    if (-not $locked) { $mutex.Dispose(); throw 'Another import is writing this installation.' }
     return $mutex
 }
 
