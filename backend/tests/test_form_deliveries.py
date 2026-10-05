@@ -88,7 +88,7 @@ def test_checkbox_and_radio_groups_are_previewed_as_choices():
             name="privacy",
             mapped_key="privacy_consent",
             confidence=0.9,
-            decision_source="RULE",
+            decision_source="MANUAL",
             recommended_value="agree",
             required=True,
         ),

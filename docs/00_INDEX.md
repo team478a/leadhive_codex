@@ -141,6 +141,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [102_FORM_CONTACT_METHOD_REVIEW.md](102_FORM_CONTACT_METHOD_REVIEW.md): 連絡方法の専用マッピング・Human選択と送信者情報の確認
 
+- [103_FORM_CONSENT_CHOICE_GUARDS.md](103_FORM_CONSENT_CHOICE_GUARDS.md): 同意チェック欄の必須性とHuman選択・メルマガ未選択の維持
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

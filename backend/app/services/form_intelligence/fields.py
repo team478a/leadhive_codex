@@ -5,6 +5,7 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
+from app.services.form_intelligence.consent import CONSENT_KEYS, consent_review_reason
 from app.services.form_intelligence.contact_method import contact_method_review_reason
 from app.services.form_intelligence.rules import dom_mapping, normalize, rule_mapping
 
@@ -103,7 +104,7 @@ def parse_form_fields(form: Tag) -> list[dict]:
                 if not c.has_attr("disabled")
             ]
             options = [
-                {"value": str(c.get("value") or "")[:500], "label": _field_label(c, form)}
+                {"value": str(c.get("value", "on"))[:500], "label": _field_label(c, form)}
                 for c in group
             ]
             required = any(_required(c, form) for c in group)
@@ -140,8 +141,18 @@ def parse_form_fields(form: Tag) -> list[dict]:
             source = "RULE"
         if mapped_key == "message" and field_type not in {"text", "textarea"}:
             mapped_key, confidence = "unknown", 0.0
-        if mapped_key == "contact_method" and surrounding:
+        if mapped_key in CONSENT_KEYS | {"contact_method"} and surrounding:
             label = surrounding[:500]
+        acceptance = element.find_parent(class_="wpcf7-acceptance")
+        if mapped_key in CONSENT_KEYS and not required:
+            optional = (acceptance and "optional" in acceptance.get("class", [])) or bool(
+                re.search(r"任意|(?<![a-z])optional(?![a-z])", normalize(label))
+            )
+            if not optional:
+                label = label[:480] + "（必須性未確認）"
+        if acceptance and "invert" in acceptance.get("class", []):
+            mapped_key, confidence = "privacy_consent", 0.0
+            options = [{"value": "", "label": "逆条件の同意チェック（未対応）"}]
         fields.append(
             {
                 "position": len(fields),
@@ -180,6 +191,12 @@ def mapping_review_reason(fields: list[dict]) -> str:
     ):
         return "必須項目の自動マッピングを確定できません。"
     for field in relevant:
+        if "必須性未確認" in str(field.get("label") or ""):
+            return "同意チェック欄の必須性が未確認です。確認が必要です。"
+        if field["mapped_key"] in CONSENT_KEYS:
+            reason = consent_review_reason(field)
+            if reason:
+                return reason
         if field["mapped_key"] == "contact_method":
             reason = contact_method_review_reason(field)
             if reason:

@@ -12,6 +12,7 @@ from app.services.form_delivery_result import (
 )
 from app.services.form_intelligence.analyzer import parse_form_fields
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
+from app.services.form_intelligence.consent import CONSENT_KEYS
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.rules import PROHIBITED_PATTERNS, normalize
 from app.services.outbound_guard import require_outbound_enabled
@@ -138,6 +139,7 @@ def _parse_form(
     analysis_fields = parse_form_fields(form)
     fingerprint = form_fingerprint(analysis_fields)
     metadata = _profile_metadata(profile_fields)
+    consent_names = {f["name"] for f in analysis_fields if f["mapped_key"] in CONSENT_KEYS}
     fields: list[FormField] = []
     grouped: set[tuple[str, str]] = set()
     for element in form.select("input[name], textarea[name], select[name]"):
@@ -169,6 +171,12 @@ def _parse_form(
             value = _option_value(selected) if selected else ""
             if profile_field and getattr(profile_field, "recommended_value", ""):
                 value = str(profile_field.recommended_value)
+            if name in consent_names or getattr(profile_field, "mapped_key", "") in CONSENT_KEYS:
+                value = (
+                    str(getattr(profile_field, "recommended_value", ""))
+                    if getattr(profile_field, "decision_source", "") == "MANUAL"
+                    else ""
+                )
             fields.append(
                 FormField(
                     name=name,

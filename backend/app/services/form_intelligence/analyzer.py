@@ -26,7 +26,7 @@ from app.services.form_intelligence.rules import (
 from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "1.5"
+ANALYSIS_VERSION = "1.6"
 MAX_CONTACT_PAGES = 8
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 
@@ -443,12 +443,6 @@ def analyze_company_forms(
                             item["recommended_value"] = value
                             if value:
                                 item["confidence"] = max(item["confidence"], confidence)
-                        if (
-                            item["mapped_key"] == "privacy_consent"
-                            and item["options"]
-                            and not item["recommended_value"]
-                        ):
-                            item["recommended_value"] = str(item["options"][0].get("value") or "")
                         _log(
                             db,
                             company.id,

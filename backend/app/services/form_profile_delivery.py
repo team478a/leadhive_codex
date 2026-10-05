@@ -103,6 +103,7 @@ def _ready_profile(db: Session, company: Company) -> tuple[FormProfile, list[For
                 key: getattr(field, key)
                 for key in (
                     "field_type",
+                    "label",
                     "mapped_key",
                     "confidence",
                     "required",

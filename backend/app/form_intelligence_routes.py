@@ -191,6 +191,7 @@ def correct_form_field(
                 key: getattr(item, key)
                 for key in (
                     "field_type",
+                    "label",
                     "mapped_key",
                     "confidence",
                     "required",

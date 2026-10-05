@@ -79,13 +79,12 @@ CASES = [
     ),
     Case(
         "privacy",
-        "単一同意checkbox",
+        "単一同意checkbox（Human確認待ち）",
         form(
             '<label>個人情報に同意<input type="checkbox" name="privacy" value="yes" required>'
             "</label>"
         ),
-        "READY",
-        True,
+        "REVIEW_REQUIRED",
     ),
     Case(
         "disabled",

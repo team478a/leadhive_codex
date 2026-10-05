@@ -7,6 +7,7 @@ from app.models import FormSenderSettings
 from app.schema_approval import Proposal
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_delivery import FormDeliveryError
+from app.services.form_intelligence.consent import CONSENT_KEYS
 from app.services.form_profile_delivery import (
     _ready_profile,
     sender_values,
@@ -54,6 +55,14 @@ def preparation(db, company, draft):
     if len(names) != len(set(names)):
         raise HTTPException(409, "同名の入力項目があります。人間による確認が必要です。")
     field_values = {f.name: values.get(f.mapped_key, "") or f.recommended_value for f in visible}
+    field_values = {
+        name: value
+        for name, value in field_values.items()
+        if value
+        or not any(
+            f.name == name and f.mapped_key in CONSENT_KEYS and not f.required for f in visible
+        )
+    }
     if any(f.required and not field_values[f.name].strip() for f in visible):
         raise HTTPException(
             409, "必須項目が不足しています。送信者設定・Draft・フォーム解析を確認してください。"
@@ -102,7 +111,7 @@ def preparation(db, company, draft):
                 "name": f.name,
                 "label": f.label or f.name,
                 "required": f.required,
-                "value": field_values[f.name],
+                "value": field_values.get(f.name, ""),
             }
             for f in visible
         ],

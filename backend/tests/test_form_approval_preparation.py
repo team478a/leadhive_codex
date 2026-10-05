@@ -214,6 +214,47 @@ def test_sender_contact_guard_stops_before_fetch(form_source, db, monkeypatch):
         inspect_delivery_profile(db, form_source[1], form_source[2])
 
 
+@pytest.mark.parametrize(
+    "key,required,source,value,status",
+    [
+        ("privacy_consent", True, "RULE", "yes", 409),
+        ("privacy_consent", True, "MANUAL", "", 409),
+        ("privacy_consent", True, "MANUAL", "wrong", 409),
+        ("privacy_consent", True, "MANUAL", "yes", 200),
+        ("newsletter_consent", False, "RULE", "yes", 409),
+        ("newsletter_consent", False, "MANUAL", "", 200),
+    ],
+)
+def test_consent_preparation_requires_human_choice(
+    auth, form_source, db, key, required, source, value, status
+):
+    label = "プライバシーに同意" if key == "privacy_consent" else "メルマガ登録"
+    db.add(
+        FormProfileField(
+            form_profile_id=form_source[3].id,
+            position=9,
+            name="consent_choice",
+            label=label,
+            field_type="checkbox",
+            required=required,
+            mapped_key=key,
+            confidence=1.0,
+            decision_source=source,
+            recommended_value=value,
+            options=[{"value": "yes", "label": label}],
+        )
+    )
+    db.commit()
+    result = auth.get(f"/api/outreach-drafts/{form_source[2].id}/form-approval-preview")
+    assert result.status_code == status
+    if status == 200:
+        values = result.json()["proposal"]["field_values"]
+        if value:
+            assert values["consent_choice"] == value
+        else:
+            assert "consent_choice" not in values
+
+
 def test_preparation_approval_never_delivers(auth, form_source, db, monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("Preparation must not fetch or submit")
