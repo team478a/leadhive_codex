@@ -149,6 +149,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [106_FORM_EXECUTION_ADAPTER_DESIGN.md](106_FORM_EXECUTION_ADAPTER_DESIGN.md): CF7・JavaScript確認画面のアダプター設計と匿名fixture受入条件
 
+- [107_FORM_EXECUTION_PLAN_VALIDATION.md](107_FORM_EXECUTION_PLAN_VALIDATION.md): 匿名操作計画のhash/version照合・未知手順の拒否・送信未接続
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
