@@ -27,7 +27,7 @@ from app.services.form_intelligence.rules import (
 from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "1.1"
+ANALYSIS_VERSION = "1.2"
 MAX_CONTACT_PAGES = 8
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 
@@ -253,6 +253,8 @@ def _profile_status(
         for item in fields
         if item["field_type"] not in {"hidden", "submit", "button", "reset", "image"}
     ]
+    if not any(item["mapped_key"] == "message" for item in relevant):
+        return "REVIEW_REQUIRED"
     if confirmation is None or any(
         item["required"] and (item["mapped_key"] == "unknown" or item["confidence"] < 0.8)
         for item in relevant
@@ -274,9 +276,15 @@ def _review_reason(
     if sales_status == "UNCERTAIN":
         return "営業目的で利用できるか確認が必要です。"
     if captcha != "CAPTCHA_NONE":
-        return "CAPTCHAがあるためCodex支援が必要です。"
+        return "CAPTCHAは人による操作・確認が必要です。自動送信できません。"
     if compatibility_reason:
         return compatibility_reason
+    if not any(
+        item["mapped_key"] == "message"
+        for item in fields
+        if item["field_type"] not in {"hidden", "submit", "button", "reset", "image"}
+    ):
+        return "営業文面の本文を入力する項目が確認できません。"
     if confirmation is None:
         return "送信ボタンを判定できないため確認が必要です。"
     if any(

@@ -24,12 +24,23 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
     if page.scheme == "https" and action.scheme != "https":
         return DeliveryCompatibility(False, "安全でない通信へ送信するフォームです。")
 
+    names: dict[str, str] = {}
+    visible_count = 0
     for field in form.select("input, textarea, select"):
         if field.has_attr("disabled"):
             continue
         field_type = str(field.get("type") or "text").lower()
         if field_type in {"submit", "button", "reset", "image"}:
             continue
+        if field.name == "select" and field.has_attr("multiple"):
+            return DeliveryCompatibility(False, "複数選択項目は人による確認が必要です。")
+        name = str(field.get("name") or "").strip()
+        if name and name in names and not (field_type == names[name] == "radio"):
+            return DeliveryCompatibility(False, "同名の複数入力項目は人による確認が必要です。")
+        if name:
+            names[name] = field_type
+        if field_type != "hidden":
+            visible_count += 1
         if field_type in {"file", "password"}:
             return DeliveryCompatibility(
                 False,
@@ -40,4 +51,6 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
                 False,
                 "送信項目にname属性がないためブラウザ操作が必要です。",
             )
+    if not visible_count:
+        return DeliveryCompatibility(False, "入力項目がないため人による確認が必要です。")
     return DeliveryCompatibility(True)

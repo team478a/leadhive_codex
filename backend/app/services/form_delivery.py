@@ -11,6 +11,7 @@ from app.services.form_delivery_result import (
     submit_and_verify,
 )
 from app.services.form_intelligence.analyzer import parse_form_fields
+from app.services.form_intelligence.compatibility import assess_delivery_compatibility
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.rules import PROHIBITED_PATTERNS, normalize
 from app.services.outbound_guard import require_outbound_enabled
@@ -131,6 +132,9 @@ def _parse_form(
         raise FormDeliveryError(
             "外部サイトへ送信するフォームは自動送信できません。", "manual_required"
         )
+    compatibility = assess_delivery_compatibility(form, form_url)
+    if not compatibility.supported:
+        raise FormDeliveryError(compatibility.reason, "manual_required")
     analysis_fields = parse_form_fields(form)
     fingerprint = form_fingerprint(analysis_fields)
     metadata = _profile_metadata(profile_fields)
