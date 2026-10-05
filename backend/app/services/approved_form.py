@@ -197,24 +197,9 @@ def capacity(db):
 
 def claim(db):
     lock(db)
-    # A lost preflight worker has not consumed approval or entered POST. Still no auto retry.
-    stale = db.scalars(
-        select(ApprovedFormDispatch)
-        .where(
-            ApprovedFormDispatch.status == "checking",
-            ApprovedFormDispatch.lease_expires_at <= approval.now(),
-        )
-        .with_for_update()
-    ).all()
-    for row in stale:
-        row.status, row.reason, row.worker_id = (
-            "blocked",
-            "事前確認が中断されました。再承認してください。",
-            None,
-        )
-        row.finished_at = approval.now()
-        item = db.get(ApprovalRequest, row.approval_id)
-        approval.audit(db, item, "form preflight interrupted", "SYSTEM", None, item.status)
+    from app.services.form_operations import reconcile_locked
+
+    reconcile_locked(db)
     db.commit()
     if not settings.outbound_enabled or not settings.human_approved_form_enabled:
         return None
