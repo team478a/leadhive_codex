@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test'
 
 test('bulk Human approval reserves and pauses email without sending', async ({ page }, testInfo) => {
   const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
-  const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approved-email-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string }
+  const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approved-email-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string; recipient: string }
   await page.goto('/')
   await page.getByLabel('メールアドレス').fill(process.env.E2E_EMAIL!)
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
@@ -13,14 +13,14 @@ test('bulk Human approval reserves and pauses email without sending', async ({ p
   expect(smtpResponse.ok()).toBeTruthy()
   const smtp = await smtpResponse.json() as { from_name: string; from_email: string } | null
   const proposal = await page.request.post(`/api/projects/${fixture.project_id}/approval-requests`, { data: {
-    company_id: fixture.company_id, channel: 'email', delivery_method: 'email', recipient: 'recipient@example.com',
+    company_id: fixture.company_id, channel: 'email', delivery_method: 'email', recipient: fixture.recipient,
     subject: 'Company specific message', body: 'A unique approved message, never sent by this test.', sender: { name: smtp?.from_name ?? 'A2 Human', email: smtp?.from_email ?? 'sender@example.com' },
   } })
   expect(proposal.status()).toBe(201)
   await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: '承認済みメール予約' })
-  await panel.locator('summary').filter({ hasText: 'recipient@example.com' }).click()
+  await panel.locator('summary').filter({ hasText: fixture.recipient }).click()
   await panel.getByRole('checkbox', { name: 'A2 E2E Companyの宛先・文面を確認して選択' }).check()
   await panel.getByLabel('一括承認用ログインパスワード').fill(process.env.E2E_PASSWORD!)
   await panel.getByRole('button', { name: '選択した1件を一括Human承認', exact: true }).click()

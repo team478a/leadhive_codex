@@ -3,6 +3,7 @@
 import json
 import os
 import sys
+from datetime import datetime, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.engine import make_url
@@ -17,9 +18,12 @@ from app.models import (  # noqa: E402
     ApprovalRequest,
     AuthSession,
     Company,
+    EmailDelivery,
+    EmailFeedbackEvent,
     FormSenderSettings,
     InboundEmail,
     InboundMailSettings,
+    OutreachDraft,
     Project,
     SmtpSettings,
     TargetProfile,
@@ -39,7 +43,7 @@ with SessionLocal() as db:
                 is_admin=not email.startswith("e2e-member-"),
             )
         )
-    elif sys.argv[1] in {"approval-fixture", "approved-email-fixture"}:
+    elif sys.argv[1] in {"approval-fixture", "approved-email-fixture", "email-feedback-fixture"}:
         user = db.scalar(select(User).where(User.email == email))
         profile = db.scalar(select(TargetProfile).where(TargetProfile.is_system).limit(1))
         project = Project(
@@ -57,11 +61,43 @@ with SessionLocal() as db:
             company_name="A2 E2E Company",
             website_url="https://approval.example",
             domain="approval.example",
-            email="recipient@example.com" if sys.argv[1] == "approved-email-fixture" else "",
+            email=f"recipient-{project.id.hex}@example.com"
+            if sys.argv[1] != "approval-fixture"
+            else "",
         )
         db.add(company)
         db.flush()
-        print(json.dumps({"project_id": str(project.id), "company_id": str(company.id)}))
+        if sys.argv[1] == "email-feedback-fixture":
+            draft = OutreachDraft(
+                company_id=company.id,
+                channel="email",
+                subject="Simulated only",
+                body="No SMTP call",
+            )
+            db.add(draft)
+            db.flush()
+            db.add(
+                EmailDelivery(
+                    company_id=company.id,
+                    draft_id=draft.id,
+                    recipient_email=company.email,
+                    subject=draft.subject,
+                    body=draft.body,
+                    status="unknown",
+                    scheduled_for=datetime.now(timezone.utc),
+                    started_at=datetime.now(timezone.utc),
+                    confirmed_at=datetime.now(timezone.utc),
+                )
+            )
+        print(
+            json.dumps(
+                {
+                    "project_id": str(project.id),
+                    "company_id": str(company.id),
+                    "recipient": company.email,
+                }
+            )
+        )
     elif sys.argv[1] == "cleanup":
         db.execute(delete(FormSenderSettings))
         db.execute(delete(SmtpSettings))
@@ -73,6 +109,12 @@ with SessionLocal() as db:
             # Retain only in the dedicated disposable _test DB; never bypass triggers.
             audited = db.scalar(
                 select(ApprovalRequest.id).join(Project).where(Project.user_id == user.id).limit(1)
+            )
+            audited = audited or db.scalar(
+                select(EmailFeedbackEvent.id)
+                .join(Project)
+                .where(Project.user_id == user.id)
+                .limit(1)
             )
             if audited:
                 db.execute(delete(AuthSession).where(AuthSession.user_id == user.id))

@@ -203,7 +203,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
             setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
           <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'deliveries' ?
-          <EmailDeliveriesPage projects={projects} /> : loaded && tab === 'approvals' ?
+          <EmailDeliveriesPage projects={projects} projectRoles={projectRoles} /> : loaded && tab === 'approvals' ?
           <ApprovalQueuePage projects={projects} projectRoles={projectRoles} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>
           <p className="muted mb-5">標準プロファイルは複製して編集できます。案件専用の条件も、複製して設定してください。</p>

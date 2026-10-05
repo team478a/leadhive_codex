@@ -81,3 +81,12 @@ JSON: `event_key`（adapterで安定した通知ID、英数字/_.:-、100文字�
 ## 未実施
 
 実配信・サービス固有adapter・外部webhook到達・10,000件負荷測定・送信者全体/Organization全体の停止・開封追跡は未実施。今回の安全停止はProject単位である。実送信、Agent、通知受信のflagはローカル環境でOFFを維持する。
+
+## 2026-10-05 検証結果
+
+- Backend全体308件の実行で306件成功。新規の閾値テスト2件は、同じDraftに複数EmailDeliveryを作る誤ったfixtureで失敗した。fixtureを分け、追加12件の全再実行が成功。既存296件は全体実行で成功している。最終308件の単一全件再実行とは区別する。
+- 署名・期限・Message-ID・宛先・入力サイズ・未知フィールド・再受信・Human Cookie混在・Agent拒否・viewer/editor権限・再認証失敗制限・append-only・UNKNOWN保持・停止・閾値を検証。実SMTPは呼ばず模擬送信のみ。
+- E2E全14ケースの初回は12件成功。連絡禁止の宛先をテスト間で共有するfixtureと、実行中のファイル更新によるログイン確認失敗を修正し、関連6件を再実行。5件成功、スマートフォンの配信登録は表示幅の問題で失敗した。
+- 長いメールアドレスで送信履歴のflex行が端末幅を超える問題を修正。入力の展開はReactのボタンで制御し、タッチ操作と実際の端末幅を確認する。修正後のPC/モバイル配信結果テスト2件はすべて成功。その他の12ケースは上記実行で成功。最終14件の単一全件再実行とは区別する。
+- Backend Ruff/compile、Frontend typecheck/lint/build成功。空の専用DBでupgrade → downgrade → upgrade、Alembic model差分確認成功。Compose構文を設定の検証用placeholderで確認（起動・送信なし）。
+- ローカルDBをバックアップしてから追加Migration適用。企業100件、AI解析済み9件を保持。メール/フォーム送信と配信結果は0件。API/worker/Webの起動と送信・通知受信flagのOFFを確認。
