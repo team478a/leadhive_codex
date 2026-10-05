@@ -157,6 +157,10 @@ def _shared_location_destination(
     value = _normalized(destination).rstrip("/") if channel == "form" else _normalized(destination)
     if not value or channel not in {"email", "form"}:
         return False
+    # The analyzer stores this sentinel when no website/contact URL exists.
+    # It is not a shared destination; normal form eligibility still rejects it.
+    if channel == "form" and value == "about:blank":
+        return False
     if channel == "email":
         matches = or_(
             func.lower(func.trim(Company.email)) == value,

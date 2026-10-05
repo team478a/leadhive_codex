@@ -2,6 +2,55 @@ from app.models import Company, FormProfile, SuppressionEntry
 from app.services.contact_permission import evaluate_contact_permission
 
 
+def test_missing_website_sentinel_is_not_a_shared_location_destination(auth, db):
+    _, company = make_company(auth, db)
+    company.record_type = "location"
+    company.location_key = "a" * 64
+    company.website_url = None
+    company.contact_url = ""
+    other = Company(
+        project_id=company.project_id,
+        company_name="Another missing website",
+        record_type="location",
+        location_key="b" * 64,
+        source="csv",
+        domain="",
+    )
+    db.add(other)
+    db.flush()
+    profiles = [
+        FormProfile(
+            company_id=item.id,
+            form_url="about:blank",
+            is_primary=True,
+            form_status="ERROR",
+            sales_contact_status="UNCERTAIN",
+            error_message="WebサイトURLが登録されていません。",
+        )
+        for item in (company, other)
+    ]
+    db.add_all(profiles)
+    db.commit()
+    decision = evaluate_contact_permission(
+        db, company.project_id, company.id, "form", "about:blank"
+    )
+    assert decision.reason_code == "form_sales_uncertain"
+    assert not decision.allowed
+
+    # A real shared destination remains prohibited, even for READY profiles.
+    for profile in profiles:
+        profile.form_url = "https://permission.example/shared"
+        profile.form_status = "READY"
+        profile.sales_contact_status = "ALLOWED"
+        profile.delivery_supported = True
+        profile.form_found = True
+    db.commit()
+    decision = evaluate_contact_permission(
+        db, company.project_id, company.id, "form", profiles[0].form_url
+    )
+    assert (decision.status, decision.reason_code) == ("PROHIBITED", "shared_location_destination")
+
+
 def make_company(auth, db):
     profile_id = auth.get("/api/target-profiles").json()[0]["id"]
     project = auth.post(
