@@ -28,6 +28,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 ## 実装・運用記録
 
+- `87_FORM_APPROVAL_PREPARATION.md`：フォームDraftから承認候補を準備する操作と、送信者変更時の失効。送信実行への接続は未完了。
+
 - `11_PHASE1_IMPLEMENTATION.md` 〜 `15_PHASE5_IMPLEMENTATION.md`
 - `16_PHASE6_VALIDATION_RUNBOOK.md`
 - `17_OPERATIONS_1_IMPLEMENTATION.md`

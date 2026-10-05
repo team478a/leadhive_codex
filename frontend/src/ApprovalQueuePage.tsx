@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from 'react'
 import { api, errorMessage } from './api'
 import { Field } from './forms'
 import { ApprovedEmailPanel, type ApprovalProposal as Proposal } from './ApprovedEmailPanel'
+import { FormApprovalPreparationPanel } from './FormApprovalPreparationPanel'
 import type { Company, Project, ProjectMember } from './types'
 
 interface AuditEvent { id: string; event: string; principal_type: string; timestamp: string; reason: string | null }
@@ -102,6 +103,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <ApprovedEmailPanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
+    {canWrite && <FormApprovalPreparationPanel key={`form-${projectId}`} projectId={projectId} refresh={refresh} />}
     <fieldset disabled={busy || !projectId}>
       <div className="flex flex-wrap gap-3"><button type="button" className="secondary" onClick={() => act(refresh)}>最新の状態を取得</button>
         {canWrite && <button type="button" onClick={openCreate}>承認待ち提案を作成</button>}</div>

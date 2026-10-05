@@ -1,5 +1,7 @@
 # フォームDM 月間10,000件に向けた監査と結果不明の隔離
 
+追補：次工程でフォームDraftからApprovalRequestを準備するUI/APIを追加した。内容は `87_FORM_APPROVAL_PREPARATION.md`。以下の送信経路・送信量制御の未完了項目は引き続き残る。
+
 ## 今回のゴール
 
 基準 `codex/integration@7e15367`。SMTP中心からフォーム中心へ優先順位を修正する。既存の通常POST・確認画面・Form Intelligence・Codex支援を再利用し、送信結果を確認できない対象を再送しない基盤を補強する。実企業へのアクセス・送信、CAPTCHA操作、送信flagの有効化は実施しない。月間10,000件の達成を確認した工程ではない。
