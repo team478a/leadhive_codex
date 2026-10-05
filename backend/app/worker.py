@@ -127,29 +127,43 @@ def recover_stale_jobs(db) -> tuple[int, int]:
 
 
 def recover_stale_email_deliveries(db) -> int:
+    from app.model_approved_email import ApprovedEmailReservation
+    from app.services.approved_email_worker import recover_stale
+
+    approved_count = recover_stale(db)
+
     deliveries = db.scalars(
         select(EmailDelivery)
         .where(
             EmailDelivery.status == "running",
+            ~EmailDelivery.id.in_(select(ApprovedEmailReservation.delivery_id)),
             EmailDelivery.lease_expires_at < datetime.now(timezone.utc),
         )
         .with_for_update(skip_locked=True)
         .limit(100)
     ).all()
     for delivery in deliveries:
-        delivery.status = "failed"
+        delivery.status = "unknown"
         delivery.worker_id = None
         delivery.lease_expires_at = None
-        delivery.error_message = "送信中断を検出しました。内容を確認してから再送してください。"
+        delivery.error_message = (
+            "送信中断を検出しました。結果不明のため再送せずSMTP履歴を確認してください。"
+        )
         delivery.finished_at = datetime.now(timezone.utc)
         notify_email_delivery_failure(db, delivery)
     if deliveries:
         db.commit()
         logger.warning("stale email deliveries marked failed: count=%s", len(deliveries))
-    return len(deliveries)
+    return len(deliveries) + approved_count
 
 
 def claim_email_delivery(db) -> EmailDelivery | None:
+    from app.model_approved_email import ApprovedEmailReservation
+
+    if settings.human_approved_email_enabled:
+        from app.services.approved_email_worker import claim
+
+        return claim(db)
     if not settings.outbound_enabled:
         return None
     now = datetime.now(timezone.utc)
@@ -187,6 +201,7 @@ def claim_email_delivery(db) -> EmailDelivery | None:
         .outerjoin(EmailCampaign, EmailCampaign.id == EmailDelivery.campaign_id)
         .where(
             EmailDelivery.status == "queued",
+            ~EmailDelivery.id.in_(select(ApprovedEmailReservation.delivery_id)),
             EmailDelivery.scheduled_for <= now,
             or_(EmailDelivery.campaign_id.is_(None), EmailCampaign.status == "queued"),
         )
@@ -237,7 +252,16 @@ def delivery_body_with_unsubscribe(delivery: EmailDelivery) -> str:
 
 def run_email_delivery(db, delivery: EmailDelivery) -> None:
     require_outbound_enabled()
+    from app.services.approved_email import reservation
+
+    if reservation(db, delivery.id):
+        from app.services.approved_email_worker import run
+
+        run(db, delivery)
+        return
+    require_outbound_enabled()
     worker_id = delivery.worker_id
+    smtp_started = False
     logger.info("email delivery start: id=%s", delivery.id)
     try:
         company = db.get(Company, delivery.company_id)
@@ -252,6 +276,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
         )
         if not permission.allowed:
             raise EmailDeliveryError(permission.message)
+        smtp_started = True
         send_email(
             db,
             str(delivery.id),
@@ -315,7 +340,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
         db.rollback()
         delivery = db.get(EmailDelivery, delivery.id)
         if delivery.status == "running" and delivery.worker_id == worker_id:
-            delivery.status = "failed"
+            delivery.status = "unknown" if exc.unknown else "failed"
             delivery.error_message = exc.public_message[:500]
             delivery.worker_id = None
             delivery.lease_expires_at = None
@@ -328,7 +353,7 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
         db.rollback()
         delivery = db.get(EmailDelivery, delivery.id)
         if delivery.status == "running" and delivery.worker_id == worker_id:
-            delivery.status = "failed"
+            delivery.status = "unknown" if smtp_started else "failed"
             delivery.error_message = "メール送信処理に失敗しました。"
             delivery.worker_id = None
             delivery.lease_expires_at = None

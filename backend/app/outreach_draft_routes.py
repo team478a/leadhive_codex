@@ -167,7 +167,10 @@ def list_email_deliveries(
         .order_by(EmailDelivery.created_at.desc(), EmailDelivery.id.desc())
         .limit(limit)
     ).all()
-    counts = {status: 0 for status in ("queued", "running", "sent", "failed", "cancelled")}
+    counts = {
+        status: 0
+        for status in ("queued", "running", "sent", "failed", "cancelled", "unknown", "blocked")
+    }
     count_rows = db.execute(
         select(EmailDelivery.status, func.count())
         .join(Company, Company.id == EmailDelivery.company_id)
@@ -187,6 +190,8 @@ def list_email_deliveries(
         sent_count=counts["sent"],
         failed_count=counts["failed"],
         cancelled_count=counts["cancelled"],
+        unknown_count=counts["unknown"],
+        blocked_count=counts["blocked"],
     )
 
 
@@ -581,6 +586,12 @@ def create_email_delivery(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    from app.config import settings
+
+    if settings.human_approved_email_enabled:
+        raise HTTPException(
+            409, "Human承認キューから予約してください。confirmedによる送信は無効です。"
+        )
     require_outbound_enabled()
     if not body.confirmed:
         raise HTTPException(422, "送信内容を確認して承認してください。")
@@ -639,6 +650,15 @@ def retry_email_delivery(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    require_outbound_enabled()
+    from app.services.approved_email import reservation
+
+    delivery = owned_email_delivery(delivery_id, db, user)
+    if reservation(db, delivery.id):
+        raise HTTPException(
+            409,
+            "この承認は再使用できません。結果不明は再送せず、既知の失敗は新しい提案を再承認してください。",
+        )
     require_outbound_enabled()
     if not body.confirmed:
         raise HTTPException(422, "再送内容を確認して承認してください。")

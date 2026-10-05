@@ -46,7 +46,7 @@ def resume_blockers(connection) -> dict:
     # Conservative: failed deliveries can include an unknown remote outcome.
     queries = {
         "email": "SELECT count(*) FROM email_deliveries "
-        "WHERE status IN ('queued','running','failed')",
+        "WHERE status IN ('queued','running','failed','unknown','blocked')",
         "form": "SELECT count(*) FROM form_deliveries WHERE status IN ('pending','failed')",
         "campaign": "SELECT count(*) FROM email_campaigns WHERE status = 'queued'",
         "batch": "SELECT count(*) FROM form_delivery_batches WHERE status IN ('ready','running')",

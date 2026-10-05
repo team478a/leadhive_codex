@@ -44,7 +44,9 @@ def request_item(db, request_id):
 
 
 def human_item(db, request_id, user, write=True, owner=False):
-    item = request_item(db, request_id)
+    item = db.get(ApprovalRequest, request_id)
+    if not item:
+        raise HTTPException(404, "提案が見つかりません。")
     # Lock authorization rows for the decision transaction (not just the UI role).
     db.scalar(select(Project).where(Project.id == item.project_id).with_for_update())
     db.scalar(
@@ -53,7 +55,7 @@ def human_item(db, request_id, user, write=True, owner=False):
         .with_for_update()
     )
     project_access(item.project_id, db, user, write=write, owner=owner)
-    return item
+    return request_item(db, request_id)
 
 
 def serialize(db, item):
@@ -64,29 +66,20 @@ def serialize(db, item):
 
 
 def list_items(db, project_id, status, limit, offset):
-    # Expiration is server-enforced on every read/decision, without requiring a worker.
-    live = db.scalars(
-        select(ApprovalRequest)
-        .where(
-            ApprovalRequest.project_id == project_id,
-            ApprovalRequest.status.in_(["PENDING", "APPROVED"]),
-        )
-        .with_for_update()
-    ).all()
-    for item in live:
-        service.invalidate_if_needed(db, item)
-    db.commit()
+    # Validate the displayed page; dispatch and every decision also validate independently.
     query = select(ApprovalRequest).where(ApprovalRequest.project_id == project_id)
     if status:
         query = query.where(ApprovalRequest.status == status)
-    return [
-        serialize(db, item)
-        for item in db.scalars(
-            query.order_by(ApprovalRequest.created_at.desc(), ApprovalRequest.id)
-            .limit(limit)
-            .offset(offset)
-        )
-    ]
+    items = db.scalars(
+        query.order_by(ApprovalRequest.created_at.desc(), ApprovalRequest.id)
+        .limit(limit)
+        .offset(offset)
+        .with_for_update()
+    ).all()
+    for item in items:
+        service.invalidate_if_needed(db, item)
+    db.commit()
+    return [serialize(db, item) for item in items]
 
 
 @router.post("/projects/{project_id}/agents", status_code=201)
@@ -177,7 +170,7 @@ def create_human(
 def list_human(
     project_id: UUID,
     status: str | None = Query(
-        default=None, pattern="^(PENDING|APPROVED|REJECTED|EXPIRED|REVOKED)$"
+        default=None, pattern="^(PENDING|APPROVED|REJECTED|EXPIRED|REVOKED|CONSUMED)$"
     ),
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),

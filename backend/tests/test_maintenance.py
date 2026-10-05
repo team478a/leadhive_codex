@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from cryptography.fernet import Fernet
 from sqlalchemy import text
 
@@ -35,7 +38,12 @@ def test_recovery_report_deterministic_and_read_only(db):
     first = database_report(db.connection())
     second = database_report(db.connection())
     assert first == second
-    assert first["schema_revision"] == "e3b7d92f410a"
+    assert (
+        first["schema_revision"]
+        == ScriptDirectory.from_config(
+            Config(str(Path(__file__).parents[1] / "alembic.ini"))
+        ).get_current_head()
+    )
     assert "outreach_audit_events" in first["fingerprints"]
     assert "approval_requests" in first["counts"]
     assert all(len(value) == 64 for value in first["fingerprints"].values())

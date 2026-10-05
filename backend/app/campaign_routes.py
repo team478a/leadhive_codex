@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import HTMLResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -91,6 +92,12 @@ def create_campaign(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    from app.config import settings
+
+    if settings.human_approved_email_enabled:
+        raise HTTPException(
+            409, "Human承認キューから予約してください。confirmedによる一括送信は無効です。"
+        )
     require_outbound_enabled()
     if not body.confirmed:
         raise HTTPException(422, "対象企業と文面を確認して一括メール送信を承認してください。")
@@ -189,6 +196,21 @@ def change_campaign(
     db.commit()
     db.refresh(campaign)
     return campaign_out(db, campaign)
+
+
+@router.get("/public/unsubscribe/{token}", response_class=HTMLResponse)
+def unsubscribe_confirmation(token: str, db: Session = Depends(get_db)):
+    # GET is deliberately non-mutating: link scanners must not trigger opt-outs.
+    delivery = db.scalar(select(EmailDelivery).where(EmailDelivery.unsubscribe_token == token))
+    if delivery is None:
+        raise HTTPException(404, "配信情報が見つかりません。")
+    return HTMLResponse(
+        '<!doctype html><html lang="ja"><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        "<title>LeadHive 配信停止</title><h1>メールの配信停止</h1>"
+        "<p>このメールの宛先への今後のご案内を停止します。</p>"
+        '<form method="post"><button type="submit">配信を停止する</button></form></html>'
+    )
 
 
 @router.post("/public/unsubscribe/{token}")

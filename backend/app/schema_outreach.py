@@ -92,7 +92,7 @@ class EmailDeliveryOut(BaseModel):
     recipient_name: str
     subject: str
     body: str
-    status: Literal["queued", "running", "sent", "failed", "cancelled"]
+    status: Literal["queued", "running", "sent", "failed", "cancelled", "unknown", "blocked"]
     scheduled_for: datetime
     confirmed_at: datetime
     sent_at: datetime | None
@@ -115,6 +115,8 @@ class EmailDeliveryListOut(BaseModel):
     sent_count: int
     failed_count: int
     cancelled_count: int
+    unknown_count: int = 0
+    blocked_count: int = 0
 
 
 class FormFieldOut(BaseModel):

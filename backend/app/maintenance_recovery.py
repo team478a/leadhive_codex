@@ -2,10 +2,12 @@
 
 from sqlalchemy import func, select, update
 
+from app.model_approved_email import ApprovedEmailReservation, BulkApprovalProof, EmailSendAttempt
 from app.models import (
     AgentCredential,
     ApprovalRequest,
     AuthSession,
+    EmailDelivery,
     HumanApprovalProof,
     OutreachAuditEvent,
 )
@@ -13,7 +15,7 @@ from app.models import (
 
 def invalidate_restored_authorizations(connection) -> dict:
     counts = {}
-    for model in (AuthSession, HumanApprovalProof):
+    for model in (AuthSession, HumanApprovalProof, BulkApprovalProof):
         result = connection.execute(
             update(model.__table__)
             .where(model.expires_at > func.now())
@@ -64,6 +66,57 @@ def invalidate_restored_authorizations(connection) -> dict:
             )
         )
     counts["approval_requests"] = len(requests)
+    attempts = (
+        connection.execute(
+            select(
+                EmailSendAttempt.id.label("attempt_id"),
+                ApprovedEmailReservation.delivery_id,
+                ApprovalRequest.id.label("approval_id"),
+                *columns[1:],
+            )
+            .select_from(EmailSendAttempt)
+            .join(
+                ApprovedEmailReservation,
+                ApprovedEmailReservation.id == EmailSendAttempt.reservation_id,
+            )
+            .join(ApprovalRequest, ApprovalRequest.id == ApprovedEmailReservation.approval_id)
+            .where(EmailSendAttempt.result == "STARTED")
+        )
+        .mappings()
+        .all()
+    )
+    for attempt in attempts:
+        connection.execute(
+            update(EmailSendAttempt.__table__)
+            .where(EmailSendAttempt.id == attempt["attempt_id"])
+            .values(result="UNKNOWN", finished_at=func.now())
+        )
+        connection.execute(
+            update(EmailDelivery.__table__)
+            .where(EmailDelivery.id == attempt["delivery_id"])
+            .values(
+                status="unknown",
+                worker_id=None,
+                lease_expires_at=None,
+                finished_at=func.now(),
+                error_message="復元した送信試行は結果不明です。再送せずSMTP履歴を確認してください。",
+            )
+        )
+        connection.execute(
+            OutreachAuditEvent.__table__.insert().values(
+                event="restored_email_unknown",
+                principal_type="SYSTEM",
+                request_id=attempt["approval_id"],
+                project_id=attempt["project_id"],
+                company_id=attempt["company_id"],
+                payload_hash=attempt["payload_hash"],
+                payload_version=attempt["payload_version"],
+                before_status="CONSUMED",
+                after_status="CONSUMED",
+                reason="Restored SMTP attempt requires human review.",
+            )
+        )
+    counts["email_attempts_unknown"] = len(attempts)
     connection.execute(
         OutreachAuditEvent.__table__.insert().values(
             event="recovery_auth_invalidated",

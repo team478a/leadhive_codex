@@ -6,6 +6,12 @@ from app.model_approval import (
     HumanApprovalProof,
     OutreachAuditEvent,
 )
+from app.model_approved_email import (
+    ApprovedEmailBatch,
+    ApprovedEmailReservation,
+    BulkApprovalProof,
+    EmailSendAttempt,
+)
 from app.model_company import (
     Activity,
     AiReview,
@@ -53,6 +59,10 @@ from app.model_settings import (
 )
 
 __all__ = [
+    "ApprovedEmailBatch",
+    "ApprovedEmailReservation",
+    "BulkApprovalProof",
+    "EmailSendAttempt",
     "SalesPreparationItem",
     "AgentCredential",
     "AgentIdentity",

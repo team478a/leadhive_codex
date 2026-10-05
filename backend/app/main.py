@@ -11,6 +11,7 @@ from app.admin_routes import router as admin_router
 from app.ai_routes import router as ai_router
 from app.analysis_routes import router as analysis_router
 from app.approval_routes import router as approval_router
+from app.approved_email_routes import router as approved_email_router
 from app.campaign_routes import router as campaign_router
 from app.collection_routes import router as collection_router
 from app.company_quality_routes import router as company_quality_router
@@ -48,6 +49,7 @@ app = FastAPI(
     dependencies=[Depends(reject_mixed_credentials)],
 )
 app.include_router(approval_router)
+app.include_router(approved_email_router)
 app.include_router(preparation_router)
 
 
@@ -64,8 +66,19 @@ app.add_middleware(
 async def protect_browser_requests(request: Request, call_next):
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         origin = request.headers.get("origin")
-        if (origin is not None and origin not in settings.allowed_origins) or (
-            origin is None and request.headers.get("sec-fetch-site") == "cross-site"
+        from urllib.parse import urlsplit
+
+        public_url = urlsplit(settings.public_app_url)
+        public_origin = f"{public_url.scheme}://{public_url.netloc}"
+        public_optout = (
+            request.method == "POST"
+            and request.url.path.startswith("/api/public/unsubscribe/")
+            and public_url.scheme == "https"
+            and origin == public_origin
+        )
+        if not public_optout and (
+            (origin is not None and origin not in settings.allowed_origins)
+            or (origin is None and request.headers.get("sec-fetch-site") == "cross-site")
         ):
             return JSONResponse(status_code=403, content={"detail": "許可されていない送信元です。"})
     response = await call_next(request)

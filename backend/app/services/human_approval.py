@@ -172,6 +172,7 @@ def create_proposal(
     principal_type: str,
     actor_id: UUID,
     previous=None,
+    commit=True,
 ):
     company = db.get(Company, body.company_id)
     if not company or company.project_id != project_id:
@@ -237,7 +238,8 @@ def create_proposal(
     audit(
         db, item, "revision created" if previous else "proposal created", principal_type, actor_id
     )
-    db.commit()
+    if commit:
+        db.commit()
     return item
 
 

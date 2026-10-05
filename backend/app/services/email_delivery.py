@@ -11,9 +11,10 @@ from app.services.outbound_guard import require_outbound_enabled
 
 
 class EmailDeliveryError(Exception):
-    def __init__(self, public_message: str):
+    def __init__(self, public_message: str, unknown: bool = False):
         super().__init__(public_message)
         self.public_message = public_message
+        self.unknown = unknown
 
 
 @dataclass(frozen=True)
@@ -93,7 +94,14 @@ def email_delivery_limits(db) -> EmailDeliveryLimits:
 
 
 def send_with_configuration(
-    config: SmtpConfiguration, message_id: str, recipient_email: str, subject: str, body: str
+    config: SmtpConfiguration,
+    message_id: str,
+    recipient_email: str,
+    subject: str,
+    body: str,
+    *,
+    stable_message_id: str | None = None,
+    unsubscribe_url: str | None = None,
 ) -> None:
     require_outbound_enabled()
     if not config.host or not config.from_email:
@@ -102,8 +110,12 @@ def send_with_configuration(
     message["From"] = formataddr((config.from_name, config.from_email))
     message["To"] = recipient_email
     message["Subject"] = subject
-    message["Message-ID"] = make_msgid(idstring=message_id)
+    message["Message-ID"] = stable_message_id or make_msgid(idstring=message_id)
+    if unsubscribe_url:
+        message["List-Unsubscribe"] = f"<{unsubscribe_url}>"
+        message["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
     message.set_content(body)
+    transmitting = accepted = False
     try:
         with smtplib.SMTP(
             config.host,
@@ -115,9 +127,20 @@ def send_with_configuration(
             if config.username:
                 client.login(config.username, config.password)
             require_outbound_enabled()
+            transmitting = True
             client.send_message(message)
+            accepted = True
+    except (smtplib.SMTPRecipientsRefused, smtplib.SMTPSenderRefused, smtplib.SMTPDataError) as exc:
+        raise EmailDeliveryError("SMTPサーバーがメールを拒否しました。") from exc
     except (OSError, smtplib.SMTPException) as exc:
-        raise EmailDeliveryError("メール送信に失敗しました。") from exc
+        if accepted:
+            return  # A failed QUIT cannot undo a confirmed SMTP DATA acceptance.
+        raise EmailDeliveryError(
+            "SMTP受付結果が不明です。再送せず送信履歴を確認してください。"
+            if transmitting
+            else "メール送信に失敗しました。",
+            unknown=transmitting,
+        ) from exc
 
 
 def send_email(db, delivery_id: str, recipient_email: str, subject: str, body: str) -> None:

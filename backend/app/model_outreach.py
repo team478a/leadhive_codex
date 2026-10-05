@@ -7,6 +7,7 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
@@ -159,7 +160,7 @@ class EmailDelivery(Timestamps, Base):
     __tablename__ = "email_deliveries"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('queued', 'running', 'sent', 'failed', 'cancelled')",
+            "status IN ('queued', 'running', 'sent', 'failed', 'cancelled', 'unknown', 'blocked')",
             name="ck_email_delivery_status",
         ),
         CheckConstraint("attempt_count >= 0", name="ck_email_delivery_attempt_count"),
@@ -195,6 +196,9 @@ class EmailDelivery(Timestamps, Base):
     unsubscribe_token: Mapped[str] = mapped_column(
         String(64), default=lambda: secrets.token_urlsafe(32), unique=True, index=True
     )
+
+
+Index("ix_email_destination_guard", func.lower(EmailDelivery.recipient_email), EmailDelivery.status)
 
 
 class FormDelivery(Timestamps, Base):

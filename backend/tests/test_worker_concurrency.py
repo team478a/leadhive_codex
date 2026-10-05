@@ -330,7 +330,7 @@ def test_two_workers_claim_and_recover_email_delivery_once():
             statuses = db.scalars(
                 select(EmailDelivery.status).where(EmailDelivery.id.in_(delivery_ids))
             ).all()
-            assert sorted(statuses) == ["failed", "queued"]
+            assert sorted(statuses) == ["queued", "unknown"]
     finally:
         with SessionLocal() as db:
             db.execute(delete(SmtpSettings).where(SmtpSettings.id == 1))
