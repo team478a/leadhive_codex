@@ -5,6 +5,7 @@ import type { ApprovalProposal } from './ApprovedEmailPanel'
 
 interface Limits {
   daily_limit: number; hourly_limit: number; minimum_interval_seconds: number
+  site_interval_seconds: number
   paused: boolean; version: number; can_manage: boolean; execution_enabled: boolean
 }
 export function FormDispatchGovernancePanel({ projectId, items, canWrite, refresh }: {
@@ -65,17 +66,18 @@ export function FormDispatchGovernancePanel({ projectId, items, canWrite, refres
     </fieldset>
     {limits && <div className="mt-4">
       <h3>環境全体のフォーム送信上限</h3>
-      <p>保存済み: 直近24時間{savedLimits?.daily_limit}件・直近1時間{savedLimits?.hourly_limit}件・間隔{savedLimits?.minimum_interval_seconds}秒 / {savedLimits?.paused ? '一時停止中' : '上限に従って実行'} / 実行{savedLimits?.execution_enabled ? '有効' : 'OFF'}</p>
+      <p>保存済み: 直近24時間{savedLimits?.daily_limit}件・直近1時間{savedLimits?.hourly_limit}件・間隔{savedLimits?.minimum_interval_seconds}秒・同じサイト{savedLimits?.site_interval_seconds ?? 300}秒 / {savedLimits?.paused ? '一時停止中' : '上限に従って実行'} / 実行{savedLimits?.execution_enabled ? '有効' : 'OFF'}</p>
       <p>上限変更では実送信を有効化しません。結果不明・失敗した試行も上限に数えます。承認期限内に処理できる件数を予約してください。</p>
       {limits.can_manage && <fieldset disabled={busy}>
         <Field label="フォーム24時間上限"><input type="number" min="1" max="1000" value={limits.daily_limit} onChange={e => setLimits({ ...limits, daily_limit: Number(e.target.value) })} /></Field>
         <Field label="フォーム1時間上限"><input type="number" min="1" max="100" value={limits.hourly_limit} onChange={e => setLimits({ ...limits, hourly_limit: Number(e.target.value) })} /></Field>
         <Field label="フォーム試行間隔（秒）"><input type="number" min="60" max="86400" value={limits.minimum_interval_seconds} onChange={e => setLimits({ ...limits, minimum_interval_seconds: Number(e.target.value) })} /></Field>
+        <Field label="同じサイトへの試行間隔（秒）"><input type="number" min="60" max="86400" value={limits.site_interval_seconds ?? 300} onChange={e => setLimits({ ...limits, site_interval_seconds: Number(e.target.value) })} /></Field>
         <label><input type="checkbox" checked={limits.paused} onChange={e => setLimits({ ...limits, paused: e.target.checked })} /> フォーム実行を一時停止</label>
         <Field label="上限変更用管理者パスワード"><input type="password" autoComplete="current-password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} /></Field>
         <p>上限の増加・停止解除は今後の予約実行に反映されます。内容を確認して保存してください。</p>
         <button type="button" disabled={!adminPassword} onClick={() => act(async () => {
-          const updated = await api<Limits>('/form-dispatch-limits', 'PUT', { daily_limit: limits.daily_limit, hourly_limit: limits.hourly_limit, minimum_interval_seconds: limits.minimum_interval_seconds, paused: limits.paused, expected_version: limits.version, password: adminPassword })
+          const updated = await api<Limits>('/form-dispatch-limits', 'PUT', { daily_limit: limits.daily_limit, hourly_limit: limits.hourly_limit, minimum_interval_seconds: limits.minimum_interval_seconds, site_interval_seconds: limits.site_interval_seconds ?? 300, paused: limits.paused, expected_version: limits.version, password: adminPassword })
           setLimits(updated); setSavedLimits(updated); setNotice('フォーム上限を保存しました。実送信設定は変更していません。')
         })}>管理者再認証してフォーム上限を保存</button>{' '}
         <button type="button" className="secondary" onClick={() => act(async () => { const next = await api<Limits>('/form-dispatch-limits'); setLimits(next); setSavedLimits(next) })}>保存済み上限を再取得</button>

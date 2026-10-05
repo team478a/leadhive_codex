@@ -17,6 +17,8 @@
 
 ## 共通上限と一時停止
 
+更新：サイト別間隔（既定300秒）と予約一覧の間隔待ち表示を追加した。現在の仕組みと負荷検証は [90_FORM_SITE_SPACING_AND_LOAD_VALIDATION.md](90_FORM_SITE_SPACING_AND_LOAD_VALIDATION.md) を参照。
+
 全Projectでフォーム送信環境を共有しているため、今回は環境全体の設定。既定は直近24時間30件、直近1時間5件、試行間隔60秒。一時停止はfalse、外部送信のfeature flagは従来どおりOFF。
 
 管理画面では保存済み設定と編集中の入力を区別する。User.is_adminのHuman管理者だけがパスワード再認証して変更できる。Project owner/editorの権限だけでは変更不可。Agent、混在認証は拒否する。変更にはexpected_versionが必要で、他の更新と競合すれば409で停止する。再認証はユーザーごとに5分間5回まで。パスワードを監査ログへ保存しない。

@@ -6,6 +6,7 @@ import { FormDispatchGovernancePanel } from './FormDispatchGovernancePanel'
 interface Dispatch {
   id: string; approval_id: string; form_url: string; status: string; reason: string
   execution_enabled: boolean; created_at: string
+  site_wait_until?: string | null
 }
 const labels: Record<string, string> = {
   queued: '予約待ち', checking: '事前確認中', submitted: '送信完了を確認',
@@ -65,6 +66,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
       {rows.map(row => <article className="mt-3" key={row.id}>
         <p className="break-all">{row.form_url} / {labels[row.status] ?? row.status}</p>
         {!row.execution_enabled && row.status === 'queued' && <p>実行OFF・送信されません</p>}
+        {row.status === 'queued' && row.site_wait_until && <p>同じサイトへの間隔待ち: {new Date(row.site_wait_until).toLocaleString('ja-JP')}以降に再確認</p>}
         {row.reason && <p role={row.status === 'unknown' ? 'alert' : undefined}>{row.reason}</p>}
         {canWrite && ['queued', 'checking'].includes(row.status) && <button type="button" className="secondary" onClick={() => act(async () => { await api(`/approved-form-dispatches/${row.id}/cancel`, 'POST') })}>フォーム予約を取り消す</button>}
       </article>)}

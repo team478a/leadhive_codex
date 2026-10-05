@@ -21,7 +21,7 @@ test('approved form reservations show disabled execution, cancellation and unkno
     expect(body.expected_version).toBe(1)
     expect(body.confirmed).toBeUndefined()
     key = body.idempotency_key
-    rows.push({ id: 'reservation', approval_id: item.id, form_url: item.form_url, status: 'queued', reason: '', execution_enabled: false })
+    rows.push({ id: 'reservation', approval_id: item.id, form_url: item.form_url, status: 'queued', reason: '', execution_enabled: false, site_wait_until: new Date(Date.now() + 300000).toISOString() })
     return route.fulfill({ status: 201, json: rows[0] })
   })
   await page.route('**/api/approved-form-dispatches/reservation/cancel', route => {
@@ -41,6 +41,7 @@ test('approved form reservations show disabled execution, cancellation and unkno
   await panel.getByRole('button', { name: /フォーム予約テスト会社 の承認済みフォームを予約/ }).click()
   await expect(panel.getByRole('status')).toContainText('OFF')
   await expect(panel.getByText('実行OFF・送信されません')).toBeVisible()
+  await expect(panel.getByText(/同じサイトへの間隔待ち/)).toBeVisible()
   expect(key).toMatch(/^[a-f0-9-]{36}$/)
   await panel.getByRole('button', { name: 'フォーム予約を取り消す' }).click()
   await expect(panel.getByText(/取消済み/)).toBeVisible()
@@ -62,7 +63,7 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
     payload_hash: 'b'.repeat(64), payload_version: 1, status: 'PENDING', created_by_principal_type: 'HUMAN',
     created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString(),
   }
-  let limits = { daily_limit: 30, hourly_limit: 5, minimum_interval_seconds: 60, paused: false, version: 1, can_manage: true, execution_enabled: false }
+  let limits = { daily_limit: 30, hourly_limit: 5, minimum_interval_seconds: 60, site_interval_seconds: 300, paused: false, version: 1, can_manage: true, execution_enabled: false }
   await page.route(`**/api/projects/${fixture.project_id}/approval-requests?**`, route => route.fulfill({ json: [item] }))
   await page.route('**/api/form-dispatch-limits', route => {
     if (route.request().method() === 'PUT') {
@@ -70,7 +71,8 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
       expect(body.expected_version).toBe(limits.version)
       expect(body.password).toBe('mock-human-password')
       expect(body.execution_enabled).toBeUndefined()
-      limits = { ...limits, daily_limit: body.daily_limit, paused: body.paused, version: limits.version + 1 }
+      expect(body.site_interval_seconds).toBe(600)
+      limits = { ...limits, daily_limit: body.daily_limit, site_interval_seconds: body.site_interval_seconds, paused: body.paused, version: limits.version + 1 }
     }
     return route.fulfill({ json: limits })
   })
@@ -109,10 +111,12 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
   expect(keys).toHaveLength(2)
   expect(keys[0]).toBe(keys[1])
   await panel.getByLabel('フォーム24時間上限').fill('500')
+  await panel.getByLabel('同じサイトへの試行間隔（秒）').fill('600')
   await expect(panel.getByText(/保存済み: 直近24時間30件/)).toBeVisible()
   await panel.getByLabel('フォーム実行を一時停止').check()
   await panel.getByLabel('上限変更用管理者パスワード').fill('mock-human-password')
   await panel.getByRole('button', { name: '管理者再認証してフォーム上限を保存' }).click()
   await expect(panel.getByText(/保存済み: 直近24時間500件.*一時停止中.*OFF/)).toBeVisible()
+  await expect(panel.getByText(/同じサイト600秒/)).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
 })
