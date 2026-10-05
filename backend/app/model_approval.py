@@ -66,6 +66,10 @@ class ApprovalRequest(Base):
             name="ck_fixture_plan_not_consumed",
         ),
         CheckConstraint(
+            "delivery_method <> 'form_adapter' OR status <> 'CONSUMED'",
+            name="ck_adapter_contract_not_consumed",
+        ),
+        CheckConstraint(
             "expires_at > created_at AND expires_at <= created_at + interval '24 hours'",
             name="ck_approval_expiry",
         ),

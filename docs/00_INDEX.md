@@ -157,6 +157,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [110_FORM_ADAPTER_DISPATCH_CONNECTION_DESIGN.md](110_FORM_ADAPTER_DISPATCH_CONNECTION_DESIGN.md): 実行用契約の分離・既存PostgreSQL承認/予約/UNKNOWN基盤への接続設計
 
+- [111_FORM_ADAPTER_CONTRACT_FOUNDATION.md](111_FORM_ADAPTER_CONTRACT_FOUNDATION.md): 新方式の独立契約・snapshot照合・工程1の非実行DB guard
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
