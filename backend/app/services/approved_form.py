@@ -8,6 +8,8 @@ from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 
 from app.config import settings
+from app.model_approved_email import BulkApprovalProof
+from app.model_approved_form import FormDispatchLimits
 from app.models import (
     ApprovalRequest,
     ApprovedFormDispatch,
@@ -77,7 +79,30 @@ def validate(db, item):
         )
         .limit(1)
     )
-    if not proof:
+    bulk_proof = (
+        db.scalar(
+            select(BulkApprovalProof.id)
+            .where(
+                BulkApprovalProof.project_id == item.project_id,
+                BulkApprovalProof.user_id == item.approved_by_user_id,
+                BulkApprovalProof.verified_at.is_not(None),
+                BulkApprovalProof.used_at.is_not(None),
+                BulkApprovalProof.items.contains(
+                    [
+                        {
+                            "request_id": str(item.id),
+                            "expected_hash": item.payload_hash,
+                            "expected_version": item.payload_version,
+                        }
+                    ]
+                ),
+            )
+            .limit(1)
+        )
+        if not proof
+        else None
+    )
+    if not proof and not bulk_proof:
         raise HTTPException(409, "Human再認証の証明が必要です。")
     user = db.get(User, item.approved_by_user_id)
     if not user:
@@ -144,16 +169,18 @@ def reserve(db, item, body, user):
 
 def capacity(db):
     now = approval.now()
-    # Initial conservative installation-wide caps. No monthly throughput claim.
+    limits = db.get(FormDispatchLimits, 1, populate_existing=True)
+    if not limits or limits.paused:
+        return False  # Missing settings fails closed; migration creates the singleton.
     starts = db.scalars(
         select(ApprovedFormDispatch.started_at).where(
             ApprovedFormDispatch.started_at >= now - timedelta(days=1),
         )
     ).all()
     return (
-        len(starts) < 30
-        and sum(t >= now - timedelta(hours=1) for t in starts) < 5
-        and (not starts or max(starts) <= now - timedelta(seconds=60))
+        len(starts) < limits.daily_limit
+        and sum(t >= now - timedelta(hours=1) for t in starts) < limits.hourly_limit
+        and (not starts or max(starts) <= now - timedelta(seconds=limits.minimum_interval_seconds))
     )
 
 

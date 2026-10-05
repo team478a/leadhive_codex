@@ -12,7 +12,7 @@ from app.model_approved_email import (
     BulkApprovalProof,
     EmailSendAttempt,
 )
-from app.model_approved_form import ApprovedFormDispatch
+from app.model_approved_form import ApprovedFormDispatch, FormDispatchLimits
 from app.model_company import (
     Activity,
     AiReview,
@@ -62,6 +62,7 @@ from app.model_settings import (
 
 __all__ = [
     "ApprovedFormDispatch",
+    "FormDispatchLimits",
     "EmailFeedbackEvent",
     "EmailHealthState",
     "ApprovedEmailBatch",

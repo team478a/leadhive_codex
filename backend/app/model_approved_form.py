@@ -3,11 +3,31 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+
+
+class FormDispatchLimits(Base):
+    __tablename__ = "form_dispatch_limits"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_form_limits_singleton"),
+        CheckConstraint(
+            "daily_limit BETWEEN 1 AND 1000 AND hourly_limit BETWEEN 1 AND 100 "
+            "AND minimum_interval_seconds BETWEEN 60 AND 86400",
+            name="ck_form_limits_range",
+        ),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    daily_limit: Mapped[int] = mapped_column(Integer, default=30)
+    hourly_limit: Mapped[int] = mapped_column(Integer, default=5)
+    minimum_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ApprovedFormDispatch(Base):
