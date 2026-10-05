@@ -123,6 +123,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - [92_CONTROLLED_FORM_HTTP_AND_PROCESS_ACCEPTANCE.md](92_CONTROLLED_FORM_HTTP_AND_PROCESS_ACCEPTANCE.md): 管理下フォームの実HTTP・通信障害・ワーカープロセス停止の検証
 - [93_FORM_COMPATIBILITY_CORPUS_AND_CLASSIFICATION.md](93_FORM_COMPATIBILITY_CORPUS_AND_CLASSIFICATION.md): フォーム種類別検証・誤READY判定の改善
 
+- [94_FORM_READINESS_OVERVIEW.md](94_FORM_READINESS_OVERVIEW.md): プロジェクト全体のフォーム候補・対象外理由・要確認企業の集計
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
