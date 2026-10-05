@@ -15,11 +15,13 @@ from app.models import (
     ApprovedFormDispatch,
     Company,
     FormDelivery,
+    FormDispatchSite,
     HumanApprovalProof,
     OutreachDraft,
     User,
 )
 from app.project_access import project_access
+from app.services import form_site_rate
 from app.services import human_approval as approval
 from app.services.form_approval_preparation import preparation
 from app.services.form_profile_delivery import primary_form_profile
@@ -162,6 +164,15 @@ def reserve(db, item, body, user):
         status="queued",
     )
     db.add(row)
+    db.flush()
+    db.add_all(
+        [
+            FormDispatchSite(dispatch_id=row.id, site_key=key)
+            for key in form_site_rate.site_keys(
+                row.form_url, row.payload_snapshot.get("form_action_url")
+            )
+        ]
+    )
     approval.audit(db, item, "form dispatch reserved", "HUMAN", user.id, item.status)
     db.commit()
     return row
@@ -221,6 +232,15 @@ def claim(db):
         select(ApprovedFormDispatch)
         .where(
             ApprovedFormDispatch.status == "queued",
+            select(FormDispatchSite.dispatch_id)
+            .where(FormDispatchSite.dispatch_id == ApprovedFormDispatch.id)
+            .exists(),
+            ~select(FormDispatchSite.dispatch_id)
+            .where(
+                FormDispatchSite.dispatch_id == ApprovedFormDispatch.id,
+                FormDispatchSite.site_key.in_(form_site_rate.active_sites(db)),
+            )
+            .exists(),
         )
         .order_by(ApprovedFormDispatch.created_at, ApprovedFormDispatch.id)
         .with_for_update(skip_locked=True)

@@ -12,7 +12,7 @@ from app.models import ApprovalRequest, ApprovedFormDispatch, OutreachAuditEvent
 from app.project_access import project_access
 from app.schema_approved_form import FormDispatchBulk, FormDispatchCreate, FormLimitsUpdate
 from app.security import current_admin, current_user
-from app.services import approved_form, human_approval
+from app.services import approved_form, form_site_rate, human_approval
 
 router = APIRouter(prefix="/api", tags=["Human approved forms"])
 
@@ -67,7 +67,7 @@ def update_limits(
         raise HTTPException(503, "フォーム上限設定が未適用です。")
     if row.version != body.expected_version:
         raise HTTPException(409, "設定が変更されています。再取得してください。")
-    changes = body.model_dump(exclude={"password", "expected_version"})
+    changes = body.model_dump(exclude={"password", "expected_version"}, exclude_none=True)
     before = {key: getattr(row, key) for key in changes}
     for key, value in changes.items():
         setattr(row, key, value)
@@ -168,17 +168,19 @@ def listing(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user, write=False)
+    rows = db.scalars(
+        select(ApprovedFormDispatch)
+        .where(
+            ApprovedFormDispatch.project_id == project_id,
+        )
+        .order_by(ApprovedFormDispatch.created_at.desc(), ApprovedFormDispatch.id)
+        .limit(limit)
+        .offset(offset)
+    ).all()
+    waits = form_site_rate.wait_times(db, rows)
     return [
-        output(row)
-        for row in db.scalars(
-            select(ApprovedFormDispatch)
-            .where(
-                ApprovedFormDispatch.project_id == project_id,
-            )
-            .order_by(ApprovedFormDispatch.created_at.desc(), ApprovedFormDispatch.id)
-            .limit(limit)
-            .offset(offset)
-        ).all()
+        output(row) | {"site_wait_until": waits.get(row.id) if row.status == "queued" else None}
+        for row in rows
     ]
 
 

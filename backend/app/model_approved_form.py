@@ -14,6 +14,7 @@ class FormDispatchLimits(Base):
     __tablename__ = "form_dispatch_limits"
     __table_args__ = (
         CheckConstraint("id = 1", name="ck_form_limits_singleton"),
+        CheckConstraint("site_interval_seconds BETWEEN 60 AND 86400", name="ck_form_site_interval"),
         CheckConstraint(
             "daily_limit BETWEEN 1 AND 1000 AND hourly_limit BETWEEN 1 AND 100 "
             "AND minimum_interval_seconds BETWEEN 60 AND 86400",
@@ -24,6 +25,7 @@ class FormDispatchLimits(Base):
     daily_limit: Mapped[int] = mapped_column(Integer, default=30)
     hourly_limit: Mapped[int] = mapped_column(Integer, default=5)
     minimum_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
+    site_interval_seconds: Mapped[int] = mapped_column(Integer, default=300)
     paused: Mapped[bool] = mapped_column(Boolean, default=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
     updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
@@ -57,3 +59,11 @@ class ApprovedFormDispatch(Base):
     delivery_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("form_deliveries.id"))
     reason: Mapped[str] = mapped_column(String(500), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FormDispatchSite(Base):
+    __tablename__ = "form_dispatch_sites"
+    dispatch_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("approved_form_dispatches.id"), primary_key=True
+    )
+    site_key: Mapped[str] = mapped_column(String(253), primary_key=True, index=True)

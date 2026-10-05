@@ -15,6 +15,7 @@ from app.models import (
 )
 from app.project_access import project_access
 from app.services import approved_form as service
+from app.services import form_site_rate
 from app.services import human_approval as approval
 from app.services.form_delivery import FormDeliveryError, submit_form
 from app.services.form_profile_delivery import inspect_delivery_profile
@@ -48,6 +49,8 @@ def begin(db, row_id, worker_id, context):
         raise HTTPException(409, "フォーム実行設定が停止されています。")
     if row.lease_expires_at <= approval.now() or not service.capacity(db):
         raise HTTPException(409, "実行期限または送信上限により停止しました。")
+    if not form_site_rate.eligible(db, row):
+        raise HTTPException(409, "同じサイトへの試行間隔により停止しました。")
     item = db.scalar(
         select(ApprovalRequest).where(ApprovalRequest.id == row.approval_id).with_for_update()
     )
