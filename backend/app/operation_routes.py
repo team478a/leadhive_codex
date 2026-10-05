@@ -336,6 +336,19 @@ def enqueue_operation(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    from app.preparation_routes import lock_project
+
+    lock_project(db, project_id)
+    if db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "prepare_outreach",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    ):
+        raise HTTPException(409, "営業準備が実行中です。完了または停止後に開始してください。")
     active = db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == project_id,
@@ -390,8 +403,23 @@ def retry_operation(
     job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     source = owned_operation(job_id, db, user)
+    if source.operation_type == "prepare_outreach":
+        raise HTTPException(409, "営業準備専用の再開操作を使用してください。")
     if source.status not in {"failed", "cancelled"}:
         raise HTTPException(409, "失敗またはキャンセル済みのジョブだけ再実行できます。")
+    from app.preparation_routes import lock_project
+
+    lock_project(db, source.project_id)
+    if db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == source.project_id,
+            OperationJob.operation_type == "prepare_outreach",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    ):
+        raise HTTPException(409, "営業準備が実行中です。停止または完了後に再実行してください。")
     active = db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == source.project_id,

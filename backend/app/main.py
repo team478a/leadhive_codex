@@ -25,6 +25,7 @@ from app.improvement_routes import router as improvement_router
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
+from app.preparation_routes import router as preparation_router
 from app.routes import router
 from app.services.approval_principals import reject_mixed_credentials
 
@@ -47,6 +48,7 @@ app = FastAPI(
     dependencies=[Depends(reject_mixed_credentials)],
 )
 app.include_router(approval_router)
+app.include_router(preparation_router)
 
 
 app.add_middleware(

@@ -42,6 +42,7 @@ from app.model_outreach import (
     OutreachExperiment,
     OutreachTemplate,
 )
+from app.model_preparation import SalesPreparationItem
 from app.model_settings import (
     ApplicationSettings,
     FormSenderSettings,
@@ -52,6 +53,7 @@ from app.model_settings import (
 )
 
 __all__ = [
+    "SalesPreparationItem",
     "AgentCredential",
     "AgentIdentity",
     "AgentProjectGrant",

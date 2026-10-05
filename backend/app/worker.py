@@ -83,7 +83,13 @@ def recover_stale_jobs(db) -> tuple[int, int]:
         .where(
             OperationJob.status == "running",
             OperationJob.operation_type.in_(
-                ("collect_search", "web_analysis", "ai_analysis", "form_intelligence")
+                (
+                    "collect_search",
+                    "web_analysis",
+                    "ai_analysis",
+                    "form_intelligence",
+                    "prepare_outreach",
+                )
             )
             if not settings.outbound_enabled
             else True,
@@ -107,10 +113,11 @@ def recover_stale_jobs(db) -> tuple[int, int]:
         else:
             job.status = "queued"
             job.started_at = None
-            job.total_count = 0
-            job.processed_count = 0
-            job.success_count = 0
-            job.failed_count = 0
+            if job.operation_type != "prepare_outreach":
+                job.total_count = 0
+                job.processed_count = 0
+                job.success_count = 0
+                job.failed_count = 0
             job.error_message = "ワーカー停止を検出したため再試行します。"
             retried += 1
     if jobs:
@@ -406,7 +413,7 @@ def enqueue_due_refresh_schedules(db) -> int:
         active = db.scalar(
             select(OperationJob.id).where(
                 OperationJob.project_id == schedule.project_id,
-                OperationJob.operation_type == "web_analysis",
+                OperationJob.operation_type.in_(("web_analysis", "prepare_outreach")),
                 OperationJob.status.in_(("queued", "running")),
             )
         )
@@ -439,7 +446,13 @@ def claim_job(db) -> OperationJob | None:
         .where(
             OperationJob.status == "queued",
             OperationJob.operation_type.in_(
-                ("collect_search", "web_analysis", "ai_analysis", "form_intelligence")
+                (
+                    "collect_search",
+                    "web_analysis",
+                    "ai_analysis",
+                    "form_intelligence",
+                    "prepare_outreach",
+                )
             )
             if not settings.outbound_enabled
             else True,
@@ -695,12 +708,17 @@ def run_once() -> bool:
         worker_id = job.worker_id
         logger.info("operation start: id=%s type=%s", job.id, job.operation_type)
         try:
+            from app.services.sales_preparation import run_preparation
+
             {
                 "collect_search": run_collection,
                 "web_analysis": run_web,
                 "ai_analysis": run_ai,
                 "form_delivery": run_form_delivery,
                 "form_intelligence": run_form_intelligence,
+                "prepare_outreach": lambda db, job, worker: run_preparation(
+                    db, job, worker, stop_requested
+                ),
             }[job.operation_type](db, job, worker_id)
             db.refresh(job)
             if job.status == "running" and job.worker_id == worker_id:

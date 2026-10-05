@@ -415,7 +415,9 @@ def _upsert_profile(
     return profile
 
 
-def analyze_company_forms(db: Session, company: Company, force: bool = False) -> list[FormProfile]:
+def analyze_company_forms(
+    db: Session, company: Company, force: bool = False, *, allow_ai: bool = True
+) -> list[FormProfile]:
     # A requested analysis always refreshes the snapshot; force is kept for the job contract.
     del force
     started = time.monotonic()
@@ -456,7 +458,7 @@ def analyze_company_forms(db: Session, company: Company, force: bool = False) ->
         root_cache = {root.url: root.html}
         if not pages:
             pages = [(root.url, True)]
-        provider = get_form_decision_provider()
+        provider = get_form_decision_provider() if allow_ai else None
         for url, explicit in pages:
             page_started = time.monotonic()
             try:
