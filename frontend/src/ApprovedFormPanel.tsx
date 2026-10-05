@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 import type { ApprovalProposal } from './ApprovedEmailPanel'
 import { FormDispatchGovernancePanel } from './FormDispatchGovernancePanel'
+import { FormOperationsPanel } from './FormOperationsPanel'
 
 interface Dispatch {
   id: string; approval_id: string; form_url: string; status: string; reason: string
@@ -49,7 +50,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
       setNotice(result.execution_enabled ? '承認した内容で予約しました。ワーカーが送信前に再確認します。' : '予約を保存しました。フォーム実行はOFFのため送信されません。')
     })
   }
-  return <><FormDispatchGovernancePanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} /><section className="panel" aria-label="承認済みフォーム予約">
+  return <><FormOperationsPanel key={`operations-${projectId}`} projectId={projectId} canWrite={canWrite} refresh={refresh} /><FormDispatchGovernancePanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} /><section className="panel" aria-label="承認済みフォーム予約">
     <h2>承認済みフォームの送信予約</h2>
     <p className="muted">初期対応は確認画面を挟まないフォームのみです。確認画面・CAPTCHA・特殊フォームは人間による確認が必要です。</p>
     <p className="muted">宛先・POST先・文面・入力値が固定されたHuman承認だけを使います。実行設定は既定OFFです。上限は上の共通設定に従います。結果不明は自動再送しません。</p>
