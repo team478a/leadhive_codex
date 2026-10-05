@@ -20,6 +20,8 @@ from app.models import (  # noqa: E402
     Company,
     EmailDelivery,
     EmailFeedbackEvent,
+    FormProfile,
+    FormProfileField,
     FormSenderSettings,
     InboundEmail,
     InboundMailSettings,
@@ -43,7 +45,12 @@ with SessionLocal() as db:
                 is_admin=not email.startswith("e2e-member-"),
             )
         )
-    elif sys.argv[1] in {"approval-fixture", "approved-email-fixture", "email-feedback-fixture"}:
+    elif sys.argv[1] in {
+        "approval-fixture",
+        "approved-email-fixture",
+        "email-feedback-fixture",
+        "adapter-fixture",
+    }:
         user = db.scalar(select(User).where(User.email == email))
         profile = db.scalar(select(TargetProfile).where(TargetProfile.is_system).limit(1))
         project = Project(
@@ -67,6 +74,47 @@ with SessionLocal() as db:
         )
         db.add(company)
         db.flush()
+        if sys.argv[1] == "adapter-fixture":
+            company.contact_url = "https://fixture.example/contact"
+            sender = db.get(FormSenderSettings, 1)
+            if sender is None:
+                sender = FormSenderSettings(id=1)
+                db.add(sender)
+            sender.contact_name, sender.email = "Synthetic Human", "sender@example.com"
+            form = FormProfile(
+                company_id=company.id,
+                form_url=company.contact_url,
+                action_url="https://fixture.example/submit",
+                fingerprint="a" * 64,
+                form_status="READY",
+                sales_contact_status="ALLOWED",
+                captcha_type="CAPTCHA_NONE",
+                confirmation_page=False,
+                form_found=True,
+                delivery_supported=True,
+                is_primary=True,
+            )
+            db.add(form)
+            db.flush()
+            db.add(
+                FormProfileField(
+                    form_profile_id=form.id,
+                    name="message",
+                    field_type="textarea",
+                    required=True,
+                    mapped_key="message",
+                    confidence=1.0,
+                    position=0,
+                )
+            )
+            db.add(
+                OutreachDraft(
+                    company_id=company.id,
+                    channel="form",
+                    subject="Synthetic adapter draft",
+                    body="Synthetic body only",
+                )
+            )
         if sys.argv[1] == "email-feedback-fixture":
             draft = OutreachDraft(
                 company_id=company.id,

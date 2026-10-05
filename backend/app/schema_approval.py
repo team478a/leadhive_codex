@@ -12,6 +12,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.services.form_adapter_contract import ExecutableFormPlan
 from app.services.form_execution_plan import ExecutionPlan
 
 AGENT_SCOPES = frozenset(
@@ -55,7 +56,9 @@ class Sender(StrictInput):
 class Proposal(StrictInput):
     company_id: UUID
     channel: Literal["email", "form"]
-    delivery_method: Literal["email", "form_direct", "form_codex", "form_plan_fixture"]
+    delivery_method: Literal[
+        "email", "form_direct", "form_codex", "form_plan_fixture", "form_adapter"
+    ]
     source_draft_id: UUID | None = None
     recipient: EmailStr | None = None
     form_url: HttpUrl | None = None
@@ -67,6 +70,14 @@ class Proposal(StrictInput):
     attachment_metadata: list[dict[str, str]] = Field(default_factory=list, max_length=10)
     expires_in_hours: int = Field(default=24, ge=1, le=24)
     execution_plan: ExecutionPlan | None = None
+    adapter_plan: ExecutableFormPlan | None = None
+
+    @field_validator("adapter_plan", mode="before")
+    @classmethod
+    def parse_adapter_plan(cls, value):
+        if isinstance(value, dict):
+            return ExecutableFormPlan.model_validate_json(json.dumps(value, default=str))
+        return value
 
     @field_validator("execution_plan", mode="before")
     @classmethod
@@ -105,6 +116,23 @@ class Proposal(StrictInput):
                 raise ValueError("plan and proposal differ")
         elif self.execution_plan is not None:
             raise ValueError("execution plan cannot be attached to a legacy delivery method")
+        if self.delivery_method == "form_adapter":
+            plan = self.adapter_plan
+            if not plan or not self.source_draft_id or self.attachment_metadata:
+                raise ValueError("adapter plan and saved draft required")
+            if (
+                plan.company_id != self.company_id
+                or plan.source_draft_id != self.source_draft_id
+                or plan.form_url != str(self.form_url)
+                or plan.steps[-1].url != str(self.form_action_url)
+                or plan.subject != self.subject
+                or plan.body != self.body
+                or {v.name: v.value for v in plan.sender} != self.sender.model_dump(mode="json")
+                or {v.name: v.value for v in plan.field_values} != self.field_values
+            ):
+                raise ValueError("adapter plan and proposal differ")
+        elif self.adapter_plan is not None:
+            raise ValueError("adapter plan requires the adapter delivery method")
         return self
 
 

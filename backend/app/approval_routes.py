@@ -40,6 +40,8 @@ from app.schema_approval import (
 from app.security import COOKIE_NAME, current_user, token_digest
 from app.services import human_approval as service
 from app.services.approval_principals import authenticate_agent
+from app.services.form_adapter_preparation import adapter_preparation
+from app.services.form_adapter_preparation import enabled as adapter_enabled
 from app.services.form_approval_preparation import preparation
 
 router = APIRouter(prefix="/api", tags=["Human Approval Foundation A2"])
@@ -76,6 +78,8 @@ def serialize(db, item):
     result["form_action_url"] = item.payload_snapshot.get("form_action_url")
     result["execution_plan"] = item.payload_snapshot.get("execution_plan")
     result["execution_plan_hash"] = item.payload_snapshot.get("execution_plan_hash")
+    result["adapter_plan"] = item.payload_snapshot.get("adapter_plan")
+    result["adapter_plan_hash"] = item.payload_snapshot.get("adapter_plan_hash")
     return result
 
 
@@ -105,6 +109,24 @@ def prepare_form_approval(
     user: User = Depends(current_user),
 ):
     company, draft = preparation_source(db, draft_id, user)
+    lock_preparation_sources(db, company, user)
+    proposal, preview = preparation(db, company, draft)
+    if preview["preparation_hash"] != body.expected_preparation_hash:
+        raise HTTPException(409, "準備内容が変更されています。もう一度内容を取得してください。")
+    return serialize(
+        db, service.create_proposal(db, company.project_id, proposal, "HUMAN", user.id)
+    )
+
+
+def lock_preparation_sources(db, company, user):
+    db.scalar(select(Project).where(Project.id == company.project_id).with_for_update())
+    db.scalar(
+        select(ProjectMember)
+        .where(ProjectMember.project_id == company.project_id, ProjectMember.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    project_access(company.project_id, db, user)
     # Keep the reviewed source data stable until the proposal and ledger commit.
     db.scalar(
         select(Company)
@@ -125,11 +147,38 @@ def prepare_form_approval(
         )
         .with_for_update()
     ).all()
-    proposal, preview = preparation(db, company, draft)
+
+
+@router.get("/form-adapter-preparation-status")
+def adapter_status(user: User = Depends(current_user)):
+    return {"enabled": adapter_enabled(), "reservation_only": True}
+
+
+@router.get("/outreach-drafts/{draft_id}/form-adapter-preview")
+def preview_form_adapter(
+    draft_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    company, draft = preparation_source(db, draft_id, user)
+    return adapter_preparation(db, company, draft)[1]
+
+
+@router.post("/outreach-drafts/{draft_id}/form-adapter-request", status_code=201)
+def prepare_form_adapter(
+    draft_id: UUID,
+    body: FormPreparation,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company, draft = preparation_source(db, draft_id, user)
+    lock_preparation_sources(db, company, user)
+    proposal, preview = adapter_preparation(db, company, draft)
     if preview["preparation_hash"] != body.expected_preparation_hash:
         raise HTTPException(409, "準備内容が変更されています。もう一度内容を取得してください。")
     return serialize(
-        db, service.create_proposal(db, company.project_id, proposal, "HUMAN", user.id)
+        db,
+        service.create_proposal(
+            db, company.project_id, proposal, "HUMAN", user.id, allow_adapter_preparation=True
+        ),
     )
 
 

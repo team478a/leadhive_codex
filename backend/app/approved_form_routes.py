@@ -139,9 +139,14 @@ def bulk_reserve(
 
 
 def output(row):
+    method = row.payload_snapshot.get("delivery_method")
     return {
         **{c.name: getattr(row, c.name) for c in ApprovedFormDispatch.__table__.columns},
-        "execution_enabled": settings.outbound_enabled and settings.human_approved_form_enabled,
+        "delivery_method": method,
+        "reservation_only": method == "form_adapter",
+        "execution_enabled": method == "form_direct"
+        and settings.outbound_enabled
+        and settings.human_approved_form_enabled,
     }
 
 

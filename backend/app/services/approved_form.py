@@ -56,10 +56,11 @@ def duplicate(db, company_id, form_url, exclude=None):
     )
 
 
-def validate(db, item):
+def validate(db, item, *, allow_adapter=False):
     if not approval.valid_approved_payload(db, item):
         raise HTTPException(409, "有効なHuman承認が必要です。")
-    if item.channel != "form" or item.delivery_method != "form_direct" or not item.source_draft_id:
+    methods = {"form_direct", "form_adapter"} if allow_adapter else {"form_direct"}
+    if item.channel != "form" or item.delivery_method not in methods or not item.source_draft_id:
         raise HTTPException(409, "保存済みフォームDraftから再準備・再承認してください。")
     if not item.payload_snapshot.get("sender_source_hash") or item.payload_snapshot.get(
         "attachment_metadata"
@@ -119,8 +120,17 @@ def validate(db, item):
         raise HTTPException(
             409, "確認画面のあるフォーム・段階が未確定のフォームは人間の確認が必要です。"
         )
-    proposal, _ = preparation(db, company, draft)
+    if item.delivery_method == "form_adapter":
+        from app.services.form_adapter_preparation import adapter_preparation
+
+        if not approval.valid_adapter_plan(item):
+            raise HTTPException(409, "操作計画を確認できません。再準備してください。")
+        proposal, _ = adapter_preparation(db, company, draft)
+    else:
+        proposal, _ = preparation(db, company, draft)
     data = proposal.model_dump(mode="json", exclude={"expires_in_hours"})
+    if proposal.adapter_plan:
+        data["adapter_plan"] = approval.canonical_plan(proposal.adapter_plan)
     if any(item.payload_snapshot.get(key) != value for key, value in data.items()):
         raise HTTPException(409, "承認payloadが保存済みの準備内容と一致しません。")
     # Execution reads the snapshot exclusively, never caller-supplied field overrides.
@@ -140,9 +150,23 @@ def reserve(db, item, body, user):
             raise HTTPException(409, "予約キーが異なる内容で使用されています。")
         return existing
     item = db.scalar(select(ApprovalRequest).where(ApprovalRequest.id == item.id).with_for_update())
+    if item.delivery_method == "form_adapter":
+        from app.models import Project, ProjectMember
+
+        db.scalar(select(Project).where(Project.id == item.project_id).with_for_update())
+        db.scalars(
+            select(ProjectMember)
+            .where(
+                ProjectMember.project_id == item.project_id,
+                ProjectMember.user_id.in_({user.id, item.approved_by_user_id}),
+            )
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        ).all()
+        project_access(item.project_id, db, user)
     approval.expected(item, body)
     try:
-        validate(db, item)
+        validate(db, item, allow_adapter=True)
     except HTTPException:
         db.commit()  # Preserve expiry/revocation and its ledger entry.
         raise
@@ -215,8 +239,10 @@ def claim(db):
         return None
     row = db.scalar(
         select(ApprovedFormDispatch)
+        .join(ApprovalRequest, ApprovalRequest.id == ApprovedFormDispatch.approval_id)
         .where(
             ApprovedFormDispatch.status == "queued",
+            ApprovalRequest.delivery_method == "form_direct",
             select(FormDispatchSite.dispatch_id)
             .where(FormDispatchSite.dispatch_id == ApprovedFormDispatch.id)
             .exists(),
@@ -228,7 +254,7 @@ def claim(db):
             .exists(),
         )
         .order_by(ApprovedFormDispatch.created_at, ApprovedFormDispatch.id)
-        .with_for_update(skip_locked=True)
+        .with_for_update(skip_locked=True, of=ApprovedFormDispatch)
         .limit(1)
     )
     if row:

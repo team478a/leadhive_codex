@@ -26,6 +26,7 @@ from app.models import (
 )
 from app.schema_approval import ExpectedPayload, Proposal
 from app.security import password_hasher, token_digest
+from app.services.form_adapter_contract import adapter_plan_hash, adapter_snapshot, canonical_plan
 from app.services.form_execution_plan import plan_hash
 
 
@@ -163,6 +164,26 @@ def valid_fixture_plan(item):
         return False
 
 
+def valid_adapter_plan(item):
+    try:
+        proposal = Proposal.model_validate(
+            {k: v for k, v in item.payload_snapshot.items() if k in Proposal.model_fields}
+        )
+        plan = proposal.adapter_plan
+        if not plan or proposal.delivery_method != "form_adapter":
+            return False
+        core = adapter_snapshot(plan)
+        return (
+            all(item.payload_snapshot.get(k) == v for k, v in core.items())
+            and plan.project_id == item.project_id
+            and plan.company_id == item.company_id
+            and plan.source_draft_id == item.source_draft_id
+            and plan.payload_version == item.payload_version
+        )
+    except (ValidationError, ValueError, TypeError):
+        return False
+
+
 def invalidate_if_needed(db, item):
     if item.status not in {"PENDING", "APPROVED"}:
         return
@@ -174,6 +195,8 @@ def invalidate_if_needed(db, item):
         reason = "payload integrity mismatch"
     elif item.delivery_method == "form_plan_fixture" and not valid_fixture_plan(item):
         reason = "fixture execution plan binding mismatch"
+    elif item.delivery_method == "form_adapter" and not valid_adapter_plan(item):
+        reason = "adapter execution plan binding mismatch"
     elif company_fingerprint(db.get(Company, item.company_id)) != item.payload_snapshot.get(
         "company_source_hash"
     ):
@@ -227,7 +250,12 @@ def create_proposal(
     actor_id: UUID,
     previous=None,
     commit=True,
+    allow_adapter_preparation=False,
 ):
+    if body.delivery_method == "form_adapter":
+        if not allow_adapter_preparation or principal_type != "HUMAN" or previous:
+            raise HTTPException(409, "管理下フォームは専用の保存済み準備から作成してください。")
+        from app.services.form_adapter_preparation import adapter_preparation
     company = db.get(Company, body.company_id)
     if not company or company.project_id != project_id:
         raise HTTPException(404, "企業が見つかりません。")
@@ -240,6 +268,10 @@ def create_proposal(
         or draft.body != body.body
     ):
         raise HTTPException(409, "Draftと提案内容が一致しません。")
+    if body.adapter_plan:
+        prepared, _ = adapter_preparation(db, company, draft)
+        if prepared.model_dump(mode="json") != body.model_dump(mode="json"):
+            raise HTTPException(409, "保存済み計画と提案が一致しません。")
     proposal_id = previous.proposal_id if previous else uuid4()
     version = previous.payload_version + 1 if previous else 1
     if body.execution_plan and (
@@ -254,6 +286,11 @@ def create_proposal(
         snapshot["execution_plan_hash"] = plan_hash(body.execution_plan)
     else:
         snapshot.pop("execution_plan", None)  # Preserve legacy canonical payload shape.
+    if body.adapter_plan:
+        snapshot["adapter_plan"] = canonical_plan(body.adapter_plan)
+        snapshot["adapter_plan_hash"] = adapter_plan_hash(body.adapter_plan)
+    else:
+        snapshot.pop("adapter_plan", None)
     snapshot.update(
         project_id=str(project_id),
         proposal_id=str(proposal_id),

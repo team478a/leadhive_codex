@@ -39,6 +39,12 @@ class ApprovedFormDispatch(Base):
             "status IN ('queued','checking','submitted','failed','unknown','blocked','cancelled')",
             name="ck_approved_form_status",
         ),
+        CheckConstraint(
+            "payload_snapshot->>'delivery_method' <> 'form_adapter' OR "
+            "(status IN ('queued','blocked','cancelled') AND started_at IS NULL "
+            "AND delivery_id IS NULL AND worker_id IS NULL)",
+            name="ck_adapter_reservation_not_started",
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     approval_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("approval_requests.id"), unique=True)

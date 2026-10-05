@@ -102,7 +102,8 @@ def latest_reviews(db, request_ids):
 
 def reprepare_allowed(row, item):
     return (
-        row.started_at is None
+        item.delivery_method == "form_direct"
+        and row.started_at is None
         and row.delivery_id is None
         and (
             row.status in {"blocked", "cancelled"}
