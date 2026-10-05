@@ -9,6 +9,8 @@ export interface ApprovalProposal {
   delivery_method?: string
   execution_plan?: Record<string, unknown> | null
   execution_plan_hash?: string | null
+  adapter_plan?: Record<string, unknown> | null
+  adapter_plan_hash?: string | null
   sender: Record<string, string>; field_values: Record<string, string>
   payload_hash: string; payload_version: number; status: string
   created_by_principal_type: 'HUMAN' | 'AGENT'; created_at: string; expires_at: string

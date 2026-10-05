@@ -159,6 +159,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [111_FORM_ADAPTER_CONTRACT_FOUNDATION.md](111_FORM_ADAPTER_CONTRACT_FOUNDATION.md): 新方式の独立契約・snapshot照合・工程1の非実行DB guard
 
+- [112_FORM_ADAPTER_APPROVAL_RESERVATION.md](112_FORM_ADAPTER_APPROVAL_RESERVATION.md): 保存済み計画のHuman承認・共通台帳への予約・DBとworkerの実行禁止
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

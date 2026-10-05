@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { Field } from './forms'
 import type { Company, OutreachDraft } from './types'
+import { FormAdapterPlanDetails } from './FormAdapterPlanDetails'
 
 interface Preview {
   preparation_hash: string; company_name: string
-  proposal: { form_url: string; form_action_url?: string; subject: string; body: string; sender: Record<string, string> }
+  proposal: { form_url: string; form_action_url?: string; subject: string; body: string; sender: Record<string, string>; adapter_plan?: Record<string, unknown> | null }
+  adapter_plan_hash?: string
   fields: { name: string; label: string; required: boolean; value: string }[]
 }
 
@@ -22,6 +24,15 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
   const [busy, setBusy] = useState(false)
   const [offset, setOffset] = useState(0)
   const [opened, setOpened] = useState(false)
+  const [mode, setMode] = useState<'direct' | 'adapter'>('direct')
+  const [adapterEnabled, setAdapterEnabled] = useState(false)
+  useEffect(() => {
+    let live = true
+    api<{ enabled: boolean }>('/form-adapter-preparation-status')
+      .then(result => { if (live) setAdapterEnabled(result.enabled) })
+      .catch(() => { if (live) setAdapterEnabled(false) })
+    return () => { live = false }
+  }, [])
   async function act(fn: () => Promise<void>) {
     setBusy(true); setError(''); setNotice('')
     try { await fn() } catch (e) { setError(errorMessage(e)); setPreview(null) }
@@ -45,7 +56,7 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
   async function prepare() {
     if (!preview) return
     await act(async () => {
-      await api(`/outreach-drafts/${draftId}/form-approval-request`, 'POST', {
+      await api(`/outreach-drafts/${draftId}/form-${mode === 'adapter' ? 'adapter' : 'approval'}-request`, 'POST', {
         expected_preparation_hash: preview.preparation_hash,
       })
       setPreview(null); setNotice('承認待ちに追加しました。下の一覧で内容を確認し、再認証して承認してください。送信は行っていません。')
@@ -58,6 +69,10 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <fieldset disabled={busy || !projectId}>
+      {adapterEnabled && <Field label="フォーム準備方式"><select value={mode} onChange={e => { setMode(e.target.value as 'direct' | 'adapter'); setPreview(null) }}>
+        <option value="direct">通常フォーム</option>
+        <option value="adapter">管理下フォーム・予約のみ（送信不可）</option>
+      </select></Field>}
       <button type="button" className="secondary" onClick={() => loadCompanies(0)}>フォーム候補を選ぶ</button>
       {opened && <>
         <Field label="フォーム提案先の会社"><select value={companyId} onChange={e => chooseCompany(e.target.value)}>
@@ -72,7 +87,7 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
           {drafts.map(draft => <option key={draft.id} value={draft.id}>{draft.subject || '件名なし'}</option>)}
         </select></Field>
         <button type="button" disabled={!draftId} onClick={() => act(async () => {
-          setPreview(await api<Preview>(`/outreach-drafts/${draftId}/form-approval-preview`))
+          setPreview(await api<Preview>(`/outreach-drafts/${draftId}/form-${mode === 'adapter' ? 'adapter' : 'approval'}-preview`))
         })}>保存済みの入力内容を確認</button>
       </>}
       {preview && <section className="mt-4">
@@ -82,6 +97,7 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
         <p>送信者: {Object.values(preview.proposal.sender).filter(Boolean).join(' / ')}</p>
         <p>件名: {preview.proposal.subject}</p>
         <p className="whitespace-pre-wrap break-words">{preview.proposal.body}</p>
+        {preview.proposal.adapter_plan && <FormAdapterPlanDetails plan={preview.proposal.adapter_plan} hash={preview.adapter_plan_hash} />}
         <dl>{preview.fields.map(field => <div key={field.name}>
           <dt>{field.label}{field.required ? '（必須）' : ''}</dt>
           <dd className="whitespace-pre-wrap break-words">{field.value || '未入力'}</dd>

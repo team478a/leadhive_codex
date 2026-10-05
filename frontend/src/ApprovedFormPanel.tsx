@@ -7,6 +7,7 @@ import { FormOperationsPanel } from './FormOperationsPanel'
 interface Dispatch {
   id: string; approval_id: string; form_url: string; status: string; reason: string
   execution_enabled: boolean; created_at: string
+  reservation_only?: boolean
   site_wait_until?: string | null
 }
 const labels: Record<string, string> = {
@@ -47,7 +48,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
         expected_hash: item.payload_hash, expected_version: item.payload_version,
         idempotency_key: keys.current[item.id],
       })
-      setNotice(result.execution_enabled ? '承認した内容で予約しました。ワーカーが送信前に再確認します。' : '予約を保存しました。フォーム実行はOFFのため送信されません。')
+      setNotice(result.reservation_only ? '管理下フォームの予約を保存しました。実行器は未接続のため送信されません。' : result.execution_enabled ? '承認した内容で予約しました。ワーカーが送信前に再確認します。' : '予約を保存しました。フォーム実行はOFFのため送信されません。')
     })
   }
   return <><FormOperationsPanel key={`operations-${projectId}`} projectId={projectId} canWrite={canWrite} refresh={refresh} /><FormDispatchGovernancePanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} /><section className="panel" aria-label="承認済みフォーム予約">
@@ -59,6 +60,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
     <fieldset disabled={busy}>
       {canWrite && items.filter(item => item.channel === 'form' && item.delivery_method !== 'form_plan_fixture' && item.status === 'APPROVED').map(item => <div key={item.id} className="my-3">
         <p>{item.company_name} / v{item.payload_version} / {item.subject}</p>
+        {item.adapter_plan && <p>管理下フォーム・予約のみ。実行器は未接続です。</p>}
         <details><summary>承認内容を確認</summary><p className="break-all">{item.form_url}</p><p className="break-all">POST先: {item.form_action_url || '未確定・再解析が必要'}</p><p className="whitespace-pre-wrap break-words">{item.body}</p>{Object.entries(item.field_values).map(([name, value]) => <p className="break-words" key={name}>{name}: {value}</p>)}</details>
         <button type="button" disabled={rows.some(row => row.approval_id === item.id) || !item.form_action_url} onClick={() => reserve(item)}>{item.company_name} の承認済みフォームを予約</button>
       </div>)}
@@ -66,6 +68,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
       {!rows.length && <p>フォーム予約はありません。</p>}
       {rows.map(row => <article className="mt-3" key={row.id}>
         <p className="break-all">{row.form_url} / {labels[row.status] ?? row.status}</p>
+        {row.reservation_only && <p>予約のみ・実行未接続</p>}
         {!row.execution_enabled && row.status === 'queued' && <p>実行OFF・送信されません</p>}
         {row.status === 'queued' && row.site_wait_until && <p>同じサイトへの間隔待ち: {new Date(row.site_wait_until).toLocaleString('ja-JP')}以降に再確認</p>}
         {row.reason && <p role={row.status === 'unknown' ? 'alert' : undefined}>{row.reason}</p>}

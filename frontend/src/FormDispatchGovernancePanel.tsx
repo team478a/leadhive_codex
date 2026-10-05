@@ -20,7 +20,7 @@ export function FormDispatchGovernancePanel({ projectId, items, canWrite, refres
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const key = useRef<string | null>(null)
-  const candidates = items.filter(i => i.channel === 'form' && i.delivery_method !== 'form_plan_fixture' && ['PENDING', 'APPROVED'].includes(i.status))
+  const candidates = items.filter(i => i.channel === 'form' && i.delivery_method === 'form_direct' && ['PENDING', 'APPROVED'].includes(i.status))
   const chosen = candidates.filter(i => selected.includes(i.id))
   const pending = chosen.filter(i => i.status === 'PENDING')
   const approved = chosen.filter(i => i.status === 'APPROVED')
