@@ -243,11 +243,15 @@ def test_multiple_forms_are_saved_and_primary_can_be_selected(auth, db, monkeypa
     assert next(item for item in saved if item["is_primary"])["id"] == secondary["id"]
 
 
-def test_prohibition_captcha_and_fingerprint_change(auth, db, monkeypatch):
+@pytest.mark.parametrize(
+    "prohibition",
+    ["営業目的のお問い合わせはご遠慮ください。", "＊セールスはお断りさせていただきます。"],
+)
+def test_prohibition_captcha_and_fingerprint_change(auth, db, monkeypatch, prohibition):
     _, company = make_company(auth, db)
     root = '<html><a href="/contact">Contact</a></html>'
-    first_form = """
-        <html><body><p>営業目的のお問い合わせはご遠慮ください。</p>
+    first_form = f"""
+        <html><body><p>{prohibition}</p>
         <form><label for="message">内容</label>
         <textarea id="message" name="message" required></textarea>
         <div class="g-recaptcha"></div><button type="submit">確認</button></form></body></html>
