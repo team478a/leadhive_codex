@@ -67,6 +67,44 @@ def test_definition_list_heading_maps_field():
 
 
 @pytest.mark.parametrize(
+    "label",
+    [
+        "お問い合わせ内容",
+        "問い合わせ内容",
+        "お問合せ内容",
+        "問合せ内容",
+        "お問い合わせの内容",
+        "問い合わせの内容",
+    ],
+)
+def test_message_spelling_variants_have_explicit_local_evidence(label):
+    fields = parse(
+        f"<form><table><tr><th>{label} ※</th>"
+        '<td><textarea name="opaque[4]"></textarea></td></tr></table></form>'
+    )
+    assert fields[0]["mapped_key"] == "message"
+    assert fields[0]["confidence"] == 0.9 and fields[0]["required"]
+    assert mapping_review_reason(fields) == ""
+
+
+@pytest.mark.parametrize("label", ["お問合せ種別", "問合せ種別", "お問合せ項目"])
+def test_category_variants_are_not_message(label):
+    fields = parse(
+        f'<form><p>{label} 必須<select name="opaque"><option>その他</option></select></p>'
+        '<p>お問合せ内容 必須<textarea name="body"></textarea></p></form>'
+    )
+    assert fields[0]["mapped_key"] == "contact_category"
+    assert fields[1]["mapped_key"] == "message"
+    assert mapping_review_reason(fields) == ""
+
+
+def test_generic_inquiry_heading_does_not_become_high_confidence_message():
+    fields = parse('<form><p>お問合せ<textarea name="opaque"></textarea></p></form>')
+    assert fields[0]["confidence"] < 0.8
+    assert mapping_review_reason(fields)
+
+
+@pytest.mark.parametrize(
     "markup",
     [
         '<form><textarea name="message"></textarea>'
