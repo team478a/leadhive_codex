@@ -28,6 +28,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 ## 実装・運用記録
 
+- `88_APPROVED_FORM_DISPATCH_FOUNDATION.md`：Human承認済みの1段階フォーム予約・一度だけの試行・旧送信経路の停止。実送信OFF。
+
 - `87_FORM_APPROVAL_PREPARATION.md`：フォームDraftから承認候補を準備する操作と、送信者変更時の失効。送信実行への接続は未完了。
 
 - `11_PHASE1_IMPLEMENTATION.md` 〜 `15_PHASE5_IMPLEMENTATION.md`

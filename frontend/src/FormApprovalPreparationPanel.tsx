@@ -5,7 +5,7 @@ import type { Company, OutreachDraft } from './types'
 
 interface Preview {
   preparation_hash: string; company_name: string
-  proposal: { form_url: string; subject: string; body: string; sender: Record<string, string> }
+  proposal: { form_url: string; form_action_url?: string; subject: string; body: string; sender: Record<string, string> }
   fields: { name: string; label: string; required: boolean; value: string }[]
 }
 
@@ -54,7 +54,7 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
   }
   return <article className="panel">
     <h2>フォームDraftから承認候補を準備</h2>
-    <p className="muted">保存済みの解析結果と送信者設定を使います。企業サイトへのアクセス・送信は行いません。フォームの承認後の送信機能は準備中です。</p>
+    <p className="muted">保存済みの解析結果と送信者設定を使います。準備・承認では企業サイトへのアクセス・送信は行いません。承認後の送信予約は別操作です。</p>
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <fieldset disabled={busy || !projectId}>
@@ -78,6 +78,7 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
       {preview && <section className="mt-4">
         <h3>{preview.company_name} のフォーム提案</h3>
         <p className="break-all">フォームURL: {preview.proposal.form_url}</p>
+        <p className="break-all">POST先: {preview.proposal.form_action_url || '未確定'}</p>
         <p>送信者: {Object.values(preview.proposal.sender).filter(Boolean).join(' / ')}</p>
         <p>件名: {preview.proposal.subject}</p>
         <p className="whitespace-pre-wrap break-words">{preview.proposal.body}</p>

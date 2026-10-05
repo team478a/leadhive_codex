@@ -3,6 +3,7 @@ import { api, errorMessage } from './api'
 import { Field } from './forms'
 import { ApprovedEmailPanel, type ApprovalProposal as Proposal } from './ApprovedEmailPanel'
 import { FormApprovalPreparationPanel } from './FormApprovalPreparationPanel'
+import { ApprovedFormPanel } from './ApprovedFormPanel'
 import type { Company, Project, ProjectMember } from './types'
 
 interface AuditEvent { id: string; event: string; principal_type: string; timestamp: string; reason: string | null }
@@ -103,6 +104,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <ApprovedEmailPanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
+    <ApprovedFormPanel key={`form-dispatch-${projectId}`} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     {canWrite && <FormApprovalPreparationPanel key={`form-${projectId}`} projectId={projectId} refresh={refresh} />}
     <fieldset disabled={busy || !projectId}>
       <div className="flex flex-wrap gap-3"><button type="button" className="secondary" onClick={() => act(refresh)}>最新の状態を取得</button>
@@ -129,6 +131,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
         <h2>{selected.company_name} の提案内容</h2>
         <dl><dt>チャネル / 状態</dt><dd>{selected.channel} / {names[selected.status]}</dd>
           <dt>宛先 / フォームURL</dt><dd className="break-all">{selected.recipient ?? selected.form_url}</dd>
+          {selected.channel === 'form' && <><dt>POST先</dt><dd className="break-all">{selected.form_action_url || '未確定・再解析が必要'}</dd></>}
           <dt>送信者</dt><dd>{Object.entries(selected.sender).filter(([, v]) => v).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</dd>
           <dt>件名</dt><dd>{selected.subject}</dd><dt>本文</dt><dd className="whitespace-pre-wrap break-words">{selected.body}</dd>
           <dt>フィールド値</dt><dd>{Object.entries(selected.field_values).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</dd>
