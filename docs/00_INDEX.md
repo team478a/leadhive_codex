@@ -129,6 +129,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [96_OFFICIAL_WEBSITE_COMPLETION_TRIAL.md](96_OFFICIAL_WEBSITE_COMPLETION_TRIAL.md): URL未登録10店舗の公式サイト確認・7店舗の補完と再解析
 
+- [97_OFFICIAL_WEBSITE_COMPLETION_REVIEW.md](97_OFFICIAL_WEBSITE_COMPLETION_REVIEW.md): 残り75店舗の一次確認・21店舗のURL補完とフォーム再解析
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
