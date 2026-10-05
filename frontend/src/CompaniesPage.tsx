@@ -464,7 +464,12 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       setNotice('フォームへの送信リクエストを実行しました。企業の活動履歴を確認してください。')
       setFormConfirmed(false)
       if (selected) await open(selected)
-    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+    } catch (e) {
+      setError(errorMessage(e)); setFormConfirmed(false)
+      try {
+        setFormDelivery(await api<FormDelivery | null>(`/outreach-drafts/${selectedDraft.id}/form-delivery`))
+      } catch { /* Keep the original error when the result read also fails. */ }
+    } finally { setBusy(false) }
   }
   async function copyFormAssist() {
     if (!selectedDraft) return

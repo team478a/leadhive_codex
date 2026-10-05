@@ -19,6 +19,7 @@ const itemStatusNames: Record<string, string> = {
   queued: '送信待ち',
   submitted: '送信済み',
   failed: '失敗',
+  unknown: '結果不明・再送禁止',
   manual_required: 'Codex支援',
   skipped: '対象外',
 }
@@ -129,6 +130,11 @@ export function CompanyFormBatchesPanel({
               </>
             )}
 
+            {batch.items.filter(item => item.status === 'unknown').map(item => (
+              <p className="error text-sm mt-2" role="alert" key={item.id}>
+                {item.company_name}：結果不明・再送禁止。送信やCodex作業をせず、受付結果を確認してください。
+              </p>
+            ))}
             {batch.items
               .filter(item => item.status === 'manual_required')
               .map(item => (
