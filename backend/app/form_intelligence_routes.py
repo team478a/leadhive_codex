@@ -189,7 +189,15 @@ def correct_form_field(
         [
             {
                 key: getattr(item, key)
-                for key in ("field_type", "mapped_key", "confidence", "required")
+                for key in (
+                    "field_type",
+                    "mapped_key",
+                    "confidence",
+                    "required",
+                    "options",
+                    "recommended_value",
+                    "decision_source",
+                )
             }
             for item in fields
         ]

@@ -139,6 +139,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [101_FORM_MESSAGE_LABEL_VARIANTS.md](101_FORM_MESSAGE_LABEL_VARIANTS.md): 本文ラベルの表記揺れ対応・曖昧な入力先の保留維持
 
+- [102_FORM_CONTACT_METHOD_REVIEW.md](102_FORM_CONTACT_METHOD_REVIEW.md): 連絡方法の専用マッピング・Human選択と送信者情報の確認
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

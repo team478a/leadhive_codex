@@ -43,7 +43,7 @@ def test_choice_options_do_not_supply_field_purpose():
     <label><input type="radio" name="contact_method" value="mail">メール</label></p>
     <p>お問い合わせ内容 必須<textarea name="body"></textarea></p></form>""")
     assert fields[0]["mapped_key"] == "contact_category"
-    assert fields[1]["mapped_key"] == "unknown"
+    assert fields[1]["mapped_key"] == "contact_method"
     assert fields[1]["required"] is True
     assert fields[2]["mapped_key"] == "message"
     assert mapping_review_reason(fields)

@@ -4,7 +4,7 @@ import type { Company, FormAnalysisLog, FormMappedKey, FormProfile, FormProfileF
 const mappedKeys: FormMappedKey[] = [
   'company_name', 'department', 'position', 'contact_name', 'last_name', 'first_name',
   'furigana', 'email', 'phone', 'postal_code', 'prefecture', 'city', 'address', 'building',
-  'website', 'contact_category', 'subject', 'message', 'privacy_consent',
+  'website', 'contact_category', 'contact_method', 'subject', 'message', 'privacy_consent',
   'newsletter_consent', 'other', 'unknown',
 ]
 const statusNames: Record<FormProfile['form_status'], string> = {
@@ -30,11 +30,15 @@ type Props = {
   onCorrect: (field: FormProfileField, mappedKey: FormMappedKey, recommendedValue: string) => void
 }
 
+function reviewedValue(field: FormProfileField) {
+  return field.mapped_key === 'contact_method' && field.decision_source !== 'MANUAL' ? '' : field.recommended_value
+}
+
 export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, readOnly, onAnalyze, onSelectPrimary, onCorrect }: Props) {
   const [drafts, setDrafts] = useState<Record<string, { mappedKey: FormMappedKey; value: string }>>({})
   useEffect(() => {
     setDrafts(Object.fromEntries(profiles.flatMap(profile => profile.fields.map(field => [
-      field.id, { mappedKey: field.mapped_key, value: field.recommended_value },
+      field.id, { mappedKey: field.mapped_key, value: reviewedValue(field) },
     ]))))
   }, [profiles])
   return <section className="panel mt-6">
@@ -54,8 +58,8 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
       {profile.error_message && <p className="error mt-3">{profile.error_message}</p>}
       {profile.fields.length > 0 && <div className="company-table-wrap mt-4"><table className="company-table form-field-table"><thead><tr><th>元の項目</th><th>種類</th><th>標準マッピング</th><th>確度・根拠</th><th>推奨値</th><th></th></tr></thead><tbody>
         {profile.fields.map(field => {
-          const draft = drafts[field.id] ?? { mappedKey: field.mapped_key, value: field.recommended_value }
-          return <tr key={field.id}><td><strong>{field.label || field.name || '名称なし'}</strong><p className="muted text-xs break-all">{field.name || field.selector}</p>{field.required && <span className="required-mark">必須</span>}</td><td>{field.field_type}{field.options.length > 0 && <p className="muted text-xs">{field.options.map(option => option.label || option.value).filter(Boolean).join(' / ')}</p>}</td><td><select aria-label={`${field.label}の標準マッピング`} value={draft.mappedKey} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, mappedKey: event.target.value as FormMappedKey } })}>{mappedKeys.map(key => <option key={key} value={key}>{key}</option>)}</select></td><td>{Math.round(field.confidence * 100)}%<p className="muted text-xs">{field.decision_source}</p></td><td><input aria-label={`${field.label}の推奨値`} value={draft.value} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, value: event.target.value } })} placeholder="選択肢の推奨値" /></td><td><button className="secondary" disabled={busy || readOnly || (draft.mappedKey === field.mapped_key && draft.value === field.recommended_value)} onClick={() => onCorrect(field, draft.mappedKey, draft.value)}>修正を保存</button></td></tr>
+          const draft = drafts[field.id] ?? { mappedKey: field.mapped_key, value: reviewedValue(field) }
+          return <tr key={field.id}><td><strong>{field.label || field.name || '名称なし'}</strong><p className="muted text-xs break-all">{field.name || field.selector}</p>{field.required && <span className="required-mark">必須</span>}</td><td>{field.field_type}{field.options.length > 0 && <p className="muted text-xs">{field.options.map(option => option.label || option.value).filter(Boolean).join(' / ')}</p>}</td><td><select aria-label={`${field.label}の標準マッピング`} value={draft.mappedKey} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, mappedKey: event.target.value as FormMappedKey } })}>{mappedKeys.map(key => <option key={key} value={key}>{key === 'contact_method' ? '連絡方法' : key}</option>)}</select></td><td>{Math.round(field.confidence * 100)}%<p className="muted text-xs">{field.decision_source}</p></td><td>{draft.mappedKey === 'contact_method' ? <><select aria-label={`${field.label}の連絡方法`} value={draft.value} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, value: event.target.value } })}><option value="">確認して選択してください</option>{field.options.map((option, index) => <option key={index} value={option.value || ''}>{option.label || option.value}</option>)}</select><p className="muted text-xs">選択した方法のメール・電話を送信者設定で確認し、修正を保存してください。</p></> : <input aria-label={`${field.label}の推奨値`} value={draft.value} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, value: event.target.value } })} placeholder="選択肢の推奨値" />}</td><td><button className="secondary" disabled={busy || readOnly || (draft.mappedKey === field.mapped_key && draft.value === field.recommended_value && (draft.mappedKey !== 'contact_method' || field.decision_source === 'MANUAL'))} onClick={() => onCorrect(field, draft.mappedKey, draft.value)}>修正を保存</button></td></tr>
         })}
       </tbody></table></div>}
     </article>)}

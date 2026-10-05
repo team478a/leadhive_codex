@@ -5,6 +5,7 @@ import re
 from bs4 import BeautifulSoup
 from bs4.element import Tag
 
+from app.services.form_intelligence.contact_method import contact_method_review_reason
 from app.services.form_intelligence.rules import dom_mapping, normalize, rule_mapping
 
 
@@ -139,6 +140,8 @@ def parse_form_fields(form: Tag) -> list[dict]:
             source = "RULE"
         if mapped_key == "message" and field_type not in {"text", "textarea"}:
             mapped_key, confidence = "unknown", 0.0
+        if mapped_key == "contact_method" and surrounding:
+            label = surrounding[:500]
         fields.append(
             {
                 "position": len(fields),
@@ -176,4 +179,9 @@ def mapping_review_reason(fields: list[dict]) -> str:
         f["required"] and (f["mapped_key"] == "unknown" or f["confidence"] < 0.8) for f in relevant
     ):
         return "必須項目の自動マッピングを確定できません。"
+    for field in relevant:
+        if field["mapped_key"] == "contact_method":
+            reason = contact_method_review_reason(field)
+            if reason:
+                return reason
     return ""

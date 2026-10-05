@@ -7,7 +7,11 @@ from app.models import FormSenderSettings
 from app.schema_approval import Proposal
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_delivery import FormDeliveryError
-from app.services.form_profile_delivery import _ready_profile, sender_values
+from app.services.form_profile_delivery import (
+    _ready_profile,
+    sender_values,
+    validate_sender_contact,
+)
 from app.services.human_approval import (
     company_fingerprint,
     draft_fingerprint,
@@ -34,6 +38,10 @@ def preparation(db, company, draft):
     if not decision.allowed:
         raise HTTPException(409, decision.message)
     sources = sender_values(db.get(FormSenderSettings, 1))
+    try:
+        validate_sender_contact(fields, sources)
+    except FormDeliveryError as exc:
+        raise HTTPException(409, exc.public_message) from exc
     values = sources | {"subject": draft.subject, "message": draft.body}
     visible = [
         f for f in fields if f.name and f.field_type not in {"hidden", "submit", "button", "reset"}

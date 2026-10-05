@@ -23,6 +23,7 @@ MappedKey = Literal[
     "building",
     "website",
     "contact_category",
+    "contact_method",
     "subject",
     "message",
     "privacy_consent",

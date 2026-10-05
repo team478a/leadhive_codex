@@ -18,6 +18,7 @@ STANDARD_KEYS = {
     "building",
     "website",
     "contact_category",
+    "contact_method",
     "subject",
     "message",
     "privacy_consent",
@@ -60,6 +61,10 @@ FIELD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
         ),
     ),
     ("subject", ("件名", "題名", "タイトル", "subject")),
+    (
+        "contact_method",
+        ("ご希望の連絡方法", "連絡方法", "連絡手段", "contact_method", "contact method"),
+    ),
     (
         "message",
         (

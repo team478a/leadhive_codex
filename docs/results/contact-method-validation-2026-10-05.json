@@ -1,0 +1,23 @@
+{
+  "analysis_version": "1.5",
+  "anonymous_alias_check": "passed",
+  "contact_method_check": "passed",
+  "technical_holds_retained": 2,
+  "flags": {
+    "outbound_enabled": false,
+    "human_approved_form_enabled": false,
+    "legacy_form_delivery_enabled": false,
+    "agent_features_enabled": false
+  },
+  "company_count": 100,
+  "form_profile_count": 139,
+  "active_jobs": 0,
+  "send_counts": {
+    "approved_form_dispatches": 0,
+    "form_deliveries": 0,
+    "email_deliveries": 0
+  },
+  "database_mutations": false,
+  "real_site_access": false,
+  "form_post": false
+}

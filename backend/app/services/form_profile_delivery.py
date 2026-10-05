@@ -11,6 +11,7 @@ from app.models import (
     OutreachDraft,
 )
 from app.services.form_delivery import FormDeliveryError, FormPreview, inspect_form
+from app.services.form_intelligence.contact_method import sender_contact_review_reason
 from app.services.form_intelligence.fields import mapping_review_reason
 
 
@@ -100,7 +101,15 @@ def _ready_profile(db: Session, company: Company) -> tuple[FormProfile, list[For
         [
             {
                 key: getattr(field, key)
-                for key in ("field_type", "mapped_key", "confidence", "required")
+                for key in (
+                    "field_type",
+                    "mapped_key",
+                    "confidence",
+                    "required",
+                    "options",
+                    "recommended_value",
+                    "decision_source",
+                )
             }
             for field in fields
         ]
@@ -163,6 +172,7 @@ def inspect_delivery_profile(
     db: Session, company: Company, draft: OutreachDraft
 ) -> DeliveryProfileContext:
     profile, fields = _ready_profile(db, company)
+    validate_sender_contact(fields, sender_values(db.get(FormSenderSettings, 1)))
     preview = inspect_form(
         profile.form_url,
         form_index=profile.form_index,
@@ -190,6 +200,28 @@ def inspect_delivery_profile(
         preview=preview,
         values=values,
     )
+
+
+def validate_sender_contact(fields: list[FormProfileField], sources: dict[str, str]) -> None:
+    reason = sender_contact_review_reason(
+        [
+            {
+                key: getattr(f, key)
+                for key in (
+                    "mapped_key",
+                    "field_type",
+                    "required",
+                    "options",
+                    "recommended_value",
+                    "decision_source",
+                )
+            }
+            for f in fields
+        ],
+        sources,
+    )
+    if reason:
+        raise FormDeliveryError(reason, "manual_required")
 
 
 def required_missing(preview: FormPreview, values: dict[str, str]) -> list[str]:

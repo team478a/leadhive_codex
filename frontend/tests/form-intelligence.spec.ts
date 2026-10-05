@@ -84,8 +84,14 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(page.getByText('フォーム項目の判定を修正しました。')).toBeVisible()
   await expect(departmentMapping).toHaveValue('department')
   await expect(captchaCard.getByText('MANUAL', { exact: true })).toBeVisible()
+  const contactMethod = formPanel.getByLabel('連絡方法の連絡方法')
+  await expect(contactMethod).toHaveValue('')
+  await contactMethod.selectOption('m')
+  await contactMethod.locator('xpath=ancestor::tr').getByRole('button', { name: '修正を保存' }).click()
+  await expect(contactMethod.locator('xpath=ancestor::tr').getByText('MANUAL', { exact: true })).toBeVisible()
+  await expect(contactMethod).toHaveValue('m')
   await formPanel.getByText(/解析ログ/).click()
-  await expect(formPanel.getByText('manual_corrected', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('manual_corrected', { exact: true })).toHaveCount(2)
 
   const memberResponse = await page.request.post(`/api/projects/${project.id}/members`, {
     data: { email: process.env.E2E_MEMBER_EMAIL, role: 'viewer' },
@@ -105,6 +111,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(viewerPanel.getByRole('button', { name: '優先フォームにする' })).toBeDisabled()
   await expect(viewerPanel.getByLabel('部署コードの標準マッピング')).toBeDisabled()
   await expect(viewerPanel.getByLabel('部署コードの推奨値')).toBeDisabled()
+  await expect(viewerPanel.getByLabel('連絡方法の連絡方法')).toBeDisabled()
 
   await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
   await login(page, process.env.E2E_EMAIL!, process.env.E2E_PASSWORD!)
