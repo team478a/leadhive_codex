@@ -50,8 +50,20 @@ GitHubには本書と、店舗名・URL・個別IDを含まない集計JSONの�
 - 解析テストの専用DBでMigration upgrade / model差分確認を実施。新Migrationなし、実DB head `fae47ac5e861` を維持。
 - このPCのAPIへ限定修正を反映し、health / DB疎通 / 集計を確認。企業100件、プロフィール104件。メール送信・フォーム送信・承認済みフォーム予約はすべて0件。
 - APIの外部送信・承認済みフォーム実行・旧フォーム送信・Agent flagはOFF。workerにも修正ソースをコピー済み。
-- 最終ファイル回収・集計更新・worker再開をまとめたコマンドが自動承認レビューで拒否された。具体的理由は示されていない。より限定した集計とファイル回収は完了したが、worker再開は行わず停止を保持した。Web UI/APIは起動中で、バックグラウンド収集・解析の再開は残作業。
+- 最終ファイル回収・集計更新・worker再開をまとめたコマンドが操作ツールの実行ポリシーで拒否された。具体的理由は示されていない。より限定した集計とファイル回収は完了したが、worker再開は行わず停止を保持した。Web UI/APIは起動中で、バックグラウンド収集・解析の再開は残作業。
 - 実メール・フォーム送信、送信flag有効化、Production deployment、配布zip更新なし。
+
+### 実行拒否の追加調査・説明訂正
+
+拒否記録は2026-10-05 21:02:14 JSTの `CreateProcess ... rejected: blocked by policy`。PowerShellプロセス作成前に、複数操作を含むコマンド全体が拒否されている。どの部分が対象だったか、規則IDや具体的理由は返されていない。「worker再開そのものが拒否対象だった」とも断定できない。
+
+当該turnの保存済み設定はapproval_policy=never / danger-full-access。現在の設定もneverで、approvals_reviewer=user。通常のCodex Auto-reviewはneverでは動作しないと[公式説明](https://learn.chatgpt.com/docs/sandboxing/auto-review)にあるため、当初の「自動承認レビュー」という説明は根拠がなく訂正する。
+
+ローカルdefault.rulesの697規則を解析し、forbidden規則0、docker prefixはallowだった。ただしローカル規則だけで全実行ポリシーは確定できない。当該会話記録、時間を限定したCodexログDB、当日のdesktopログを確認したが、具体的な拒否理由は見つからなかった。
+
+workerは20:55:40 JSTに測定準備の明示的なdocker stopで停止し、拒否より約6分34秒前の出来事。OOMKilled=false、Docker State.Errorは空。実行拒否がworkerを停止したという因果関係はない。根本の拒否規則は未特定であり、侵入・情報漏えいを検出したとする証拠もない。調査では再開、規則緩和、送信有効化を行わない。
+
+秘密情報と会話全文を含めない診断JSONをローカル `dist/exec-policy-denial-diagnostics-2026-10-05.json` に保存した。原因を確定するには実行サービス側の拒否理由の照会が必要。日時とtool call IDを添えて問い合わせるための資料であり、調査用に拒否された操作を再実行しない。
 
 ## 次の優先工程
 

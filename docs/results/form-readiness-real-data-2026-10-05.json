@@ -66,5 +66,5 @@
   },
   "detail_csv_sha256": "91552F0F972C67929DDEFA19203C052910CB9848A45E0A5FF96736EEEDE1201F",
   "limitations": "15 registered websites / 7 domains; GET/rules only; no approval/send; not a 100-site or 10000-send benchmark",
-  "worker_state": "stopped; automatic approval review rejected combined finalization and resume command"
+  "worker_state": "stopped; execution policy rejected combined finalization and resume command; specific denied suboperation and rationale not identified"
 }
