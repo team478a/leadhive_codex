@@ -119,6 +119,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - `acceptance/THREE_COMPANY_DEPLOYMENT_REGISTER.csv`
 - `acceptance/THREE_COMPANY_ACCEPTANCE_RESULTS.csv`
 
+- [91_FORM_OPERATIONS_AND_SAFE_REPREPARATION.md](91_FORM_OPERATIONS_AND_SAFE_REPREPARATION.md): フォーム運用確認・期限切れ整理・未送信予約の安全な再準備
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
