@@ -67,6 +67,7 @@ PREFECTURES = (
 )
 
 AGGREGATOR_DOMAINS = {
+    "hotpepper.jp",
     "facebook.com",
     "instagram.com",
     "x.com",

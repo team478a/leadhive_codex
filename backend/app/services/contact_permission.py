@@ -149,6 +149,48 @@ def _email_permission(db: Session, company: Company, destination: str) -> Contac
     return _decision("ALLOWED", "allowed", "送信できます。")
 
 
+def _shared_location_destination(
+    db: Session, company: Company, channel: str, destination: str
+) -> bool:
+    """Fail closed on a shared store destination; collection identity is not send identity."""
+    value = _normalized(destination).rstrip("/") if channel == "form" else _normalized(destination)
+    if not value or channel not in {"email", "form"}:
+        return False
+    if channel == "email":
+        matches = or_(
+            func.lower(func.trim(Company.email)) == value,
+            select(ContactPerson.id)
+            .where(
+                ContactPerson.company_id == Company.id,
+                func.lower(func.trim(ContactPerson.email)) == value,
+            )
+            .exists(),
+        )
+    else:
+        matches = or_(
+            func.rtrim(func.lower(func.trim(Company.contact_url)), "/") == value,
+            select(FormProfile.id)
+            .where(
+                FormProfile.company_id == Company.id,
+                func.rtrim(func.lower(func.trim(FormProfile.form_url)), "/") == value,
+            )
+            .exists(),
+        )
+    return (
+        db.scalar(
+            select(Company.id)
+            .where(
+                Company.project_id == company.project_id,
+                Company.id != company.id,
+                True if company.record_type == "location" else Company.record_type == "location",
+                matches,
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def _form_permission(db: Session, company: Company) -> ContactPermissionDecision:
     profile = _primary_form_profile(db, company.id)
     if profile is None:
@@ -223,6 +265,15 @@ def evaluate_contact_permission(
             "PROHIBITED",
             suppression_reason,
             "Suppression Listに登録された宛先には送信できません。",
+        )
+    profile = _primary_form_profile(db, company.id) if channel == "form" else None
+    if _shared_location_destination(db, company, channel, destination) or (
+        profile and _shared_location_destination(db, company, channel, profile.form_url)
+    ):
+        return _decision(
+            "PROHIBITED",
+            "shared_location_destination",
+            "別店舗と共通の宛先です。重複送信を防ぐため、店舗固有の連絡先を確認してください。",
         )
     if channel == "email":
         return _email_permission(db, company, destination)

@@ -93,6 +93,8 @@ class CompanyOut(BaseModel):
     project_id: UUID
     company_name: str
     website_url: str | None
+    record_type: Literal["company", "location"]
+    reference_url: str
     domain: str | None
     address: str
     phone: str

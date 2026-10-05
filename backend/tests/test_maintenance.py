@@ -35,7 +35,7 @@ def test_recovery_report_deterministic_and_read_only(db):
     first = database_report(db.connection())
     second = database_report(db.connection())
     assert first == second
-    assert first["schema_revision"] == "a2f0c6d8e913"
+    assert first["schema_revision"] == "c7a24d9e601b"
     assert "outreach_audit_events" in first["fingerprints"]
     assert "approval_requests" in first["counts"]
     assert all(len(value) == 64 for value in first["fingerprints"].values())

@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CollectionJob, Company, SuppressionEntry
 from app.services.collection import Candidate, canonicalize_url
+from app.services.location_identity import location_key
 from app.services.scraper import is_aggregator_domain
 
 logger = logging.getLogger("leadhive")
@@ -41,6 +42,24 @@ def start_job(
 
 
 def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
+    if candidate.record_type == "location":
+        key = location_key(
+            candidate.company_name,
+            candidate.address,
+            candidate.reference_url or candidate.website_url or "",
+        )
+        return (
+            db.scalar(
+                select(Company.id)
+                .where(
+                    Company.project_id == project_id,
+                    Company.record_type == "location",
+                    Company.location_key == key,
+                )
+                .limit(1)
+            )
+            is not None
+        )
     conditions = []
     if candidate.website_url:
         _, domain = canonicalize_url(candidate.website_url)
@@ -53,7 +72,11 @@ def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
     return (
         bool(conditions)
         and db.scalar(
-            select(Company.id).where(Company.project_id == project_id, or_(*conditions)).limit(1)
+            select(Company.id)
+            .where(
+                Company.project_id == project_id, Company.record_type == "company", or_(*conditions)
+            )
+            .limit(1)
         )
         is not None
     )
@@ -61,8 +84,10 @@ def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
 
 def is_suppressed(db: Session, project_id: UUID, candidate: Candidate) -> bool:
     conditions = []
-    if candidate.website_url:
-        _, domain = canonicalize_url(candidate.website_url)
+    for url in (candidate.website_url, candidate.reference_url):
+        if not url:
+            continue
+        _, domain = canonicalize_url(url)
         conditions.append((SuppressionEntry.domain != "") & (SuppressionEntry.domain == domain))
     if candidate.email:
         conditions.append(
@@ -100,8 +125,12 @@ def save_candidates(
         if candidate.website_url:
             _, candidate_domain = canonicalize_url(candidate.website_url)
             if is_aggregator_domain(candidate_domain):
-                job.excluded_count += 1
-                continue
+                if candidate.record_type == "location":
+                    candidate.reference_url = candidate.reference_url or candidate.website_url
+                    candidate.website_url = None
+                else:
+                    job.excluded_count += 1
+                    continue
         if is_duplicate(db, job.project_id, candidate) or is_suppressed(
             db, job.project_id, candidate
         ):
@@ -113,6 +142,20 @@ def save_candidates(
         company = Company(
             project_id=job.project_id,
             company_name=candidate.company_name,
+            record_type=candidate.record_type,
+            reference_url=candidate.reference_url,
+            location_key=(
+                location_key(
+                    candidate.company_name,
+                    candidate.address,
+                    candidate.reference_url or candidate.website_url or "",
+                )
+                if candidate.record_type == "location"
+                else ""
+            ),
+            protected_fields=(
+                ["company_name", "address"] if candidate.record_type == "location" else []
+            ),
             website_url=candidate.website_url,
             domain=domain,
             address=candidate.address,

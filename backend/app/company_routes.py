@@ -369,6 +369,8 @@ def export_companies(
         "city",
         "address",
         "website_url",
+        "record_type",
+        "reference_url",
         "phone",
         "email",
         "contact_url",

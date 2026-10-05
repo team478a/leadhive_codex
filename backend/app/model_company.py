@@ -10,7 +10,6 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
-    UniqueConstraint,
     func,
     text,
 )
@@ -24,15 +23,38 @@ from app.model_core import Timestamps
 class Company(Timestamps, Base):
     __tablename__ = "companies"
     __table_args__ = (
-        UniqueConstraint("project_id", "domain", name="uq_company_project_domain"),
-        UniqueConstraint("project_id", "website_url", name="uq_company_project_website"),
+        Index(
+            "uq_company_project_domain",
+            "project_id",
+            "domain",
+            unique=True,
+            postgresql_where=text("record_type = 'company'"),
+        ),
+        Index(
+            "uq_company_project_website",
+            "project_id",
+            "website_url",
+            unique=True,
+            postgresql_where=text("record_type = 'company'"),
+        ),
+        Index(
+            "uq_company_project_location",
+            "project_id",
+            "location_key",
+            unique=True,
+            postgresql_where=text("record_type = 'location'"),
+        ),
+        CheckConstraint("record_type IN ('company', 'location')", name="ck_company_record_type"),
+        CheckConstraint(
+            "record_type <> 'location' OR length(location_key) = 64", name="ck_company_location_key"
+        ),
         Index(
             "uq_company_project_name_address",
             "project_id",
             "company_name",
             "address",
             unique=True,
-            postgresql_where=text("address <> ''"),
+            postgresql_where=text("address <> '' AND record_type = 'company'"),
         ),
         CheckConstraint(
             "source IN ('serper', 'google_places', 'gbizinfo', 'url', 'csv')",
@@ -62,6 +84,11 @@ class Company(Timestamps, Base):
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
     company_name: Mapped[str] = mapped_column(String(500))
+    record_type: Mapped[str] = mapped_column(
+        String(20), default="company", server_default="company"
+    )
+    location_key: Mapped[str] = mapped_column(String(64), default="", server_default="")
+    reference_url: Mapped[str] = mapped_column(Text, default="", server_default="")
     website_url: Mapped[str | None] = mapped_column(Text)
     domain: Mapped[str | None] = mapped_column(String(253))
     address: Mapped[str] = mapped_column(Text, default="")

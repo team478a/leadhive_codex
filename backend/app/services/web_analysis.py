@@ -39,12 +39,29 @@ def update_unprotected_fields(company: Company, data) -> None:
 def find_duplicate(
     db: Session, company: Company, website_url: str, domain: str, company_name: str, address: str
 ) -> Company | None:
+    # Locations are keyed by their imported identity, not a chain's website/domain.
+    if company.record_type == "location":
+        return db.scalar(
+            select(Company)
+            .where(
+                Company.project_id == company.project_id,
+                Company.id != company.id,
+                Company.record_type == "location",
+                Company.location_key == company.location_key,
+            )
+            .limit(1)
+        )
     conditions = [Company.domain == domain, Company.website_url == website_url]
     if company_name and address:
         conditions.append((Company.company_name == company_name) & (Company.address == address))
     return db.scalar(
         select(Company)
-        .where(Company.project_id == company.project_id, Company.id != company.id, or_(*conditions))
+        .where(
+            Company.project_id == company.project_id,
+            Company.id != company.id,
+            Company.record_type == "company",
+            or_(*conditions),
+        )
         .order_by(Company.created_at, Company.id)
         .limit(1)
     )
@@ -75,6 +92,18 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
     try:
         page, data = scrape_company(company.website_url)
         website_url, domain = canonicalize_url(page.url)
+        if company.record_type == "location" and is_aggregator_domain(domain):
+            company.reference_url = company.reference_url or website_url
+            company.website_url = None
+            company.domain = None
+            company.analysis_status = "excluded"
+            company.analysis_error = (
+                "予約・ポータルサイトへ転送されたため、参考URLとして保存しました。"
+            )
+            company.scraped_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(company)
+            return company
         protected = set(company.protected_fields or [])
         name = (
             company.company_name

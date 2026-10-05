@@ -108,6 +108,7 @@ def merge_companies(
     if not duplicate_reasons(target, source):
         raise HTTPException(409, "一致する重複根拠がないため統合できません。")
     fill_fields = (
+        "reference_url",
         "address",
         "phone",
         "email",

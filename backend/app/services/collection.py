@@ -24,6 +24,8 @@ class Candidate:
     address: str = ""
     phone: str = ""
     email: str = ""
+    record_type: str = "company"
+    reference_url: str = ""
 
 
 def canonicalize_url(value: str) -> tuple[str, str]:
@@ -88,15 +90,18 @@ def read_csv(content: bytes) -> tuple[list[str], list[dict[str, str]]]:
 
 
 def parse_csv_with_mapping(
-    content: bytes, mapping: dict[str, str]
+    content: bytes, mapping: dict[str, str], record_type: str = "company"
 ) -> tuple[list[Candidate], list[dict[str, object]]]:
     headers, rows = read_csv(content)
     if (
         not isinstance(mapping, dict)
-        or set(mapping) != set(CSV_FIELDS)
+        or not set(CSV_FIELDS).issubset(mapping)
+        or set(mapping) - set(CSV_FIELDS) - {"reference_url"}
         or any(value not in headers for value in mapping.values())
     ):
         raise ValueError("CSVの列対応付けが正しくありません。")
+    if record_type not in {"company", "location"}:
+        raise ValueError("取り込み単位が正しくありません。")
     candidates: list[Candidate] = []
     errors: list[dict[str, object]] = []
     for index, row in enumerate(rows, start=2):
@@ -106,6 +111,13 @@ def parse_csv_with_mapping(
             errors.append({"row": index, "reason": "会社名が空です。"})
             continue
         normalized: str | None = None
+        reference_url = (row.get(mapping.get("reference_url", "")) or "").strip()
+        if reference_url:
+            try:
+                reference_url, _ = canonicalize_url(reference_url)
+            except ValueError:
+                errors.append({"row": index, "reason": "参考URLが不正です。"})
+                continue
         if website:
             try:
                 normalized, _ = canonicalize_url(website)
@@ -119,16 +131,21 @@ def parse_csv_with_mapping(
                 phone=(row.get(mapping["phone"]) or "").strip()[:100],
                 email=(row.get(mapping["email"]) or "").strip()[:320],
                 address=(row.get(mapping["address"]) or "").strip()[:5000],
+                record_type=record_type,
+                reference_url=reference_url,
             )
         )
     return candidates, errors
 
 
-def parse_csv(content: bytes) -> tuple[list[Candidate], int]:
+def parse_csv(content: bytes, record_type: str = "company") -> tuple[list[Candidate], int]:
     headers, _ = read_csv(content)
     if not set(CSV_FIELDS).issubset(headers):
         raise ValueError("CSVの列はcompany_name, website_url, phone, email, addressが必要です。")
-    candidates, errors = parse_csv_with_mapping(content, {field: field for field in CSV_FIELDS})
+    mapping = {field: field for field in CSV_FIELDS}
+    if "reference_url" in headers:
+        mapping["reference_url"] = "reference_url"
+    candidates, errors = parse_csv_with_mapping(content, mapping, record_type)
     return candidates, len(errors)
 
 

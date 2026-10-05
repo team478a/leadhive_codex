@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
@@ -141,6 +142,7 @@ async def collect_csv(
     project_id: UUID,
     file: UploadFile = File(...),
     column_mapping: str | None = Form(None),
+    record_type: Literal["company", "location"] = Form("company"),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -151,9 +153,9 @@ async def collect_csv(
     try:
         if column_mapping:
             mapping = json.loads(column_mapping)
-            candidates, errors = parse_csv_with_mapping(content, mapping)
+            candidates, errors = parse_csv_with_mapping(content, mapping, record_type)
         else:
-            candidates, count = parse_csv(content)
+            candidates, count = parse_csv(content, record_type)
             errors = count
     except (ValueError, json.JSONDecodeError) as exc:
         raise HTTPException(422, str(exc)) from None
@@ -180,6 +182,7 @@ async def preview_csv(
         "phone": ("phone", "電話", "電話番号"),
         "email": ("email", "メール", "メールアドレス"),
         "address": ("address", "住所", "所在地"),
+        "reference_url": ("reference_url", "参考URL", "予約ページURL"),
     }
     suggested = {
         field: next((header for header in choices if header in headers), "")
