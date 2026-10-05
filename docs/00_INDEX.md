@@ -125,6 +125,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [94_FORM_READINESS_OVERVIEW.md](94_FORM_READINESS_OVERVIEW.md): プロジェクト全体のフォーム候補・対象外理由・要確認企業の集計
 
+- [95_FORM_READINESS_REAL_DATA_MEASUREMENT.md](95_FORM_READINESS_REAL_DATA_MEASUREMENT.md): 既存100店舗のフォーム解析結果・入力不足・共通宛先の確認
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
