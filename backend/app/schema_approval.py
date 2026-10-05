@@ -56,6 +56,7 @@ class Proposal(StrictInput):
     source_draft_id: UUID | None = None
     recipient: EmailStr | None = None
     form_url: HttpUrl | None = None
+    form_action_url: HttpUrl | None = None
     subject: str = Field(default="", max_length=1000)
     body: str = Field(min_length=1, max_length=30000)
     sender: Sender
@@ -66,7 +67,12 @@ class Proposal(StrictInput):
     @model_validator(mode="after")
     def valid_channel(self):
         if self.channel == "email":
-            if self.delivery_method != "email" or not self.recipient or self.form_url:
+            if (
+                self.delivery_method != "email"
+                or not self.recipient
+                or self.form_url
+                or self.form_action_url
+            ):
                 raise ValueError("email target required")
         elif self.delivery_method == "email" or not self.form_url or self.recipient:
             raise ValueError("form target required")

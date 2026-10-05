@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     worker_paused: bool = False
     outbound_enabled: bool = False
     human_approved_email_enabled: bool = False
+    human_approved_form_enabled: bool = False
+    legacy_form_delivery_enabled: bool = False
     email_feedback_webhook_enabled: bool = False
     email_feedback_webhook_secret: str = ""
     serper_api_key: str = ""

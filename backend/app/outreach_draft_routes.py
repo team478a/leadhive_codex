@@ -58,7 +58,7 @@ from app.services.form_profile_delivery import (
     profile_form_url,
 )
 from app.services.form_submission_guard import UNKNOWN_MESSAGE, reserve_form_submission
-from app.services.outbound_guard import require_outbound_enabled
+from app.services.outbound_guard import require_legacy_form_enabled, require_outbound_enabled
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
@@ -358,7 +358,7 @@ def get_form_assist(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    require_outbound_enabled()
+    require_legacy_form_enabled()
     draft = owned_draft(draft_id, db, user, write=False)
     if draft.channel != "form":
         raise HTTPException(409, "フォーム文面だけをCodex支援へ渡せます。")
@@ -408,7 +408,7 @@ def record_form_assist_delivery(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    require_outbound_enabled()
+    require_legacy_form_enabled()
     if not body.confirmed:
         raise HTTPException(422, "Codex上で確認した送信結果を承認してください。")
     draft = owned_draft(draft_id, db, user)
@@ -505,7 +505,7 @@ def create_form_delivery(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    require_outbound_enabled()
+    require_legacy_form_enabled()
     if not body.confirmed:
         raise HTTPException(422, "送信内容を確認して承認してください。")
     draft = owned_draft(draft_id, db, user)

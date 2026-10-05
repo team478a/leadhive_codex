@@ -27,9 +27,11 @@ def form_source(db, workspace):
     profile = FormProfile(
         company_id=company.id,
         form_url=company.contact_url,
+        action_url=company.contact_url + "/submit",
         form_status="READY",
         sales_contact_status="ALLOWED",
         captcha_type="CAPTCHA_NONE",
+        confirmation_page=False,
         form_found=True,
         delivery_supported=True,
         fingerprint="a" * 64,

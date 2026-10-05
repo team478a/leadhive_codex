@@ -101,6 +101,7 @@ def form_dependency_hash(db, company_id):
             {
                 "id": str(profile.id),
                 "url": profile.form_url,
+                "action_url": profile.action_url,
                 "index": profile.form_index,
                 "fingerprint": profile.fingerprint,
                 "primary": profile.is_primary,
@@ -108,6 +109,8 @@ def form_dependency_hash(db, company_id):
                 "sales_contact_status": profile.sales_contact_status,
                 "captcha": profile.captcha_type,
                 "delivery_supported": profile.delivery_supported,
+                "confirmation_page": profile.confirmation_page,
+                "form_found": profile.form_found,
                 "fields": [
                     {
                         column.name: (

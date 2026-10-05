@@ -26,6 +26,8 @@ def preparation(db, company, draft):
         raise HTTPException(409, exc.public_message) from exc
     if not profile.form_found or not profile.fingerprint:
         raise HTTPException(409, "フォーム構造が未確定です。再解析してください。")
+    if not profile.action_url:
+        raise HTTPException(409, "フォームのPOST先が未確定です。再解析してください。")
     decision = evaluate_contact_permission(
         db, company.project_id, company.id, "form", profile.form_url
     )
@@ -57,6 +59,7 @@ def preparation(db, company, draft):
             delivery_method="form_direct",
             source_draft_id=draft.id,
             form_url=profile.form_url,
+            form_action_url=profile.action_url or None,
             subject=draft.subject,
             body=draft.body,
             sender={

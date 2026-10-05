@@ -66,6 +66,7 @@ class FormProfile(Timestamps, Base):
         ForeignKey("companies.id", ondelete="CASCADE"), index=True
     )
     form_url: Mapped[str] = mapped_column(Text)
+    action_url: Mapped[str] = mapped_column(Text, default="")
     form_index: Mapped[int] = mapped_column(Integer, default=0)
     form_status: Mapped[str] = mapped_column(String(30), default="UNANALYZED", index=True)
     sales_contact_status: Mapped[str] = mapped_column(String(20), default="UNCERTAIN", index=True)

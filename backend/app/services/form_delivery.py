@@ -12,6 +12,7 @@ from app.services.form_delivery_result import (
 )
 from app.services.form_intelligence.analyzer import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
+from app.services.form_intelligence.rules import PROHIBITED_PATTERNS, normalize
 from app.services.outbound_guard import require_outbound_enabled
 from app.services.scraper import SafeFetcher, ScrapeError
 
@@ -100,6 +101,9 @@ def _parse_form(
     form_status: str = "UNANALYZED",
 ) -> FormPreview:
     soup = BeautifulSoup(html, "html.parser")
+    page_text = normalize(soup.get_text(" ", strip=True))
+    if any(pattern.search(page_text) for pattern in PROHIBITED_PATTERNS):
+        raise FormDeliveryError("営業目的の送信が禁止されているフォームです。", "blocked")
     forms = list(soup.select("form"))
     if form_index < 0 or form_index >= len(forms):
         raise FormDeliveryError(
@@ -265,6 +269,7 @@ def submit_form(
     form_profile_id: UUID | None = None,
     expected_fingerprint: str = "",
     confirmation_expected: bool = False,
+    expected_action_url: str = "",
 ) -> tuple[FormPreview, FormSubmissionResult]:
     require_outbound_enabled()
     fetcher = SafeFetcher()
@@ -282,6 +287,10 @@ def submit_form(
             raise FormDeliveryError(
                 "フォーム構造が解析時から変更されています。再解析してください。",
                 "profile_changed",
+            )
+        if expected_action_url and preview.action_url != expected_action_url:
+            raise FormDeliveryError(
+                "フォームのPOST先が承認時から変更されています。", "profile_changed"
             )
         missing = [
             field.label
@@ -302,10 +311,11 @@ def submit_form(
             if form
             else {}
         )
+        submit_values = _submit_payload(form) if form else {}
+        if any(key in values and values[key] != value for key, value in submit_values.items()):
+            raise FormDeliveryError("送信ボタンが承認した入力値を上書きします。", "profile_changed")
         payload = (
-            hidden
-            | {key: value[:2000] for key, value in values.items() if key in allowed}
-            | (_submit_payload(form) if form else {})
+            hidden | {key: value for key, value in values.items() if key in allowed} | submit_values
         )
         submission = submit_and_verify(
             fetcher,

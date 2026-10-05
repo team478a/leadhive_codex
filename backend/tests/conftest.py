@@ -80,3 +80,4 @@ def legacy_delivery_test_mode(monkeypatch):
     from app.config import settings
 
     monkeypatch.setattr(settings, "outbound_enabled", True)
+    monkeypatch.setattr(settings, "legacy_form_delivery_enabled", True)

@@ -333,6 +333,7 @@ def _upsert_profile(
     delivery_supported: bool = False,
     compatibility_reason: str = "",
     error_message: str = "",
+    action_url: str = "",
 ) -> FormProfile:
     profile = db.scalar(
         select(FormProfile).where(
@@ -382,6 +383,7 @@ def _upsert_profile(
     profile.form_found = form_found
     profile.page_kind = page_kind
     profile.fingerprint = fingerprint
+    profile.action_url = action_url
     profile.analysis_version = ANALYSIS_VERSION
     profile.analysis_provider = provider_name
     profile.last_analyzed_at = datetime.now(timezone.utc)
@@ -610,6 +612,7 @@ def analyze_company_forms(
                         provider_name=provider_name,
                         delivery_supported=compatibility.supported,
                         compatibility_reason=compatibility.reason,
+                        action_url=_clean_url(str(form.get("action") or url), url),
                     )
                     profiles.append(profile)
                     seen.add((url, form_index))

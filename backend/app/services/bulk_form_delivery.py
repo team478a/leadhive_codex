@@ -20,7 +20,7 @@ from app.services.form_profile_delivery import (
     required_missing,
 )
 from app.services.form_submission_guard import UNKNOWN_MESSAGE, reserve_form_submission
-from app.services.outbound_guard import require_outbound_enabled
+from app.services.outbound_guard import require_legacy_form_enabled
 
 
 def body_values(preview: FormPreview, body: str) -> tuple[dict[str, str], list[str]]:
@@ -38,7 +38,7 @@ def body_values(preview: FormPreview, body: str) -> tuple[dict[str, str], list[s
 
 
 def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: UUID | None) -> bool:
-    require_outbound_enabled()
+    require_legacy_form_enabled()
     company = db.get(Company, item.company_id)
     draft = db.get(OutreachDraft, item.draft_id) if item.draft_id else None
     if company is None or draft is None:

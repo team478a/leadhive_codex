@@ -15,3 +15,11 @@ def require_outbound_enabled() -> None:
         raise HTTPException(
             503, "この環境では外部送信を停止しています。収集・解析・文面準備は利用できます。"
         )
+
+
+def require_legacy_form_enabled() -> None:
+    require_outbound_enabled()
+    if not settings.legacy_form_delivery_enabled or settings.human_approved_form_enabled:
+        raise HTTPException(
+            403, "旧フォーム送信経路は停止中です。承認キューで準備・承認してください。"
+        )

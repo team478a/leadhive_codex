@@ -39,7 +39,7 @@ from app.services.email_delivery import EmailDeliveryError, email_delivery_limit
 from app.services.form_intelligence import analyze_company_forms
 from app.services.inbound_email import sync_inbound_mail
 from app.services.operations import add_operation_job, refresh_company_ids
-from app.services.outbound_guard import require_outbound_enabled
+from app.services.outbound_guard import require_legacy_form_enabled, require_outbound_enabled
 from app.services.web_analysis import analyze
 
 logger = logging.getLogger("leadhive")
@@ -669,7 +669,7 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 
 
 def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
-    require_outbound_enabled()
+    require_legacy_form_enabled()
     batch_id = uuid.UUID(job.payload["batch_id"])
     batch = db.get(FormDeliveryBatch, batch_id)
     if batch is None or batch.status == "cancelled":
@@ -733,6 +733,21 @@ def run_once() -> bool:
         if settings.outbound_enabled:
             recover_stale_email_deliveries(db)
         if sync_inbound_mail(db):
+            return True
+        from app.services import approved_form, approved_form_worker
+
+        form_dispatch = approved_form.claim(db)
+        if form_dispatch is not None:
+            form_dispatch_id = form_dispatch.id
+            try:
+                approved_form_worker.run(db, form_dispatch)
+            except Exception as exc:
+                db.rollback()
+                logger.error(
+                    "form dispatch persistence error: id=%s type=%s",
+                    form_dispatch_id,
+                    type(exc).__name__,
+                )
             return True
         delivery = claim_email_delivery(db)
         if delivery is not None:

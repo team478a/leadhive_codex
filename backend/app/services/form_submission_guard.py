@@ -23,7 +23,7 @@ def unresolved_form_submission(db, company_id, form_url):
     )
 
 
-def reserve_form_submission(db, company, draft, context, user_id, item=None):
+def reserve_form_submission(db, company, draft, context, user_id, item=None, *, commit=True):
     # Short global lock serializes reservation only; network I/O starts after commit.
     db.execute(text("SELECT pg_advisory_xact_lock(4781003)"))
     existing = db.scalar(select(FormDelivery).where(FormDelivery.draft_id == draft.id))
@@ -71,5 +71,7 @@ def reserve_form_submission(db, company, draft, context, user_id, item=None):
             note="フォーム送信試行を保存。完了確認まで結果不明として再送を禁止。",
         )
     )
-    db.commit()  # Worker/process death must not erase the pre-POST marker.
+    db.flush()
+    if commit:
+        db.commit()  # Worker/process death must not erase the pre-POST marker.
     return existing

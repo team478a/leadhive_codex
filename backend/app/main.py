@@ -12,6 +12,7 @@ from app.ai_routes import router as ai_router
 from app.analysis_routes import router as analysis_router
 from app.approval_routes import router as approval_router
 from app.approved_email_routes import router as approved_email_router
+from app.approved_form_routes import router as approved_form_router
 from app.campaign_routes import router as campaign_router
 from app.collection_routes import router as collection_router
 from app.company_quality_routes import router as company_quality_router
@@ -50,6 +51,7 @@ app = FastAPI(
     dependencies=[Depends(reject_mixed_credentials)],
 )
 app.include_router(approval_router)
+app.include_router(approved_form_router)
 app.include_router(approved_email_router)
 app.include_router(email_feedback_router)
 app.include_router(preparation_router)

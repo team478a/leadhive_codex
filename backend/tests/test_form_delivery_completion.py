@@ -16,6 +16,58 @@ INITIAL_FORM = """
 """
 
 
+def test_approved_action_and_full_message(monkeypatch):
+    class Fetcher:
+        def fetch_html(self, url):
+            return FetchedPage(url, INITIAL_FORM)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(form_delivery, "SafeFetcher", Fetcher)
+    seen = []
+
+    def submit(fetcher, url, values, **kwargs):
+        seen.append(values)
+        return form_delivery_result.FormSubmissionResult(200, url, False, "完了")
+
+    monkeypatch.setattr(form_delivery, "submit_and_verify", submit)
+    values = {"name": "担当者", "message": "本文" * 1500}
+    submit_form(
+        "https://form.example/contact", values, expected_action_url="https://form.example/contact"
+    )
+    assert seen[0]["message"] == values["message"]
+    with pytest.raises(FormDeliveryError, match="POST先"):
+        submit_form(
+            "https://form.example/contact",
+            values,
+            expected_action_url="https://form.example/changed",
+        )
+    assert len(seen) == 1
+
+
+@pytest.mark.parametrize(
+    "html",
+    [
+        "<p>営業目的のお問い合わせは禁止です。</p>" + INITIAL_FORM,
+        INITIAL_FORM.replace('name="step" value="confirm"', 'name="message" value="changed"'),
+    ],
+)
+def test_live_prohibition_and_button_override_block_before_post(monkeypatch, html):
+    class Fetcher:
+        def fetch_html(self, url):
+            return FetchedPage(url, html)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(form_delivery, "SafeFetcher", Fetcher)
+    monkeypatch.setattr(form_delivery, "submit_and_verify", lambda *a, **k: pytest.fail("No POST"))
+    with pytest.raises(FormDeliveryError) as error:
+        submit_form("https://form.example/contact", {"name": "担当者", "message": "本文"})
+    assert not error.value.submission_unknown
+
+
 class FakeResponse(AbstractContextManager):
     def __init__(self, url: str, status: int, html: str = "", location: str = ""):
         self.url = url
