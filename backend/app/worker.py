@@ -159,6 +159,7 @@ def recover_stale_email_deliveries(db) -> int:
 
 def claim_email_delivery(db) -> EmailDelivery | None:
     from app.model_approved_email import ApprovedEmailReservation
+    from app.model_email_feedback import EmailHealthState
 
     if settings.human_approved_email_enabled:
         from app.services.approved_email_worker import claim
@@ -202,6 +203,11 @@ def claim_email_delivery(db) -> EmailDelivery | None:
         .where(
             EmailDelivery.status == "queued",
             ~EmailDelivery.id.in_(select(ApprovedEmailReservation.delivery_id)),
+            ~EmailDelivery.company_id.in_(
+                select(Company.id)
+                .join(EmailHealthState, EmailHealthState.project_id == Company.project_id)
+                .where(EmailHealthState.paused.is_(True))
+            ),
             EmailDelivery.scheduled_for <= now,
             or_(EmailDelivery.campaign_id.is_(None), EmailCampaign.status == "queued"),
         )
@@ -267,6 +273,11 @@ def run_email_delivery(db, delivery: EmailDelivery) -> None:
         company = db.get(Company, delivery.company_id)
         if company is None:
             raise EmailDeliveryError("送信対象の企業が見つかりません。")
+        from app.services.email_feedback import evaluate
+
+        health, _ = evaluate(db, company.project_id)
+        if health.paused:
+            raise EmailDeliveryError("配信異常による安全停止中です。")
         permission = evaluate_contact_permission(
             db,
             company.project_id,

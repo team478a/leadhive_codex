@@ -209,6 +209,13 @@ def change_batch(
     if not batch:
         raise HTTPException(404, "予約が見つかりません。")
     access(db, batch.project_id, user)
+    if action == "resume":
+        from app.services.email_feedback import evaluate
+
+        health, _ = evaluate(db, batch.project_id)
+        if health.paused:
+            db.commit()
+            raise HTTPException(409, "配信異常の安全停止を確認・解除してください。")
     from sqlalchemy import func
 
     db.execute(select(func.pg_advisory_xact_lock(approved_email.RESERVATION_LOCK)))

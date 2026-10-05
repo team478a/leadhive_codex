@@ -85,6 +85,12 @@ def duplicate(db, recipient, exclude=None):
 
 
 def create_batch(db, project_id, body, user):
+    from app.services.email_feedback import evaluate
+
+    health, _ = evaluate(db, project_id)
+    if health.paused:
+        db.commit()
+        raise HTTPException(409, "配信異常により停止中です。メール配信状況で確認してください。")
     db.execute(select(func.pg_advisory_xact_lock(RESERVATION_LOCK)))
     fingerprint = approval.payload_hash(body.model_dump(mode="json"))
     existing = db.scalar(
@@ -315,6 +321,9 @@ def begin_attempt(db, delivery):
     row = reservation(db, delivery.id)
     initial = db.get(ApprovalRequest, row.approval_id)
     db.scalar(select(Project).where(Project.id == initial.project_id).with_for_update())
+    from app.services.email_feedback import evaluate
+
+    health, _ = evaluate(db, initial.project_id)
     db.scalar(
         select(ProjectMember)
         .where(
@@ -349,7 +358,9 @@ def begin_attempt(db, delivery):
         db.commit()
         return None
     reason = ""
-    if batch.status != "queued":
+    if health.paused:
+        reason = "配信異常による安全停止中です。"
+    elif batch.status != "queued":
         reason = "送信予約が停止・取消済みです。"
     elif not approval.valid_approved_payload(db, item):
         reason = "承認が失効・取消済みです。"

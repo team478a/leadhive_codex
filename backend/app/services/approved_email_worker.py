@@ -20,6 +20,9 @@ from app.services.email_delivery import (
 
 def claim(db):
     service.expire_queued(db)
+    from app.services.email_feedback import refresh_pending
+
+    refresh_pending(db)
     if not settings.outbound_enabled or not settings.human_approved_email_enabled:
         return None
     now = approval.now()

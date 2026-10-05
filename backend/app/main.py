@@ -20,6 +20,7 @@ from app.company_routes import router as company_router
 from app.company_workflow_routes import router as company_workflow_router
 from app.config import settings
 from app.database import SessionLocal
+from app.email_feedback_routes import router as email_feedback_router
 from app.form_batch_routes import router as form_batch_router
 from app.form_intelligence_routes import router as form_intelligence_router
 from app.improvement_routes import router as improvement_router
@@ -50,6 +51,7 @@ app = FastAPI(
 )
 app.include_router(approval_router)
 app.include_router(approved_email_router)
+app.include_router(email_feedback_router)
 app.include_router(preparation_router)
 
 

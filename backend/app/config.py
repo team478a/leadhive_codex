@@ -16,6 +16,8 @@ class Settings(BaseSettings):
     worker_paused: bool = False
     outbound_enabled: bool = False
     human_approved_email_enabled: bool = False
+    email_feedback_webhook_enabled: bool = False
+    email_feedback_webhook_secret: str = ""
     serper_api_key: str = ""
     google_places_api_key: str = ""
     gbizinfo_api_token: str = ""
