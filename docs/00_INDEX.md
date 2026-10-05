@@ -135,6 +135,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [99_FORM_FIELD_EVIDENCE_AND_READINESS_GUARDS.md](99_FORM_FIELD_EVIDENCE_AND_READINESS_GUARDS.md): 入力欄と必須表示の判定改善・本文マッピングの安全なREADY制御
 
+- [100_HELD_FORM_V13_GET_ONLY_RECHECK.md](100_HELD_FORM_V13_GET_ONLY_RECHECK.md): 保留2店舗のGETのみ再確認・改善確認と残る停止理由
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
