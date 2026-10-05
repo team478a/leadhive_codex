@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 import type { ApprovalProposal } from './ApprovedEmailPanel'
+import { FormDispatchGovernancePanel } from './FormDispatchGovernancePanel'
 
 interface Dispatch {
   id: string; approval_id: string; form_url: string; status: string; reason: string
@@ -27,7 +28,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
     api<Dispatch[]>(`/projects/${projectId}/approved-form-dispatches?limit=50&offset=${offset}`)
       .then(next => { if (live) setRows(next) }).catch(e => { if (live) setError(errorMessage(e)) })
     return () => { live = false }
-  }, [projectId, offset])
+  }, [projectId, offset, items])
   async function act(fn: () => Promise<void>) {
     setBusy(true); setError(''); setNotice('')
     try {
@@ -47,10 +48,10 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
       setNotice(result.execution_enabled ? '承認した内容で予約しました。ワーカーが送信前に再確認します。' : '予約を保存しました。フォーム実行はOFFのため送信されません。')
     })
   }
-  return <section className="panel" aria-label="承認済みフォーム予約">
+  return <><FormDispatchGovernancePanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} /><section className="panel" aria-label="承認済みフォーム予約">
     <h2>承認済みフォームの送信予約</h2>
     <p className="muted">初期対応は確認画面を挟まないフォームのみです。確認画面・CAPTCHA・特殊フォームは人間による確認が必要です。</p>
-    <p className="muted">宛先・POST先・文面・入力値が固定されたHuman承認だけを使います。実行設定は既定OFFです。初期上限は環境全体で24時間30件・1時間5件・試行間隔60秒。結果不明は自動再送しません。</p>
+    <p className="muted">宛先・POST先・文面・入力値が固定されたHuman承認だけを使います。実行設定は既定OFFです。上限は上の共通設定に従います。結果不明は自動再送しません。</p>
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <fieldset disabled={busy}>
@@ -70,5 +71,5 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
       <button type="button" className="secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>前の50予約</button>{' '}
       <button type="button" className="secondary" disabled={rows.length < 50} onClick={() => setOffset(offset + 50)}>次の50予約</button>
     </fieldset>
-  </section>
+  </section></>
 }

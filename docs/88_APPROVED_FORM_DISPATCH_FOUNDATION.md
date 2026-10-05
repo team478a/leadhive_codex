@@ -44,6 +44,8 @@ unknownは実行中・受付不明・中断を保守的に含む。期限経過�
 
 ## 実行設定と初期上限
 
+更新：一括承認・予約、DBに保存する管理者上限設定・一時停止を追加した。現在の操作は [89_FORM_BULK_APPROVAL_AND_LIMITS.md](89_FORM_BULK_APPROVAL_AND_LIMITS.md) を参照。以下の固定上限はこの基盤実装時の記録で、現在は同じ値を初期既定として変更可能。
+
 `OUTBOUND_ENABLED=false`、`HUMAN_APPROVED_FORM_ENABLED=false`が既定。両方trueでなければ予約を実行しない。UIから有効化する機能は追加しない。初期は環境全体で直近24時間30試行、直近1時間5試行、最小間隔60秒、同時checking 1件。unknown/失敗した試行も上限に数える。
 
 `LEGACY_FORM_DELIVERY_ENABLED=false`が既定。従来confirmedだけの通常送信、batch execute/retry、Codex送信タスク生成/結果更新、旧worker処理を停止する。古いコードは削除しない。旧処理の回帰テストだけが専用DBでlegacy opt-inする。承認済みフォーム実行が有効な場合はlegacy flagがtrueでも旧経路を拒否する。legacy opt-inは承認境界の保証対象外であり、今回のローカル運用では使用しない。
