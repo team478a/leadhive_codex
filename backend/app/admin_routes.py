@@ -19,6 +19,7 @@ from app.models import (
     SmtpSettings,
     User,
 )
+from app.schema_settings import SmtpConnectionTestOut
 from app.schemas import (
     ApplicationSettingsInput,
     ApplicationSettingsOut,
@@ -53,6 +54,7 @@ from app.services.inbound_email import (
 from app.services.inbound_reply_notification import notify_inbound_reply
 from app.services.outreach_attribution import attribute_inbound_reply
 from app.services.service_connection import test_service_connection
+from app.services.smtp_connection import check_smtp_connection
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api/admin")
@@ -287,6 +289,18 @@ def update_smtp_settings(
     db.refresh(saved)
     logger.info("SMTP settings updated: user_id=%s", user.id)
     return smtp_out(saved)
+
+
+@router.post("/smtp-settings/connection-test", response_model=SmtpConnectionTestOut)
+def smtp_connection_test(
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
+):
+    result = check_smtp_connection(db)
+    logger.info(
+        "SMTP connection checked: user_id=%s ok=%s stage=%s", user.id, result.ok, result.stage
+    )
+    return result
 
 
 @router.post("/smtp-settings/test", status_code=204)

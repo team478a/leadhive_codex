@@ -74,6 +74,15 @@ class SmtpTestInput(Input):
     recipient_email: EmailStr
 
 
+class SmtpConnectionTestOut(BaseModel):
+    ok: bool
+    stage: Literal["configuration", "connection", "greeting", "tls", "authentication", "completed"]
+    message: str
+    tls_verified: bool
+    authenticated: bool
+    checked_at: datetime
+
+
 class FormSenderSettingsInput(Input):
     company_name: str = Field(default="", max_length=500)
     department: str = Field(default="", max_length=500)
