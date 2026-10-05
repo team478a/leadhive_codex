@@ -139,7 +139,7 @@ export interface OutreachDraftApproval { id: string; draft_id: string; approved_
 export interface EmailDelivery {
   id: string; draft_id: string; company_id: string; created_by_user_id: string | null
   recipient_email: string; recipient_name: string; subject: string; body: string
-  status: 'queued' | 'running' | 'sent' | 'failed' | 'cancelled'
+  status: 'queued' | 'running' | 'sent' | 'failed' | 'cancelled' | 'unknown' | 'blocked'
   scheduled_for: string; confirmed_at: string; sent_at: string | null
   started_at: string | null; finished_at: string | null; attempt_count: number
   error_message: string; created_at: string; updated_at: string
@@ -147,7 +147,7 @@ export interface EmailDelivery {
 export interface EmailDeliveryListItem extends EmailDelivery { company_name: string }
 export interface EmailDeliveryList {
   items: EmailDeliveryListItem[]; queued_count: number; running_count: number
-  sent_count: number; failed_count: number; cancelled_count: number
+  sent_count: number; failed_count: number; cancelled_count: number; unknown_count: number; blocked_count: number
 }
 export interface EmailCampaign { id: string; project_id: string; template_id: string; name: string; status: 'queued' | 'paused' | 'completed'; followup_days: number; queued_count: number; sent_count: number; failed_count: number; skipped_count: number; replied_count: number; meeting_count: number; won_count: number; created_at: string; updated_at: string }
 export interface FormDeliveryBatchItem { id: string; company_id: string; draft_id: string | null; form_delivery_id: string | null; status: 'queued' | 'submitted' | 'failed' | 'manual_required' | 'skipped'; reason: string; submitted_at: string | null; created_at: string; company_name: string; form_url: string }

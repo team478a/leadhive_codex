@@ -24,7 +24,7 @@ test('human approval queue requires step-up and records approve/revoke without s
   await page.getByLabel('本文', { exact: true }).fill('A2 does not send this message.')
   await page.getByRole('button', { name: '提案を保存', exact: true }).click()
   await page.getByRole('button', { name: /A2 E2E Company.*承認待ち/ }).click()
-  await expect(page.getByText('A2 does not send this message.', { exact: true })).toBeVisible()
+  await expect(page.getByRole('article').getByText('A2 does not send this message.', { exact: true })).toBeVisible()
   await page.getByLabel('承認用パスワード（再認証）').fill('wrong-password')
   await page.getByRole('button', { name: '内容を確認して承認', exact: true }).click()
   await expect(page.getByRole('alert')).toContainText('再認証に失敗')

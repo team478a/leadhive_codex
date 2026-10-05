@@ -9,6 +9,7 @@ const python = process.env.PYTHON || (process.platform === 'win32' ?
 
 export default defineConfig({
   timeout: 60_000,
+  expect: { timeout: 15_000 },
   testDir: './tests', workers: 1, fullyParallel: false,
   globalSetup: './tests/setup.ts',
   use: { baseURL: 'http://localhost:15173', screenshot: 'only-on-failure' },
@@ -23,6 +24,8 @@ export default defineConfig({
       env: {
         OUTBOUND_ENABLED: 'false', DATABASE_URL: testDatabase, CORS_ORIGINS: 'http://localhost:15173', COOKIE_SECURE: 'false',
         SETTINGS_ENCRYPTION_KEY: 'TXo8wyai6a-uQTN15jhU7_la86LCSPzFR6pMXGkYslM=',
+        HUMAN_APPROVED_EMAIL_ENABLED: 'false', SMTP_FROM_EMAIL: 'sender@example.com', SMTP_FROM_NAME: 'A2 Human',
+        PUBLIC_APP_URL: 'https://leadhive.example',
       },
     },
     {

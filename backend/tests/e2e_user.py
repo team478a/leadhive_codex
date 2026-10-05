@@ -39,7 +39,7 @@ with SessionLocal() as db:
                 is_admin=not email.startswith("e2e-member-"),
             )
         )
-    elif sys.argv[1] == "approval-fixture":
+    elif sys.argv[1] in {"approval-fixture", "approved-email-fixture"}:
         user = db.scalar(select(User).where(User.email == email))
         profile = db.scalar(select(TargetProfile).where(TargetProfile.is_system).limit(1))
         project = Project(
@@ -57,6 +57,7 @@ with SessionLocal() as db:
             company_name="A2 E2E Company",
             website_url="https://approval.example",
             domain="approval.example",
+            email="recipient@example.com" if sys.argv[1] == "approved-email-fixture" else "",
         )
         db.add(company)
         db.flush()

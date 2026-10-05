@@ -1,18 +1,11 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { api, errorMessage } from './api'
 import { Field } from './forms'
+import { ApprovedEmailPanel, type ApprovalProposal as Proposal } from './ApprovedEmailPanel'
 import type { Company, Project, ProjectMember } from './types'
 
-interface Proposal {
-  id: string; company_name: string; company_id: string; channel: 'email' | 'form'
-  recipient: string | null; form_url: string | null; subject: string; body: string
-  sender: Record<string, string>; field_values: Record<string, string>
-  payload_hash: string; payload_version: number; status: string
-  created_by_principal_type: 'HUMAN' | 'AGENT'; created_at: string; expires_at: string
-  rejection_reason: string | null; invalidation_reason: string | null
-}
 interface AuditEvent { id: string; event: string; principal_type: string; timestamp: string; reason: string | null }
-const names: Record<string, string> = { PENDING: '承認待ち', APPROVED: '承認済み（未送信）', REJECTED: '却下', EXPIRED: '期限切れ', REVOKED: '取消済み' }
+const names: Record<string, string> = { PENDING: '承認待ち', APPROVED: '承認済み（未送信）', REJECTED: '却下', EXPIRED: '期限切れ', REVOKED: '取消済み', CONSUMED: '送信実行に使用済み' }
 const date = (value: string) => new Date(value).toLocaleString('ja-JP')
 
 export function ApprovalQueuePage({ projects, projectRoles }: {
@@ -102,12 +95,13 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
     })
   }
   return <section className="space-y-6">
-    <p className="muted">提案の宛先と内容を確認し、ログインパスワードで再認証して承認してください。現在は承認のみで、メール・フォームの送信は行いません。承認の有効期限は作成から最大24時間です。</p>
+    <p className="muted">提案の宛先と内容を確認し、ログインパスワードで再認証して承認してください。承認だけでは送信しません。承認済みメールは別操作で予約でき、実行設定が有効な場合だけワーカーが送信します。承認の有効期限は作成から最大24時間です。</p>
     <Field label="承認プロジェクト"><select value={projectId} onChange={e => { setProjectId(e.target.value); setOffset(0); setCreateOpen(false); setNotice('') }}>
       {projects.map(project => <option key={project.id} value={project.id}>{project.project_name}</option>)}
     </select></Field>
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
+    <ApprovedEmailPanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     <fieldset disabled={busy || !projectId}>
       <div className="flex flex-wrap gap-3"><button type="button" className="secondary" onClick={() => act(refresh)}>最新の状態を取得</button>
         {canWrite && <button type="button" onClick={openCreate}>承認待ち提案を作成</button>}</div>

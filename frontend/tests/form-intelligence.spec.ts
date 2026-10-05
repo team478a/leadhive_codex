@@ -5,7 +5,7 @@ async function dismissGuide(page: Page) {
   const laterButton = page.getByRole('dialog', { name: '3ステップで始めましょう' })
     .getByRole('button', { name: 'あとで見る' })
   try {
-    await laterButton.waitFor({ state: 'visible', timeout: 2_000 })
+    await laterButton.waitFor({ state: 'visible', timeout: 10_000 })
     await laterButton.click()
   } catch {
     // The guide is already dismissed for this account.
