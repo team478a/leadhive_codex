@@ -16,20 +16,31 @@ from app.model_approval import (
     ApprovalRequest,
     OutreachAuditEvent,
 )
-from app.models import Company, Project, ProjectMember, User
-from app.project_access import project_access
+from app.models import (
+    Company,
+    FormProfile,
+    FormProfileField,
+    FormSenderSettings,
+    OutreachDraft,
+    Project,
+    ProjectMember,
+    User,
+)
+from app.project_access import company_access, project_access
 from app.schema_approval import (
     AgentIssue,
     Approve,
     ChallengeVerify,
     Decision,
     ExpectedPayload,
+    FormPreparation,
     Proposal,
     Revision,
 )
 from app.security import COOKIE_NAME, current_user, token_digest
 from app.services import human_approval as service
 from app.services.approval_principals import authenticate_agent
+from app.services.form_approval_preparation import preparation
 
 router = APIRouter(prefix="/api", tags=["Human Approval Foundation A2"])
 
@@ -63,6 +74,60 @@ def serialize(db, item):
     result = {c.name: getattr(item, c.name) for c in ApprovalRequest.__table__.columns}
     result["company_name"] = company.company_name if company else ""
     return result
+
+
+def preparation_source(db, draft_id, user):
+    draft = db.scalar(select(OutreachDraft).where(OutreachDraft.id == draft_id).with_for_update())
+    if not draft:
+        raise HTTPException(404, "Draftが見つかりません。")
+    company = company_access(draft.company_id, db, user)
+    return company, draft
+
+
+@router.get("/outreach-drafts/{draft_id}/form-approval-preview")
+def preview_form_approval(
+    draft_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company, draft = preparation_source(db, draft_id, user)
+    return preparation(db, company, draft)[1]
+
+
+@router.post("/outreach-drafts/{draft_id}/form-approval-request", status_code=201)
+def prepare_form_approval(
+    draft_id: UUID,
+    body: FormPreparation,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company, draft = preparation_source(db, draft_id, user)
+    # Keep the reviewed source data stable until the proposal and ledger commit.
+    db.scalar(
+        select(Company)
+        .where(Company.id == company.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    db.scalar(select(FormSenderSettings).where(FormSenderSettings.id == 1).with_for_update())
+    db.scalars(
+        select(FormProfile).where(FormProfile.company_id == company.id).with_for_update()
+    ).all()
+    db.scalars(
+        select(FormProfileField)
+        .where(
+            FormProfileField.form_profile_id.in_(
+                select(FormProfile.id).where(FormProfile.company_id == company.id)
+            )
+        )
+        .with_for_update()
+    ).all()
+    proposal, preview = preparation(db, company, draft)
+    if preview["preparation_hash"] != body.expected_preparation_hash:
+        raise HTTPException(409, "準備内容が変更されています。もう一度内容を取得してください。")
+    return serialize(
+        db, service.create_proposal(db, company.project_id, proposal, "HUMAN", user.id)
+    )
 
 
 def list_items(db, project_id, status, limit, offset):

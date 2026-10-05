@@ -80,6 +80,10 @@ class ExpectedPayload(StrictInput):
     expected_version: int = Field(ge=1)
 
 
+class FormPreparation(StrictInput):
+    expected_preparation_hash: str = Field(pattern="^[a-f0-9]{64}$")
+
+
 class Revision(Proposal):
     expected_hash: str = Field(pattern="^[a-f0-9]{64}$")
     expected_version: int = Field(ge=1)

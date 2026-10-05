@@ -14,7 +14,15 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.model_approval import ApprovalRequest, HumanApprovalProof, OutreachAuditEvent
-from app.models import AuthSession, Company, FormProfile, FormProfileField, OutreachDraft, User
+from app.models import (
+    AuthSession,
+    Company,
+    FormProfile,
+    FormProfileField,
+    FormSenderSettings,
+    OutreachDraft,
+    User,
+)
 from app.schema_approval import ExpectedPayload, Proposal
 from app.security import password_hasher, token_digest
 
@@ -117,6 +125,17 @@ def form_dependency_hash(db, company_id):
     return payload_hash({"profiles": data})
 
 
+def form_sender_hash(db):
+    sender = db.get(FormSenderSettings, 1)
+    return payload_hash(
+        {
+            column.name: getattr(sender, column.name) if sender else None
+            for column in FormSenderSettings.__table__.columns
+            if column.name not in {"created_at", "updated_at", "updated_by_user_id"}
+        }
+    )
+
+
 def invalidate_if_needed(db, item):
     if item.status not in {"PENDING", "APPROVED"}:
         return
@@ -134,6 +153,12 @@ def invalidate_if_needed(db, item):
         db, item.company_id
     ) != item.payload_snapshot.get("form_profile_hash"):
         reason = "form profile or mapping changed"
+    elif (
+        item.channel == "form"
+        and "sender_source_hash" in item.payload_snapshot
+        and (form_sender_hash(db) != item.payload_snapshot["sender_source_hash"])
+    ):
+        reason = "form sender settings changed"
     elif item.source_draft_id:
         draft = db.get(OutreachDraft, item.source_draft_id)
         if not draft or draft_fingerprint(draft) != item.payload_snapshot["source_draft_hash"]:
@@ -200,6 +225,8 @@ def create_proposal(
         company_source_hash=company_fingerprint(company),
         form_profile_hash=form_dependency_hash(db, company.id) if body.channel == "form" else None,
     )
+    if body.channel == "form":
+        snapshot["sender_source_hash"] = form_sender_hash(db)
     created_at = now()
     item = ApprovalRequest(
         id=uuid4(),
