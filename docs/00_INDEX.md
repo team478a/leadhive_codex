@@ -147,6 +147,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [105_HELD_FORM_V17_GET_ONLY_RECHECK.md](105_HELD_FORM_V17_GET_ONLY_RECHECK.md): 保留2店舗の解析1.7でのGETのみ再確認・具体的な停止理由
 
+- [106_FORM_EXECUTION_ADAPTER_DESIGN.md](106_FORM_EXECUTION_ADAPTER_DESIGN.md): CF7・JavaScript確認画面のアダプター設計と匿名fixture受入条件
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
