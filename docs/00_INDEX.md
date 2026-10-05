@@ -155,6 +155,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [109_CF7_SHAPED_HTTP_LAB.md](109_CF7_SHAPED_HTTP_LAB.md): 匿名HTTP実行・試験台帳の永続UNKNOWN・プロセス停止時の再POST禁止
 
+- [110_FORM_ADAPTER_DISPATCH_CONNECTION_DESIGN.md](110_FORM_ADAPTER_DISPATCH_CONNECTION_DESIGN.md): 実行用契約の分離・既存PostgreSQL承認/予約/UNKNOWN基盤への接続設計
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
