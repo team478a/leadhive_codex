@@ -153,6 +153,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [108_EXECUTION_PLAN_HUMAN_APPROVAL.md](108_EXECUTION_PLAN_HUMAN_APPROVAL.md): 匿名操作計画のHuman承認・旧承認非転用・検証用方式の非実行制約
 
+- [109_CF7_SHAPED_HTTP_LAB.md](109_CF7_SHAPED_HTTP_LAB.md): 匿名HTTP実行・試験台帳の永続UNKNOWN・プロセス停止時の再POST禁止
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
