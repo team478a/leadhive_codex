@@ -1,0 +1,77 @@
+{
+  "baseline": "773afe0",
+  "started_at": "2026-10-05T21:36:17.709997+09:00",
+  "finished_at": "2026-10-05T21:37:15.482242+09:00",
+  "reviewed": 10,
+  "registered": 7,
+  "unresolved": 3,
+  "website_before": 15,
+  "website_after": 22,
+  "website_missing_after": 78,
+  "job_status": "completed",
+  "processed": 7,
+  "success": 7,
+  "failed": 0,
+  "before": {
+    "counts": {
+      "candidate": 2,
+      "captcha": 1,
+      "error": 91,
+      "missing_form": 5,
+      "review": 1
+    },
+    "permissions": {
+      "UNCERTAIN": 96,
+      "PROHIBITED": 4
+    },
+    "permission_reasons": {
+      "form_sales_uncertain": 94,
+      "shared_location_destination": 4,
+      "form_captcha_review": 1,
+      "form_review_required": 1
+    }
+  },
+  "after": {
+    "counts": {
+      "candidate": 2,
+      "captcha": 6,
+      "error": 84,
+      "missing_form": 6,
+      "review": 2
+    },
+    "permissions": {
+      "PROHIBITED": 9,
+      "UNCERTAIN": 91
+    },
+    "permission_reasons": {
+      "shared_location_destination": 9,
+      "form_sales_uncertain": 88,
+      "form_review_required": 2,
+      "form_captcha_review": 1
+    }
+  },
+  "selected_readiness": {
+    "review": 1,
+    "missing_form": 1,
+    "captcha": 5
+  },
+  "new_automated_send_candidates": 0,
+  "send_counts": {
+    "approved_form_dispatches": 0,
+    "form_deliveries": 0,
+    "email_deliveries": 0
+  },
+  "flags": {
+    "outbound_enabled": false,
+    "human_approved_form_enabled": false,
+    "legacy_form_delivery_enabled": false,
+    "agent_features_enabled": false
+  },
+  "worker_state": "stopped",
+  "allow_ai": false,
+  "company_count": 100,
+  "form_profile_count": 111,
+  "migration_head": "fae47ac5e861",
+  "active_jobs": 0,
+  "detailed_report_sha256": "21D58DBF867C5FB8C6C928BF25BFFB484C249C3B4E61BD5A48CE1D5CDF6C6B6F"
+}
