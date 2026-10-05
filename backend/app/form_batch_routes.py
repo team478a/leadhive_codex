@@ -194,6 +194,15 @@ def list_form_codex_queue(
     profiles = primary_form_profiles(db, [company.id for _, _, company, _ in rows])
     tasks = []
     for item, batch, company, draft in rows:
+        permission = evaluate_contact_permission(
+            db,
+            batch.project_id,
+            company.id,
+            "form",
+            display_form_url(company, profiles.get(company.id)),
+        )
+        if permission.status == "PROHIBITED":
+            continue
         payload = build_codex_form_payload(db, company, draft, fallback_reason=item.reason)
         tasks.append(
             FormCodexTaskOut(

@@ -7,6 +7,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import Company, ContactPerson, FormProfile, SuppressionEntry
+from app.services.form_submission_guard import UNKNOWN_MESSAGE, unresolved_form_submission
 
 ContactPermissionStatus = Literal["ALLOWED", "PROHIBITED", "UNCERTAIN"]
 
@@ -259,6 +260,10 @@ def evaluate_contact_permission(
             "company_do_not_contact",
             "連絡禁止の企業には送信できません。",
         )
+    if channel == "form" and unresolved_form_submission(
+        db, company.id, destination or company.contact_url
+    ):
+        return _decision("PROHIBITED", "form_result_unknown", UNKNOWN_MESSAGE)
     suppression, suppression_reason = _matching_suppression(db, company, channel, destination)
     if suppression is not None:
         return _decision(

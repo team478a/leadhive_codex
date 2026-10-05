@@ -205,7 +205,8 @@ class FormDelivery(Timestamps, Base):
     __tablename__ = "form_deliveries"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'submitted', 'failed')", name="ck_form_delivery_status"
+            "status IN ('pending', 'submitted', 'failed', 'unknown')",
+            name="ck_form_delivery_status",
         ),
         CheckConstraint(
             "delivery_method IN ('direct', 'codex_assisted')", name="ck_form_delivery_method"
@@ -268,7 +269,7 @@ class FormDeliveryBatchItem(Timestamps, Base):
     __table_args__ = (
         UniqueConstraint("batch_id", "company_id", name="uq_form_batch_item_company"),
         CheckConstraint(
-            "status IN ('queued', 'submitted', 'failed', 'manual_required', 'skipped')",
+            "status IN ('queued', 'submitted', 'failed', 'manual_required', 'skipped', 'unknown')",
             name="ck_form_batch_item_status",
         ),
     )

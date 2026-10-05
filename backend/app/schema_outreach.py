@@ -158,7 +158,7 @@ class FormDeliveryOut(BaseModel):
     company_id: UUID
     form_profile_id: UUID | None
     delivery_method: Literal["direct", "codex_assisted"]
-    status: Literal["pending", "submitted", "failed"]
+    status: Literal["pending", "submitted", "failed", "unknown"]
     action_url: str
     response_status: int | None
     final_url: str
@@ -270,7 +270,7 @@ class FormDeliveryBatchItemOut(BaseModel):
     company_id: UUID
     draft_id: UUID | None
     form_delivery_id: UUID | None
-    status: Literal["queued", "submitted", "failed", "manual_required", "skipped"]
+    status: Literal["queued", "submitted", "failed", "manual_required", "skipped", "unknown"]
     reason: str
     submitted_at: datetime | None
     created_at: datetime

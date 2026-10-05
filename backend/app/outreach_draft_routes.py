@@ -57,6 +57,7 @@ from app.services.form_profile_delivery import (
     primary_form_profile,
     profile_form_url,
 )
+from app.services.form_submission_guard import UNKNOWN_MESSAGE, reserve_form_submission
 from app.services.outbound_guard import require_outbound_enabled
 
 logger = logging.getLogger("leadhive")
@@ -517,8 +518,10 @@ def create_form_delivery(
     if db.scalar(select(FormDelivery.id).where(FormDelivery.draft_id == draft.id)):
         raise HTTPException(409, "この文面は既にフォーム送信済みです。")
     context = None
+    delivery = None
     try:
         context = inspect_delivery_profile(db, company, draft)
+        delivery = reserve_form_submission(db, company, draft, context, user.id)
         preview, submission = submit_form(
             context.profile.form_url,
             body.field_values,
@@ -529,29 +532,26 @@ def create_form_delivery(
             confirmation_expected=context.profile.confirmation_page is True,
         )
     except FormDeliveryError as exc:
+        if delivery is not None:
+            delivery.status = "unknown" if exc.submission_unknown else "failed"
+            delivery.error_message = (
+                UNKNOWN_MESSAGE if exc.submission_unknown else exc.public_message
+            )
+            db.commit()
         if context is not None:
             mark_profile_changed(db, context.profile, exc)
         logger.warning(
             "form delivery failed: company_id=%s type=%s", company.id, type(exc).__name__
         )
-        raise HTTPException(422, exc.public_message) from exc
-    delivery = FormDelivery(
-        draft_id=draft.id,
-        company_id=company.id,
-        form_profile_id=context.profile.id,
-        created_by_user_id=user.id,
-        form_url=preview.form_url,
-        action_url=preview.action_url,
-        delivery_method="direct",
-        response_status=submission.response_status,
-        final_url=submission.final_url,
-        confirmation_used=submission.confirmation_used,
-        completion_evidence=submission.completion_evidence,
-        submitted_at=datetime.now(timezone.utc),
-        profile_fingerprint=context.profile.fingerprint,
-        field_mapping_snapshot=mapping_snapshot(context.fields),
-    )
-    db.add(delivery)
+        raise HTTPException(
+            422, UNKNOWN_MESSAGE if exc.submission_unknown else exc.public_message
+        ) from exc
+    delivery.status, delivery.error_message = "submitted", ""
+    delivery.response_status = submission.response_status
+    delivery.final_url = submission.final_url
+    delivery.confirmation_used = submission.confirmation_used
+    delivery.completion_evidence = submission.completion_evidence
+    delivery.submitted_at = datetime.now(timezone.utc)
     record_draft_approval(db, draft, user, "form_direct", delivered_at=delivery.submitted_at)
     db.add(
         Activity(

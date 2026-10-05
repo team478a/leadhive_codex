@@ -150,6 +150,7 @@ def test_unverified_results_are_never_marked_submitted(monkeypatch, response, ex
     with pytest.raises(FormDeliveryError) as error:
         run_submission(monkeypatch, [response])
     assert error.value.code == expected_code
+    assert error.value.submission_unknown is True
 
 
 def test_unexpected_confirmation_page_requires_reanalysis(monkeypatch):

@@ -10,10 +10,11 @@ from app.services.scraper import SafeFetcher, ScrapeError, validate_public_url
 
 
 class FormDeliveryError(Exception):
-    def __init__(self, public_message: str, code: str = ""):
+    def __init__(self, public_message: str, code: str = "", submission_unknown: bool = False):
         super().__init__(public_message)
         self.public_message = public_message
         self.code = code
+        self.submission_unknown = submission_unknown
 
 
 @dataclass(frozen=True)
@@ -221,7 +222,7 @@ def _confirmation_payload(page: _ResponsePage) -> tuple[str, dict[str, str]] | N
     return candidates[0] if len(candidates) == 1 else None
 
 
-def submit_and_verify(
+def _submit_and_verify(
     fetcher: SafeFetcher,
     action_url: str,
     payload: dict[str, str],
@@ -266,3 +267,33 @@ def submit_and_verify(
             "manual_required",
         )
     return FormSubmissionResult(final_page.status_code, final_page.url, True, evidence)
+
+
+def submit_and_verify(
+    fetcher: SafeFetcher,
+    action_url: str,
+    payload: dict[str, str],
+    *,
+    original_form_url: str,
+    confirmation_expected: bool,
+) -> FormSubmissionResult:
+    # Once the POST phase begins, failure is not proof that nothing was accepted.
+    # Preserve the diagnostic code, but never offer a new send as result verification.
+    require_outbound_enabled()
+    try:
+        return _submit_and_verify(
+            fetcher,
+            action_url,
+            payload,
+            original_form_url=original_form_url,
+            confirmation_expected=confirmation_expected,
+        )
+    except FormDeliveryError as exc:
+        exc.submission_unknown = True
+        raise
+    except Exception as exc:
+        raise FormDeliveryError(
+            "送信結果が不明です。再送せず相手側の受付結果を確認してください。",
+            "submission_unknown",
+            submission_unknown=True,
+        ) from exc

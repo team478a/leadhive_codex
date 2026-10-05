@@ -16,10 +16,10 @@ from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_delivery import FormDeliveryError, FormPreview, submit_form
 from app.services.form_profile_delivery import (
     inspect_delivery_profile,
-    mapping_snapshot,
     mark_profile_changed,
     required_missing,
 )
+from app.services.form_submission_guard import UNKNOWN_MESSAGE, reserve_form_submission
 from app.services.outbound_guard import require_outbound_enabled
 
 
@@ -61,6 +61,7 @@ def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: U
         item.status, item.reason = "skipped", "この企業にはフォーム送信済みです。"
         return True
     context = None
+    delivery = None
     try:
         context = inspect_delivery_profile(db, company, draft)
         preview = context.preview
@@ -70,6 +71,7 @@ def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: U
             item.status = "manual_required"
             item.reason = f"手動入力が必要です: {', '.join(missing[:3])}"
             return True
+        delivery = reserve_form_submission(db, company, draft, context, user_id, item=item)
         preview, submission = submit_form(
             context.profile.form_url,
             values,
@@ -80,30 +82,32 @@ def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: U
             confirmation_expected=context.profile.confirmation_page is True,
         )
     except FormDeliveryError as exc:
+        if delivery is not None:
+            delivery.status = "unknown" if exc.submission_unknown else "failed"
+            delivery.error_message = (
+                UNKNOWN_MESSAGE if exc.submission_unknown else exc.public_message
+            )
+        if exc.submission_unknown:
+            item.status, item.reason = "unknown", UNKNOWN_MESSAGE
+            db.commit()
+            return False
         if context is not None:
             mark_profile_changed(db, context.profile, exc)
         item.status, item.reason = "manual_required", exc.public_message
         return True
     except Exception:
-        item.status, item.reason = "failed", "フォーム送信処理に失敗しました。"
+        item.status = "unknown" if delivery is not None else "failed"
+        item.reason = (
+            UNKNOWN_MESSAGE if delivery is not None else "フォーム送信処理に失敗しました。"
+        )
+        db.commit()
         return False
-    delivery = FormDelivery(
-        draft_id=draft.id,
-        company_id=company.id,
-        form_profile_id=context.profile.id,
-        created_by_user_id=user_id,
-        form_url=preview.form_url,
-        action_url=preview.action_url,
-        delivery_method="direct",
-        response_status=submission.response_status,
-        final_url=submission.final_url,
-        confirmation_used=submission.confirmation_used,
-        completion_evidence=submission.completion_evidence,
-        submitted_at=datetime.now(timezone.utc),
-        profile_fingerprint=context.profile.fingerprint,
-        field_mapping_snapshot=mapping_snapshot(context.fields),
-    )
-    db.add(delivery)
+    delivery.status, delivery.error_message = "submitted", ""
+    delivery.response_status = submission.response_status
+    delivery.final_url = submission.final_url
+    delivery.confirmation_used = submission.confirmation_used
+    delivery.completion_evidence = submission.completion_evidence
+    delivery.submitted_at = datetime.now(timezone.utc)
     db.flush()
     item.form_delivery_id = delivery.id
     item.status = "submitted"
