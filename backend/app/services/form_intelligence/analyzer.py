@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models import Company, FormAnalysisLog, FormProfile, FormProfileField, Project
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
+from app.services.form_intelligence.fields import mapping_review_reason, parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.providers import (
     AmbiguousField,
@@ -19,15 +20,13 @@ from app.services.form_intelligence.providers import (
     get_form_decision_provider,
 )
 from app.services.form_intelligence.rules import (
-    dom_mapping,
     recommended_option,
-    rule_mapping,
     sales_contact_status,
 )
 from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "1.2"
+ANALYSIS_VERSION = "1.3"
 MAX_CONTACT_PAGES = 8
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 
@@ -87,123 +86,6 @@ def _candidate_pages(company: Company, root_url: str, root_html: str) -> list[tu
     return candidates[:MAX_CONTACT_PAGES]
 
 
-def _field_label(element: Tag, form: Tag) -> str:
-    element_id = str(element.get("id") or "")
-    if element_id:
-        label = form.find("label", attrs={"for": element_id})
-        if label:
-            return label.get_text(" ", strip=True)[:500]
-    parent = element.find_parent("label")
-    if parent:
-        return parent.get_text(" ", strip=True)[:500]
-    for attribute in ("aria-label", "placeholder", "name"):
-        if element.get(attribute):
-            return str(element.get(attribute))[:500]
-    return "入力項目"
-
-
-def _selector(element: Tag, position: int) -> str:
-    element_id = str(element.get("id") or "").replace('"', "")
-    name = str(element.get("name") or "").replace('"', "")
-    if element_id:
-        return f'{element.name}[id="{element_id}"]'
-    if name:
-        return f'{element.name}[name="{name}"]'
-    return f"{element.name}:nth-of-type({position + 1})"
-
-
-def _option(element: Tag) -> dict[str, str]:
-    label = element.get_text(" ", strip=True)[:500]
-    return {"value": str(element.get("value") or label)[:500], "label": label}
-
-
-def parse_form_fields(form: Tag) -> list[dict]:
-    fields: list[dict] = []
-    grouped: set[tuple[str, str]] = set()
-    elements = form.select("input, textarea, select, button")
-    for element in elements:
-        if element.has_attr("disabled"):
-            continue
-        raw_type = str(element.get("type") or "text").lower()
-        if element.name == "textarea":
-            field_type = "textarea"
-        elif element.name == "select":
-            field_type = "select"
-        elif element.name == "button":
-            field_type = "button"
-        else:
-            field_type = raw_type
-        name = str(element.get("name") or "")[:500]
-        group_key = (field_type, name)
-        if field_type in {"radio", "checkbox"} and name:
-            if group_key in grouped:
-                continue
-            grouped.add(group_key)
-            group = form.find_all("input", attrs={"type": field_type, "name": name})
-            options = [
-                {
-                    "value": str(item.get("value") or "")[:500],
-                    "label": _field_label(item, form),
-                }
-                for item in group
-            ]
-            required = any(
-                item.has_attr("required") or str(item.get("aria-required") or "").lower() == "true"
-                for item in group
-            )
-        else:
-            options = [_option(item) for item in element.select("option")]
-            required = (
-                element.has_attr("required")
-                or str(element.get("aria-required") or "").lower() == "true"
-            )
-        position = len(fields)
-        label = _field_label(element, form)
-        parent = element.find_parent(["div", "p", "li", "td", "fieldset"])
-        surrounding = parent.get_text(" ", strip=True)[:1000] if parent else label
-        mapped = dom_mapping(field_type, name)
-        if field_type in {"hidden", "submit", "button", "reset", "image"}:
-            mapped_key, confidence, source = "other", 1.0, "DOM"
-        elif mapped:
-            mapped_key, confidence, source = mapped[0], mapped[1], "DOM"
-        else:
-            mapping_text = " ".join(
-                filter(
-                    None,
-                    (
-                        label,
-                        name,
-                        str(element.get("id") or ""),
-                        str(element.get("placeholder") or ""),
-                        str(element.get("aria-label") or ""),
-                        surrounding,
-                    ),
-                )
-            )
-            mapped_key, confidence = rule_mapping(mapping_text, field_type)
-            source = "RULE"
-        fields.append(
-            {
-                "position": position,
-                "selector": _selector(element, position),
-                "element_id": str(element.get("id") or "")[:500],
-                "label": label,
-                "name": name,
-                "field_type": field_type[:50],
-                "required": required,
-                "mapped_key": mapped_key,
-                "confidence": confidence,
-                "decision_source": source,
-                "recommended_value": "",
-                "options": options,
-                "placeholder": str(element.get("placeholder") or "")[:500],
-                "aria_label": str(element.get("aria-label") or "")[:500],
-                "surrounding_text": surrounding,
-            }
-        )
-    return fields
-
-
 def _captcha_type(html: str) -> str:
     value = html.lower()
     if "hcaptcha" in value or "h-captcha" in value:
@@ -248,17 +130,7 @@ def _profile_status(
         or not delivery_supported
     ):
         return "REVIEW_REQUIRED"
-    relevant = [
-        item
-        for item in fields
-        if item["field_type"] not in {"hidden", "submit", "button", "reset", "image"}
-    ]
-    if not any(item["mapped_key"] == "message" for item in relevant):
-        return "REVIEW_REQUIRED"
-    if confirmation is None or any(
-        item["required"] and (item["mapped_key"] == "unknown" or item["confidence"] < 0.8)
-        for item in relevant
-    ):
+    if confirmation is None or mapping_review_reason(fields):
         return "REVIEW_REQUIRED"
     return "READY"
 
@@ -279,21 +151,9 @@ def _review_reason(
         return "CAPTCHAは人による操作・確認が必要です。自動送信できません。"
     if compatibility_reason:
         return compatibility_reason
-    if not any(
-        item["mapped_key"] == "message"
-        for item in fields
-        if item["field_type"] not in {"hidden", "submit", "button", "reset", "image"}
-    ):
-        return "営業文面の本文を入力する項目が確認できません。"
     if confirmation is None:
         return "送信ボタンを判定できないため確認が必要です。"
-    if any(
-        item["required"] and (item["mapped_key"] == "unknown" or item["confidence"] < 0.8)
-        for item in fields
-        if item["field_type"] not in {"hidden", "submit", "button", "reset", "image"}
-    ):
-        return "必須項目の自動マッピングを確定できません。"
-    return ""
+    return mapping_review_reason(fields)
 
 
 def _log(
@@ -364,6 +224,11 @@ def _upsert_profile(
             )
         ).all()
     }
+    for item in fields:
+        manual_value = manual.get((item["name"], item["selector"]))
+        if manual_value:
+            item["mapped_key"], item["recommended_value"] = manual_value
+            item["confidence"], item["decision_source"] = 1.0, "MANUAL"
     fingerprint = form_fingerprint(fields) if fields else ""
     status = (
         "ERROR"
@@ -412,10 +277,6 @@ def _upsert_profile(
     profile.error_message = error_message[:500]
     db.execute(delete(FormProfileField).where(FormProfileField.form_profile_id == profile.id))
     for item in fields:
-        manual_value = manual.get((item["name"], item["selector"]))
-        if manual_value:
-            item["mapped_key"], item["recommended_value"] = manual_value
-            item["confidence"], item["decision_source"] = 1.0, "MANUAL"
         db.add(
             FormProfileField(
                 form_profile_id=profile.id,

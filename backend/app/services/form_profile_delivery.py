@@ -11,6 +11,7 @@ from app.models import (
     OutreachDraft,
 )
 from app.services.form_delivery import FormDeliveryError, FormPreview, inspect_form
+from app.services.form_intelligence.fields import mapping_review_reason
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,17 @@ def _ready_profile(db: Session, company: Company) -> tuple[FormProfile, list[For
             .order_by(FormProfileField.position)
         ).all()
     )
+    reason = mapping_review_reason(
+        [
+            {
+                key: getattr(field, key)
+                for key in ("field_type", "mapped_key", "confidence", "required")
+            }
+            for field in fields
+        ]
+    )
+    if reason:
+        raise FormDeliveryError(reason, "manual_required")
     return profile, fields
 
 

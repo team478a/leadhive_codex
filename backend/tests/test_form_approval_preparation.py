@@ -48,6 +48,7 @@ def form_source(db, workspace):
             field_type=kind,
             required=True,
             mapped_key=key,
+            confidence=1.0,
         )
         for position, (name, kind, key) in enumerate(
             [
@@ -79,6 +80,24 @@ def prepare(auth, source):
     )
     assert result.status_code == 201, result.text
     return result.json()
+
+
+def test_legacy_ready_profile_with_duplicate_body_cannot_prepare(auth, form_source, db):
+    profile = form_source[3]
+    db.add(
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=9,
+            name="second_body",
+            field_type="textarea",
+            mapped_key="message",
+            confidence=1.0,
+        )
+    )
+    db.commit()
+    response = auth.get(f"/api/outreach-drafts/{form_source[2].id}/form-approval-preview")
+    assert response.status_code == 409
+    assert "複数" in str(response.json())
 
 
 def test_preparation_approval_never_delivers(auth, form_source, db, monkeypatch):

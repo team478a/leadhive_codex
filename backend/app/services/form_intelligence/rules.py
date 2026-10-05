@@ -47,6 +47,8 @@ FIELD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
         "contact_category",
         (
             "お問い合わせ種別",
+            "お問い合わせ項目",
+            "お問い合わせの種類",
             "問い合わせ種別",
             "お問い合わせ目的",
             "ご用件",

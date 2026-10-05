@@ -25,6 +25,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.form_intelligence import analyze_company_forms
+from app.services.form_intelligence.fields import mapping_review_reason
 from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
@@ -178,13 +179,21 @@ def correct_form_field(
     field.recommended_value = body.recommended_value
     field.confidence = 1.0
     field.decision_source = "MANUAL"
-    required_fields = db.scalars(
+    fields = db.scalars(
         select(FormProfileField).where(
             FormProfileField.form_profile_id == profile.id,
-            FormProfileField.required.is_(True),
             ~FormProfileField.field_type.in_(("hidden", "submit", "button", "reset", "image")),
         )
     ).all()
+    mapping_reason = mapping_review_reason(
+        [
+            {
+                key: getattr(item, key)
+                for key in ("field_type", "mapped_key", "confidence", "required")
+            }
+            for item in fields
+        ]
+    )
     if profile.sales_contact_status == "PROHIBITED":
         profile.form_status = "BLOCKED"
     elif (
@@ -193,13 +202,13 @@ def correct_form_field(
         or profile.captcha_type != "CAPTCHA_NONE"
         or not profile.delivery_supported
         or profile.confirmation_page is None
-        or any(item.mapped_key == "unknown" or item.confidence < 0.8 for item in required_fields)
+        or mapping_reason
     ):
         profile.form_status = "REVIEW_REQUIRED"
         if not profile.delivery_supported and not profile.review_reason:
             profile.review_reason = "このフォームはブラウザまたはCodex支援での操作が必要です。"
-        elif any(item.mapped_key == "unknown" or item.confidence < 0.8 for item in required_fields):
-            profile.review_reason = "必須項目の自動マッピングを確定できません。"
+        elif mapping_reason:
+            profile.review_reason = mapping_reason
     else:
         profile.form_status = "READY"
         profile.review_reason = ""

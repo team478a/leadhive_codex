@@ -144,6 +144,33 @@ def test_analyze_form_profile_and_manual_correction(auth, db, monkeypatch):
     assert changed_fields["corporation"]["decision_source"] == "MANUAL"
 
 
+def test_manual_unknown_body_stays_review_after_reanalysis(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<a href="/contact">Contact</a>',
+            "https://form-intelligence.example/contact": (
+                '<form method="post"><textarea name="message" required></textarea>'
+                '<button type="submit">送信</button></form>'
+            ),
+        },
+    )
+    profile = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    field = next(f for f in profile["fields"] if f["name"] == "message")
+    response = auth.patch(
+        f"/api/form-profile-fields/{field['id']}",
+        json={
+            "mapped_key": "unknown",
+            "reason": "入力先を確定できない",
+        },
+    )
+    assert response.status_code == 200
+    refreshed = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    assert refreshed["form_status"] == "REVIEW_REQUIRED"
+    assert next(f for f in refreshed["fields"] if f["name"] == "message")["mapped_key"] == "unknown"
+
+
 def test_ai_receives_only_ambiguous_fields_and_cannot_override_rule_results(auth, db, monkeypatch):
     _, company = make_company(auth, db)
     install_pages(
