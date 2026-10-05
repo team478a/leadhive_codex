@@ -145,6 +145,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [104_FORM_EXECUTION_PATH_COMPATIBILITY.md](104_FORM_EXECUTION_PATH_COMPATIBILITY.md): JavaScript・Contact Form 7の未検証経路を候補と区別
 
+- [105_HELD_FORM_V17_GET_ONLY_RECHECK.md](105_HELD_FORM_V17_GET_ONLY_RECHECK.md): 保留2店舗の解析1.7でのGETのみ再確認・具体的な停止理由
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
