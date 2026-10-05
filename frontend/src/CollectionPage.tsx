@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { allPages, api, download, errorMessage, upload } from './api'
 import { Field } from './forms'
+import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
@@ -31,6 +32,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [file, setFile] = useState<File | null>(null)
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
+  const [recordType, setRecordType] = useState('company')
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [operations, setOperations] = useState<OperationJob[]>([])
@@ -86,7 +88,8 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       if (source === 'csv') {
         if (!file) { setError('CSVファイルを選択してください。'); return }
         const form = new FormData(); form.append('file', file)
-        if (csvPreview) form.append('column_mapping', JSON.stringify(csvMapping))
+        form.append('record_type', recordType)
+        if (csvPreview) form.append('column_mapping', JSON.stringify(Object.fromEntries(Object.entries(csvMapping).filter(([, value]) => value))))
         result = [await upload<CollectionJob>(`/projects/${projectId}/collection-jobs/csv`, form)]
       } else if (source === 'url') {
         const urls = keywords.split('\n').map(value => value.trim()).filter(Boolean)
@@ -177,8 +180,9 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
     <p className="muted">企業は営業プロジェクトごとに収集・保存されます。</p>
   </section>
 
-  return <div className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="space-y-6">
-    <form className="panel form-panel max-w-none" onSubmit={submit}>
+  return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
+    <SalesPreparationPanel key={projectId} projectId={projectId} />
+    <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
@@ -203,7 +207,8 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             max={source === 'google_places' ? 60 : 100} value={maxResults}
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>
         </div>}
-        {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所' }).map(([field, label]) => <Field key={field} label={label}><select required value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
+        {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
+        {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
         <div className="actions"><button type="submit">{loading ? (['serper', 'google_places', 'gbizinfo'].includes(source) ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
       </fieldset>
     </form>
@@ -279,11 +284,11 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       <div className="panel"><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
         <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
         {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
-            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
+            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
             <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
-            {['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
+            {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
           </article>)}
       </div>
     </section>

@@ -69,6 +69,7 @@ export interface CsvPreview {
 }
 export interface Company {
   id: string; project_id: string; company_name: string; website_url: string | null
+  record_type: 'company' | 'location'; reference_url: string
   domain: string | null; address: string; phone: string; email: string
   source: CollectionSource; source_keyword: string; status: SalesStatus; notes: string
   next_followup_at: string | null; assignee: string
@@ -185,7 +186,7 @@ export interface OutreachQueueItem {
 }
 export interface OperationJob {
   id: string; project_id: string
-  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence'
+  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach'
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_count: number; processed_count: number; success_count: number; failed_count: number
   cancel_requested: boolean; attempt_count: number; acknowledged_at: string | null; error_message: string

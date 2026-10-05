@@ -8,6 +8,10 @@ export default function setup() {
   process.env.E2E_PASSWORD = randomBytes(24).toString('hex')
   process.env.E2E_MEMBER_EMAIL = `e2e-member-${randomBytes(8).toString('hex')}@example.com`
   process.env.E2E_MEMBER_PASSWORD = randomBytes(24).toString('hex')
+  execFileSync(process.env.PYTHON || (process.platform === 'win32' ?
+    '.venv/Scripts/python.exe' : '.venv/bin/python'), ['-m', 'alembic', 'upgrade', 'head'], {
+    cwd: '../backend', env: { ...process.env, DATABASE_URL: process.env.TEST_DATABASE_URL },
+  })
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env: process.env })
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], {
     env: { ...process.env, E2E_EMAIL: process.env.E2E_MEMBER_EMAIL, E2E_PASSWORD: process.env.E2E_MEMBER_PASSWORD },
