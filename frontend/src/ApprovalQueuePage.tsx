@@ -135,6 +135,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
           <dt>送信者</dt><dd>{Object.entries(selected.sender).filter(([, v]) => v).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</dd>
           <dt>件名</dt><dd>{selected.subject}</dd><dt>本文</dt><dd className="whitespace-pre-wrap break-words">{selected.body}</dd>
           <dt>フィールド値</dt><dd>{Object.entries(selected.field_values).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</dd>
+          {selected.execution_plan && <><dt>検証用の操作計画（送信不可）</dt><dd><p>匿名フォームの計画を承認します。送信予約・実行には使用できません。</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(selected.execution_plan, null, 2)}</pre></dd><dt>操作計画hash</dt><dd className="break-all">{selected.execution_plan_hash}</dd></>}
           <dt>提案者</dt><dd>{selected.created_by_principal_type === 'AGENT' ? 'Agent' : 'Human'}</dd>
           <dt>作成 / 有効期限</dt><dd>{date(selected.created_at)} / {date(selected.expires_at)}</dd>
           <dt>payload version / hash</dt><dd className="break-all">{selected.payload_version} / {selected.payload_hash}</dd>

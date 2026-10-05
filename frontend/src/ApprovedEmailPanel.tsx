@@ -6,6 +6,9 @@ export interface ApprovalProposal {
   id: string; company_name: string; company_id: string; channel: 'email' | 'form'
   recipient: string | null; form_url: string | null; subject: string; body: string
   form_action_url?: string | null
+  delivery_method?: string
+  execution_plan?: Record<string, unknown> | null
+  execution_plan_hash?: string | null
   sender: Record<string, string>; field_values: Record<string, string>
   payload_hash: string; payload_version: number; status: string
   created_by_principal_type: 'HUMAN' | 'AGENT'; created_at: string; expires_at: string

@@ -57,7 +57,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <fieldset disabled={busy}>
-      {canWrite && items.filter(item => item.channel === 'form' && item.status === 'APPROVED').map(item => <div key={item.id} className="my-3">
+      {canWrite && items.filter(item => item.channel === 'form' && item.delivery_method !== 'form_plan_fixture' && item.status === 'APPROVED').map(item => <div key={item.id} className="my-3">
         <p>{item.company_name} / v{item.payload_version} / {item.subject}</p>
         <details><summary>承認内容を確認</summary><p className="break-all">{item.form_url}</p><p className="break-all">POST先: {item.form_action_url || '未確定・再解析が必要'}</p><p className="whitespace-pre-wrap break-words">{item.body}</p>{Object.entries(item.field_values).map(([name, value]) => <p className="break-words" key={name}>{name}: {value}</p>)}</details>
         <button type="button" disabled={rows.some(row => row.approval_id === item.id) || !item.form_action_url} onClick={() => reserve(item)}>{item.company_name} の承認済みフォームを予約</button>

@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,7 @@ from app.models import (
 )
 from app.schema_approval import ExpectedPayload, Proposal
 from app.security import password_hasher, token_digest
+from app.services.form_execution_plan import plan_hash
 
 
 def now():
@@ -139,6 +141,28 @@ def form_sender_hash(db):
     )
 
 
+def valid_fixture_plan(item):
+    try:
+        body = Proposal.model_validate(
+            {
+                key: value
+                for key, value in item.payload_snapshot.items()
+                if key in Proposal.model_fields
+            }
+        )
+        plan = body.execution_plan
+        return bool(
+            plan
+            and body.delivery_method == "form_plan_fixture"
+            and plan.project_id == item.project_id
+            and plan.company_id == item.company_id
+            and plan.payload_version == item.payload_version
+            and plan_hash(plan) == item.payload_snapshot.get("execution_plan_hash")
+        )
+    except (ValidationError, ValueError, TypeError):
+        return False
+
+
 def invalidate_if_needed(db, item):
     if item.status not in {"PENDING", "APPROVED"}:
         return
@@ -148,6 +172,8 @@ def invalidate_if_needed(db, item):
         reason, status = "request expired", "EXPIRED"
     elif payload_hash(item.payload_snapshot) != item.payload_hash:
         reason = "payload integrity mismatch"
+    elif item.delivery_method == "form_plan_fixture" and not valid_fixture_plan(item):
+        reason = "fixture execution plan binding mismatch"
     elif company_fingerprint(db.get(Company, item.company_id)) != item.payload_snapshot.get(
         "company_source_hash"
     ):
@@ -216,9 +242,18 @@ def create_proposal(
         raise HTTPException(409, "Draftと提案内容が一致しません。")
     proposal_id = previous.proposal_id if previous else uuid4()
     version = previous.payload_version + 1 if previous else 1
+    if body.execution_plan and (
+        body.execution_plan.project_id != project_id
+        or body.execution_plan.payload_version != version
+    ):
+        raise HTTPException(409, "操作計画のProjectまたはversionが一致しません。")
     snapshot = body.model_dump(
         mode="json", exclude={"expires_in_hours", "expected_hash", "expected_version"}
     )
+    if body.execution_plan:
+        snapshot["execution_plan_hash"] = plan_hash(body.execution_plan)
+    else:
+        snapshot.pop("execution_plan", None)  # Preserve legacy canonical payload shape.
     snapshot.update(
         project_id=str(project_id),
         proposal_id=str(proposal_id),
