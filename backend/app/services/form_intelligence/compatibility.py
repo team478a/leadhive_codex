@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from urllib.parse import urljoin, urlsplit
 
@@ -24,6 +25,48 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
     if page.scheme == "https" and action.scheme != "https":
         return DeliveryCompatibility(False, "安全でない通信へ送信するフォームです。")
 
+    if (
+        "wpcf7-form" in form.get("class", [])
+        or form.select_one('input[name="_wpcf7"]')
+        or form.find_parent(class_="wpcf7")
+    ):
+        return DeliveryCompatibility(
+            False,
+            "Contact Form 7の送信経路は未対応です。ブラウザで確認してください。",
+        )
+    if (
+        str(form.get("onsubmit") or "").strip()
+        or any(
+            form.has_attr(name) and str(form.get(name) or "").lower() not in {"false", "0"}
+            for name in ("data-ajax", "data-remote")
+        )
+        or form.has_attr("hx-post")
+        or any(str(name).startswith(("x-on:submit", "@submit", "on:submit")) for name in form.attrs)
+    ):
+        return DeliveryCompatibility(
+            False, "JavaScript・非同期の送信経路は未検証です。ブラウザでの確認が必要です。"
+        )
+    native_submit = []
+    for control in form.select("button, input"):
+        if control.has_attr("disabled"):
+            continue
+        kind = str(
+            control.get("type") or ("submit" if control.name == "button" else "text")
+        ).lower()
+        label = control.get_text(" ", strip=True) or str(control.get("value") or "")
+        if kind == "button" and re.search(r"確認|送信|次へ|confirm|submit|send|next", label, re.I):
+            return DeliveryCompatibility(
+                False, "確認・送信ボタンがJavaScript操作を必要とします。確認経路は未検証です。"
+            )
+        if kind == "submit":
+            if str(control.get("onclick") or "").strip() or any(
+                control.has_attr(name) for name in ("formaction", "formmethod", "formenctype")
+            ):
+                return DeliveryCompatibility(
+                    False,
+                    "送信ボタンに独自処理または送信先の上書きがあります。ブラウザでの確認が必要です。",
+                )
+            native_submit.append(control)
     names: dict[str, str] = {}
     visible_count = 0
     for field in form.select("input, textarea, select"):
@@ -53,4 +96,8 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
             )
     if not visible_count:
         return DeliveryCompatibility(False, "入力項目がないため人による確認が必要です。")
+    if not native_submit:
+        return DeliveryCompatibility(
+            False, "標準の送信ボタンを確認できません。ブラウザ操作が必要です。"
+        )
     return DeliveryCompatibility(True)

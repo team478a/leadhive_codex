@@ -143,6 +143,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [103_FORM_CONSENT_CHOICE_GUARDS.md](103_FORM_CONSENT_CHOICE_GUARDS.md): 同意チェック欄の必須性とHuman選択・メルマガ未選択の維持
 
+- [104_FORM_EXECUTION_PATH_COMPATIBILITY.md](104_FORM_EXECUTION_PATH_COMPATIBILITY.md): JavaScript・Contact Form 7の未検証経路を候補と区別
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

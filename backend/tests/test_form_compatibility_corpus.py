@@ -86,6 +86,14 @@ def test_corpus_classification_and_preparation(db, workspace, monkeypatch, corpu
     )
     assert profile.form_status == case.status
     assert candidate == case.candidate
+    expected_reason = {
+        "cf7": "Contact Form 7",
+        "js_confirmation": "確認経路",
+        "submit_handler": "非同期",
+    }.get(case.key)
+    if expected_reason:
+        assert not profile.delivery_supported
+        assert expected_reason in profile.review_reason
 
 
 @pytest.mark.parametrize(

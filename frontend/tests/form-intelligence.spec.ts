@@ -70,6 +70,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     .locator('xpath=ancestor::section[1]')
   const profileCards = formPanel.locator('.form-profile-card')
   await expect(profileCards).toHaveCount(2)
+  await expect(profileCards.getByText('静的構造: 通常経路の候補', { exact: true })).toHaveCount(2)
   await expect(profileCards.filter({ hasText: '優先フォーム' }).getByText('送信準備完了')).toBeVisible()
   const captchaCard = profileCards.filter({ hasText: 'hCaptcha' })
   await expect(captchaCard.getByText('要確認', { exact: true })).toBeVisible()

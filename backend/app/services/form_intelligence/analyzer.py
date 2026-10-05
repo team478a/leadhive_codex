@@ -26,7 +26,7 @@ from app.services.form_intelligence.rules import (
 from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "1.6"
+ANALYSIS_VERSION = "1.7"
 MAX_CONTACT_PAGES = 8
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 

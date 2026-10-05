@@ -95,6 +95,21 @@ CASES = [
     ),
     Case("confirmation", "確認画面あり", form(button="確認する"), "READY"),
     Case(
+        "js_confirmation",
+        "JavaScript確認ボタン",
+        form().replace(
+            '<button type="submit">送信</button>', '<button type="button">確認する</button>'
+        ),
+        "REVIEW_REQUIRED",
+    ),
+    Case("cf7", "Contact Form 7", form(attributes='class="wpcf7-form"'), "REVIEW_REQUIRED"),
+    Case(
+        "submit_handler",
+        "JavaScript送信処理",
+        form(attributes='onsubmit="customSubmit()"'),
+        "REVIEW_REQUIRED",
+    ),
+    Case(
         "unknown_required",
         "不明な必須項目",
         form('<input name="custom_code" aria-label="識別符号" required>'),
