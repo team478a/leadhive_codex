@@ -223,6 +223,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [143_LEAD_COMPLETION_WORK_QUEUE.md](143_LEAD_COMPLETION_WORK_QUEUE.md): 停止理由・状態の作業一覧、部分集計・25件ページ・企業詳細への読み取り導線と送信境界
 
+- [144_COMPLETION_QUEUE_RETURN_AND_RECHECK.md](144_COMPLETION_QUEUE_RETURN_AND_RECHECK.md): 元の固定リスト・絞り込みへの復帰、旧診断を保持しない再集計、条件消失とページ丸め
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
