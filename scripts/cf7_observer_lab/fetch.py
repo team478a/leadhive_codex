@@ -7,7 +7,7 @@ import math
 import os
 import ssl
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from threading import Event
 
 import httpcore
@@ -21,9 +21,12 @@ USER_AGENT = "LeadHiveObserverLab"
 
 @dataclass(frozen=True)
 class FetchResult:
-    observation: observer.Observation
+    observation: observer.Observation = field(repr=False)
     robots_sha256: str
     pinned_ips: tuple[str, str]
+    body: bytes = field(repr=False)
+    robots: bytes = field(repr=False)
+    media_type: str
 
 
 def checkpoint(deadline: float, cancelled: Event) -> float:
@@ -217,5 +220,10 @@ def observe_owned_page(
     observation = observer.analyze(PAGE, body, status=200, media_type=media_type)
     checkpoint(deadline, cancelled)
     return FetchResult(
-        observation, hashlib.sha256(robots).hexdigest(), (robots_ip, page_ip)
+        observation,
+        hashlib.sha256(robots).hexdigest(),
+        (robots_ip, page_ip),
+        body,
+        robots,
+        media_type,
     )
