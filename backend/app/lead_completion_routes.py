@@ -21,12 +21,21 @@ from app.project_access import company_access, project_access
 from app.security import current_user
 from app.services.contact_destinations import candidates, linked_inventory, sync_company
 from app.services.lead_identity import identity_hash
+from app.services.sendability import evaluate as evaluate_sendability
 
 router = APIRouter(prefix="/api")
 
 
 class EmptyInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+@router.get("/companies/{company_id}/sendability")
+def sendability(
+    company_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    company = company_access(company_id, db, user, write=False)
+    return evaluate_sendability(db, company)
 
 
 @router.get("/companies/{company_id}/lead-completion")

@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 
 from sqlalchemy import delete, select
 
-from app.models import Company, ContactDestination, FormProfile, LeadDestinationLink
+from app.models import Company, ContactDestination, ContactPerson, FormProfile, LeadDestinationLink
 from app.services.collection import canonicalize_url
 
 
@@ -20,7 +20,7 @@ def normalize_destination(channel: str, value: str) -> str:
     if parsed.username or parsed.password or parsed.port not in (None, 80, 443):
         raise ValueError("Invalid destination")
     canonical, _ = canonicalize_url(value)
-    host = parsed.hostname or ""
+    host = (parsed.hostname or "").rstrip(".")
     if host.lower() == "localhost" or host.lower().endswith((".localhost", ".local")):
         raise ValueError("Invalid destination")
     try:
@@ -38,6 +38,8 @@ def candidates(db, company):
         ("email", company.email, company.contact_source_url),
         ("form", company.contact_url, company.contact_source_url),
     ]
+    for contact in db.scalars(select(ContactPerson).where(ContactPerson.company_id == company.id)):
+        values.append(("email", contact.email, contact.source_url))
     for profile in db.scalars(
         select(FormProfile).where(
             FormProfile.company_id == company.id, FormProfile.form_found.is_(True)
