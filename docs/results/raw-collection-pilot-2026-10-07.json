@@ -1,0 +1,132 @@
+{
+  "schema_version": "raw-repeat-v2",
+  "date": "2026-10-07",
+  "status": "NOT_RUN",
+  "measurement_complete": false,
+  "baseline_commit": "203a6eff31ec2cb93cc26e2d74a24b56afa1fe61",
+  "branch": "codex/integration",
+  "blockers": [
+    "COLLECTION_CREDENTIALS_UNSET",
+    "HUMAN_TRUTH_NOT_AVAILABLE"
+  ],
+  "planned_condition": {
+    "region": "兵庫県姫路市",
+    "industry": "美容院・美容室",
+    "sources": [
+      "serper"
+    ],
+    "queries": [
+      {
+        "keyword": "美容院",
+        "requested_count_per_run": 10,
+        "maximum_runs": 3
+      },
+      {
+        "keyword": "美容室",
+        "requested_count_per_run": 10,
+        "maximum_runs": 1
+      }
+    ],
+    "initial_requested_allocation": 20,
+    "maximum_raw_hits": 40,
+    "unique_candidate_target": "20–30; not guaranteed",
+    "google_places": "DEFERRED_STORAGE_AND_TERMS_REVIEW",
+    "gbizinfo": "CORPORATE_IDENTITY_ROLE_NOT_STORE_TRUTH"
+  },
+  "pilot": {
+    "sources": null,
+    "queries": null,
+    "runs": null,
+    "raw_hits": null,
+    "unique_candidates": null,
+    "human_reviewed": null
+  },
+  "quality": {
+    "correct": null,
+    "strict_precision": null,
+    "resolved_precision": null,
+    "duplicate_rate": null,
+    "uncertain_rate": null,
+    "coverage": null
+  },
+  "stability": {
+    "union": null,
+    "intersection": null,
+    "intersection_rate": null,
+    "repeat_discovery_rate": null,
+    "single_run_rate": null,
+    "human_entity_stability": null
+  },
+  "errors": {
+    "WRONG_INDUSTRY": {
+      "count": null,
+      "rate": null
+    },
+    "WRONG_AREA": {
+      "count": null,
+      "rate": null
+    },
+    "DUPLICATE": {
+      "count": null,
+      "rate": null
+    },
+    "WRONG_ENTITY": {
+      "count": null,
+      "rate": null
+    },
+    "PORTAL_OR_AGGREGATOR": {
+      "count": null,
+      "rate": null
+    },
+    "CLOSED_OR_INACTIVE": {
+      "count": null,
+      "rate": null
+    },
+    "UNCERTAIN": {
+      "count": null,
+      "rate": null
+    },
+    "OTHER": {
+      "count": null,
+      "rate": null
+    }
+  },
+  "source_comparison": [],
+  "query_comparison": [],
+  "field_completeness": {
+    "name": null,
+    "address": null,
+    "phone": null,
+    "website": null,
+    "email": null,
+    "reference_url": null
+  },
+  "identity_pair": {
+    "SAME": null,
+    "DIFFERENT": null,
+    "UNSURE": null
+  },
+  "cost": {
+    "collection_api_calls": 0,
+    "estimated_api_cost": null,
+    "human_review_seconds": null
+  },
+  "safety": {
+    "collection_external_requests": 0,
+    "ai_calls": 0,
+    "completion_jobs": 0,
+    "email_sent": 0,
+    "form_sent": 0,
+    "approvals": 0,
+    "outbound_enabled": false,
+    "delivery_worker_started": false,
+    "operational_db_modified": false
+  },
+  "synthetic_tests_are_measurement": false,
+  "oss_network_access_excluded_from_collection_calls": true,
+  "next_action": "Configure one authorized discovery source in LeadHive settings, then execute the small Pilot and obtain actual Human labels; no Full Benchmark or accuracy improvement yet.",
+  "implementation_commits": {
+    "backend": "39268d8",
+    "frontend": "6827f89"
+  }
+}

@@ -119,3 +119,7 @@ CIはBackend tests / Ruff・format・境界mypy / Frontend typecheck・lint・bu
 5. URL秘匿処理と部分レビュー/Query順の影響がある。後工程や旧100店舗の手動成果をRaw正解へ流用しない。
 
 推奨: **先にPilotの実行条件（SourceキーとHumanレビュー）を整える。** Full Benchmark・判定緩和・Error改善を開始しない。次の実収集はSerper 24候補まで。測定結果を提出して停止し、Humanの明示確認後にのみ次へ進む。
+
+## 2026-10-07追記
+
+新規Benchmarkの反復測定・Human Pair基盤は[147_RAW_COLLECTION_PILOT.md](147_RAW_COLLECTION_PILOT.md)を参照。既存v1の定義・Snapshot・結果は改変せず、反復は新しいv2 Benchmarkのみ許可する。

@@ -1,0 +1,197 @@
+{
+  "date": "2026-10-07",
+  "leadhive_baseline": "203a6eff31ec2cb93cc26e2d74a24b56afa1fe61",
+  "repositories": [
+    {
+      "full_name": "gosom/google-maps-scraper",
+      "pushed_at": "2026-09-24T04:54:54Z",
+      "language": "Go",
+      "stargazers_count": 6298,
+      "forks_count": 992,
+      "license": "MIT",
+      "commit": "d0b51bcf3cd56d9a3f71e049cb6e226554e24162",
+      "commit_date": "2026-09-24T07:54:35+03:00",
+      "license_file": "LICENSE"
+    },
+    {
+      "full_name": "dedupeio/dedupe",
+      "pushed_at": "2025-07-29T00:18:20Z",
+      "language": "Python",
+      "stargazers_count": 4515,
+      "forks_count": 575,
+      "license": "MIT",
+      "commit": "3f61e79102910bd355e920a2df7e44c14c9cb247",
+      "commit_date": "2025-07-28T20:18:20-04:00",
+      "license_file": "LICENSE"
+    },
+    {
+      "full_name": "dedupeio/dedupe-examples",
+      "pushed_at": "2024-08-10T00:15:53Z",
+      "language": "Python",
+      "stargazers_count": 417,
+      "forks_count": 212,
+      "license": "MIT",
+      "commit": "48916bf09205756a2948a30ec0275ac2e394288d",
+      "commit_date": "2024-08-09T20:15:49-04:00",
+      "license_file": "LICENSE.md"
+    },
+    {
+      "full_name": "moj-analytical-services/splink",
+      "pushed_at": "2026-10-06T14:36:01Z",
+      "language": "Python",
+      "stargazers_count": 2460,
+      "forks_count": 269,
+      "license": "MIT",
+      "commit": "68ced2a46105dca1df1f35b037a3edcdf87a60c7",
+      "commit_date": "2026-10-06T10:16:58+01:00",
+      "license_file": "LICENSE"
+    },
+    {
+      "full_name": "powergr/AGMS",
+      "pushed_at": "2026-09-23T11:12:07Z",
+      "language": "Python",
+      "stargazers_count": 0,
+      "forks_count": 1,
+      "license": "MIT",
+      "commit": "9f43bd303cf4d1d03149b82b40854c1e282f291a",
+      "commit_date": "2026-09-23T14:09:44+03:00",
+      "license_file": "LICENSE"
+    },
+    {
+      "full_name": "professai/leadforge",
+      "pushed_at": "2026-04-17T16:30:36Z",
+      "language": "Python",
+      "stargazers_count": 0,
+      "forks_count": 0,
+      "license": "MIT",
+      "commit": "7efa391f390ce5cc24b6e22dc539cda2da6747cd",
+      "commit_date": "2026-04-17T10:30:35-06:00",
+      "license_file": "LICENSE"
+    },
+    {
+      "full_name": "dariomory/formharvester",
+      "pushed_at": "2026-09-07T13:05:09Z",
+      "language": "Python",
+      "stargazers_count": 5,
+      "forks_count": 2,
+      "license": "MIT",
+      "commit": "f4baee53699327b6047556be412963e2a61c2986",
+      "commit_date": "2026-09-07T19:55:25+07:00",
+      "license_file": "LICENSE"
+    }
+  ],
+  "oss_executed": false,
+  "dependencies_added": false,
+  "code_copied": false,
+  "decisions": {
+    "gosom": "ADAPT measurements / REJECT unofficial acquisition",
+    "dedupe": "ADAPT Human pairs and missing values",
+    "dedupe-examples": "REFERENCE evaluation and labels",
+    "splink": "REFERENCE scaling",
+    "AGMS": "REFERENCE extraction tests / REJECT Maps and bypass",
+    "leadforge": "REFERENCE tests / REJECT derived recipient and autonomous send",
+    "formharvester": "REFERENCE evidence / REJECT execution and captcha"
+  },
+  "capabilities": [
+    {
+      "capability": "Geographic Grid",
+      "LeadHive": "NOT IMPLEMENTED",
+      "gosom": "IMPLEMENTED: grid/grid.go",
+      "dedupe": "N/A",
+      "Splink": "N/A",
+      "decision": "REFERENCE: official API partition design only"
+    },
+    {
+      "capability": "Query Expansion",
+      "LeadHive": "manual queries only",
+      "gosom": "input query list",
+      "dedupe": "N/A",
+      "Splink": "N/A",
+      "decision": "REFERENCE: no automatic expansion"
+    },
+    {
+      "capability": "Repeatability",
+      "LeadHive": "v2 explicit repeat_index and set metrics",
+      "gosom": "Issue #295 reports variation; controlled Human benchmark UNKNOWN",
+      "dedupe": "N/A",
+      "Splink": "N/A",
+      "decision": "ADAPT: independent runs"
+    },
+    {
+      "capability": "Stable Place ID",
+      "LeadHive": "current field mask does not request Places id; Places raw persistence disabled",
+      "gosom": "entry PlaceID",
+      "dedupe": "user record IDs",
+      "Splink": "unique_id_column_name",
+      "decision": "REFERENCE: policy review before official API use"
+    },
+    {
+      "capability": "Dedup",
+      "LeadHive": "company/domain and location identity; raw fingerprints separate",
+      "gosom": "URL/hashmap/resume identity",
+      "dedupe": "pair classification and clusters",
+      "Splink": "probabilistic linkage",
+      "decision": "ADAPT: evaluate before model adoption"
+    },
+    {
+      "capability": "Entity Resolution",
+      "LeadHive": "Lead Identity and Human pair labels",
+      "gosom": "identifier dedup, semantic resolution UNKNOWN",
+      "dedupe": "IMPLEMENTED",
+      "Splink": "IMPLEMENTED",
+      "decision": "REFERENCE: no automatic merge"
+    },
+    {
+      "capability": "Human Label",
+      "LeadHive": "raw outcomes and SAME/DIFFERENT/UNSURE",
+      "gosom": "UNKNOWN",
+      "dedupe": "match/distinct; convenience unsure writes both",
+      "Splink": "labelled comparison/evaluation inputs",
+      "decision": "ADAPT: retain UNSURE separately"
+    },
+    {
+      "capability": "Active Learning",
+      "LeadHive": "NOT IMPLEMENTED",
+      "gosom": "UNKNOWN",
+      "dedupe": "uncertain_pairs / labeler",
+      "Splink": "interactive active learning UNKNOWN",
+      "decision": "REFERENCE"
+    },
+    {
+      "capability": "Resume",
+      "LeadHive": "normal worker recovery; raw runs no automatic recovery",
+      "gosom": "runner/resume",
+      "dedupe": "training/settings reuse, not collection",
+      "Splink": "model/settings reuse, not collection",
+      "decision": "REFERENCE"
+    },
+    {
+      "capability": "Retry",
+      "LeadHive": "normal collection retry; raw explicit attempts no hidden auto retry",
+      "gosom": "max retry configuration",
+      "dedupe": "N/A",
+      "Splink": "N/A",
+      "decision": "REFERENCE: do not pollute repeat metrics"
+    },
+    {
+      "capability": "Marginal Gain",
+      "LeadHive": "Human CORRECT entity keys by source/query",
+      "gosom": "controlled Human unique gain UNKNOWN",
+      "dedupe": "N/A",
+      "Splink": "N/A",
+      "decision": "KEEP"
+    },
+    {
+      "capability": "Benchmark",
+      "LeadHive": "strict/resolved precision, null coverage, run stability; real Pilot NOT RUN",
+      "gosom": "unit tests; Human precision UNKNOWN",
+      "dedupe": "examples precision/recall evaluation",
+      "Splink": "threshold ROC/precision/recall tools",
+      "decision": "ADAPT: evaluation definitions, not measured OSS claims"
+    }
+  ],
+  "implementation_commits": {
+    "backend": "39268d8",
+    "frontend": "6827f89"
+  }
+}
