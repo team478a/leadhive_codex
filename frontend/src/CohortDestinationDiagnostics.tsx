@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, errorMessage } from './api'
 import { CompletionWorkQueue } from './CompletionWorkQueue'
-import type { CompletionWorkRow } from './completionWorkQueueTypes'
+import type { CompletionWorkRow, CompletionQueueFilters } from './completionWorkQueueTypes'
 
 type Reason = { code: string; message: string; next_action: string }
 type DeliveryFunnel = { prepared_ever: boolean; human_approved: boolean; sent: boolean; attempt_count: number; results: Record<string, number>; queued: number; blocked: number; cancelled: number; preflight_failed: number; unverified_records: number }
@@ -16,7 +16,8 @@ type Page = { cohort_id: string; cohort_hash: string; context_hash: string; defi
 type Summary = { rows: Row[]; history: History; dmReady: number; dmReasons: Record<string, number>; processed: number; states: Record<string, number>; destinations: Record<string, { leads: number; ready: boolean; shared: boolean }>; reasons: Record<string, { reason: Reason; count: number; states: Set<string> }>; first: string; last: string; complete: boolean }
 const empty = (): Summary => ({ rows: [], history: emptyHistory(), dmReady: 0, dmReasons: {}, processed: 0, states: { READY: 0, REVIEW: 0, HOLD: 0, BLOCKED: 0 }, destinations: {}, reasons: {}, first: '', last: '', complete: false })
 
-export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered, onOpenCompany }: { cohortId: string; cohortHash: string; discovered: number; onOpenCompany: (id: string) => void }) {
+export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered, onOpenCompany, initialFilters }: { cohortId: string; cohortHash: string; discovered: number; onOpenCompany: (id: string, filters: CompletionQueueFilters) => void; initialFilters?: CompletionQueueFilters }) {
+  const [filters, setFilters] = useState<CompletionQueueFilters>(initialFilters ?? { state: 'ALL', reason: 'ALL', page: 0 })
   const [data, setData] = useState<Summary>(empty)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -106,7 +107,7 @@ export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered,
         <p>予約・実行前 {data.history.queued}件 / 安全停止 {data.history.blocked}件 / 取消 {data.history.cancelled}件 / 実行前失敗 {data.history.preflightFailed}件 / 証跡不一致 {data.history.unverified}件</p>
         <p className="muted">根拠付きDMの承認提案に紐付く履歴のみです。旧経路の履歴を推定して混ぜません。過去の承認記録は取消・期限切れ後も残り、現在の送信許可とは異なります。予約だけでは送信実行に数えません。フォーム受付・SMTP受付は相手の閲覧や返信を意味しません。UNKNOWNの自動再送は行いません。</p>
       </section>
-      <CompletionWorkQueue rows={data.rows} complete={data.complete} onOpenCompany={onOpenCompany} />
+      <CompletionWorkQueue rows={data.rows} complete={data.complete} filters={filters} onFiltersChange={setFilters} onOpenCompany={onOpenCompany} />
       <h4 className="mt-4">不足・停止理由と次の作業</h4>
       <p className="muted">READY以外のLeadを理由ごとに一度だけ数えます。一つのLeadに複数理由があるため合計は候補数と一致しません。別窓口の理由も含むので、企業詳細で窓口別に確認してください。</p>
       <ul>{Object.values(data.reasons).sort((a, b) => b.count - a.count || a.reason.code.localeCompare(b.reason.code)).map(item => <li key={item.reason.code}><strong>{item.reason.message}：{item.count}件</strong>（{[...item.states].join(' / ')}）— {item.reason.next_action} <small>({item.reason.code})</small></li>)}</ul>

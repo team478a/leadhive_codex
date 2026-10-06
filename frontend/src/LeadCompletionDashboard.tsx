@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import type { Project } from './types'
+import type { CompletionReturnContext } from './completionWorkQueueTypes'
 import { CohortDestinationDiagnostics } from './CohortDestinationDiagnostics'
 
 type Cohort = { id: string; name: string; discovered: number; created_at: string }
@@ -18,11 +19,11 @@ const stages: Record<string, string> = { DISCOVERED: '発見・固定対象', MA
 
 const numberOrUnknown = (value: number | null) => value === null ? '不明' : value.toLocaleString('ja-JP')
 
-export function LeadCompletionDashboard({ onOpenCompany }: { onOpenCompany: (projectId: string, companyId: string) => void }) {
+export function LeadCompletionDashboard({ onOpenCompany, returnContext }: { onOpenCompany: (context: CompletionReturnContext, companyId: string) => void; returnContext: CompletionReturnContext | null }) {
   const [projects, setProjects] = useState<Project[]>([])
-  const [projectId, setProjectId] = useState('')
+  const [projectId, setProjectId] = useState(returnContext?.projectId ?? '')
   const [cohorts, setCohorts] = useState<Cohort[]>([])
-  const [cohortId, setCohortId] = useState('')
+  const [cohortId, setCohortId] = useState(returnContext?.cohortId ?? '')
   const [data, setData] = useState<Report | null>(null)
   const [reviewCompany, setReviewCompany] = useState('')
   const [outcome, setOutcome] = useState('CHECKED')
@@ -59,19 +60,21 @@ export function LeadCompletionDashboard({ onOpenCompany }: { onOpenCompany: (pro
       setReload(n => n + 1)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
+  const restored = returnContext?.projectId === projectId && returnContext.cohortId === data?.cohort_id && returnContext.cohortHash === data.cohort_hash
   return <section className="panel mb-6" aria-label="Lead Completion計測">
     <h2>リスト完成率</h2>
     <p className="muted mt-2">集計対象を固定して不足情報を確認します。追加収集や削除後も分母は変わりません。ここから承認・送信は行いません。</p>
     <label className="field mt-4">完成率のプロジェクト<select value={projectId} disabled={busy} onChange={e => { setProjectId(e.target.value); setCohorts([]); setCohortId(''); setData(null); setError(''); setReviewCompany('') }}><option value="">選択してください</option>{projects.map(p => <option key={p.id} value={p.id}>{p.project_name}</option>)}</select></label>
     {projectId && <><button className="secondary" disabled={busy} onClick={() => void freeze()}>現在のリストを集計対象として固定</button><label className="field mt-4">固定した集計対象<select value={cohortId} disabled={busy} onChange={e => { setCohortId(e.target.value); setData(null); setReviewCompany('') }}><option value="">選択してください</option>{cohorts.map(c => <option key={c.id} value={c.id}>{c.name}（{c.discovered}件）</option>)}</select></label></>}
     {error && <p role="alert" className="error">{error}</p>}
+    {restored && <p role="status">元の固定リストに戻りました。最新状態を確認するため「窓口診断を集計」を実行してください。以前の診断結果は引き継ぎません。</p>}
     {data && <>
       <div className="grid gap-3 sm:grid-cols-3"><article className="metric"><span>固定候補数</span><strong>{data.discovered}</strong></article><article className="metric"><span>段階通過を含むDM READY率</span><strong>{data.dm_ready_rate === null ? '未判定' : `${data.dm_ready_rate}%`}</strong></article><article className="metric"><span>窓口候補（重複除外）</span><strong>{data.diagnostics.unique_candidate_destinations}</strong></article></div>
       <p className="muted mt-3">この表は全段階の通過を含む記録です。現在のDM READY率と根拠付きDMのHuman承認・送信結果は、下の窓口診断を全件集計して確認してください。URL登録だけをDM完成とは扱わず、未確認の段階を推定で埋めません。</p>
       {data.context_changed && <p role="status">固定後に営業条件が変更されています。旧条件との比較には注意してください。</p>}
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>段階</th><th>前段階通過を含む確認数</th><th>単独の根拠・候補数</th><th>変換率</th></tr></thead><tbody>{data.stages.map(s => <tr key={s.code}><td>{stages[s.code]}</td><td>{numberOrUnknown(s.count)}{s.coverage === 'PARTIAL' && '（部分計測）'}</td><td>{numberOrUnknown(s.observed_count)}</td><td>{s.conversion_rate === null ? '不明' : `${s.conversion_rate}%`}</td></tr>)}</tbody></table></div>
       <p className="mt-4">公式URL登録 {data.diagnostics.website_registered} / 有効な公式照合根拠 {data.diagnostics.official_evidence} / 窓口候補のあるLead {data.diagnostics.destination_candidate_leads} / 固定範囲内の共通窓口候補 {data.diagnostics.shared_candidate_destinations}</p>
-      <CohortDestinationDiagnostics key={`${data.cohort_id}:${data.measured_at}`} cohortId={data.cohort_id} cohortHash={data.cohort_hash} discovered={data.discovered} onOpenCompany={id => onOpenCompany(projectId, id)} />
+      <CohortDestinationDiagnostics key={`${data.cohort_id}:${data.measured_at}`} cohortId={data.cohort_id} cohortHash={data.cohort_hash} discovered={data.discovered} initialFilters={restored ? returnContext.filters : undefined} onOpenCompany={(id, filters) => onOpenCompany({ projectId, cohortId: data.cohort_id, cohortHash: data.cohort_hash, filters }, id)} />
       <h3 className="mt-5">処理コスト・レビュー</h3>
       <p>記録済み検索HTTP試行：{Object.entries(data.cost.search_api_attempts).map(([key, value]) => `${key} ${value}回`).join(' / ') || '記録なし'} / AI操作 {data.cost.ai_operations}回</p>
       <p>記録済みtoken：入力 {numberOrUnknown(data.cost.input_tokens)} / 出力 {numberOrUnknown(data.cost.output_tokens)}（{data.cost.token_observations}操作分）</p>

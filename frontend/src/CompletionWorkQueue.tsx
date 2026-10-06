@@ -1,15 +1,14 @@
-import { useState } from 'react'
-import type { CompletionWorkRow } from './completionWorkQueueTypes'
+import type { CompletionWorkRow, CompletionQueueFilters } from './completionWorkQueueTypes'
 
 // A navigation queue over received observations, never an authorization or retry queue.
-export function CompletionWorkQueue({ rows, complete, onOpenCompany }: {
+export function CompletionWorkQueue({ rows, complete, onOpenCompany, filters, onFiltersChange }: {
   rows: CompletionWorkRow[]
   complete: boolean
-  onOpenCompany: (id: string) => void
+  onOpenCompany: (id: string, filters: CompletionQueueFilters) => void
+  filters: CompletionQueueFilters
+  onFiltersChange: (value: CompletionQueueFilters) => void
 }) {
-  const [state, setState] = useState('ALL')
-  const [reason, setReason] = useState('ALL')
-  const [page, setPage] = useState(0)
+  const { state, reason, page } = filters
   const reasons = new Map<string, { message: string; count: number }>()
   for (const row of rows) for (const code of new Set(row.reasons.map(r => r.code))) {
     const item = row.reasons.find(r => r.code === code)!
@@ -26,12 +25,12 @@ export function CompletionWorkQueue({ rows, complete, onOpenCompany }: {
     <h4>停止理由別の作業キュー</h4>
     <p className="muted">{complete ? '全件診断済み' : '部分集計・未診断分を含みません'}。取得済みの診断から企業詳細を開けます。修正後は再集計してください。複数理由や別窓口の理由も含みます。DM READYは送信許可ではありません。</p>
     <div className="detail-grid">
-      <label className="field">作業キューの状態<select value={state} onChange={e => { setState(e.target.value); setPage(0) }}>
+      <label className="field">作業キューの状態<select value={state} onChange={e => { onFiltersChange({ ...filters, state: e.target.value, page: 0 }) }}>
         <option value="ALL">すべて</option><option value="DM_NOT_READY">DM未準備</option><option value="DM_READY">DM READY・承認状態は詳細で確認</option>
         <option value="REVIEW">窓口REVIEW</option><option value="HOLD">窓口HOLD</option><option value="BLOCKED">窓口BLOCKED</option><option value="READY">窓口READY</option><option value="DELIVERY_REVIEW">結果不明・証跡のHuman確認</option>
       </select></label>
-      <label className="field">作業キューの停止理由<select value={reason} onChange={e => { setReason(e.target.value); setPage(0) }}>
-        <option value="ALL">すべての理由</option>{[...reasons].sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0])).map(([code, item]) => <option key={code} value={code}>{item.message}（{item.count}件）</option>)}
+      <label className="field">作業キューの停止理由<select value={reason} onChange={e => { onFiltersChange({ ...filters, reason: e.target.value, page: 0 }) }}>
+        <option value="ALL">すべての理由</option>{reason !== 'ALL' && !reasons.has(reason) && <option value={reason}>以前の理由・今回の診断範囲に該当なし（{reason}）</option>}{[...reasons].sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0])).map(([code, item]) => <option key={code} value={code}>{item.message}（{item.count}件）</option>)}
       </select></label>
     </div>
     <p role="status">作業対象 {filtered.length}件 / 診断済み {rows.length}件（{currentPage + 1} / {lastPage + 1}ページ、25件ずつ）</p>
@@ -44,8 +43,8 @@ export function CompletionWorkQueue({ rows, complete, onOpenCompany }: {
       {needsDeliveryReview(row) && <p>結果不明または証跡不一致があります。Human確認が必要です。自動再送しません。</p>}
       {row.delivery_funnel.sent && <p>送信実行の履歴があります。送信履歴と重複窓口を確認してください。</p>}
       <ul>{row.reasons.map((item, i) => <li key={`${item.code}:${i}`}>{item.message} — {item.next_action} <small>({item.code})</small></li>)}</ul>
-      <button className="secondary mt-3" disabled={row.company_name === null} onClick={() => onOpenCompany(row.company_id)}>詳細を開く</button>
+      <button className="secondary mt-3" disabled={row.company_name === null} onClick={() => onOpenCompany(row.company_id, { ...filters, page: currentPage })}>詳細を開く</button>
     </article>)}
-    <div className="actions"><button className="secondary" disabled={currentPage === 0} onClick={() => setPage(currentPage - 1)}>前の25件</button><button className="secondary" disabled={currentPage >= lastPage} onClick={() => setPage(currentPage + 1)}>次の25件</button></div>
+    <div className="actions"><button className="secondary" disabled={currentPage === 0} onClick={() => onFiltersChange({ ...filters, page: currentPage - 1 })}>前の25件</button><button className="secondary" disabled={currentPage >= lastPage} onClick={() => onFiltersChange({ ...filters, page: currentPage + 1 })}>次の25件</button></div>
   </section>
 }

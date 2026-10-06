@@ -7,3 +7,11 @@ export type CompletionWorkRow = {
   reasons: { code: string; message: string; next_action: string }[]
   delivery_funnel: { sent: boolean; results: Record<string, number>; unverified_records: number }
 }
+
+export type CompletionQueueFilters = { state: string; reason: string; page: number }
+export type CompletionReturnContext = {
+  projectId: string
+  cohortId: string
+  cohortHash: string
+  filters: CompletionQueueFilters
+}
