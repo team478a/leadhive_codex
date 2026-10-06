@@ -179,6 +179,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [121_CF7_CANDIDATE_NON_EXECUTION_DB_GUARD.md](121_CF7_CANDIDATE_NON_EXECUTION_DB_GUARD.md): CF7候補の承認消費・予約・配送認可を拒否するP1 DB制約とmigration保護
 
+- [122_CF7_CANDIDATE_STORED_PREPARATION_API.md](122_CF7_CANDIDATE_STORED_PREPARATION_API.md): 管理下証拠の保存・CF7候補準備API・既存Human承認への二層snapshot結合
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
