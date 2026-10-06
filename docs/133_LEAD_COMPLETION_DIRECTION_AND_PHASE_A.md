@@ -60,7 +60,7 @@ Baselineのform URL group keyは従来ガードに合わせたcasefold/trailing 
 ### LeadSourceObservation
 
 Company + CollectionJobに結合した、情報源・観測日時・照合状態/理由・項目候補・適用項目の記録。
-factsはfieldごとのvalue / confidence / verified / protected。外部入力でverified=trueを作るAPIはない。
+factsはfieldごとのvalue / confidence / verified / protected。未検証項目のconfidenceは0であり、実測精度の点数ではない。外部入力でverified=trueを作るAPIはない。
 csv/urlの顧客提供候補について、同名+番地を含む住所または十分な桁数の電話が一致し、衝突がなければCONFIRMED。
 その場合だけphone/email/address/reference_urlの空欄・非保護項目を補完する。website URLの追加は別の公式サイト検証が必要。
 情報が非空、保護、住所/電話競合、地域しか一致しない、domain単独一致の場合は変更しない。
@@ -70,6 +70,8 @@ CONFIRMEDは候補間の同一性照合であり、メール・営業許可が�
 同一projectの取込をProject row lockで直列化し、既存Leadの更新前にrow lockで値/保護を再読込する。ネットワーク中にこのlockを保持しない。
 旧duplicate_countは互換性のため維持。重複件数の中には補完・確認待ちがあるため、SourceObservation.applied_fieldsとidentity_statusを併せて読む。
 companyのunique制約と衝突する別名称候補は既存Companyに「未統合の候補観察」として保存する。独立会社の自動統合や制約解除は行わない。
+既存Human mergeでも新しいSource/Site evidenceを統合先へ移して保持する。重複する窓口linkは現在のinventoryとして整理する。証拠unique競合はtransactionごと拒否し、削除して辻褄を合わせない。
+別location_keyの店舗や会社/店舗の混合統合は409で停止する。統合元のdo_not_contact、Suppression、営業禁止、未解消UNKNOWNのhard stopは統合先の連絡禁止として保持し、保護された空欄も補完しない。
 
 ### LeadSiteEvidence
 
@@ -148,6 +150,7 @@ additive revision `0596f0531982`、親 `0485ef420871`。既存Migration/Company 
 
 - 専用DBのLeadCompletion/location import/collection/sales preparationは44 passed（104.83秒）。
 - 最終変更を含むLeadCompletion/sales preparation/contact permission回帰は26 passed（75.42秒）。
+- 統合保護を追加したLeadCompletion全体11 passed（28.63秒）、既存企業管理13 passed（19.75秒）、最終hard-stop保持テスト1 passed（2.05秒）。
 - 実APIで合成窓口の登録・整理・表示を行うdesktop/mobile E2Eは2 passed（36.5秒）。初回は窓口のないfixtureで失敗し、登録操作と編集後の根拠再読込を追加して成功した。
 - Backend Ruff、変更format、7変更ファイルmypy（check-untyped-defs / follow-imports=silent）、Frontend typecheck/lint/build成功。
 - upgrade→downgrade親revision→upgrade→model差分check成功。非空Evidenceのdowngrade拒否とProject間の不正リンクDB拒否も検証した。

@@ -25,6 +25,8 @@ from app.schemas import (
     OperationJobOut,
 )
 from app.security import current_user
+from app.services.contact_permission import evaluate_contact_permission
+from app.services.lead_enrichment import preserve_merged_evidence
 from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
@@ -105,8 +107,32 @@ def merge_companies(
         raise HTTPException(404, "統合対象の企業が見つかりません。")
     by_id = {item.id: item for item in companies}
     target, source = by_id[body.target_id], by_id[body.source_id]
+    if "location" in {target.record_type, source.record_type} and (
+        target.record_type != source.record_type or target.location_key != source.location_key
+    ):
+        raise HTTPException(409, "別店舗・会社と店舗を共通窓口だけで統合できません。")
     if not duplicate_reasons(target, source):
         raise HTTPException(409, "一致する重複根拠がないため統合できません。")
+    hard_reasons = {
+        "company_do_not_contact",
+        "form_sales_prohibited",
+        "form_result_unknown",
+        "suppression_domain",
+        "suppression_email",
+        "suppression_phone",
+    }
+    # Do not erase a source lead's hard stop by deleting it during a Human merge.
+    if source.do_not_contact or any(
+        evaluate_contact_permission(db, project_id, source.id, channel, destination).reason_code
+        in hard_reasons
+        for channel, destination in (("email", source.email), ("form", source.contact_url))
+    ):
+        target.do_not_contact = True
+        target.exclusion_reason = (
+            target.exclusion_reason
+            or source.exclusion_reason
+            or "統合元の連絡禁止・営業禁止・未解消結果を保持"
+        )
     fill_fields = (
         "reference_url",
         "address",
@@ -129,7 +155,11 @@ def merge_companies(
         "ai_recommended_approach",
     )
     for field in fill_fields:
-        if not getattr(target, field) and getattr(source, field):
+        if (
+            field not in (target.protected_fields or [])
+            and not getattr(target, field)
+            and getattr(source, field)
+        ):
             setattr(target, field, getattr(source, field))
     if source.notes and source.notes not in target.notes:
         target.notes = "\n\n".join(value for value in (target.notes, source.notes) if value)
@@ -149,6 +179,7 @@ def merge_companies(
         .where(Company.duplicate_of_id == source.id)
         .values(duplicate_of_id=target.id)
     )
+    preserve_merged_evidence(db, target, source)
     db.delete(source)
     db.flush()
     if target.website_url is None and website_url:

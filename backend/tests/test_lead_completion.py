@@ -200,3 +200,54 @@ def test_identity_rules_and_query_bound():
     assert compare(left, Candidate("Alpha", address="City 1-1"))[0] == "CONFIRMED"
     left.city = "City"
     assert len(site_queries(left)) <= 3
+
+
+def test_human_merge_keeps_evidence_and_refuses_shared_store_merge(auth, db):
+    project = make_project(auth)
+    job = collection_jobs.start_job(db, UUID(project["id"]), "csv", "", "")
+    collection_jobs.save_candidates(
+        db,
+        job,
+        [
+            Candidate("Alpha", "https://alpha.example", email="common@example.com"),
+            Candidate(
+                "Beta", "https://beta.example", phone="0612345678", email="common@example.com"
+            ),
+        ],
+    )
+    rows = db.scalars(select(Company).order_by(Company.company_name)).all()
+    rows[0].protected_fields = ["phone"]
+    rows[1].do_not_contact = True
+    rows[1].exclusion_reason = "Synthetic opt-out"
+    db.commit()
+    path = f"/api/projects/{project['id']}/companies/merge"
+    response = auth.post(path, json={"target_id": str(rows[0].id), "source_id": str(rows[1].id)})
+    assert response.status_code == 200
+    assert response.json()["phone"] == ""
+    assert (
+        response.json()["do_not_contact"]
+        and response.json()["exclusion_reason"] == "Synthetic opt-out"
+    )
+    assert db.scalar(select(func.count()).select_from(LeadSourceObservation)) == 2
+    assert set(db.scalars(select(LeadSourceObservation.company_id))) == {rows[0].id}
+    import_locations(
+        auth,
+        project,
+        [
+            [f"Salon {i}", "https://chain.example", "", "shared@example.com", f"City {i}-1", ""]
+            for i in range(2)
+        ],
+    )
+    stores = db.scalars(select(Company).where(Company.record_type == "location")).all()
+    assert (
+        auth.post(
+            path, json={"target_id": str(stores[0].id), "source_id": str(stores[1].id)}
+        ).status_code
+        == 409
+    )
+    assert (
+        db.scalar(
+            select(func.count()).select_from(Company).where(Company.record_type == "location")
+        )
+        == 2
+    )

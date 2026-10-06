@@ -3,9 +3,9 @@
 import hashlib
 import json
 
-from sqlalchemy import select
+from sqlalchemy import delete, select, update
 
-from app.models import LeadSourceObservation
+from app.models import LeadDestinationLink, LeadSiteEvidence, LeadSourceObservation
 from app.services.lead_identity import compare
 
 FIELDS = ("company_name", "address", "phone", "email", "website_url", "reference_url")
@@ -19,6 +19,29 @@ TERMS = {
     "csv": ("", "Customer must hold data usage rights"),
     "url": ("", "Website terms and robots apply"),
 }
+
+
+def preserve_merged_evidence(db, target, source):
+    """Same-project Human merge keeps observation provenance; conflicts fail closed."""
+    if target.project_id != source.project_id:
+        raise ValueError("Project mismatch")
+    for model in (LeadSourceObservation, LeadSiteEvidence):
+        db.execute(update(model).where(model.company_id == source.id).values(company_id=target.id))
+    target_destinations = select(LeadDestinationLink.destination_id).where(
+        LeadDestinationLink.company_id == target.id
+    )
+    # Links are a current inventory, not an immutable evidence/send ledger.
+    db.execute(
+        delete(LeadDestinationLink).where(
+            LeadDestinationLink.company_id == source.id,
+            LeadDestinationLink.destination_id.in_(target_destinations),
+        )
+    )
+    db.execute(
+        update(LeadDestinationLink)
+        .where(LeadDestinationLink.company_id == source.id)
+        .values(company_id=target.id)
+    )
 
 
 def observe_candidate(db, job, company, candidate, *, new=False):
@@ -56,7 +79,7 @@ def observe_candidate(db, job, company, candidate, *, new=False):
         {
             field: {
                 "value": value,
-                "confidence": 50,
+                "confidence": 0,
                 "verified": False,
                 "protected": field in protected,
             }
