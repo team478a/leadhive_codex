@@ -219,6 +219,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [141_LEAD_DM_READY_AND_APPROVAL_HANDOFF.md](141_LEAD_DM_READY_AND_APPROVAL_HANDOFF.md): 固定送信者・フォーム入力値、PENDING提案とHuman承認境界、現在DM READY率と変更失効
 
+- [142_HUMAN_APPROVAL_AND_DELIVERY_FUNNEL.md](142_HUMAN_APPROVAL_AND_DELIVERY_FUNNEL.md): C2に紐付くHuman承認・送信実行・結果分類、現在状態と履歴の分離とread-only集計
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

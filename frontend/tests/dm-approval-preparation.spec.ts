@@ -11,7 +11,7 @@ test('Human can prepare fixed PENDING proposal without approving or sending', as
     if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/(?:send|dispatch|execute|test-send|approve)(?:[/?]|$)/.test(request.url())) forbidden.push(request.url())
   })
   try {
-    const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'destination-selection-fixture'], { env, encoding: 'utf8' })) as { project_id: string }
+    const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'destination-selection-fixture'], { env, encoding: 'utf8' })) as { project_id: string; company_id: string }
     await page.goto('/')
     await page.getByLabel('メールアドレス').fill(env.E2E_EMAIL)
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
@@ -60,6 +60,12 @@ test('Human can prepare fixed PENDING proposal without approving or sending', as
     await handoff.getByRole('button', { name: '承認待ち提案を準備', exact: true }).click()
     await expect(handoff).toContainText('DM READY（承認・送信は別操作）')
     await expect(handoff).toContainText('提案状態：PENDING')
+    const cohort = await page.request.post(`/api/projects/${fixture.project_id}/completion-cohorts`, { data: { name: 'Synthetic C3 history' } })
+    expect(cohort.status()).toBe(201)
+    const cohortData = await cohort.json() as { id: string }
+    const diagnostic = await page.request.get(`/api/completion-cohorts/${cohortData.id}/destination-diagnostics`)
+    const rows = (await diagnostic.json() as { rows: { delivery_funnel: { prepared_ever: boolean; human_approved: boolean; sent: boolean; attempt_count: number } }[] }).rows
+    expect(rows[0].delivery_funnel).toMatchObject({ prepared_ever: true, human_approved: false, sent: false, attempt_count: 0 })
     await expect(handoff.getByRole('button', { name: '承認待ち提案を準備', exact: true })).toHaveCount(0)
     await page.reload()
     await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
