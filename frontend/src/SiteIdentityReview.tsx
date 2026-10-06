@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import { api, errorMessage } from './api'
 
 export type IdentityReview = { state: string; version: number; source_url: string; observed_name: string; observed_address: string; observed_phone: string; evidence_excerpt: string; actor_user_id: string | null; created_at: string | null; expires_at: string | null; reasons: string[] }
@@ -12,6 +12,7 @@ const reasonLabels: Record<string, string> = {
 }
 
 export function SiteIdentityReview({ companyId, digest, target, review, canReview, onSaved }: { companyId: string; digest: string; target: IdentityTarget; review: IdentityReview; canReview: boolean; onSaved: () => void }) {
+  const excerptId = useId()
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
   const [phone, setPhone] = useState('')
@@ -56,7 +57,7 @@ export function SiteIdentityReview({ companyId, digest, target, review, canRevie
       <label className="field">公式ページの住所<input disabled={busy} value={address} maxLength={1000} onChange={e => edit(setAddress, e.target.value)} /></label>
       <label className="field">公式ページの電話<input disabled={busy} value={phone} maxLength={100} onChange={e => edit(setPhone, e.target.value)} /></label>
       <label className="field">照合の根拠URL<input disabled={busy} value={source} maxLength={2048} onChange={e => edit(setSource, e.target.value)} placeholder="公式サイト内の公開ページ" /></label>
-      <label className="field">照合の公開情報<textarea disabled={busy} value={excerpt} maxLength={1000} onChange={e => edit(setExcerpt, e.target.value)} placeholder="確認した公開情報を10文字以上。秘密情報は記録しないでください。" /></label>
+      <div className="field"><label htmlFor={excerptId}>照合の公開情報</label><textarea id={excerptId} disabled={busy} value={excerpt} maxLength={1000} onChange={e => edit(setExcerpt, e.target.value)} placeholder="確認した公開情報を10文字以上。秘密情報は記録しないでください。" /></div>
       <button className="secondary" disabled={busy || !complete} onClick={() => void check()}>入力内容の照合をプレビュー</button>
       {preview && <div role="status">
         <p>{preview.can_record ? '記録可能な一致です。まだ確認記録は保存されていません。' : '確認記録に必要な一致がありません。名称と住所または電話を見直してください。'}</p>
