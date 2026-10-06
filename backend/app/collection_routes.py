@@ -31,6 +31,7 @@ from app.services.collection import (
     search_serper,
 )
 from app.services.collection_jobs import fail_job, save_candidates, start_job
+from app.services.processing_usage import measured_search
 
 router = APIRouter(prefix="/api")
 
@@ -109,7 +110,7 @@ def collect_search(
                 "google_places": search_google_places,
                 "gbizinfo": search_gbizinfo,
             }[body.source]
-            candidates = search(keyword, body.region, body.max_results)
+            candidates = measured_search(db, job, search, keyword, body.region, body.max_results)
             jobs.append(save_candidates(db, job, candidates, keyword))
         except ExternalServiceError as exc:
             jobs.append(fail_job(db, job, exc.public_message))

@@ -7,6 +7,7 @@ from urllib.parse import urlsplit, urlunsplit
 import httpx
 
 from app.config import settings
+from app.services.processing_usage import measured_request
 
 logger = logging.getLogger("leadhive")
 
@@ -155,7 +156,9 @@ def search_serper(keyword: str, region: str, max_results: int) -> list[Candidate
     query = f"{keyword} {region}".strip()
     try:
         with httpx.Client(timeout=settings.external_api_timeout_seconds) as client:
-            response = client.post(
+            response = measured_request(
+                "serper",
+                client.post,
                 "https://google.serper.dev/search",
                 headers={"X-API-KEY": settings.serper_api_key},
                 json={"q": query, "gl": "jp", "hl": "ja", "num": min(max_results, 100)},
@@ -193,7 +196,9 @@ def search_google_places(keyword: str, region: str, max_results: int) -> list[Ca
                 }
                 if page_token:
                     body["pageToken"] = page_token
-                response = client.post(
+                response = measured_request(
+                    "google_places",
+                    client.post,
                     "https://places.googleapis.com/v1/places:searchText",
                     headers={
                         "X-Goog-Api-Key": settings.google_places_api_key,
@@ -244,7 +249,9 @@ def search_gbizinfo(keyword: str, region: str, max_results: int) -> list[Candida
         raise ExternalServiceError("gBizINFO APIトークンが設定されていません。")
     try:
         with httpx.Client(timeout=settings.external_api_timeout_seconds) as client:
-            response = client.get(
+            response = measured_request(
+                "gbizinfo",
+                client.get,
                 settings.gbizinfo_api_base_url.rstrip("/"),
                 headers={"X-hojinInfo-api-token": settings.gbizinfo_api_token},
                 params={

@@ -29,6 +29,7 @@ from app.services.collection import ExternalServiceError, canonicalize_url, sear
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence.analyzer import analyze_company_forms
 from app.services.lead_identity import identity_hash, site_queries, website_match
+from app.services.processing_usage import ai_operation, capture_usage, persist_usage
 from app.services.scraper import ScrapeError, is_aggregator_domain, scrape_company
 from app.services.web_analysis import analyze
 
@@ -41,6 +42,21 @@ def context_hash(project: Project, profile: TargetProfile) -> str:
         project.region,
         str(profile.updated_at),
         str(project.target_profile_id),
+    ]
+    return hashlib.sha256(json.dumps(values, ensure_ascii=False).encode()).hexdigest()
+
+
+def completion_match_hash(company: Company) -> str:
+    values = [
+        identity_hash(company),
+        company.website_text,
+        company.business_summary,
+        company.score,
+        company.is_target,
+        company.ai_summary,
+        company.ai_reason,
+        company.ai_provider,
+        company.ai_model,
     ]
     return hashlib.sha256(json.dumps(values, ensure_ascii=False).encode()).hexdigest()
 
@@ -92,7 +108,11 @@ def discover_site(
         if not reserve_call(db, job, "search"):
             break
         queries.append(query)
-        candidates = search_serper(query, "", 5)
+        with capture_usage() as usage:
+            try:
+                candidates = search_serper(query, "", 5)
+            finally:
+                persist_usage(db, usage, company.project_id, company_id=company.id)
         for candidate in candidates:
             if not candidate.website_url:
                 continue
@@ -204,10 +224,29 @@ def prepare_item(db: Session, job: OperationJob, item: SalesPreparationItem, sto
             finish(db, item, "review", "AIキー未設定またはAI回数上限のため判定を保留しました。")
             return
         checkpoint(db, item, analysis_started=True)
-        analyze_company_ai(db, company, project, profile, force=True)
+        with ai_operation(db, company, model=settings.openai_model) as usage:
+
+            def capture_tokens(company_id, provider, model, status, tokens):
+                usage.update(
+                    provider=provider,
+                    model=model,
+                    input_tokens=tokens.input_tokens,
+                    output_tokens=tokens.output_tokens,
+                )
+
+            analyze_company_ai(
+                db, company, project, profile, force=True, usage_callback=capture_tokens
+            )
+            usage["status"] = "completed" if company.ai_status == "completed" else "failed"
         if stopped():
             return
-        checkpoint(db, item, analysis_completed=company.ai_status == "completed")
+        checkpoint(
+            db,
+            item,
+            analysis_completed=company.ai_status == "completed",
+            completion_match_hash=completion_match_hash(company),
+            completion_ai_analyzed_at=str(company.ai_analyzed_at),
+        )
     if company.ai_status != "completed":
         finish(db, item, "error", company.ai_error or "AI判定に失敗しました。")
         return
@@ -255,22 +294,27 @@ def prepare_item(db: Session, job: OperationJob, item: SalesPreparationItem, sto
             return
         checkpoint(db, item, draft_started=True)
         provider = get_ai_provider()
-        content = provider.generate_outreach(
-            OutreachContext(
-                channel=cast(Literal["email", "form", "sns"], channel),
-                company_name=company.company_name,
-                recipient_name="",
-                recipient_department="",
-                recipient_title="",
-                business_summary=company.business_summary,
-                ai_summary=company.ai_summary,
-                ai_strengths=company.ai_strengths,
-                ai_concerns=company.ai_concerns,
-                recommended_approach=company.ai_recommended_approach,
-                sales_objective=project.sales_objective,
-                instruction="確認できる事実のみ使う。製品の価格・機能・成果保証や送信者情報を創作しない。未確認事項は確認事項として扱う。",
+        with ai_operation(db, company, model=provider.model, provider=provider.name) as usage:
+            content = provider.generate_outreach(
+                OutreachContext(
+                    channel=cast(Literal["email", "form", "sns"], channel),
+                    company_name=company.company_name,
+                    recipient_name="",
+                    recipient_department="",
+                    recipient_title="",
+                    business_summary=company.business_summary,
+                    ai_summary=company.ai_summary,
+                    ai_strengths=company.ai_strengths,
+                    ai_concerns=company.ai_concerns,
+                    recommended_approach=company.ai_recommended_approach,
+                    sales_objective=project.sales_objective,
+                    instruction="確認できる事実のみ使う。製品の価格・機能・成果保証や送信者情報を創作しない。未確認事項は確認事項として扱う。",
+                )
             )
-        )
+            usage["status"] = "completed"
+            tokens = getattr(provider, "last_usage", None)
+            if tokens is not None:
+                usage.update(input_tokens=tokens.input_tokens, output_tokens=tokens.output_tokens)
         if stopped():
             return
         db.refresh(project)

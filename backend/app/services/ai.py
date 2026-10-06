@@ -158,6 +158,7 @@ class OpenAiProvider(AiProvider):
             raise AiAnalysisError("AI判定結果を処理できませんでした。") from exc
 
     def generate_outreach(self, context: OutreachContext) -> OutreachDraftContent:
+        self.last_usage = None
         try:
             response = self.client.responses.parse(
                 model=self.model,
@@ -172,6 +173,12 @@ class OpenAiProvider(AiProvider):
                 text_format=OutreachDraftContent,
                 max_output_tokens=1_500,
             )
+            if response.usage is not None:
+                self.last_usage = AiUsage(
+                    response.usage.input_tokens,
+                    response.usage.output_tokens,
+                    response.usage.total_tokens,
+                )
             if response.output_parsed is None:
                 raise AiAnalysisError("AIが営業文面を返しませんでした。")
             return response.output_parsed

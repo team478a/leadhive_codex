@@ -20,6 +20,7 @@ from app.company_quality_routes import router as company_quality_router
 from app.company_reporting_routes import router as company_reporting_router
 from app.company_routes import router as company_router
 from app.company_workflow_routes import router as company_workflow_router
+from app.completion_metrics_routes import router as completion_metrics_router
 from app.config import settings
 from app.database import SessionLocal
 from app.email_feedback_routes import router as email_feedback_router
@@ -65,6 +66,7 @@ app.include_router(approved_email_router)
 app.include_router(email_feedback_router)
 app.include_router(preparation_router)
 app.include_router(lead_completion_router)
+app.include_router(completion_metrics_router)
 
 
 app.add_middleware(

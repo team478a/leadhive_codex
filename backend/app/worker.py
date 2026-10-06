@@ -40,6 +40,7 @@ from app.services.form_intelligence import analyze_company_forms
 from app.services.inbound_email import sync_inbound_mail
 from app.services.operations import add_operation_job, refresh_company_ids
 from app.services.outbound_guard import require_legacy_form_enabled, require_outbound_enabled
+from app.services.processing_usage import capture_usage, measured_search, persist_usage
 from app.services.web_analysis import analyze
 
 logger = logging.getLogger("leadhive")
@@ -563,16 +564,18 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         ]
 
         def fetch(keyword):
-            try:
-                return search(keyword, payload["region"], payload["max_results"]), None
-            except ExternalServiceError as exc:
-                return [], exc
+            with capture_usage() as usage:
+                try:
+                    return search(keyword, payload["region"], payload["max_results"]), None, usage
+                except ExternalServiceError as exc:
+                    return [], exc, usage
 
         with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
             results = list(executor.map(fetch, keywords))
-        for keyword, collection, (candidates, error) in zip(
+        for keyword, collection, (candidates, error, usage) in zip(
             keywords, collections, results, strict=True
         ):
+            persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
             if stop_requested(db, job, worker_id):
                 return
             if error:
@@ -620,7 +623,9 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                 "google_places": search_google_places,
                 "gbizinfo": search_gbizinfo,
             }[payload["source"]]
-            candidates = search(keyword, payload["region"], max_results)
+            candidates = measured_search(
+                db, collection, search, keyword, payload["region"], max_results
+            )
             save_candidates(db, collection, candidates, keyword)
             if not progress(db, job, worker_id, True):
                 return

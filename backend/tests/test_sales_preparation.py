@@ -58,7 +58,7 @@ def providers(monkeypatch):
     monkeypatch.setattr(settings, "serper_api_key", "test-only")
     monkeypatch.setattr(settings, "outbound_enabled", False)
 
-    def analyze(db, company, project, profile, force=False):
+    def analyze(db, company, project, profile, force=False, usage_callback=None):
         assert force
         counts["analysis"] += 1
         company.ai_status, company.score, company.is_target = "completed", 88, True
