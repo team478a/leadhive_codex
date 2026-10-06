@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { Field } from './forms'
+import type { CF7Snapshot, CF7Observation } from './CF7CandidateDetails'
 
 export interface ApprovalProposal {
   id: string; company_name: string; company_id: string; channel: 'email' | 'form'
@@ -11,6 +12,10 @@ export interface ApprovalProposal {
   execution_plan_hash?: string | null
   adapter_plan?: Record<string, unknown> | null
   adapter_plan_hash?: string | null
+  cf7_candidate_snapshot?: CF7Snapshot | null
+  cf7_candidate_snapshot_hash?: string | null
+  cf7_observation?: CF7Observation | null
+  source_draft_id?: string | null; proposal_id?: string; supersedes_request_id?: string | null
   sender: Record<string, string>; field_values: Record<string, string>
   payload_hash: string; payload_version: number; status: string
   created_by_principal_type: 'HUMAN' | 'AGENT'; created_at: string; expires_at: string

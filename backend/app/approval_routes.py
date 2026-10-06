@@ -17,6 +17,7 @@ from app.model_approval import (
     OutreachAuditEvent,
 )
 from app.models import (
+    CF7Observation,
     Company,
     FormProfile,
     FormProfileField,
@@ -83,6 +84,21 @@ def serialize(db, item):
     result["execution_plan_hash"] = item.payload_snapshot.get("execution_plan_hash")
     result["adapter_plan"] = item.payload_snapshot.get("adapter_plan")
     result["adapter_plan_hash"] = item.payload_snapshot.get("adapter_plan_hash")
+    if item.delivery_method == "cf7_candidate_only":
+        result["cf7_candidate_snapshot"] = item.payload_snapshot.get("cf7_candidate_snapshot")
+        result["cf7_candidate_snapshot_hash"] = item.payload_snapshot.get(
+            "cf7_candidate_snapshot_hash"
+        )
+        observation = db.get(CF7Observation, item.payload_snapshot.get("cf7_observation_id"))
+        result["cf7_observation"] = (
+            {
+                "observed_at": observation.observed_at,
+                "expires_at": observation.expires_at,
+                "evidence_hash": observation.evidence_hash,
+            }
+            if observation
+            else None
+        )
     return result
 
 

@@ -160,7 +160,7 @@ def build(db, company, draft, selections, version=1):
     return CF7Candidate.model_validate_json(json.dumps(data)), observation
 
 
-def preparation(db, company, draft, selections=None):
+def preparation(db, company, draft, selections=None, version=1):
     ensure_enabled()
     try:
         observation, _, structure = evidence(db, company)
@@ -168,11 +168,15 @@ def preparation(db, company, draft, selections=None):
             return None, {
                 "non_executable": True,
                 "preparation_hash": None,
+                "company_name": company.company_name,
+                "observed_at": observation.observed_at,
+                "expires_at": observation.expires_at,
+                "observation_hash": observation.evidence_hash,
                 "required_selections": [
                     c.model_dump(mode="json") for c in structure.controls if c.kind == "checkbox"
                 ],
             }
-        candidate, observation = build(db, company, draft, selections or [])
+        candidate, observation = build(db, company, draft, selections or [], version)
         inner = snapshot(candidate)
         preparation_hash = digest(
             {
@@ -188,8 +192,11 @@ def preparation(db, company, draft, selections=None):
             "non_executable": True,
             "preparation_hash": preparation_hash,
             "cf7_candidate_snapshot": inner,
+            "cf7_candidate_snapshot_hash": digest(inner),
             "company_name": company.company_name,
             "observation_id": str(observation.id),
+            "observation_hash": observation.evidence_hash,
+            "observed_at": observation.observed_at,
             "expires_at": observation.expires_at,
         }
     except (ValueError, TypeError, KeyError, ValidationError) as exc:
@@ -230,12 +237,28 @@ def envelope(db, company, draft, candidate, observation, proposal_id):
     }
 
 
-def create_request(db, company, draft, selections, expected_preparation_hash, user):
-    candidate, preview = preparation(db, company, draft, selections)
+def revision_previous(db, previous):
+    ensure_enabled()
+    if previous.delivery_method != "cf7_candidate_only" or previous.status == "CONSUMED":
+        raise HTTPException(409, "この提案からCF7候補を改訂できません。")
+    latest = db.scalar(
+        select(ApprovalRequest.id)
+        .where(ApprovalRequest.proposal_id == previous.proposal_id)
+        .order_by(ApprovalRequest.payload_version.desc())
+        .limit(1)
+    )
+    if latest != previous.id:
+        raise HTTPException(409, "新しい改訂が存在します。最新の候補を確認してください。")
+    return previous.payload_version + 1
+
+
+def create_request(db, company, draft, selections, expected_preparation_hash, user, previous=None):
+    version = revision_previous(db, previous) if previous else 1
+    candidate, preview = preparation(db, company, draft, selections, version)
     if preview["preparation_hash"] != expected_preparation_hash:
         raise HTTPException(409, "準備内容が変更されています。再取得してください。")
     observation, _, _ = evidence(db, company)
-    proposal_id = uuid4()
+    proposal_id = previous.proposal_id if previous else uuid4()
     outer = envelope(db, company, draft, candidate, observation, proposal_id)
     created = approval.now()
     if created >= observation.expires_at:
@@ -253,9 +276,10 @@ def create_request(db, company, draft, selections, expected_preparation_hash, us
         field_values=outer["field_values"],
         payload_snapshot=outer,
         payload_hash=approval.payload_hash(outer),
-        payload_version=1,
+        payload_version=version,
         canonicalization_version="json-v1",
         proposal_id=proposal_id,
+        supersedes_request_id=previous.id if previous else None,
         created_by_principal_type="HUMAN",
         created_by_user_id=user.id,
         created_at=created,
@@ -264,7 +288,25 @@ def create_request(db, company, draft, selections, expected_preparation_hash, us
     )
     db.add(item)
     db.flush()
-    approval.audit(db, item, "proposal created", "HUMAN", user.id)
+    if previous and previous.status in {"PENDING", "APPROVED"}:
+        before = previous.status
+        expired = previous.expires_at <= created
+        previous.status = "EXPIRED" if expired else "REVOKED"
+        previous.invalidation_reason = (
+            "request expired" if expired else "superseded by CF7 revision"
+        )
+        approval.audit(
+            db,
+            previous,
+            "expired" if expired else "revoked",
+            "SYSTEM" if expired else "HUMAN",
+            None if expired else user.id,
+            before,
+            previous.invalidation_reason,
+        )
+    approval.audit(
+        db, item, "revision created" if previous else "proposal created", "HUMAN", user.id
+    )
     db.commit()
     return item
 

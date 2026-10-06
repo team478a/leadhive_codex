@@ -4,12 +4,19 @@ import { Field } from './forms'
 import { ApprovedEmailPanel, type ApprovalProposal as Proposal } from './ApprovedEmailPanel'
 import { FormApprovalPreparationPanel } from './FormApprovalPreparationPanel'
 import { FormAdapterPlanDetails } from './FormAdapterPlanDetails'
+import { CF7CandidatePreparationPanel } from './CF7CandidatePreparationPanel'
+import { CF7CandidateDetails } from './CF7CandidateDetails'
 import { ApprovedFormPanel } from './ApprovedFormPanel'
 import type { Company, Project, ProjectMember } from './types'
 
 interface AuditEvent { id: string; event: string; principal_type: string; timestamp: string; reason: string | null }
 const names: Record<string, string> = { PENDING: '承認待ち', APPROVED: '承認済み（未送信）', REJECTED: '却下', EXPIRED: '期限切れ', REVOKED: '取消済み', CONSUMED: '送信実行に使用済み' }
 const date = (value: string) => new Date(value).toLocaleString('ja-JP')
+const reasonNames: Record<string, string> = {
+  'CF7 candidate evidence or payload changed': '保存済み証拠・文面・送信者・連絡可否のいずれかが変更または無効になりました。確認して再準備してください。',
+  'superseded by CF7 revision': '改訂候補を作成したため、旧候補を無効にしました。',
+  'request expired': '候補の有効期限が切れました。新しい有効な証拠で再準備してください。',
+}
 
 export function ApprovalQueuePage({ projects, projectRoles }: {
   projects: Project[]; projectRoles: Record<string, ProjectMember['role']>
@@ -34,6 +41,8 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
   const [senderEmail, setSenderEmail] = useState('')
   const [fieldValues, setFieldValues] = useState('{}')
   const [offset, setOffset] = useState(0)
+  const [cf7Reviewed, setCf7Reviewed] = useState(false)
+  useEffect(() => { setCf7Reviewed(false) }, [selected?.id, selected?.payload_hash, selected?.status])
   const canWrite = ['owner', 'editor'].includes(projectRoles[projectId] ?? '')
   useEffect(() => {
     if (!projectId) return
@@ -63,9 +72,11 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
     if (!selected) return
     await act(async () => {
       const expected = { expected_hash: selected.payload_hash, expected_version: selected.payload_version }
-      const challenge = await api<{ challenge_token: string }>(`/approval-requests/${selected.id}/challenge`, 'POST', expected)
-      await api(`/approval-requests/${selected.id}/challenge/verify`, 'POST', { challenge_token: challenge.challenge_token, password })
-      await api(`/approval-requests/${selected.id}/approve`, 'POST', { ...expected, challenge_token: challenge.challenge_token })
+      try {
+        const challenge = await api<{ challenge_token: string }>(`/approval-requests/${selected.id}/challenge`, 'POST', expected)
+        await api(`/approval-requests/${selected.id}/challenge/verify`, 'POST', { challenge_token: challenge.challenge_token, password })
+        await api(`/approval-requests/${selected.id}/approve`, 'POST', { ...expected, challenge_token: challenge.challenge_token })
+      } catch (e) { await refresh().catch(() => {}); throw e }
       setNotice('承認を記録しました。送信は行っていません。'); await refresh()
     })
   }
@@ -107,6 +118,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
     <ApprovedEmailPanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     <ApprovedFormPanel key={`form-dispatch-${projectId}`} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     {canWrite && <FormApprovalPreparationPanel key={`form-${projectId}`} projectId={projectId} refresh={refresh} />}
+    {canWrite && <CF7CandidatePreparationPanel key={`cf7-${projectId}`} projectId={projectId} refresh={refresh} />}
     <fieldset disabled={busy || !projectId}>
       <div className="flex flex-wrap gap-3"><button type="button" className="secondary" onClick={() => act(refresh)}>最新の状態を取得</button>
         {canWrite && <button type="button" onClick={openCreate}>承認待ち提案を作成</button>}</div>
@@ -131,6 +143,12 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
       {selected && <article className="panel mt-4">
         <h2>{selected.company_name} の提案内容</h2>
         {selected.delivery_method === 'cf7_candidate_only' && <p role="status">CF7候補内容の承認のみです。送信予約・実送信には使用できません。</p>}
+        {selected.delivery_method === 'cf7_candidate_only' && <>
+          {selected.cf7_candidate_snapshot ? <CF7CandidateDetails snapshot={selected.cf7_candidate_snapshot} hash={selected.cf7_candidate_snapshot_hash} observation={selected.cf7_observation} />
+            : <p role="alert">候補証拠を表示できません。最新の状態を取得してください。</p>}
+          <p className="break-all">履歴ID: {selected.proposal_id} / 改訂元: {selected.supersedes_request_id || '初版'}</p>
+          {['EXPIRED', 'REVOKED', 'REJECTED'].includes(selected.status) && <p>この候補は承認に使えません。証拠・Draft・送信者・連絡禁止状態を確認し、改訂候補を再準備してください。新たな再認証・承認が必要です。</p>}
+        </>}
         <dl><dt>チャネル / 状態</dt><dd>{selected.channel} / {names[selected.status]}</dd>
           <dt>宛先 / フォームURL</dt><dd className="break-all">{selected.recipient ?? selected.form_url}</dd>
           {selected.channel === 'form' && <><dt>POST先</dt><dd className="break-all">{selected.form_action_url || '未確定・再解析が必要'}</dd></>}
@@ -142,17 +160,19 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
           <dt>提案者</dt><dd>{selected.created_by_principal_type === 'AGENT' ? 'Agent' : 'Human'}</dd>
           <dt>作成 / 有効期限</dt><dd>{date(selected.created_at)} / {date(selected.expires_at)}</dd>
           <dt>payload version / hash</dt><dd className="break-all">{selected.payload_version} / {selected.payload_hash}</dd>
-          {(selected.rejection_reason || selected.invalidation_reason) && <><dt>理由</dt><dd>{selected.rejection_reason || selected.invalidation_reason}</dd></>}
+          {(selected.rejection_reason || selected.invalidation_reason) && <><dt>理由</dt><dd>{reasonNames[selected.rejection_reason || selected.invalidation_reason || ''] || selected.rejection_reason || selected.invalidation_reason}</dd></>}
         </dl>
         {canWrite && selected.status === 'PENDING' && <form onSubmit={e => { e.preventDefault(); void approve() }}>
           <Field label="承認用パスワード（再認証）"><input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></Field>
-          <button type="submit">内容を確認して承認</button>
+          {selected.delivery_method === 'cf7_candidate_only' && <label><input type="checkbox" checked={cf7Reviewed} onChange={e => setCf7Reviewed(e.target.checked)} /> CF7の入力値・同意・証拠期限を確認しました</label>}
+          <button type="submit" disabled={selected.delivery_method === 'cf7_candidate_only' && (!cf7Reviewed || !selected.cf7_candidate_snapshot || !selected.cf7_observation)}>{selected.delivery_method === 'cf7_candidate_only' ? 'CF7候補内容を承認（送信不可）' : '内容を確認して承認'}</button>
         </form>}
         {canWrite && ['PENDING', 'APPROVED'].includes(selected.status) && <div className="mt-4">
           <Field label="却下・取消の理由"><input maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></Field>
           {selected.status === 'PENDING' && <button type="button" className="secondary" disabled={!reason.trim()} onClick={() => decide('reject')}>却下</button>}{' '}
           <button type="button" className="secondary" disabled={!reason.trim()} onClick={() => decide('revoke')}>取消</button>
         </div>}
+        {canWrite && selected.delivery_method === 'cf7_candidate_only' && <CF7CandidatePreparationPanel key={`cf7-revision-${selected.id}`} projectId={projectId} refresh={refresh} revision={selected} />}
       </article>}
     </fieldset>
     <details className="panel"><summary>監査記録（最新100件）</summary><ul>{events.map(event => <li key={event.id}>{date(event.timestamp)} · {event.principal_type} · {event.event} · {event.reason}</li>)}</ul></details>

@@ -26,6 +26,7 @@ export default defineConfig({
         SETTINGS_ENCRYPTION_KEY: 'TXo8wyai6a-uQTN15jhU7_la86LCSPzFR6pMXGkYslM=',
         HUMAN_APPROVED_EMAIL_ENABLED: 'false', SMTP_FROM_EMAIL: 'sender@example.com', SMTP_FROM_NAME: 'A2 Human',
         FORM_ADAPTER_PREPARATION_ENABLED: 'true', // Dedicated _test DB, reservation only.
+        CF7_CANDIDATE_PREPARATION_ENABLED: process.env.CF7_E2E_DISPOSABLE_DATABASE === 'true' ? 'true' : 'false',
         PUBLIC_APP_URL: 'https://leadhive.example',
       },
     },
