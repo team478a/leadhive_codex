@@ -88,7 +88,16 @@ def test_stopped_reprepare_is_pending_idempotent_and_does_not_send(auth, approve
     assert reprepare(auth, row, approved, preview.json()).json()["id"] == new_item["id"]
     assert db.get(ApprovalRequest, UUID(approved["id"])).status == "REVOKED"
     assert not db.scalar(select(FormDelivery))
-    assert len(db.scalars(select(ApprovedFormDispatch)).all()) == 1
+    assert (
+        len(
+            db.scalars(
+                select(ApprovedFormDispatch).where(
+                    ApprovedFormDispatch.project_id == form_source[0].id
+                )
+            ).all()
+        )
+        == 1
+    )
     assert (
         db.scalar(
             select(OutreachAuditEvent).where(

@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 
 class FixtureServer:
-    def __init__(self, mode="success"):
+    def __init__(self, mode="success", fingerprint="a" * 64):
         self.posts = []
         self.accepted = threading.Event()
         self.release = threading.Event()
@@ -17,6 +17,23 @@ class FixtureServer:
         class Handler(BaseHTTPRequestHandler):
             def log_message(self, *args):
                 pass
+
+            def do_GET(self):
+                if self.path != "/contact":
+                    self.send_error(404)
+                    return
+                body = json.dumps(
+                    {
+                        "form_url": "https://fixture.example/contact",
+                        "action_url": "https://fixture.example/submit",
+                        "fingerprint": fingerprint,
+                    }
+                ).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
 
             def do_POST(self):
                 if self.path != "/submit":

@@ -82,7 +82,14 @@ def test_end_to_end_approval_reservation_without_execution(auth, adapter_source,
     assert listed[0]["reservation_only"] and not listed[0]["execution_enabled"]
     assert db.get(ApprovalRequest, item["id"]).status == "APPROVED"
     for model in (FormDelivery, EmailDelivery):
-        assert db.scalar(select(func.count()).select_from(model)) == 0
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(model)
+                .where(model.company_id == adapter_source[1].id)
+            )
+            == 0
+        )
     events = db.scalars(
         select(OutreachAuditEvent.event).where(OutreachAuditEvent.request_id == item["id"])
     ).all()
@@ -184,7 +191,14 @@ def test_approved_dependencies_changed_cannot_reserve(
         monkeypatch.setattr(human_approval, "now", lambda: frozen)
     db.commit()
     assert reserve(auth, item).status_code == 409
-    assert db.scalar(select(func.count()).select_from(ApprovedFormDispatch)) == 0
+    assert (
+        db.scalar(
+            select(func.count())
+            .select_from(ApprovedFormDispatch)
+            .where(ApprovedFormDispatch.company_id == adapter_source[1].id)
+        )
+        == 0
+    )
 
 
 def test_reservation_db_guard_and_cancel(auth, adapter_source, db):

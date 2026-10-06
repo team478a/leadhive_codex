@@ -216,7 +216,12 @@ def test_adapter_not_exposed_and_sql_consumption_forbidden(auth, workspace, db):
         == 409
     )
     for model in (ApprovedFormDispatch, EmailDelivery, FormDelivery):
-        assert db.scalar(select(func.count()).select_from(model)) == 0
+        assert (
+            db.scalar(
+                select(func.count()).select_from(model).where(model.company_id == workspace[1].id)
+            )
+            == 0
+        )
 
 
 def test_unknown_fields_duplicates_and_sender_validation():

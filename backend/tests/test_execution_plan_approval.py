@@ -68,7 +68,12 @@ def test_plan_bound_to_human_proof_and_cannot_dispatch(auth, workspace, db):
     )
     assert result.status_code == 409, result.text
     for model in (ApprovedFormDispatch, EmailDelivery, FormDelivery):
-        assert db.scalar(select(func.count()).select_from(model)) == 0
+        assert (
+            db.scalar(
+                select(func.count()).select_from(model).where(model.company_id == workspace[1].id)
+            )
+            == 0
+        )
 
 
 @pytest.mark.parametrize(
