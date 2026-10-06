@@ -21,6 +21,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 最初の実装指示は `docs/09_CODEX_INITIAL_INSTRUCTION.md` です。
 
+保存済み静的フォーム観察の閲覧・非認可境界と検証結果は [O3-C1診断ガイド](docs/129_CF7_OBSERVATION_READ_DIAGNOSTICS.md) を参照してください。
+
 ## Phase 1〜6・運用改善 実装
 
 React / TypeScript / Vite / Tailwind CSS、FastAPI / SQLAlchemy / PostgreSQLを使用。
