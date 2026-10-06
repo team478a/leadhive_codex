@@ -14,7 +14,7 @@ type Assessment = {
 }
 const states: Record<string, string> = { READY: '準備候補', REVIEW: '要確認', HOLD: '保留', BLOCKED: '利用不可' }
 
-export function SendabilityPanel({ companyId, updatedAt, inventoryRevision }: { companyId: string; updatedAt: string; inventoryRevision: number }) {
+export function SendabilityPanel({ companyId, updatedAt, inventoryRevision, onAssessmentChanged }: { companyId: string; updatedAt: string; inventoryRevision: number; onAssessmentChanged?: () => void }) {
   const [data, setData] = useState<Assessment | null>(null)
   const [error, setError] = useState('')
   const [revision, setRevision] = useState(0)
@@ -36,12 +36,12 @@ export function SendabilityPanel({ companyId, updatedAt, inventoryRevision }: { 
       {data.recommended_destination && <p className="break-all">推奨準備窓口：{data.recommended_destination.type} / {data.recommended_destination.destination} / 用途：{data.recommended_destination.purpose}。営業提案・提携相談・事業相談・一般の順に用途を評価します。送信先の確定・送信承認ではありません。</p>}
       {data.destination_selection_required && <p>同条件のREADY窓口が複数あります。Humanが対象範囲・用途を確認して選択する必要があります。自動選択しません。</p>}
       <ul>{data.reasons.map(reason => <li key={reason.code}><strong>{reason.message}</strong>：{reason.next_action} <small>({reason.code})</small></li>)}</ul>
-      <DestinationChoice companyId={companyId} choice={data.human_choice} candidates={data.destinations} canReview={data.can_review} onSaved={() => setRevision(v => v + 1)} />
+      <DestinationChoice companyId={companyId} choice={data.human_choice} candidates={data.destinations} canReview={data.can_review} onSaved={() => { setRevision(v => v + 1); onAssessmentChanged?.() }} />
       {data.destinations.map(item => <details key={`${item.type}:${item.destination}`} className="mt-3 break-all">
         <summary>{item.type}：{item.destination} / {states[item.status] ?? '未判定'}（{item.status}）</summary>
         <p>既存連絡可否：{item.core_permission} / 用途登録：{item.purpose}。ALLOWEDだけでは準備完了になりません。</p>
         <ul>{item.reasons.map(reason => <li key={reason.code}>{reason.message}：{reason.next_action} <small>({reason.code})</small></li>)}</ul>
-        <DestinationReview key={item.expected_hash ?? item.destination} companyId={companyId} item={item} canReview={data.can_review} onSaved={() => setRevision(v => v + 1)} />
+        <DestinationReview key={item.expected_hash ?? item.destination} companyId={companyId} item={item} canReview={data.can_review} onSaved={() => { setRevision(v => v + 1); onAssessmentChanged?.() }} />
       </details>)}
     </>}
   </section>

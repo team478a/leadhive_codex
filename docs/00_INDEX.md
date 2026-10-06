@@ -215,6 +215,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [139_HUMAN_DESTINATION_CHOICE.md](139_HUMAN_DESTINATION_CHOICE.md): READY窓口のHuman選択・取消、hashと用途版による失効、準備と送信承認の分離
 
+- [140_EVIDENCE_TEMPLATE_DM_PREPARATION.md](140_EVIDENCE_TEMPLATE_DM_PREPARATION.md): Human観察根拠付きテンプレートDM下書き、固定窓口・版・条件変更の再確認と送信経路への未接続境界
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

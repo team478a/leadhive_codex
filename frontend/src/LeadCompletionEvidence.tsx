@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
+import { DmPreparationPanel } from './DmPreparationPanel'
 import { SendabilityPanel } from './SendabilityPanel'
 import { SiteIdentityReview } from './SiteIdentityReview'
 import type { IdentityReview } from './SiteIdentityReview'
@@ -40,6 +41,7 @@ export function LeadCompletionEvidence({ companyId, projectId, updatedAt }: { co
     <ul>{data.observations.map(item => <li key={item.id}>{item.source}：{labels[item.identity_status] ?? '未確認'} / 補完 {item.applied_fields.length}項目{item.allowed_usage === 'REVIEW_REQUIRED' ? ' / 利用条件要確認' : ''}</li>)}</ul>
     <p className="muted">照合根拠の種別：{data.identity_confirmation_source === 'AUTOMATIC_RULE' ? '自動ルール照合' : data.identity_confirmation_source === 'HUMAN_OBSERVED' ? 'Humanの公開情報確認' : '未確認'}</p>
     <SiteIdentityReview key={`${companyId}:${data.expected_identity_hash}`} companyId={companyId} digest={data.expected_identity_hash} review={data.human_identity_review} canReview={data.can_refresh} onSaved={() => setReload(v => v + 1)} />
-    <SendabilityPanel companyId={companyId} updatedAt={updatedAt} inventoryRevision={reload} />
+    <SendabilityPanel companyId={companyId} updatedAt={updatedAt} inventoryRevision={reload} onAssessmentChanged={() => setReload(v => v + 1)} />
+    <DmPreparationPanel key={`${companyId}:${updatedAt}:${reload}`} companyId={companyId} projectId={projectId} />
   </section>
 }
