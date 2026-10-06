@@ -29,14 +29,16 @@ def block(db, row_id, worker_id, reason):
     )
     if row.status != "checking" or row.worker_id != worker_id:
         return
-    row.status, row.reason, row.finished_at = "blocked", reason[:500], approval.now()
     item = db.get(ApprovalRequest, row.approval_id)
+    row.status, row.reason, row.finished_at = "blocked", reason[:500], approval.now()
+    if item.delivery_method == "form_adapter":
+        row.worker_id = None
     approval.invalidate_if_needed(db, item)
     approval.audit(db, item, "form dispatch blocked", "SYSTEM", None, item.status, reason[:500])
     db.commit()
 
 
-def begin(db, row_id, worker_id, context):
+def begin(db, row_id, worker_id, context, *, adapter_plan=None):
     db.expire_all()
     service.lock(db)
     row = db.scalar(
@@ -54,6 +56,10 @@ def begin(db, row_id, worker_id, context):
     item = db.scalar(
         select(ApprovalRequest).where(ApprovalRequest.id == row.approval_id).with_for_update()
     )
+    if adapter_plan is not None:
+        from app.services.controlled_form_execution import validate_context
+
+        validate_context(db, item, row, context, adapter_plan)
     if (
         row.payload_hash != item.payload_hash
         or row.payload_snapshot != item.payload_snapshot
@@ -61,7 +67,7 @@ def begin(db, row_id, worker_id, context):
     ):
         raise HTTPException(409, "固定payloadの整合性を確認できません。")
     try:
-        company, draft = service.validate(db, item)
+        company, draft = service.validate(db, item, allow_adapter=adapter_plan is not None)
     except HTTPException:
         db.commit()  # Retain invalidation ledger, then block this reservation separately.
         raise
@@ -76,8 +82,23 @@ def begin(db, row_id, worker_id, context):
         or context.preview.action_url != row.payload_snapshot["form_action_url"]
     ):
         raise HTTPException(409, "フォームURLまたはPOST先が承認時から変更されています。")
+    authorization = None
+    if adapter_plan is not None:
+        authorization = {
+            "approval_id": str(item.id),
+            "payload_hash": item.payload_hash,
+            "payload_version": item.payload_version,
+            "adapter_plan_hash": item.payload_snapshot["adapter_plan_hash"],
+        }
     delivery = reserve_form_submission(
-        db, company, draft, context, item.approved_by_user_id, commit=False
+        db,
+        company,
+        draft,
+        context,
+        item.approved_by_user_id,
+        commit=False,
+        delivery_method="adapter" if adapter_plan is not None else "direct",
+        execution_authorization=authorization,
     )
     row.delivery_id, row.started_at, row.status = delivery.id, approval.now(), "unknown"
     row.reason = UNKNOWN_MESSAGE
@@ -126,6 +147,12 @@ def run(db, claimed):
             result, message = "failed", exc.public_message
     except Exception:
         pass  # Unknown acceptance must never return to a retryable queue.
+    finish(db, row_id, worker_id, result, message, submission)
+
+
+def finish(db, row_id, worker_id, result, message, submission):
+    if result not in {"unknown", "submitted", "failed"}:
+        raise ValueError("Invalid form result")
     db.rollback()
     row = db.scalar(
         select(ApprovedFormDispatch).where(ApprovedFormDispatch.id == row_id).with_for_update()
@@ -150,7 +177,9 @@ def run(db, claimed):
             OutreachDraftApproval(
                 draft_id=row.draft_id,
                 approved_by_user_id=item.approved_by_user_id,
-                approval_type="form_direct",
+                approval_type="form_adapter"
+                if item.delivery_method == "form_adapter"
+                else "form_direct",
                 subject=row.payload_snapshot["subject"],
                 body=row.payload_snapshot["body"],
                 approved_at=item.approved_at,

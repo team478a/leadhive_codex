@@ -66,7 +66,8 @@ class ApprovalRequest(Base):
             name="ck_fixture_plan_not_consumed",
         ),
         CheckConstraint(
-            "delivery_method <> 'form_adapter' OR status <> 'CONSUMED'",
+            "delivery_method <> 'form_adapter' OR status <> 'CONSUMED' OR "
+            "current_database() ~ '_test$'",
             name="ck_adapter_contract_not_consumed",
         ),
         CheckConstraint(

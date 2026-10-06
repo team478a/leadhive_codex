@@ -88,7 +88,7 @@ class OutreachDraftApproval(Base):
     __tablename__ = "outreach_draft_approvals"
     __table_args__ = (
         CheckConstraint(
-            "approval_type IN ('email', 'form_direct', 'form_codex')",
+            "approval_type IN ('email', 'form_direct', 'form_codex', 'form_adapter')",
             name="ck_outreach_draft_approval_type",
         ),
     )
@@ -209,7 +209,13 @@ class FormDelivery(Timestamps, Base):
             name="ck_form_delivery_status",
         ),
         CheckConstraint(
-            "delivery_method IN ('direct', 'codex_assisted')", name="ck_form_delivery_method"
+            "delivery_method IN ('direct', 'codex_assisted', 'adapter')",
+            name="ck_form_delivery_method",
+        ),
+        CheckConstraint(
+            "delivery_method <> 'adapter' OR (current_database() ~ '_test$' "
+            "AND execution_authorization IS NOT NULL)",
+            name="ck_adapter_delivery_lab",
         ),
         UniqueConstraint("draft_id", name="uq_form_delivery_draft"),
     )
@@ -239,6 +245,7 @@ class FormDelivery(Timestamps, Base):
     result_note: Mapped[str] = mapped_column(String(500), default="")
     profile_fingerprint: Mapped[str] = mapped_column(String(64), default="")
     field_mapping_snapshot: Mapped[list] = mapped_column(JSONB, default=list)
+    execution_authorization: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class FormDeliveryBatch(Timestamps, Base):

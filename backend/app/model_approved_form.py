@@ -42,7 +42,13 @@ class ApprovedFormDispatch(Base):
         CheckConstraint(
             "payload_snapshot->>'delivery_method' <> 'form_adapter' OR "
             "(status IN ('queued','blocked','cancelled') AND started_at IS NULL "
-            "AND delivery_id IS NULL AND worker_id IS NULL)",
+            "AND delivery_id IS NULL AND worker_id IS NULL) OR "
+            "(current_database() ~ '_test$' AND "
+            "payload_snapshot->'adapter_plan'->>'environment' = 'CONTROLLED_LAB' AND "
+            "((status='checking' AND started_at IS NULL AND delivery_id IS NULL "
+            "AND worker_id IS NOT NULL AND lease_expires_at IS NOT NULL) OR "
+            "(status IN ('unknown','submitted','failed') AND started_at IS NOT NULL "
+            "AND delivery_id IS NOT NULL AND worker_id IS NOT NULL)))",
             name="ck_adapter_reservation_not_started",
         ),
     )

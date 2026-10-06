@@ -23,7 +23,20 @@ def unresolved_form_submission(db, company_id, form_url):
     )
 
 
-def reserve_form_submission(db, company, draft, context, user_id, item=None, *, commit=True):
+def reserve_form_submission(
+    db,
+    company,
+    draft,
+    context,
+    user_id,
+    item=None,
+    *,
+    commit=True,
+    delivery_method="direct",
+    execution_authorization=None,
+):
+    if delivery_method not in {"direct", "adapter"}:
+        raise FormDeliveryError("未対応の実行方式です。", "unsupported")
     # Short global lock serializes reservation only; network I/O starts after commit.
     db.execute(text("SELECT pg_advisory_xact_lock(4781003)"))
     existing = db.scalar(select(FormDelivery).where(FormDelivery.draft_id == draft.id))
@@ -48,7 +61,7 @@ def reserve_form_submission(db, company, draft, context, user_id, item=None, *, 
             form_url=context.preview.form_url,
             action_url=context.preview.action_url,
             form_profile_id=context.profile.id,
-            delivery_method="direct",
+            delivery_method=delivery_method,
             profile_fingerprint=context.profile.fingerprint,
             field_mapping_snapshot=mapping_snapshot(context.fields),
         )
@@ -60,7 +73,8 @@ def reserve_form_submission(db, company, draft, context, user_id, item=None, *, 
     existing.form_profile_id = context.profile.id
     existing.profile_fingerprint = context.profile.fingerprint
     existing.field_mapping_snapshot = mapping_snapshot(context.fields)
-    existing.delivery_method = "direct"
+    existing.delivery_method = delivery_method
+    existing.execution_authorization = execution_authorization
     if item is not None:
         db.flush()
         item.status, item.reason, item.form_delivery_id = "unknown", UNKNOWN_MESSAGE, existing.id

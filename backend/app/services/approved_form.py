@@ -219,7 +219,11 @@ def capacity(db):
     )
 
 
-def claim(db):
+def claim(db, *, controlled_lab=False):
+    if controlled_lab:
+        from app.services.controlled_form_execution import ensure_enabled
+
+        ensure_enabled(db)
     lock(db)
     from app.services.form_operations import reconcile_locked
 
@@ -242,7 +246,8 @@ def claim(db):
         .join(ApprovalRequest, ApprovalRequest.id == ApprovedFormDispatch.approval_id)
         .where(
             ApprovedFormDispatch.status == "queued",
-            ApprovalRequest.delivery_method == "form_direct",
+            ApprovalRequest.delivery_method
+            == ("form_adapter" if controlled_lab else "form_direct"),
             select(FormDispatchSite.dispatch_id)
             .where(FormDispatchSite.dispatch_id == ApprovedFormDispatch.id)
             .exists(),

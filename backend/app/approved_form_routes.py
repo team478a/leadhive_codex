@@ -200,6 +200,8 @@ def cancel(dispatch_id: UUID, db: Session = Depends(get_db), user: User = Depend
     if row.status not in {"queued", "checking"}:
         raise HTTPException(409, "送信試行開始後の取消・再送はできません。")
     row.status, row.finished_at = "cancelled", human_approval.now()
+    if row.payload_snapshot.get("delivery_method") == "form_adapter":
+        row.worker_id = None
     human_approval.audit(
         db, db.get(ApprovalRequest, row.approval_id), "form dispatch cancelled", "HUMAN", user.id
     )

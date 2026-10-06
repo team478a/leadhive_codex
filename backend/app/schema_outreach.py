@@ -64,7 +64,7 @@ class OutreachDraftApprovalOut(BaseModel):
     id: UUID
     draft_id: UUID
     approved_by_user_id: UUID | None
-    approval_type: Literal["email", "form_direct", "form_codex"]
+    approval_type: Literal["email", "form_direct", "form_codex", "form_adapter"]
     subject: str
     body: str
     approved_at: datetime
@@ -157,7 +157,7 @@ class FormDeliveryOut(BaseModel):
     draft_id: UUID
     company_id: UUID
     form_profile_id: UUID | None
-    delivery_method: Literal["direct", "codex_assisted"]
+    delivery_method: Literal["direct", "codex_assisted", "adapter"]
     status: Literal["pending", "submitted", "failed", "unknown"]
     action_url: str
     response_status: int | None

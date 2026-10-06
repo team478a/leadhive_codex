@@ -152,7 +152,7 @@ class SalesActivityAnalyticsOut(BaseModel):
 
 
 class OutreachEffectivenessItemOut(BaseModel):
-    approval_type: Literal["email", "form_direct", "form_codex"]
+    approval_type: Literal["email", "form_direct", "form_codex", "form_adapter"]
     subject: str
     approvals: int
     replied: int
