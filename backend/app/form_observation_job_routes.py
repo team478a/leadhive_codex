@@ -2,7 +2,7 @@
 
 import os
 from datetime import datetime
-from typing import Literal, cast, get_args
+from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -13,25 +13,12 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import FormObservationJobEvent, OperationJob, User
 from app.project_access import company_access, project_access
+from app.schema_form_observation_job import REASONS, Reason
 from app.security import current_user
 from app.services import form_observation_jobs as service
 
 router = APIRouter(prefix="/api")
 Status = Literal["queued", "running", "completed", "failed", "cancelled"]
-Reason = Literal[
-    "QUEUED",
-    "CLAIMED",
-    "CANCELLED",
-    "EVIDENCE_SAVED",
-    "CLAIM_REJECTED",
-    "OBSERVATION_FAILED",
-    "BINDING_CHANGED",
-    "LEASE_CHANGED",
-    "WORKER_LOST",
-    "PERMISSION_CHANGED",
-    "SOURCE_CHANGED",
-    "LAB_DISABLED",
-]
 
 
 class EmptyInput(BaseModel):
@@ -84,7 +71,7 @@ def project_job(db: Session, job: OperationJob) -> JobOut:
         .limit(51)
     ).all()
     now = db.scalar(text("SELECT clock_timestamp()"))
-    reason = cast(Reason, job.error_message) if job.error_message in get_args(Reason) else None
+    reason = cast(Reason, job.error_message) if job.error_message in REASONS else None
     return JobOut(
         id=job.id,
         status=cast(Status, job.status),

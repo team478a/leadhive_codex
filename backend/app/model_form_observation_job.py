@@ -7,6 +7,7 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, t
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+from app.schema_form_observation_job import REASON_CONSTRAINT
 
 
 class FormObservationJobEvent(Base):
@@ -18,9 +19,7 @@ class FormObservationJobEvent(Base):
             name="ck_observation_job_event_type",
         ),
         CheckConstraint(
-            "reason_code IN ('QUEUED','CLAIMED','CANCELLED','EVIDENCE_SAVED',"
-            "'CLAIM_REJECTED','OBSERVATION_FAILED','BINDING_CHANGED','LEASE_CHANGED',"
-            "'WORKER_LOST','PERMISSION_CHANGED','SOURCE_CHANGED','LAB_DISABLED')",
+            REASON_CONSTRAINT,
             name="ck_observation_job_reason",
         ),
         CheckConstraint(
