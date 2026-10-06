@@ -18,6 +18,8 @@ backend/.venv/Scripts/python.exe -m ruff format --check scripts/pinned_tls_lab
 
 本番のlocalhost許可、TLS verify=False、DNS失敗時のfallbackを追加していません。検証用CAのcontextはテスト用です。任意のAgent入力からcontextを渡す設計にしないでください。
 
-静的型検査は `mypy --strict --follow-imports=silent scripts/pinned_tls_lab/transport.py`。アプリ全体の型検査ではありません。監査時のmypy 2.4.0はignored `dist/type-tools`へ隔離導入し、backend依存定義を変更していません。
+静的型検査は `mypy --strict --follow-imports=silent scripts/pinned_tls_lab/transport.py scripts/pinned_tls_lab/resolver.py scripts/pinned_tls_lab/dns_worker.py`。アプリ全体の型検査ではありません。監査時のmypy 2.4.0はignored `dist/type-tools`へ隔離導入し、backend依存定義を変更していません。
 
-制限と次の停止条件は [docs/116](../../docs/116_PINNED_TLS_TRANSPORT_VALIDATION.md) を参照してください。DNS API自体のwall-clock上限、承認payloadとendpointの結合、永続UNKNOWN台帳、新CF7契約を完成させる前に本番へ転用しないでください。
+DNSは `resolver.py` が専用stdlib workerへ隔離します。4枠admission、残り予算内の応答待ち、所有processのkill/wait、最大1秒の終了確認猶予、失敗時quarantineを使います。fixtureは実子processで固着を再現します。`-I` はPython user設定の分離であり、OS network sandboxではありません。
+
+DNS停止結果とOS起動/親強制終了等の限界は [docs/117](../../docs/117_ISOLATED_DNS_DEADLINE_VALIDATION.md)、TLS条件は [docs/116](../../docs/116_PINNED_TLS_TRANSPORT_VALIDATION.md) を参照してください。承認payloadとendpointの結合、永続UNKNOWN台帳、新CF7契約を完成させる前に本番へ転用しないでください。

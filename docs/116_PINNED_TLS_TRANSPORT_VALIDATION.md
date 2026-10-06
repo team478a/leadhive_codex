@@ -1,5 +1,7 @@
 # 検査済みIPへの接続固定・TLS identityの管理下検証
 
+> 後続状況：DNS固着の隔離・終了確認は [docs/117](117_ISOLATED_DNS_DEADLINE_VALIDATION.md) で追加検証した。以下は当工程時点の結果・未完了条件として保持する。
+
 ## 1. 範囲と判定
 
 2026-10-06、`codex/integration@9ca9129` を基準に、docs/115の次工程として通信prototypeを独立した `scripts/pinned_tls_lab/` に追加した。

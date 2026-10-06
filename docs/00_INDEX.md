@@ -169,6 +169,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [116_PINNED_TLS_TRANSPORT_VALIDATION.md](116_PINNED_TLS_TRANSPORT_VALIDATION.md): 検査済み数値IPへの接続固定・元hostnameのTLS検証・redirect/proxy拒否と残るresolver停止条件
 
+- [117_ISOLATED_DNS_DEADLINE_VALIDATION.md](117_ISOLATED_DNS_DEADLINE_VALIDATION.md): DNS固着の子process隔離・deadline停止・回収確認と未確認終了時のquarantine
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
