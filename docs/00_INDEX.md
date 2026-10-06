@@ -167,6 +167,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [115_REAL_CF7_ISOLATED_PROTOCOL_LAB.md](115_REAL_CF7_ISOLATED_PROTOCOL_LAB.md): 外部配送を遮断した実WordPress/CF7検証器・Browser multipartとREST rootの照合
 
+- [116_PINNED_TLS_TRANSPORT_VALIDATION.md](116_PINNED_TLS_TRANSPORT_VALIDATION.md): 検査済み数値IPへの接続固定・元hostnameのTLS検証・redirect/proxy拒否と残るresolver停止条件
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
