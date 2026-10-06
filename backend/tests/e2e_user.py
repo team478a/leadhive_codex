@@ -25,6 +25,7 @@ from app.models import (  # noqa: E402
     FormSenderSettings,
     InboundEmail,
     InboundMailSettings,
+    LeadSiteEvidence,
     OutreachDraft,
     Project,
     SmtpSettings,
@@ -32,6 +33,7 @@ from app.models import (  # noqa: E402
     User,
 )
 from app.security import password_hasher  # noqa: E402
+from app.services.lead_identity import identity_hash  # noqa: E402
 
 email = os.environ["E2E_EMAIL"]
 if not email.startswith("e2e-") or not email.endswith("@example.com"):
@@ -48,6 +50,7 @@ with SessionLocal() as db:
     elif sys.argv[1] in {
         "approval-fixture",
         "completion-fixture",
+        "destination-selection-fixture",
         "approved-email-fixture",
         "email-feedback-fixture",
         "adapter-fixture",
@@ -75,6 +78,17 @@ with SessionLocal() as db:
         )
         db.add(company)
         db.flush()
+        if sys.argv[1] == "destination-selection-fixture":
+            company.contact_quality_status = "verified"
+            db.add(
+                LeadSiteEvidence(
+                    company_id=company.id,
+                    source_url=company.website_url,
+                    identity_hash=identity_hash(company),
+                    confidence="CONFIRMED",
+                    reasons=["NAME_MATCH", "ADDRESS_MATCH"],
+                )
+            )
         if sys.argv[1] == "completion-fixture":
             db.add_all(
                 [

@@ -213,6 +213,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [138_COHORT_DESTINATION_DIAGNOSTICS.md](138_COHORT_DESTINATION_DIAGNOSTICS.md): 固定リストの25件単位診断、独立READY窓口・共通窓口・停止理由、部分集計・中断・再集計とDM READY未判定境界
 
+- [139_HUMAN_DESTINATION_CHOICE.md](139_HUMAN_DESTINATION_CHOICE.md): READY窓口のHuman選択・取消、hashと用途版による失効、準備と送信承認の分離
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
