@@ -69,6 +69,12 @@ def detail(company_id: UUID, db: Session = Depends(get_db), user: User = Depends
     return {
         "company_id": company.id,
         "record_type": company.record_type,
+        "identity_target": {
+            "company_name": company.company_name,
+            "address": company.address,
+            "phone": company.phone,
+            "website_url": company.website_url,
+        },
         "expected_identity_hash": identity_hash(company),
         "identity_confirmation_source": valid,
         "human_identity_review": public_review(latest(db, company.id), company),

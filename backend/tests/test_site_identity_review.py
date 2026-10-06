@@ -79,6 +79,65 @@ def test_identity_current_revoke_expire_stale_and_no_send(auth, db):
         assert db.scalar(select(func.count()).select_from(model)) == 0
 
 
+def test_preview_is_read_only_and_uses_confirmation_rules(auth, db):
+    company, path, body = fixture(auth, db)
+    response = auth.post(path + "/preview", json=body)
+    assert response.status_code == 200
+    assert response.json() == {
+        "comparison": "CONFIRMED",
+        "reasons": ["COMPANY_NAME_MATCH", "ADDRESS_MATCH", "DOMAIN_MATCH"],
+        "can_record": True,
+        "review_recorded": False,
+        "execution_allowed": False,
+        "live_site_checked": False,
+    }
+    assert confirmation(db, company) is None
+    for model in (SiteIdentityReviewEvent, ApprovalRequest, EmailDelivery, FormDelivery):
+        assert db.scalar(select(func.count()).select_from(model)) == 0
+    conflict = {**body, "observed_address": "Other city 9-9"}
+    result = auth.post(path + "/preview", json=conflict).json()
+    assert not result["can_record"] and result["reasons"] == ["ADDRESS_CONFLICT"]
+    assert auth.post(path, json=conflict).status_code == 422
+    name_only = {**body, "observed_address": ""}
+    assert not auth.post(path + "/preview", json=name_only).json()["can_record"]
+    assert auth.post(path, json=name_only).status_code == 422
+    assert auth.post(path + "/preview", json={**body, "confirmed": True}).status_code == 422
+    assert (
+        auth.post(path + "/preview", json={**body, "source_url": "http://localhost/"}).status_code
+        == 422
+    )
+    inventory = auth.get(f"/api/companies/{company.id}/lead-completion").json()
+    assert inventory["identity_target"]["company_name"] == company.company_name
+    assert inventory["identity_target"]["address"] == company.address
+    assert auth.post(path, json=body).status_code == 201
+    assert auth.post(path + "/preview", json=body).status_code == 409
+
+
+def test_preview_human_project_boundary_and_stale_target(auth, db, users):
+    company, path, body = fixture(auth, db)
+    assert (
+        auth.post(
+            path + "/preview", json=body, headers={"Authorization": "Bearer invalid"}
+        ).status_code
+        == 403
+    )
+    company.phone = "0791234567"
+    db.commit()
+    assert auth.post(path + "/preview", json=body).status_code == 409
+    body["expected_hash"] = identity_hash(company)
+    db.add(ProjectMember(project_id=company.project_id, user_id=users[1].id, role="viewer"))
+    db.commit()
+    from tests.conftest import PASSWORD
+
+    auth.post("/api/auth/login", json={"email": users[1].email, "password": PASSWORD})
+    assert auth.get(f"/api/companies/{company.id}/lead-completion").status_code == 200
+    assert auth.post(path + "/preview", json=body).status_code == 404
+    db.execute(delete(ProjectMember).where(ProjectMember.project_id == company.project_id))
+    db.commit()
+    assert auth.post(path + "/preview", json=body).status_code == 404
+    assert db.scalar(select(func.count()).select_from(SiteIdentityReviewEvent)) == 0
+
+
 @pytest.mark.parametrize(
     "changes",
     [

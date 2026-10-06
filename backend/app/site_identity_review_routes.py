@@ -43,6 +43,56 @@ def lock_company(db, user, company_id):
     return company
 
 
+def check_evidence(company, body):
+    """Shared deterministic validation; no writes or network access."""
+    try:
+        source = official_evidence_url(company, body.source_url)
+    except (ValueError, UnicodeError):
+        raise HTTPException(
+            422,
+            "根拠URLには公式サイト内の公開ページを指定してください。秘密情報・クエリ等は含められません。",
+        ) from None
+    if body.observed_phone and not re.fullmatch(r"[0-9]{9,15}", normalize(body.observed_phone)):
+        raise HTTPException(422, "電話は9〜15桁の番号を確認してください。")
+    if body.observed_address and len(normalize(body.observed_address)) < 6:
+        raise HTTPException(422, "住所は番地を含む住所全体を確認してください。")
+    incoming = SimpleNamespace(
+        record_type=company.record_type,
+        company_name=body.observed_name,
+        address=body.observed_address,
+        phone=body.observed_phone,
+        website_url=company.website_url,
+    )
+    result, reasons = compare(company, incoming)
+    eligible = len(normalize(body.observed_name)) >= 2 and result == "CONFIRMED"
+    return source, result, reasons, eligible
+
+
+@router.post("/{company_id}/site-identity-reviews/preview")
+def preview(
+    company_id: UUID,
+    body: IdentityInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company = company_access(company_id, db, user)
+    previous = latest(db, company.id)
+    if (
+        identity_hash(company) != body.expected_hash
+        or (previous.version if previous else 0) != body.expected_review_version
+    ):
+        raise HTTPException(409, "確認対象または確認記録が変わりました。再読込してください。")
+    _, result, reasons, eligible = check_evidence(company, body)
+    return {
+        "comparison": result,
+        "reasons": reasons,
+        "can_record": eligible,
+        "review_recorded": False,
+        "execution_allowed": False,
+        "live_site_checked": False,
+    }
+
+
 @router.post("/{company_id}/site-identity-reviews", status_code=201)
 def confirm(
     company_id: UUID,
@@ -58,26 +108,8 @@ def confirm(
         or (previous.version if previous else 0) != body.expected_review_version
     ):
         raise HTTPException(409, "確認対象または確認記録が変わりました。再読込してください。")
-    try:
-        source = official_evidence_url(company, body.source_url)
-    except (ValueError, UnicodeError):
-        raise HTTPException(
-            422,
-            "根拠URLには公式サイト内の公開ページを指定してください。秘密情報・クエリ等は含められません。",
-        ) from None
-    incoming = SimpleNamespace(
-        record_type=company.record_type,
-        company_name=body.observed_name,
-        address=body.observed_address,
-        phone=body.observed_phone,
-        website_url=company.website_url,
-    )
-    if body.observed_phone and not re.fullmatch(r"[0-9]{9,15}", normalize(body.observed_phone)):
-        raise HTTPException(422, "電話は9〜15桁の番号を確認してください。")
-    if body.observed_address and len(normalize(body.observed_address)) < 6:
-        raise HTTPException(422, "住所は番地を含む住所全体を確認してください。")
-    result, reasons = compare(company, incoming)
-    if len(normalize(body.observed_name)) < 2 or result != "CONFIRMED":
+    source, _, reasons, eligible = check_evidence(company, body)
+    if not eligible:
         raise HTTPException(
             422,
             "名称と、番地を含む住所または電話の一致が必要です。矛盾や地域名だけでは確認できません。",
