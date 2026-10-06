@@ -21,6 +21,11 @@ from app.model_company import (
     ContactPerson,
     Deal,
 )
+from app.model_completion_metrics import (
+    LeadCompletionCohort,
+    LeadProcessingUsage,
+    LeadReviewSession,
+)
 from app.model_core import (
     AuthSession,
     Project,
@@ -70,6 +75,9 @@ from app.model_settings import (
 )
 
 __all__ = [
+    "LeadCompletionCohort",
+    "LeadReviewSession",
+    "LeadProcessingUsage",
     "ContactDestination",
     "LeadDestinationLink",
     "LeadSiteEvidence",
