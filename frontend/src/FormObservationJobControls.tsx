@@ -12,6 +12,14 @@ const reasons: Record<string, string> = {
   CLAIM_REJECTED: '開始条件が変わったため停止', OBSERVATION_FAILED: '取得・解析・保存のいずれかに失敗（詳細分類は未対応）',
   BINDING_CHANGED: '企業・ジョブの結合情報が変更', LEASE_CHANGED: '処理の担当が変更', WORKER_LOST: '担当処理の有効期限切れ',
   PERMISSION_CHANGED: '実行者の権限が変更', SOURCE_CHANGED: '企業URLが変更', LAB_DISABLED: '検証機能が無効',
+  RUNNER_STOPPED: '検証runnerの終了要求により停止', OBSERVATION_TIMEOUT: '取得の制限時間を超過',
+  OBSERVATION_DNS_FAILED: '接続先の名前解決に失敗', OBSERVATION_UNSAFE_DNS: '許可できない接続先アドレスを検出',
+  OBSERVATION_TLS_FAILED: 'TLS接続・証明書の確認に失敗', OBSERVATION_NETWORK_FAILED: '取得中のネットワーク接続に失敗',
+  OBSERVATION_HTTP_REJECTED: '取得先からHTTP 200以外の応答（転送も停止）',
+  OBSERVATION_RESPONSE_INVALID: '応答の形式・サイズ・長さを確認できないため停止',
+  OBSERVATION_ROBOTS_DENIED: 'robotsで問い合わせページの取得が禁止', OBSERVATION_ROBOTS_INVALID: 'robotsの取得ルールを安全に判定できないため停止',
+  OBSERVATION_PARSE_FAILED: '静的HTMLの解析処理に失敗', OBSERVATION_CONTRACT_INVALID: '観察結果の保存契約に不整合',
+  OBSERVATION_STORAGE_FAILED: 'DBアクセス・証拠保存処理に失敗',
 }
 const states: Record<string, string> = { queued: '待機中', running: '実行中', completed: '診断保存完了', failed: '失敗', cancelled: '停止済み' }
 

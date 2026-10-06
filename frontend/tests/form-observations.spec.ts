@@ -65,9 +65,10 @@ test('managed observation controls queue, stop and recover without any send acti
   try {
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env, encoding: 'utf8' })) as { project_id: string; company_id: string }
     let state = ''
+    let failureReason = 'WORKER_LOST'
     const calls: string[] = []
     function job() {
-      return { id: 'managed-job', status: state, cancel_requested: false, recoverable: state === 'running', reason_code: state === 'failed' ? 'WORKER_LOST' : null,
+      return { id: 'managed-job', status: state, cancel_requested: false, recoverable: state === 'running', reason_code: state === 'failed' ? failureReason : null,
         events: [{ id: 'event', event_type: 'QUEUED', reason_code: 'QUEUED', principal_type: 'HUMAN', created_at: '2026-01-01T00:00:00Z' }], events_has_more: false }
     }
     await page.route(`**/api/companies/${fixture.company_id}/form-observation-jobs*`, async route => {
@@ -103,6 +104,11 @@ test('managed observation controls queue, stop and recover without any send acti
     await panel.getByRole('button', { name: '期限切れの観察ジョブを終了', exact: true }).click()
     await expect(panel).toContainText('担当処理の有効期限切れ')
     await expect(panel.getByRole('button', { name: /送信|承認/ })).toHaveCount(0)
+    for (const [code, label] of [['OBSERVATION_ROBOTS_DENIED', 'robotsで問い合わせページの取得が禁止'], ['OBSERVATION_TLS_FAILED', 'TLS接続・証明書の確認に失敗']]) {
+      failureReason = code
+      await panel.getByRole('button', { name: '観察ジョブの状態を更新', exact: true }).click()
+      await expect(panel).toContainText(label)
+    }
     expect(calls).toEqual(['queue', 'cancel', 'recover'])
     expect(forbidden).toEqual([])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
