@@ -20,6 +20,7 @@ from app.models import (
 )
 from app.services.contact_destinations import candidates, linked_inventory, normalize_destination
 from app.services.contact_permission import evaluate_contact_permission
+from app.services.destination_choice import public_choice
 from app.services.destination_review import latest, public_review, snapshot_hash
 from app.services.destination_selection import recommend
 from app.services.form_intelligence.fields import mapping_review_reason
@@ -315,6 +316,10 @@ def evaluate(db, company):
             status_for(lead_codes),
         )
     )
+    choice = public_choice(db, company, rows, now)
+    recommendation = recommend(rows)
+    if choice["state"] == "CURRENT":
+        recommendation["destination_selection_required"] = False
     return dict(
         company_id=company.id,
         definition_version=DEFINITION,
@@ -322,7 +327,8 @@ def evaluate(db, company):
         status=state,
         reasons=reason_details(codes),
         destinations=rows,
-        **recommend(rows),
+        **recommendation,
+        human_choice=choice,
         ready_evaluation="CACHED_DESTINATION_PREPARATION_ONLY",
         dm_ready=False,
         execution_allowed=False,

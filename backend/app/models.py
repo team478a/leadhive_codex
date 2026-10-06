@@ -34,6 +34,7 @@ from app.model_core import (
     Timestamps,
     User,
 )
+from app.model_destination_choice import DestinationChoiceEvent
 from app.model_destination_review import DestinationReviewEvent
 from app.model_email_feedback import EmailFeedbackEvent, EmailHealthState
 from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
@@ -78,6 +79,7 @@ from app.model_site_identity_review import SiteIdentityReviewEvent
 
 __all__ = [
     "DestinationReviewEvent",
+    "DestinationChoiceEvent",
     "SiteIdentityReviewEvent",
     "LeadCompletionCohort",
     "LeadReviewSession",
