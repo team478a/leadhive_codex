@@ -17,15 +17,15 @@ from app.models import (
     FormDelivery,
     FormProfile,
     FormProfileField,
-    LeadSiteEvidence,
 )
 from app.services.contact_destinations import candidates, linked_inventory, normalize_destination
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.destination_review import latest, public_review, snapshot_hash
+from app.services.destination_selection import recommend
 from app.services.form_intelligence.fields import mapping_review_reason
-from app.services.lead_identity import identity_hash
+from app.services.site_identity_review import confirmation
 
-DEFINITION = "sendability-b2-v1"
+DEFINITION = "sendability-b3-v1"
 EMAIL = TypeAdapter(EmailStr)
 REASONS = {
     "DESTINATION_SCOPE_UNCERTAIN": (
@@ -149,18 +149,7 @@ def evaluate(db, company):
         )
     ).all()
     contacts = db.scalars(select(ContactPerson).where(ContactPerson.company_id == company.id)).all()
-    confirmed = (
-        db.scalar(
-            select(LeadSiteEvidence.id)
-            .where(
-                LeadSiteEvidence.company_id == company.id,
-                LeadSiteEvidence.confidence == "CONFIRMED",
-                LeadSiteEvidence.identity_hash == identity_hash(company),
-            )
-            .limit(1)
-        )
-        is not None
-    )
+    confirmed = confirmation(db, company, now)
     # Read only; global delivery guards already reserve by company or destination.
     emails = [v for c, v in available if c == "email"]
     forms = [v for c, v in available if c == "form"]
@@ -333,7 +322,7 @@ def evaluate(db, company):
         status=state,
         reasons=reason_details(codes),
         destinations=rows,
-        recommended_destination=None,
+        **recommend(rows),
         ready_evaluation="CACHED_DESTINATION_PREPARATION_ONLY",
         dm_ready=False,
         execution_allowed=False,

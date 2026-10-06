@@ -74,9 +74,11 @@ from app.model_settings import (
     Notification,
     SmtpSettings,
 )
+from app.model_site_identity_review import SiteIdentityReviewEvent
 
 __all__ = [
     "DestinationReviewEvent",
+    "SiteIdentityReviewEvent",
     "LeadCompletionCohort",
     "LeadReviewSession",
     "LeadProcessingUsage",

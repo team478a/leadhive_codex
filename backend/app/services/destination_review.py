@@ -15,6 +15,7 @@ from app.models import (
     LeadSiteEvidence,
 )
 from app.services.lead_identity import identity_hash
+from app.services.site_identity_review import latest as latest_identity
 
 CANONICAL_VERSION = "destination-review-v1"
 
@@ -46,7 +47,11 @@ def snapshot_hash(db, company, destination):
         .where(LeadSiteEvidence.company_id == company.id)
         .order_by(LeadSiteEvidence.id)
     ).all()
+    human_identity = latest_identity(db, company.id)
     values = dict(
+        human_identity=[str(human_identity.id), human_identity.version, human_identity.event_type]
+        if human_identity
+        else None,
         schema=CANONICAL_VERSION,
         project=str(company.project_id),
         company=str(company.id),

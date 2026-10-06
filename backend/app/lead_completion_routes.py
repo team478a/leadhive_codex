@@ -22,6 +22,7 @@ from app.security import current_user
 from app.services.contact_destinations import candidates, linked_inventory, sync_company
 from app.services.lead_identity import identity_hash
 from app.services.sendability import evaluate as evaluate_sendability
+from app.services.site_identity_review import confirmation, latest, public_review
 
 router = APIRouter(prefix="/api")
 
@@ -58,14 +59,7 @@ def detail(company_id: UUID, db: Session = Depends(get_db), user: User = Depends
         .order_by(LeadSiteEvidence.observed_at.desc(), LeadSiteEvidence.id)
         .limit(20)
     ).all()
-    valid = next(
-        (
-            row
-            for row in sites
-            if row.identity_hash == identity_hash(company) and row.confidence == "CONFIRMED"
-        ),
-        None,
-    )
+    valid = confirmation(db, company)
     observations = db.scalars(
         select(LeadSourceObservation)
         .where(LeadSourceObservation.company_id == company.id)
@@ -75,6 +69,9 @@ def detail(company_id: UUID, db: Session = Depends(get_db), user: User = Depends
     return {
         "company_id": company.id,
         "record_type": company.record_type,
+        "expected_identity_hash": identity_hash(company),
+        "identity_confirmation_source": valid,
+        "human_identity_review": public_review(latest(db, company.id), company),
         "identity_status": "CONFIRMED" if valid else "REVIEW_REQUIRED",
         "official_site_confidence": "CONFIRMED" if valid else "REVIEW_REQUIRED",
         "site_evidence": [

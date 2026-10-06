@@ -39,6 +39,7 @@ from app.outreach_draft_routes import router as outreach_draft_router
 from app.preparation_routes import router as preparation_router
 from app.routes import router
 from app.services.approval_principals import reject_mixed_credentials
+from app.site_identity_review_routes import router as site_identity_review_router
 
 logger = logging.getLogger("leadhive")
 
@@ -68,6 +69,7 @@ app.include_router(email_feedback_router)
 app.include_router(preparation_router)
 app.include_router(lead_completion_router)
 app.include_router(destination_review_router)
+app.include_router(site_identity_review_router)
 app.include_router(completion_metrics_router)
 
 

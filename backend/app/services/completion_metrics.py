@@ -21,14 +21,16 @@ from app.models import (
     LeadSourceObservation,
     OperationJob,
     SalesPreparationItem,
+    SiteIdentityReviewEvent,
     TargetProfile,
 )
 from app.services.contact_destinations import candidates
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.lead_identity import identity_hash
 from app.services.sales_preparation import completion_match_hash, context_hash
+from app.services.site_identity_review import state as identity_review_state
 
-DEFINITION = "completion-a2-v1"
+DEFINITION = "completion-b3-identity-v1"
 HARD_BLOCKS = {
     "company_do_not_contact",
     "form_sales_prohibited",
@@ -123,6 +125,20 @@ def report(db, cohort, project):
         if any(
             s.confidence == "CONFIRMED" and s.identity_hash == identity_hash(c) for s in sites[c.id]
         )
+    }
+    # Bulk load latest Human attestations; never inherit an older confirmed revision.
+    human_reviews: dict[UUID, SiteIdentityReviewEvent] = {}
+    for row in db.scalars(
+        select(SiteIdentityReviewEvent)
+        .where(SiteIdentityReviewEvent.company_id.in_(ids_present))
+        .order_by(SiteIdentityReviewEvent.version.desc())
+    ):
+        human_reviews.setdefault(row.company_id, row)
+    now = datetime.now(timezone.utc)
+    evidence_ids |= {
+        c.id
+        for c in companies
+        if identity_review_state(human_reviews.get(c.id), identity_hash(c), now) == "CURRENT"
     }
     raw_destinations = {}
     groups = defaultdict(set)

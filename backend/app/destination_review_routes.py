@@ -2,7 +2,6 @@
 
 from datetime import datetime, timedelta, timezone
 from typing import Literal
-from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -20,9 +19,9 @@ from app.models import (
 )
 from app.project_access import company_access
 from app.security import current_user
-from app.services.collection import canonicalize_url
-from app.services.contact_destinations import candidates, normalize_destination
+from app.services.contact_destinations import candidates
 from app.services.destination_review import latest, public_review, snapshot_hash
+from app.services.site_identity_review import official_evidence_url
 
 router = APIRouter(prefix="/api/companies")
 
@@ -91,14 +90,7 @@ def confirm(
     ):
         raise HTTPException(409, "確認対象または確認記録が変わりました。再読込してください。")
     try:
-        parsed = urlsplit(body.source_url)
-        source = normalize_destination("form", body.source_url)
-        if (
-            parsed.query
-            or parsed.fragment
-            or canonicalize_url(source)[1] != canonicalize_url(company.website_url)[1]
-        ):
-            raise ValueError("Evidence must be a public official-site URL")
+        source = official_evidence_url(company, body.source_url)
     except (ValueError, UnicodeError):
         raise HTTPException(
             422,
