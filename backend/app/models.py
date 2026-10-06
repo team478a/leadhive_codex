@@ -72,6 +72,7 @@ from app.model_raw_collection import (
     RawBenchmark,
     RawLeadReview,
     RawLeadSnapshot,
+    RawPairReview,
     RawQueryRun,
     RawReviewSession,
 )
@@ -91,6 +92,7 @@ __all__ = [
     "RawLeadSnapshot",
     "RawReviewSession",
     "RawLeadReview",
+    "RawPairReview",
     "LeadDmPreparation",
     "DestinationReviewEvent",
     "DestinationChoiceEvent",

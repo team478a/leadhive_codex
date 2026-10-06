@@ -7,7 +7,7 @@ from collections import Counter
 
 from sqlalchemy import select
 
-from app.models import RawLeadReview, RawLeadSnapshot, RawQueryRun
+from app.models import RawLeadReview, RawLeadSnapshot, RawPairReview, RawQueryRun
 
 OUTCOMES = (
     "CORRECT",
@@ -118,6 +118,7 @@ def report(db, benchmark):
                 "query": run.query,
                 "keyword": run.keyword,
                 "ordinal": run.ordinal,
+                "repeat_index": run.repeat_index,
                 "requested_count": run.requested_count,
                 "code_commit": run.code_commit,
                 "created_at": run.created_at.isoformat(),
@@ -163,9 +164,58 @@ def report(db, benchmark):
                 kind = (
                     "cross_source"
                     if a.source != b.source
-                    else ("cross_query" if a.id != b.id else "same_source_same_query")
+                    else (
+                        "cross_repeat"
+                        if a.keyword == b.keyword and a.id != b.id
+                        else ("cross_query" if a.id != b.id else "same_source_same_query")
+                    )
                 )
                 duplicate_types[kind] += 1
+    from app.services.raw_repeat import candidate_key, stability
+
+    query_groups = []
+    seen = set()
+    for source, keyword in dict.fromkeys((r.source, r.keyword) for r in runs):
+        group_runs = [r for r in runs if r.source == source and r.keyword == keyword]
+        group = [(s, v) for r in group_runs for s, v in by_run[r.id]]
+        keys = {v.entity_key for _, v in group if v and v.outcome == "CORRECT"}
+        comparable = (
+            all(r.status == "COMPLETED" and r.code_commit != "UNKNOWN" for r in group_runs)
+            and len({(r.code_commit, r.requested_count, r.query) for r in group_runs}) == 1
+        )
+        human_complete = bool(group) and all(v and v.outcome != "UNCERTAIN" for _, v in group)
+        human_sets = [
+            {v.entity_key for _, v in by_run[r.id] if v and v.outcome in {"CORRECT", "DUPLICATE"}}
+            for r in group_runs
+        ]
+        query_groups.append(
+            {
+                "source": source,
+                "keyword": keyword,
+                "runs": len(group_runs),
+                **metrics(group),
+                "unique_candidates": len({candidate_key(s.payload, s.id) for s, _ in group}),
+                "marginal_gain": len(keys - seen) if any(v for _, v in group) else None,
+                "comparable": comparable,
+                "raw_stability": stability(
+                    [{candidate_key(s.payload, s.id) for s, _ in by_run[r.id]} for r in group_runs]
+                )
+                if comparable
+                else None,
+                "human_entity_stability": stability(human_sets)
+                if comparable and human_complete and not duplicate_types["unresolved_reference"]
+                else None,
+            }
+        )
+        seen.update(keys)
+    pair_reviews = db.scalars(
+        select(RawPairReview)
+        .join(RawLeadSnapshot, RawPairReview.left_id == RawLeadSnapshot.id)
+        .join(RawQueryRun)
+        .where(RawQueryRun.benchmark_id == benchmark.id)
+        .order_by(RawPairReview.version)
+    ).all()
+    latest_pairs = {(r.left_id, r.right_id): r for r in pair_reviews}
     return {
         "definition_version": benchmark.definition_version,
         "code_commit": benchmark.code_commit,
@@ -174,7 +224,22 @@ def report(db, benchmark):
         "created_at": benchmark.created_at.isoformat(),
         "phase": "PILOT",
         "pilot_limit": 30,
+        "repeat_limit": 3 if benchmark.definition_version == "raw-repeat-v2" else 1,
+        "base_requested_count": sum(r.requested_count for r in runs if r.repeat_index == 1),
+        "unique_candidates": len({candidate_key(s.payload, s.id) for s in snapshots}),
+        "query_groups": query_groups,
+        "pair_labels": {
+            o: sum(r.outcome == o for r in latest_pairs.values())
+            for o in ("SAME", "DIFFERENT", "UNSURE")
+        },
         **metrics(rows),
+        "raw_review_seconds": sum(r.duration_seconds for r in reviews) if reviews else None,
+        "pair_review_seconds": sum(r.duration_seconds for r in pair_reviews)
+        if pair_reviews
+        else None,
+        "human_review_seconds": sum(r.duration_seconds for r in [*reviews, *pair_reviews])
+        if reviews or pair_reviews
+        else None,
         "sources": sources,
         "queries": queries,
         "duplicate_types": dict(duplicate_types),

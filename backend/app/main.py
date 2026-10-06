@@ -41,6 +41,7 @@ from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
 from app.preparation_routes import router as preparation_router
 from app.raw_collection_routes import router as raw_collection_router
+from app.raw_pair_routes import router as raw_pair_router
 from app.routes import router
 from app.services.approval_principals import reject_mixed_credentials
 from app.site_identity_review_routes import router as site_identity_review_router
@@ -64,6 +65,7 @@ app = FastAPI(
     dependencies=[Depends(reject_mixed_credentials)],
 )
 app.include_router(raw_collection_router)
+app.include_router(raw_pair_router)
 app.include_router(approval_router)
 app.include_router(cf7_candidate_router)
 app.include_router(approved_form_router)

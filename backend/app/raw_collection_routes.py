@@ -17,6 +17,7 @@ from app.models import (
     RawBenchmark,
     RawLeadReview,
     RawLeadSnapshot,
+    RawPairReview,
     RawQueryRun,
     RawReviewSession,
     TargetProfile,
@@ -43,6 +44,7 @@ class QueryInput(BaseModel):
     source: Literal["serper", "google_places", "gbizinfo"]
     keyword: str = Field(min_length=1, max_length=300)
     requested_count: int = Field(ge=1, le=30)
+    repeat: bool = False
 
 
 class StartReviewInput(BaseModel):
@@ -141,6 +143,7 @@ def create(body: CreateInput, db: Session = Depends(get_db), user: User = Depend
         created_by_user_id=user.id,
         region=body.region,
         industry=body.industry,
+        definition_version="raw-repeat-v2",
         code_commit=commit_id(),
     )
     db.add(benchmark)
@@ -169,6 +172,12 @@ def listing(db: Session = Depends(get_db), user: User = Depends(current_user)):
     ]
 
 
+def raw_candidate_key(snapshot):
+    from app.services.raw_repeat import candidate_key
+
+    return candidate_key(snapshot.payload, snapshot.id)
+
+
 @router.get("/{benchmark_id}/report")
 def summary(benchmark_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     benchmark = access(db, user, benchmark_id)
@@ -195,12 +204,13 @@ def snapshots(
         .where(RawQueryRun.benchmark_id == benchmark.id)
         .order_by(RawQueryRun.ordinal, RawLeadSnapshot.position)
         .offset(offset)
-        .limit(30)
+        .limit(90)
     ).all()
     return [
         {
             "id": r.id,
             "payload": r.payload,
+            "candidate_key": raw_candidate_key(r),
             "snapshot_hash": r.snapshot_hash,
             "review": public_review(latest_review(db, r.id)),
         }
@@ -221,18 +231,37 @@ def collect(
     if not (settings.serper_api_key if body.source == "serper" else settings.gbizinfo_api_token):
         raise HTTPException(409, "収集Sourceの認証情報が未設定です。")
     db.scalar(select(Project.id).where(Project.id == benchmark.project_id).with_for_update())
-    runs = db.scalars(select(RawQueryRun).where(RawQueryRun.benchmark_id == benchmark.id)).all()
+    runs = db.scalars(
+        select(RawQueryRun)
+        .where(RawQueryRun.benchmark_id == benchmark.id)
+        .order_by(RawQueryRun.ordinal)
+    ).all()
     if any(r.status == "RUNNING" for r in runs):
         raise HTTPException(409, "収集中です。再読込または中断状態を確認してください。")
-    if sum(r.requested_count for r in runs) + body.requested_count > 30:
+    previous = [r for r in runs if r.source == body.source and r.keyword == body.keyword]
+    if previous and not body.repeat:
+        raise HTTPException(409, "同じSource/Queryです。反復測定を明示してください。")
+    if body.repeat and not previous:
+        raise HTTPException(409, "初回RunのないQueryは反復できません。")
+    if previous and (
+        benchmark.definition_version != "raw-repeat-v2"
+        or len(previous) >= 3
+        or body.requested_count != previous[0].requested_count
+        or previous[-1].status != "COMPLETED"
+        or any(r.code_commit != commit_id() for r in previous)
+    ):
+        raise HTTPException(409, "同条件・同commitの成功Runだけ最大3回まで反復できます。")
+    base_count = sum(r.requested_count for r in runs if r.repeat_index == 1)
+    if not previous and base_count + body.requested_count > 30:
         raise HTTPException(
             409, "Pilotの合計依頼上限30件を超えます。Full Benchmarkへ自動拡大しません。"
         )
-    if any(r.source == body.source and r.keyword == body.keyword for r in runs):
-        raise HTTPException(409, "同じSource/Queryは実行済みです。自動再試行しません。")
+    if body.keyword not in {r.keyword for r in runs} and len({r.keyword for r in runs}) >= 4:
+        raise HTTPException(409, "Pilot検索語は最大4種類です。")
     run = RawQueryRun(
         benchmark_id=benchmark.id,
         ordinal=len(runs) + 1,
+        repeat_index=len(previous) + 1,
         source=body.source,
         keyword=body.keyword,
         query=f"{body.keyword} {benchmark.region}".strip(),
@@ -268,6 +297,8 @@ def collect(
                 fields[key] = ""
         payload = {
             **fields,
+            "benchmark_id": str(benchmark.id),
+            "repeat_index": run.repeat_index,
             "source": run.source,
             "source_keyword": run.keyword,
             "source_query": run.query,
@@ -367,6 +398,7 @@ def review(
         or session.snapshot_id != snapshot.id
         or (session.finished_at or session.snapshot_hash != snapshot.snapshot_hash)
         or not 0 <= (now - session.started_at).total_seconds() <= 14400
+        or db.scalar(select(RawPairReview.id).where(RawPairReview.session_id == body.session_id))
     ):
         raise HTTPException(409, "確認開始記録が無効・使用済み・失効しています。")
     if body.outcome not in OUTCOMES:
