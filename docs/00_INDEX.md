@@ -209,6 +209,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [136_HUMAN_DESTINATION_PURPOSE_EVIDENCE.md](136_HUMAN_DESTINATION_PURPOSE_EVIDENCE.md): Human用途証跡、7日失効・hash変更・取消、窓口READYの条件と送信承認との分離
 
+- [137_HUMAN_IDENTITY_AND_DESTINATION_RECOMMENDATION.md](137_HUMAN_IDENTITY_AND_DESTINATION_RECOMMENDATION.md): Humanの名称・住所/電話照合、失効・取消、READY限定窓口推奨と同条件時の未選択境界
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
