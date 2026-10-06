@@ -3,8 +3,10 @@ const { chromium } = require('../../frontend/node_modules/playwright');
 
 (async () => {
   const url = new URL(process.argv[2]);
+  const email = process.argv[3] || 'operator@example.invalid';
   if (process.env.CF7_PROTOCOL_LAB !== '1' || url.hostname !== '127.0.0.1'
-      || url.protocol !== 'http:' || !url.port || url.username || url.password) {
+      || url.protocol !== 'http:' || !url.port || url.username || url.password
+      || !['operator@example.invalid', 'operator@example.com'].includes(email)) {
     throw new Error('Explicit loopback lab required');
   }
   const browser = await chromium.launch({ headless: true });
@@ -29,7 +31,7 @@ const { chromium } = require('../../frontend/node_modules/playwright');
     await page.goto(url.href);
     const form = page.locator('form.wpcf7-form').first();
     await form.locator('[name="your-name"]').fill('Lab operator');
-    await form.locator('[name="your-email"]').fill('operator@example.invalid');
+    await form.locator('[name="your-email"]').fill(email);
     await form.locator('[name="your-message"]').fill('Lab fixture only 日本語\n第二行');
     await form.locator('[name="consent"]').check();
     const responsePromise = page.waitForResponse(response =>

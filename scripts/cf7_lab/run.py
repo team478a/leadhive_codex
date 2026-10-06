@@ -1,4 +1,4 @@
-"""Opt-in isolated real WordPress/CF7 lab. Never imports LeadHive app/DB settings."""
+"""Opt-in isolated CF7 lab. Imports pure candidate contract, never DB/app settings."""
 
 import hashlib
 import io

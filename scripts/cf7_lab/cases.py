@@ -4,6 +4,7 @@ import json
 import os
 
 import httpx
+from contract_probe import verify_path, verify_query
 from protocol import browser_multipart_value, classify, observe
 
 
@@ -190,6 +191,18 @@ def verify(origin, output, report, fixture, check, command, assets, page_url):
             },
         )
         report["mail_evidence"] = evidence()
+        verify_path(
+            client,
+            page.text,
+            origin,
+            output,
+            report,
+            fixture,
+            check,
+            command,
+            assets,
+            page_url,
+        )
         # Real response mutation checks: zero extra POST for every ambiguous variant.
         good = success.json()
         for name, mutation in [
@@ -237,11 +250,12 @@ def verify(origin, output, report, fixture, check, command, assets, page_url):
         check("query REST root observed", "/index.php?rest_route=/" in query.endpoint)
         observations[0] = query
         submit("query-root multipart receipt")
+        verify_query(client, query_page.text, origin, report, fixture, check)
         report["mail_evidence"] = evidence()
         check(
             "fixed explicit cases have no extra submission",
-            report["feedback_post_count"] == 15
-            and len(report["mail_evidence"]["submissions"]) == 13
+            report["feedback_post_count"] == 19
+            and len(report["mail_evidence"]["submissions"]) == 17
             and len(report["mail_evidence"]["mail_calls"])
-            == report["setup_mail_calls_captured"] + 6,
+            == report["setup_mail_calls_captured"] + 10,
         )
