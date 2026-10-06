@@ -227,6 +227,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 ## 基本原則
 
+- [144_LEAD_COMPLETION_BENCHMARK.md](144_LEAD_COMPLETION_BENCHMARK.md): 固定100店舗のread-only測定、未知・単独停止条件・費用・Baseline比較。C5の144文書とは別成果物
+
 - 業種固有ロジックをコードに埋め込まない
 - Target Profile と Sales Objective で条件を差し替える
 - 旧LeadHiveを丸ごとコピーしない
