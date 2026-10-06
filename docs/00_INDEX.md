@@ -207,6 +207,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [135_SENDABILITY_DESTINATION_DIAGNOSTICS.md](135_SENDABILITY_DESTINATION_DIAGNOSTICS.md): Phase B1の窓口別利用可否・固定理由・次の確認作業、100店舗事前集計とREADY未確定境界
 
+- [136_HUMAN_DESTINATION_PURPOSE_EVIDENCE.md](136_HUMAN_DESTINATION_PURPOSE_EVIDENCE.md): Human用途証跡、7日失効・hash変更・取消、窓口READYの条件と送信承認との分離
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
