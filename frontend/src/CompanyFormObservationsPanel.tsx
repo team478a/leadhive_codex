@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, ApiError } from './api'
+import { FormObservationJobControls } from './FormObservationJobControls'
 
 type Evidence = {
   id: string; operation_job_id: string; observed_at: string; expires_at: string; snapshot_hash: string
@@ -19,6 +20,7 @@ export function CompanyFormObservationsPanel({ companyId }: { companyId: string 
   const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState('')
   const [offset, setOffset] = useState(0)
+  const [reload, setReload] = useState(0)
   useEffect(() => { setOffset(0) }, [companyId])
   useEffect(() => {
     let active = true
@@ -27,10 +29,11 @@ export function CompanyFormObservationsPanel({ companyId }: { companyId: string 
       .then(value => { if (active) setResult(value) })
       .catch(e => { if (active) setError(e instanceof ApiError && e.status === 404 ? '観察履歴を利用できません。APIの対応状況と閲覧権限を確認してください。' : '観察履歴を取得できません。時間をおいて再度確認してください。') })
     return () => { active = false }
-  }, [companyId, offset])
+  }, [companyId, offset, reload])
   return <section className="panel mt-7" aria-label="静的フォーム観察履歴">
     <h3>静的フォーム観察履歴</h3>
     <p role="note">診断専用の管理下テスト証拠です。送信許可・Human Approval・送信準備完了を意味しません。既存のフォーム判定や送信制御を更新しません。</p>
+    <FormObservationJobControls companyId={companyId} onUpdated={() => setReload(value => value + 1)} />
     {error && <p role="alert">{error}</p>}
     {!result && !error && <p>読み込み中…</p>}
     {result && !result.available && <p>観察保存機能が未導入です。既存の企業機能は利用できます。</p>}
