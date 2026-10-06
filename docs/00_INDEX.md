@@ -171,6 +171,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [117_ISOLATED_DNS_DEADLINE_VALIDATION.md](117_ISOLATED_DNS_DEADLINE_VALIDATION.md): DNS固着の子process隔離・deadline停止・回収確認と未確認終了時のquarantine
 
+- [118_CF7_IMMUTABLE_CANDIDATE_CONTRACT.md](118_CF7_IMMUTABLE_CANDIDATE_CONTRACT.md): 実CF7候補の非実行契約・endpoint/文面/構造/wireの固定hashと変更検知
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
