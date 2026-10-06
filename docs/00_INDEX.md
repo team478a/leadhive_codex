@@ -183,6 +183,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [123_CF7_CANDIDATE_HUMAN_UI_AND_REVISION.md](123_CF7_CANDIDATE_HUMAN_UI_AND_REVISION.md): CF7候補の同意確認・Human承認画面・immutable改訂履歴・失効案内と専用DBでの画面検証
 
+- [124_REAL_SITE_OBSERVER_SAFETY_DESIGN.md](124_REAL_SITE_OBSERVER_SAFETY_DESIGN.md): 実サイト用Observerの安全境界・静的観察と認可の分離・管理下解析試験と段階的導入計画
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
