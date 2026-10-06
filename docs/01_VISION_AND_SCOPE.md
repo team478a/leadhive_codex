@@ -1,5 +1,11 @@
 # LeadHive V2 - Vision and Scope
 
+## 現行方針（2026-10-06）
+
+LeadHiveはCRM/SFA/MAへ拡大せず、営業リスト完成とHuman承認付きDM支援に特化する。中心はDiscovery → Enrichment → Completion → Sendability → DM準備 → Human承認 → Delivery。主要KPIはDM READY件数 ÷ 固定cohortのDISCOVERED件数。既存案件・追客は維持する。詳細と実装順序は[Lead Completion計画](133_LEAD_COMPLETION_DIRECTION_AND_PHASE_A.md)を現行の基準とする。
+
+以下は初期V1の目的・範囲を記録したもので、上記方針に置き換えられる部分は今後の優先対象にしない。
+
 ## 1. 開発目的
 
 LeadHive V2 は、BtoB営業に必要な営業先候補を収集し、企業情報を解析し、営業対象としての適性をAIで判定し、優先順位付き営業リストを作成するシステムとする。

@@ -1,6 +1,6 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
-LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を解析し、AIで営業適性を判定して優先順位付きリストを作成するBtoB営業リスト収集基盤です。
+LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公式サイト・連絡窓口の確認、DM準備、Human承認、送信を支援する営業リスト完成システムです。主要KPIはDM READY率です。現行方針と段階的実装は `133_LEAD_COMPLETION_DIRECTION_AND_PHASE_A.md` を参照してください。
 
 ## 開発前提
 
@@ -200,6 +200,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 - [131_CF7_OBSERVATION_HUMAN_JOB_CONTROL.md](131_CF7_OBSERVATION_HUMAN_JOB_CONTROL.md): 管理下観察のHuman開始・停止・期限切れ回収API、append-only Job台帳、操作UIと独立プロセス検証
 
 - [132_CF7_OBSERVATION_RUNNER_AND_FAILURE_DIAGNOSTICS.md](132_CF7_OBSERVATION_RUNNER_AND_FAILURE_DIAGNOSTICS.md): 管理下1件runnerの起動・終了・回収、固定失敗理由とappend-only履歴保護
+
+- [133_LEAD_COMPLETION_DIRECTION_AND_PHASE_A.md](133_LEAD_COMPLETION_DIRECTION_AND_PHASE_A.md): Lead Completionへの方針変更、100店舗Baseline、Phase A1の証拠・補完・窓口基盤とA2〜D計画
 
 ## 基本原則
 
