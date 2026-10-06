@@ -10,6 +10,7 @@ import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
 import { CompanyFormDeliveryPanel } from './CompanyFormDeliveryPanel'
 import { CompanyFormBatchesPanel } from './CompanyFormBatchesPanel'
 import { CompanyFormIntelligencePanel } from './CompanyFormIntelligencePanel'
+import { CompanyFormObservationsPanel } from './CompanyFormObservationsPanel'
 import { FormReadinessPanel } from './FormReadinessPanel'
 import { CompanyEmailDeliveryPanel } from './CompanyEmailDeliveryPanel'
 import { CompanyEmailCampaignsPanel } from './CompanyEmailCampaignsPanel'
@@ -947,6 +948,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onSelectPrimary={profile => void selectPrimaryForm(profile)}
       onCorrect={(field, mappedKey, recommendedValue) => void correctFormField(field, mappedKey, recommendedValue)}
     />}
+    {selected && <CompanyFormObservationsPanel key={selected.id} companyId={selected.id} />}
     {selected && <CompanyContactsPanel
       contacts={contacts}
       contactDraft={contactDraft}
