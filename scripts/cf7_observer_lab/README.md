@@ -1,4 +1,4 @@
-# CF7静的観察の管理下検証（O1）
+# CF7静的観察の管理下検証（O1/O2）
 
 `observer.py` は渡された架空HTML bytesを解析する未登録prototypeです。URLの検査には既存pinned TLS labの純粋validatorだけを使います。HTTP/DNS、JavaScript実行、ファイル読み込み、DB、Human Approval、送信機能は呼び出しません。アプリ/workerへimportしていません。
 
@@ -19,4 +19,8 @@ backend/.venv/Scripts/python.exe -m compileall -q scripts/cf7_observer_lab
 
 営業禁止の文字列検出は限定的です。不検出を許可としません。外部scriptの挙動、動的CAPTCHA、plugin構成、サーバー側設定、規約の意味はこの解析で証明しません。CPU/OS異常を含む絶対解析deadlineやsandboxも未実装です。
 
-設計・残るblocker・次のO2管理下GET検証は [docs/124](../../docs/124_REAL_SITE_OBSERVER_SAFETY_DESIGN.md) を参照してください。
+`fetch.py` はO2の未登録GET-only接続labです。`CF7_OBSERVER_GET_LAB=1` を必要とし、固定 `https://managed.example/contact/` だけを受付します。robots GET→許可確認→contact GET→O1解析。テストではDNS/dialだけ管理下loopbackへ置き換え、実TLS/HTTPで確認します。実企業アクセス、DB保存、承認、POSTには使用しません。
+
+型検査対象に `fetch.py` も含めます。robotsは保守的subsetで、404/未知directive/圧縮/redirect/非200等は停止。cancelは協調的で、parser隔離やOS強制停止はありません。
+
+設計は [docs/124](../../docs/124_REAL_SITE_OBSERVER_SAFETY_DESIGN.md)、O2の検証記録と制限は [docs/125](../../docs/125_CF7_OBSERVER_OWNED_TLS_GET_INTEGRATION.md) を参照してください。

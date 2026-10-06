@@ -185,6 +185,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [124_REAL_SITE_OBSERVER_SAFETY_DESIGN.md](124_REAL_SITE_OBSERVER_SAFETY_DESIGN.md): 実サイト用Observerの安全境界・静的観察と認可の分離・管理下解析試験と段階的導入計画
 
+- [125_CF7_OBSERVER_OWNED_TLS_GET_INTEGRATION.md](125_CF7_OBSERVER_OWNED_TLS_GET_INTEGRATION.md): 管理下TLSでのrobots・GET取得と非認可の静的解析の接続検証、停止条件と未対応境界
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
