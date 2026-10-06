@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
 
-test('Human can prepare evidence template draft without sending and changed destination requires review', async ({ page }) => {
+test('Human can prepare fixed PENDING proposal without approving or sending', async ({ page }) => {
   const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
   const env = { ...process.env, E2E_EMAIL: `e2e-completion-${randomBytes(8).toString('hex')}@example.com`, E2E_PASSWORD: randomBytes(24).toString('hex') }
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
@@ -53,16 +53,28 @@ test('Human can prepare evidence template draft without sending and changed dest
     await expect(saved).toContainText('公開情報で「公開のサービス紹介を掲載しています」を拝見しました。')
     await expect(saved.getByRole('link')).toHaveAttribute('href', 'https://approval.example/services')
     await expect(dm).toContainText('下書き保存だけではDM READYになりません')
+    const handoff = saved.getByRole('region', { name: 'DM承認準備' })
+    await handoff.getByRole('button', { name: '入力内容を確認', exact: true }).click()
+    await expect(handoff).toContainText('A2 Human / sender@example.com')
+    await expect(handoff).toContainText('入力確認済み・提案作成前')
+    await handoff.getByRole('button', { name: '承認待ち提案を準備', exact: true }).click()
+    await expect(handoff).toContainText('DM READY（承認・送信は別操作）')
+    await expect(handoff).toContainText('提案状態：PENDING')
+    await expect(handoff.getByRole('button', { name: '承認待ち提案を準備', exact: true })).toHaveCount(0)
     await page.reload()
     await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByRole('button', { name: '詳細', exact: true }).first().click()
     await expect(saved).toContainText('下書き準備済み（DRAFT_PREPARED）')
+    await handoff.getByRole('button', { name: '入力内容を確認', exact: true }).click()
+    await expect(handoff).toContainText('提案状態：PENDING')
     await page.getByLabel('メール', { exact: true }).fill('changed-destination@example.com')
     await page.getByRole('button', { name: '企業情報を保存', exact: true }).click()
     await expect(saved).toContainText('要再確認（REVIEW）：窓口選択・安全条件の変更')
     await expect(dm.getByRole('button', { name: '根拠付き下書きを保存', exact: true })).toHaveCount(0)
     await expect(panel.getByRole('button', { name: /送信|承認/ })).toHaveCount(0)
+    await handoff.getByRole('button', { name: '入力内容を確認', exact: true }).click()
+    await expect(handoff).toContainText('準備保留')
     expect(forbidden).toEqual([])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
   } finally {

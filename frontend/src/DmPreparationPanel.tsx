@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
+import { DmApprovalPreparationPanel } from './DmApprovalPreparationPanel'
 import type { HumanDestinationChoice } from './DestinationChoice'
 
 type Template = { id: string; name: string; channel: string; subject: string; body: string; hash: string }
@@ -56,7 +57,7 @@ export function DmPreparationPanel({ companyId, projectId }: { companyId: string
   }
   return <section className="mt-5 break-all" aria-label="根拠付きDM下書き準備">
     <h3>根拠付きDM下書き準備</h3>
-    <p className="muted">選択した窓口と公開情報の根拠を固定して下書きを保存します。AI通信・サイト接続は行いません。根拠はHumanの確認記録で、独立した事実検証ではありません。送信者・フォーム入力値の確定前なので、DM READY・送信承認・送信には進みません。</p>
+    <p className="muted">選択した窓口と公開情報の根拠を固定して下書きを保存します。AI通信・サイト接続は行いません。根拠はHumanの確認記録で、独立した事実検証ではありません。保存後に入力内容を確認し、承認待ち提案を準備できます。下書き保存だけではDM READYになりません。</p>
     {!selected && <p>有効な窓口を準備対象に選択すると、下書きを準備できます。</p>}
     {selected && data?.can_prepare && <>
       <p>対象窓口：{selected.type} / {selected.destination} / 選択版 {choice?.version}</p>
@@ -85,6 +86,7 @@ export function DmPreparationPanel({ companyId, projectId }: { companyId: string
       <p>使った事実：{p.snapshot.evidence.fact}</p>
       <p>根拠：<a href={p.snapshot.evidence.source_url} target="_blank" rel="noreferrer">{p.snapshot.evidence.source_url}</a> / Human確認日時：{new Date(p.snapshot.evidence.observed_at).toLocaleString('ja-JP')}</p>
       <blockquote>{p.snapshot.evidence.evidence_excerpt}</blockquote>
+      <DmApprovalPreparationPanel preparationId={p.id} canPrepare={data.can_prepare} />
     </article>)}
     {data && <p className="muted">最新10件の準備記録を表示しています。</p>}
   </section>

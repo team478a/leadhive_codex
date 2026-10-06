@@ -13,6 +13,11 @@ interface AuditEvent { id: string; event: string; principal_type: string; timest
 const names: Record<string, string> = { PENDING: '承認待ち', APPROVED: '承認済み（未送信）', REJECTED: '却下', EXPIRED: '期限切れ', REVOKED: '取消済み', CONSUMED: '送信実行に使用済み' }
 const date = (value: string) => new Date(value).toLocaleString('ja-JP')
 const reasonNames: Record<string, string> = {
+  "company target changed": "対象企業・宛先情報が変わりました。最新の窓口で再準備してください。",
+  "form profile or mapping changed": "フォーム構造・入力項目が変わりました。解析と入力値を再確認してください。",
+  "form sender settings changed": "フォーム送信者設定が変わりました。新しい設定で再準備してください。",
+  "source draft changed": "元の文面が変わりました。新しい内容で再準備してください。",
+  "lead completion evidence, destination or sender changed": "下書き・根拠・窓口・送信者が変更または無効になりました。最新の情報で再準備してください。",
   'CF7 candidate evidence or payload changed': '保存済み証拠・文面・送信者・連絡可否のいずれかが変更または無効になりました。確認して再準備してください。',
   'superseded by CF7 revision': '改訂候補を作成したため、旧候補を無効にしました。',
   'request expired': '候補の有効期限が切れました。新しい有効な証拠で再準備してください。',
@@ -153,6 +158,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
           <dt>宛先 / フォームURL</dt><dd className="break-all">{selected.recipient ?? selected.form_url}</dd>
           {selected.channel === 'form' && <><dt>POST先</dt><dd className="break-all">{selected.form_action_url || '未確定・再解析が必要'}</dd></>}
           <dt>送信者</dt><dd>{Object.entries(selected.sender).filter(([, v]) => v).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</dd>
+          {selected.lead_dm_evidence && <><dt>個別情報の根拠（Human確認記録）</dt><dd><p>{selected.lead_dm_evidence.evidence.fact}</p><a href={selected.lead_dm_evidence.evidence.source_url} target="_blank" rel="noreferrer">{selected.lead_dm_evidence.evidence.source_url}</a><blockquote>{selected.lead_dm_evidence.evidence.evidence_excerpt}</blockquote><p>窓口選択版 {selected.lead_dm_evidence.choice_version} / 確認日時 {date(selected.lead_dm_evidence.evidence.observed_at)}</p></dd></>}
           <dt>件名</dt><dd>{selected.subject}</dd><dt>本文</dt><dd className="whitespace-pre-wrap break-words">{selected.body}</dd>
           <dt>フィールド値</dt><dd>{Object.entries(selected.field_values).map(([k, v]) => <div key={k}>{k}: {v}</div>)}</dd>
           {selected.execution_plan && <><dt>検証用の操作計画（送信不可）</dt><dd><p>匿名フォームの計画を承認します。送信予約・実行には使用できません。</p><pre className="whitespace-pre-wrap break-all">{JSON.stringify(selected.execution_plan, null, 2)}</pre></dd><dt>操作計画hash</dt><dd className="break-all">{selected.execution_plan_hash}</dd></>}

@@ -42,7 +42,7 @@ test('Human freezes the funnel denominator and records review effort without app
     await expect(diagnostic).toContainText('診断済み 26 / 26件 — 全件集計済み')
     await expect(diagnostic).toContainText('READY 0 / REVIEW 0 / HOLD 26 / BLOCKED 0')
     await expect(diagnostic).toContainText('公式サイト未登録：25件')
-    await expect(diagnostic).toContainText('DM READY率は未判定のまま')
+    await expect(diagnostic).toContainText('診断範囲のDM READY：0件 / DM READY率：0.0%')
     await expect(diagnostic.locator('article').filter({ hasText: '診断範囲の共通窓口' })).toContainText('1')
     await expect(diagnostic.locator('article').filter({ hasText: 'READYの独立窓口' })).toContainText('0')
     await panel.getByLabel('レビュー時間を記録する企業').selectOption({ index: 1 })

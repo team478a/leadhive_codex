@@ -217,6 +217,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [140_EVIDENCE_TEMPLATE_DM_PREPARATION.md](140_EVIDENCE_TEMPLATE_DM_PREPARATION.md): Human観察根拠付きテンプレートDM下書き、固定窓口・版・条件変更の再確認と送信経路への未接続境界
 
+- [141_LEAD_DM_READY_AND_APPROVAL_HANDOFF.md](141_LEAD_DM_READY_AND_APPROVAL_HANDOFF.md): 固定送信者・フォーム入力値、PENDING提案とHuman承認境界、現在DM READY率と変更失効
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
