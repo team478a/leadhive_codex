@@ -20,7 +20,7 @@ from tests.test_approval_foundation import approve, challenge
 from tests.test_destination_review import reviewed_fixture
 
 
-def prepared(auth, db):
+def prepared(auth, db, channel="form"):
     company, profile, path, review_path, review = reviewed_fixture(auth, db)
     profile.action_url = "https://shop.example/submit"
     profile.confirmation_page = False
@@ -30,10 +30,17 @@ def prepared(auth, db):
     field.name = "message"
     field.required = True
     db.add(FormSenderSettings(id=1, contact_name="Synthetic sender", email="sender@example.com"))
+    if channel == "email":
+        company.email = "recipient@shop.example"
+        company.contact_quality_status = "verified"
     db.commit()
-    review["expected_hash"] = auth.get(path).json()["destinations"][0]["expected_hash"]
+    if channel == "email":
+        auth.post(f"/api/projects/{company.project_id}/lead-destinations/refresh", json={})
+    dest = next(d for d in auth.get(path).json()["destinations"] if d["type"] == channel)
+    review_path = f"/api/companies/{company.id}/destinations/{dest['id']}/reviews"
+    review["expected_hash"] = dest["expected_hash"]
     assert auth.post(review_path, json=review).status_code == 201
-    dest = auth.get(path).json()["destinations"][0]
+    dest = next(d for d in auth.get(path).json()["destinations"] if d["type"] == channel)
     assert (
         auth.post(
             f"/api/companies/{company.id}/destinations/{dest['id']}/choice",
@@ -49,8 +56,8 @@ def prepared(auth, db):
         f"/api/projects/{company.project_id}/outreach-templates",
         json=dict(
             name="Synthetic template",
-            channel="form",
-            subject="",
+            channel=channel,
+            subject="Synthetic email subject" if channel == "email" else "",
             body="{{company_name}} {{personalization}} Synthetic service proposal",
         ),
     ).json()

@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.models import Company, TargetProfile
+from app.services.completion_delivery_metrics import page_history
 from app.services.dm_approval_preparation import readiness
 from app.services.sales_preparation import context_hash
 from app.services.sendability import DEFINITION, evaluate
@@ -29,6 +30,7 @@ def page(db, cohort, project, offset, limit, expected_context=None):
         )
     }
     started = datetime.now(timezone.utc)
+    histories = page_history(db, project.id, ids)
     rows = []
     for company_id in ids:
         company = companies.get(company_id)
@@ -36,6 +38,7 @@ def page(db, cohort, project, offset, limit, expected_context=None):
             rows.append(
                 dict(
                     company_id=company_id,
+                    delivery_funnel=histories[company_id],
                     status="HOLD",
                     dm_ready=False,
                     dm_ready_reason="削除・統合された候補",
@@ -55,6 +58,7 @@ def page(db, cohort, project, offset, limit, expected_context=None):
         rows.append(
             dict(
                 company_id=company.id,
+                delivery_funnel=histories[company.id],
                 status=result["status"],
                 dm_ready=completion["dm_ready"],
                 dm_ready_reason=completion["reason"],
@@ -79,7 +83,7 @@ def page(db, cohort, project, offset, limit, expected_context=None):
         cohort_hash=cohort.cohort_hash,
         context_hash=context,
         definition_version=DEFINITION,
-        aggregation_definition="cohort-destinations-c2-v1",
+        aggregation_definition="cohort-destinations-c3-v1",
         discovered=len(cohort.company_ids),
         offset=offset,
         inspected=len(ids),
