@@ -10,7 +10,7 @@ test('non-executable CF7 candidates show a warning and never offer reservations'
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
   const forbidden: string[] = []
   page.on('request', request => {
-    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/form-dispatch$|\/send|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
+    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/form-dispatch$|\/send(?:[/?]|$)|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
   })
   try {
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env, encoding: 'utf8' })) as { project_id: string; company_id: string }

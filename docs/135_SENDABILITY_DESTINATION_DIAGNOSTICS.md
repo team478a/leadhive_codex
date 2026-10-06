@@ -74,7 +74,7 @@ DashboardのA2暫定在庫分類と本APIは別定義。大量集計やFunnelへ
 
 合成データで、技術READYとDM READYの区別、属性だけの用途確認拒否、Identity変更、禁止条件と共有/代替メール、CAPTCHA、古い解析、必須項目、主フォームURL違い、担当者メール品質、危険URL、他Project/Viewer/混在認証、UNKNOWN/処理中/送信済みの同一窓口履歴、SELECTのみ・外部通信なしを検証する。
 追加12件と既存のLead Completion・計測18件、計30件が成功（39.10秒）。desktop/mobile E2E 2件が成功（1.2分）。Backend Ruff、変更4ファイルformatチェック、変更3ファイルmypy、Frontend typecheck/lint/build、API起動と現行Migrationのmodel差分を確認した。Windows作業コピーの既存5ファイルは混在改行によるformatチェック差分があるため、無関係なコードを変更せずLinux CIの全体チェックを確認する。
-最終の全回帰と配布/Migration検証はGitHub Actionsの結果を完了報告で確認する。
+初回CIではBackend全回帰と他5項目は成功し、既存フォーム観察E2E 4件が診断API名sendabilityを送信と誤検出した。既存の曖昧なsend-prefix検査を実際のパス境界に合わせて修正した。送信禁止・外部通信禁止の検査は維持する。最終の全回帰と配布/Migration検証は修正後GitHub Actionsの結果を完了報告で確認する。
 
 ## 次のゴール B2
 

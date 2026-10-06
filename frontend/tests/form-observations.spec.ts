@@ -9,7 +9,7 @@ test('diagnostic history remains separate from permission, job failure and old i
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
   const forbidden: string[] = []
   page.on('request', request => {
-    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/send|\/dispatch|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
+    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/send(?:[/?]|$)|\/dispatch|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
   })
   try {
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env, encoding: 'utf8' })) as { project_id: string; company_id: string }
@@ -60,7 +60,7 @@ test('managed observation controls queue, stop and recover without any send acti
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
   const forbidden: string[] = []
   page.on('request', request => {
-    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/send|\/dispatch|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
+    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/send(?:[/?]|$)|\/dispatch|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
   })
   try {
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env, encoding: 'utf8' })) as { project_id: string; company_id: string }

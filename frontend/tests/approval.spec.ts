@@ -5,7 +5,7 @@ test('human approval queue requires step-up and records approve/revoke without s
   const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
   const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string }
   const forbidden: string[] = []
-  page.on('request', request => { if (/\/send|\/execute|\/test-send|\/dispatch/.test(request.url())) forbidden.push(request.url()) })
+  page.on('request', request => { if (/\/send(?:[/?]|$)|\/execute|\/test-send|\/dispatch/.test(request.url())) forbidden.push(request.url()) })
   await page.goto('/')
   await page.getByLabel('メールアドレス').fill(process.env.E2E_EMAIL!)
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)

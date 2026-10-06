@@ -5,7 +5,7 @@ test('stored form Draft preparation submits only the reviewed hash without dispa
   const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
   const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string }
   const forbidden: string[] = []
-  page.on('request', request => { if (/\/send|\/execute|\/test-send|\/dispatch|\/form-delivery|\/form-preview/.test(request.url())) forbidden.push(request.url()) })
+  page.on('request', request => { if (/\/send(?:[/?]|$)|\/execute|\/test-send|\/dispatch|\/form-delivery|\/form-preview/.test(request.url())) forbidden.push(request.url()) })
   await page.route(`**/api/companies/${fixture.company_id}/outreach-drafts`, route => route.fulfill({ json: [{ id: 'form-draft', channel: 'form', subject: 'フォーム提案', body: '個別の営業文面' }] }))
   await page.route('**/api/outreach-drafts/form-draft/form-approval-preview', route => route.fulfill({ json: {
     preparation_hash: 'a'.repeat(64), company_name: 'A2 E2E Company',

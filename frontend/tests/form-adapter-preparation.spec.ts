@@ -8,7 +8,7 @@ test('controlled plan is prepared, human approved and reserved without execution
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
   const forbidden: string[] = []
   page.on('request', request => {
-    if (!new URL(request.url()).hostname.match(/^(localhost|127\.0\.0\.1)$/) || /\/send|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
+    if (!new URL(request.url()).hostname.match(/^(localhost|127\.0\.0\.1)$/) || /\/send(?:[/?]|$)|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
   })
   try {
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'adapter-fixture'], { env, encoding: 'utf8' })) as { project_id: string; company_id: string }

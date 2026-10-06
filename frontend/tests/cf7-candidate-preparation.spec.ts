@@ -12,7 +12,7 @@ test('stored CF7 choices, human proof, source invalidation and revision never di
   const seeded = JSON.parse(execFileSync(python, ['../backend/tests/e2e_cf7.py', 'seed', fixture.company_id], { env, encoding: 'utf8' })) as { draft_id: string }
   const forbidden: string[] = []
   page.on('request', req => {
-    if (!['127.0.0.1', 'localhost'].includes(new URL(req.url()).hostname) || /\/form-dispatch$|\/send|\/execute|\/test-send/.test(req.url())) forbidden.push(req.url())
+    if (!['127.0.0.1', 'localhost'].includes(new URL(req.url()).hostname) || /\/form-dispatch$|\/send(?:[/?]|$)|\/execute|\/test-send/.test(req.url())) forbidden.push(req.url())
   })
   // Real API and PostgreSQL throughout; no response mocks and no outbound worker.
   await page.goto('/')
