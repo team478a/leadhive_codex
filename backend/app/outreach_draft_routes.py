@@ -22,6 +22,7 @@ from app.models import (
 )
 from app.project_access import company_access as owned_company
 from app.project_access import project_access
+from app.schema_outreach import FormCodexFieldOut
 from app.schemas import (
     EmailDeliveryCreateInput,
     EmailDeliveryListItemOut,
@@ -69,6 +70,11 @@ def owned_draft(draft_id: UUID, db: Session, user: User, write: bool = True) -> 
     if draft is None:
         raise HTTPException(404, "営業文面が見つかりません。")
     owned_company(draft.company_id, db, user, write=write)
+    if write:
+        from app.services.dm_approval_preparation import bound_draft
+
+        if bound_draft(db, draft.id):
+            raise HTTPException(409, "根拠付き下書きの専用準備・Human承認を利用してください。")
     return draft
 
 
@@ -178,7 +184,7 @@ def list_email_deliveries(
         .where(Company.project_id == project_id)
         .group_by(EmailDelivery.status)
     ).all()
-    counts.update(dict(count_rows))
+    counts.update({status: count for status, count in count_rows})
     return EmailDeliveryListOut(
         items=[
             EmailDeliveryListItemOut(
@@ -222,9 +228,9 @@ def valid_recipient(company: Company, draft: OutreachDraft, db: Session, email: 
         if contact.email and contact.email.casefold() == normalized:
             return contact.name
     if draft.contact_person_id:
-        contact = db.get(ContactPerson, draft.contact_person_id)
-        if contact and contact.email and contact.email.casefold() == normalized:
-            return contact.name
+        draft_contact = db.get(ContactPerson, draft.contact_person_id)
+        if draft_contact and draft_contact.email and draft_contact.email.casefold() == normalized:
+            return draft_contact.name
     raise HTTPException(
         409, "企業または有効な先方担当者に登録されたメールアドレスを選択してください。"
     )
@@ -331,6 +337,10 @@ def get_form_preview(
     user: User = Depends(current_user),
 ):
     draft = owned_draft(draft_id, db, user, write=False)
+    from app.services.dm_approval_preparation import bound_draft
+
+    if bound_draft(db, draft.id):
+        raise HTTPException(409, "Human approval preparation is required")
     if draft.channel != "form":
         raise HTTPException(409, "フォーム文面だけを送信できます。")
     company = db.get(Company, draft.company_id)
@@ -360,6 +370,10 @@ def get_form_assist(
 ):
     require_legacy_form_enabled()
     draft = owned_draft(draft_id, db, user, write=False)
+    from app.services.dm_approval_preparation import bound_draft
+
+    if bound_draft(db, draft.id):
+        raise HTTPException(409, "Human approval preparation is required")
     if draft.channel != "form":
         raise HTTPException(409, "フォーム文面だけをCodex支援へ渡せます。")
     company = db.get(Company, draft.company_id)
@@ -382,7 +396,7 @@ def get_form_assist(
         body=draft.body,
         reason=payload.reason,
         sender_values=payload.sender_values,
-        fields=payload.fields,
+        fields=[FormCodexFieldOut.model_validate(field) for field in payload.fields],
         instructions=payload.instructions,
     )
 

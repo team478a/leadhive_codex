@@ -79,6 +79,7 @@ def serialize(db, item):
     company = db.get(Company, item.company_id)
     result = {c.name: getattr(item, c.name) for c in ApprovalRequest.__table__.columns}
     result["company_name"] = company.company_name if company else ""
+    result["lead_dm_evidence"] = item.payload_snapshot.get("lead_dm_binding")
     result["form_action_url"] = item.payload_snapshot.get("form_action_url")
     result["execution_plan"] = item.payload_snapshot.get("execution_plan")
     result["execution_plan_hash"] = item.payload_snapshot.get("execution_plan_hash")

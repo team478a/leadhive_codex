@@ -9,6 +9,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.models import Company, TargetProfile
+from app.services.dm_approval_preparation import readiness
 from app.services.sales_preparation import context_hash
 from app.services.sendability import DEFINITION, evaluate
 
@@ -36,6 +37,8 @@ def page(db, cohort, project, offset, limit, expected_context=None):
                 dict(
                     company_id=company_id,
                     status="HOLD",
+                    dm_ready=False,
+                    dm_ready_reason="削除・統合された候補",
                     destinations=[],
                     reasons=[
                         dict(
@@ -48,10 +51,13 @@ def page(db, cohort, project, offset, limit, expected_context=None):
             )
             continue
         result = evaluate(db, company)
+        completion = readiness(db, company, project)
         rows.append(
             dict(
                 company_id=company.id,
                 status=result["status"],
+                dm_ready=completion["dm_ready"],
+                dm_ready_reason=completion["reason"],
                 reasons=result["reasons"],
                 destinations=[
                     dict(
@@ -73,7 +79,7 @@ def page(db, cohort, project, offset, limit, expected_context=None):
         cohort_hash=cohort.cohort_hash,
         context_hash=context,
         definition_version=DEFINITION,
-        aggregation_definition="cohort-destinations-b3b-v1",
+        aggregation_definition="cohort-destinations-c2-v1",
         discovered=len(cohort.company_ids),
         offset=offset,
         inspected=len(ids),

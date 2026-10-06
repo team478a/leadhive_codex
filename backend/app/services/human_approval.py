@@ -220,6 +220,11 @@ def invalidate_if_needed(db, item):
         draft = db.get(OutreachDraft, item.source_draft_id)
         if not draft or draft_fingerprint(draft) != item.payload_snapshot["source_draft_hash"]:
             reason = "source draft changed"
+    if not reason and "lead_dm_binding" in item.payload_snapshot:
+        from app.services.dm_approval_preparation import valid_request
+
+        if not valid_request(db, item):
+            reason = "lead completion evidence, destination or sender changed"
     if reason:
         before = item.status
         item.status, item.invalidation_reason = status, reason
@@ -256,7 +261,18 @@ def create_proposal(
     previous=None,
     commit=True,
     allow_adapter_preparation=False,
+    lead_dm_binding=None,
+    expiry_cap=None,
 ):
+    if previous and "lead_dm_binding" in previous.payload_snapshot:
+        raise HTTPException(409, "根拠付き下書きから再準備してください。")
+    if lead_dm_binding is not None and (principal_type != "HUMAN" or previous):
+        raise HTTPException(403, "Humanによる専用準備が必要です。")
+    if body.source_draft_id and lead_dm_binding is None:
+        from app.services.dm_approval_preparation import bound_draft
+
+        if bound_draft(db, body.source_draft_id):
+            raise HTTPException(409, "根拠付き下書きの専用準備を利用してください。")
     if previous and previous.delivery_method == "cf7_candidate_only":
         raise HTTPException(
             409, "CF7候補の改訂は未公開です。専用準備から新しい候補を作成してください。"
@@ -311,7 +327,14 @@ def create_proposal(
     )
     if body.channel == "form":
         snapshot["sender_source_hash"] = form_sender_hash(db)
+    if lead_dm_binding is not None:
+        snapshot["lead_dm_binding"] = lead_dm_binding
     created_at = now()
+    expires_at = created_at + timedelta(hours=body.expires_in_hours)
+    if expiry_cap is not None:
+        expires_at = min(expires_at, expiry_cap)
+        if expires_at <= created_at:
+            raise HTTPException(409, "根拠付き準備の期限が切れました。")
     item = ApprovalRequest(
         id=uuid4(),
         project_id=project_id,
@@ -335,7 +358,7 @@ def create_proposal(
         created_by_user_id=actor_id if principal_type == "HUMAN" else None,
         created_by_agent_id=actor_id if principal_type == "AGENT" else None,
         created_at=created_at,
-        expires_at=created_at + timedelta(hours=body.expires_in_hours),
+        expires_at=expires_at,
         status="PENDING",
     )
     if previous:
