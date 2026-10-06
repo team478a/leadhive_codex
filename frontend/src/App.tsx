@@ -7,6 +7,7 @@ import { CollectionPage } from './CollectionPage'
 import { ApprovalQueuePage } from './ApprovalQueuePage'
 import { CompaniesPage } from './CompaniesPage'
 import { DashboardPage } from './DashboardPage'
+import { RawCollectionBenchmarkPage } from './RawCollectionBenchmarkPage'
 import { EmailDeliveriesPage } from './EmailDeliveriesPage'
 import { OnboardingGuide } from './OnboardingGuide'
 import { SmtpSettingsPage } from './SmtpSettingsPage'
@@ -49,7 +50,7 @@ type Editor = { type: 'project'; value?: Project } | { type: 'profile'; value?: 
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals'>('projects')
+  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals' | 'raw'>('projects')
   const [collectionProjectId, setCollectionProjectId] = useState('')
   const [replyInboundEmailId, setReplyInboundEmailId] = useState<string | null>(null)
   const [completionReturnContext, setCompletionReturnContext] = useState<CompletionReturnContext | null>(null)
@@ -130,6 +131,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     <aside className="sidebar"><div className="brand">⬡ LeadHive</div>
       <p className="nav-label">ワークスペース</p>
       <nav aria-label="メインナビゲーション">
+        <button className={tab === 'raw' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('raw'); setEditor(null); setNotice('') }}>◎ 一次収集Benchmark</button>
         <button className={tab === 'dashboard' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('dashboard'); setEditor(null); setNotice('')
         }}>⌂ ダッシュボード{unreadNotifications > 0 && ` (${unreadNotifications})`}</button>
@@ -162,8 +164,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         })}>ログアウト</button></div>
     </aside>
     <main className="workspace"><OutboundStatus /><header><p className="eyebrow">YOUR WORKSPACE</p>
-      <div className="page-heading"><div><h1>{tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
-        <p className="muted">{tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
+      <div className="page-heading"><div><h1>{tab === 'raw' ? '一次収集Benchmark' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
+        <p className="muted">{tab === 'raw' ? '一次収集のRaw結果とHuman評価を測定。' : tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
         {!editor && (tab === 'projects' || tab === 'profiles') && <button disabled={!loaded || loading || busy} onClick={() => {
           setEditor({ type: tab === 'projects' ? 'project' : 'profile' }); setNotice('')
         }}>＋ {tab === 'projects' ? 'プロジェクトを作成' : 'プロファイルを作成'}</button>}
@@ -210,7 +212,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           }} onOpenFollowup={(projectId, companyId) => {
             setCompletionCompanyId(null); setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
-          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'deliveries' ?
+          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'raw' ? <RawCollectionBenchmarkPage /> : loaded && tab === 'deliveries' ?
           <EmailDeliveriesPage projects={projects} projectRoles={projectRoles} /> : loaded && tab === 'approvals' ?
           <ApprovalQueuePage projects={projects} projectRoles={projectRoles} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>

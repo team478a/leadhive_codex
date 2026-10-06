@@ -68,6 +68,13 @@ from app.model_outreach import (
     OutreachTemplate,
 )
 from app.model_preparation import SalesPreparationItem
+from app.model_raw_collection import (
+    RawBenchmark,
+    RawLeadReview,
+    RawLeadSnapshot,
+    RawQueryRun,
+    RawReviewSession,
+)
 from app.model_settings import (
     ApplicationSettings,
     FormSenderSettings,
@@ -79,6 +86,11 @@ from app.model_settings import (
 from app.model_site_identity_review import SiteIdentityReviewEvent
 
 __all__ = [
+    "RawBenchmark",
+    "RawQueryRun",
+    "RawLeadSnapshot",
+    "RawReviewSession",
+    "RawLeadReview",
     "LeadDmPreparation",
     "DestinationReviewEvent",
     "DestinationChoiceEvent",

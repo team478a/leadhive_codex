@@ -28,6 +28,7 @@ from app.models import (  # noqa: E402
     LeadSiteEvidence,
     OutreachDraft,
     Project,
+    RawBenchmark,
     SmtpSettings,
     TargetProfile,
     User,
@@ -191,6 +192,9 @@ with SessionLocal() as db:
                 .join(Project)
                 .where(Project.user_id == user.id)
                 .limit(1)
+            )
+            audited = audited or db.scalar(
+                select(RawBenchmark.id).join(Project).where(Project.user_id == user.id).limit(1)
             )
             if audited:
                 db.execute(delete(AuthSession).where(AuthSession.user_id == user.id))

@@ -8,6 +8,7 @@ import httpx
 
 from app.config import settings
 from app.services.processing_usage import measured_request
+from app.services.raw_capture import capture
 
 logger = logging.getLogger("leadhive")
 
@@ -169,6 +170,7 @@ def search_serper(keyword: str, region: str, max_results: int) -> list[Candidate
         logger.error("external API error: provider=serper type=%s", type(exc).__name__)
         raise ExternalServiceError("Google検索に失敗しました。設定を確認してください。") from exc
     candidates = []
+    capture("serper", data.get("organic", [])[:max_results])
     for item in data.get("organic", [])[:max_results]:
         url = item.get("link", "")
         title = (item.get("title") or "").strip()
@@ -267,6 +269,7 @@ def search_gbizinfo(keyword: str, region: str, max_results: int) -> list[Candida
         logger.error("external API error: provider=gbizinfo type=%s", type(exc).__name__)
         raise ExternalServiceError("gBizINFO検索に失敗しました。設定を確認してください。") from exc
     raw_items = data.get("hojin-infos") or data.get("corporations") or data.get("items") or []
+    capture("gbizinfo", raw_items[:max_results])
     candidates = []
     for item in raw_items[:max_results]:
         if not isinstance(item, dict):

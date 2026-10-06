@@ -1,0 +1,87 @@
+{
+  "schema_version": "raw-pilot-v1",
+  "date": "2026-10-07",
+  "branch": "codex/integration",
+  "implementation_baseline_commit": "d0be8c58c53b4a6656481606afa8018b0d0a4bb2",
+  "status": "NOT_RUN_MISSING_SOURCE_CREDENTIAL",
+  "pilot_complete": false,
+  "full_benchmark_authorized": false,
+  "condition": {
+    "region": "兵庫県姫路市",
+    "industry": "美容院・美容室",
+    "planned_source": "serper",
+    "planned_keywords": ["美容院", "美容室"],
+    "planned_requested_per_query": 12,
+    "planned_requested_total": 24,
+    "server_pilot_limit": 30
+  },
+  "actual": {
+    "project_created": false,
+    "collection_runs": 0,
+    "found": null,
+    "reviewed": null,
+    "correct": null,
+    "unique_correct": null,
+    "strict_precision": null,
+    "resolved_precision": null,
+    "duplicate_rate": null,
+    "uncertain_rate": null,
+    "coverage": null
+  },
+  "error_breakdown": {
+    "WRONG_INDUSTRY": {"count": null, "rate": null},
+    "WRONG_AREA": {"count": null, "rate": null},
+    "DUPLICATE": {"count": null, "rate": null},
+    "WRONG_ENTITY": {"count": null, "rate": null},
+    "PORTAL_OR_AGGREGATOR": {"count": null, "rate": null},
+    "CLOSED_OR_INACTIVE": {"count": null, "rate": null},
+    "UNCERTAIN": {"count": null, "rate": null},
+    "OTHER": {"count": null, "rate": null}
+  },
+  "source_comparison": [],
+  "query_comparison": [],
+  "marginal_gain": null,
+  "field_completeness": {
+    "company_name": {"available": null, "denominator": null, "rate": null},
+    "address": {"available": null, "denominator": null, "rate": null},
+    "phone": {"available": null, "denominator": null, "rate": null},
+    "website": {"available": null, "denominator": null, "rate": null},
+    "email": {"available": null, "denominator": null, "rate": null},
+    "reference_url": {"available": null, "denominator": null, "rate": null}
+  },
+  "cost": {
+    "search_calls": 0,
+    "places_calls": 0,
+    "ai_requests": 0,
+    "input_tokens": 0,
+    "output_tokens": 0,
+    "human_review_seconds": null,
+    "estimated_api_cost": null
+  },
+  "safety": {
+    "operational_external_requests": 0,
+    "email_sent": 0,
+    "form_sent": 0,
+    "approvals": 0,
+    "completion_jobs": 0,
+    "outbound_enabled": false,
+    "source_worker_state": "exited",
+    "source_database_modified": false
+  },
+  "source_readiness": {
+    "serper": "CREDENTIAL_UNSET",
+    "google_places": "CREDENTIAL_UNSET_AND_STORAGE_POLICY_UNRESOLVED",
+    "gbizinfo": "CREDENTIAL_UNSET_AND_CORPORATE_NAME_SEARCH_NOT_STORE_DISCOVERY"
+  },
+  "human_truth": {
+    "automatic_labels": false,
+    "old_100_leads_reused": false,
+    "synthetic_tests_are_measurements": false
+  },
+  "recommendation": "Prepare source credential and Human review; do not start Full Benchmark or accuracy improvements",
+  "limitations": [
+    "No actual Pilot collection has run",
+    "No actual Human review exists",
+    "No accuracy, coverage, source advantage or marginal gain can be inferred from synthetic tests"
+  ]
+}
