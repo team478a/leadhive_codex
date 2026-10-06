@@ -28,31 +28,37 @@ with SessionLocal() as db:
     ):
         raise RuntimeError("E2E owner mismatch")
     now = datetime.now(timezone.utc)
+    repeat_mode = len(sys.argv) > 2 and sys.argv[2] == "repeat"
     ids = []
     for ordinal, source in enumerate(("serper", "gbizinfo", "serper"), 1):
         run = RawQueryRun(
             benchmark_id=benchmark.id,
             ordinal=ordinal,
-            source=source,
-            keyword=f"Synthetic query {ordinal}",
-            query=f"Synthetic query {ordinal}",
-            requested_count=2 if ordinal == 1 else 1,
+            source="serper" if repeat_mode else source,
+            keyword="Synthetic repeat" if repeat_mode else f"Synthetic query {ordinal}",
+            repeat_index=ordinal if repeat_mode else 1,
+            query="Synthetic repeat" if repeat_mode else f"Synthetic query {ordinal}",
+            requested_count=2 if repeat_mode or ordinal == 1 else 1,
             code_commit="synthetic-e2e",
-            status="RUNNING" if ordinal == 3 else "COMPLETED",
-            finished_at=None if ordinal == 3 else now,
+            status="RUNNING" if ordinal == 3 and not repeat_mode else "COMPLETED",
+            finished_at=None if ordinal == 3 and not repeat_mode else now,
         )
         db.add(run)
         db.flush()
-        for position in range(1, (3 if ordinal == 1 else 2) if ordinal < 3 else 1):
+        for position in range(
+            1, 3 if repeat_mode else ((3 if ordinal == 1 else 2) if ordinal < 3 else 1)
+        ):
             payload = {
-                "company_name": "Synthetic store",
+                "company_name": f"Synthetic store {0 if position == 1 else ordinal}"
+                if repeat_mode
+                else "Synthetic store",
                 "address": "",
                 "phone": "",
                 "website": "https://synthetic.example/",
                 "email": "",
                 "reference_url": "https://synthetic.example/",
                 "record_type": "company",
-                "source": source,
+                "source": run.source,
                 "source_keyword": run.keyword,
                 "source_query": run.query,
                 "query_region": benchmark.region,

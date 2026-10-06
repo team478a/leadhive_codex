@@ -28,7 +28,7 @@ test('Raw Pilot is separate, Human truth is versioned, and unknown precision sta
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_raw_benchmark.py', benchmark], { env, encoding: 'utf8' })) as { snapshot_ids: string[] }
     await raw.getByRole('button', { name: 'Raw結果を再読込', exact: true }).click()
     await expect(metrics).toContainText('Found 3 / Reviewed 0 / Correct 0')
-    await expect(metrics).toContainText('Query Comparison / Marginal Gain')
+    await expect(metrics).toContainText('Run Comparison / Marginal Gain')
     await expect(metrics).toContainText('Source Comparison')
     await metrics.getByRole('button', { name: 'この収集を中断', exact: true }).click()
     await expect(metrics).toContainText('CANCELLED')
