@@ -1,4 +1,6 @@
+import type { BenchmarkEvidence } from './completionBenchmarkTypes'
 export type CompletionWorkRow = {
+  benchmark?: BenchmarkEvidence
   company_id: string
   company_name: string | null
   status: string
