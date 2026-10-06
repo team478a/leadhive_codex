@@ -74,6 +74,7 @@ def test_paged_diagnostics_match_single_lead_and_deduplicate_shared_keys(auth, d
     for row in rows:
         company = db.get(Company, UUID(row["company_id"]))
         single = evaluate(db, company)
+        assert row["company_name"] == company.company_name
         assert row["status"] == single["status"]
         assert {r["code"] for r in row["reasons"]} == {r["code"] for r in single["reasons"]}
         keys.extend(d["key"] for d in row["destinations"])
@@ -103,6 +104,7 @@ def test_fixed_membership_missing_leads_limits_context_and_reader_boundary(auth,
     assert second["rows"][0]["status"] == "HOLD"
     assert second["rows"][0]["reasons"][0]["code"] == "LEAD_REMOVED_OR_MERGED"
     assert second["rows"][0]["destinations"] == []
+    assert second["rows"][0]["company_name"] is None
     for params in [
         {"limit": 51},
         {"limit": 0},

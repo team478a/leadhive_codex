@@ -38,6 +38,7 @@ def page(db, cohort, project, offset, limit, expected_context=None):
             rows.append(
                 dict(
                     company_id=company_id,
+                    company_name=None,
                     delivery_funnel=histories[company_id],
                     status="HOLD",
                     dm_ready=False,
@@ -58,6 +59,7 @@ def page(db, cohort, project, offset, limit, expected_context=None):
         rows.append(
             dict(
                 company_id=company.id,
+                company_name=company.company_name,
                 delivery_funnel=histories[company.id],
                 status=result["status"],
                 dm_ready=completion["dm_ready"],
