@@ -1,0 +1,38 @@
+import { execFileSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { test, expect } from '@playwright/test'
+
+test('Human can organize candidate destinations without approval or sending', async ({ page }) => {
+  const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
+  const env = { ...process.env, E2E_EMAIL: `e2e-completion-${randomBytes(8).toString('hex')}@example.com`, E2E_PASSWORD: randomBytes(24).toString('hex') }
+  execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
+  const forbidden: string[] = []
+  page.on('request', request => {
+    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/send|\/dispatch|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
+  })
+  try {
+    const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env, encoding: 'utf8' })) as { project_id: string }
+    await page.goto('/')
+    await page.getByLabel('メールアドレス').fill(env.E2E_EMAIL)
+    await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
+    await page.getByRole('button', { name: 'ログインする', exact: true }).click()
+    await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
+    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
+    await page.getByRole('button', { name: '詳細', exact: true }).first().click()
+    const panel = page.getByRole('region', { name: 'リスト完成の根拠' })
+    await page.getByLabel('メール', { exact: true }).fill('synthetic-recipient@example.com')
+    await page.getByRole('button', { name: '企業情報を保存', exact: true }).click()
+    await expect(panel).toContainText('窓口候補 1件')
+    await expect(panel).toContainText('企業・店舗の照合：要確認')
+    await expect(panel).toContainText('営業許可・DM READY・送信承認を意味しません')
+    await panel.getByRole('button', { name: 'プロジェクトの窓口候補を整理', exact: true }).click()
+    await expect(panel).toContainText('現在の候補')
+    await expect(panel).toContainText('用途・送信可否は未確認')
+    await expect(panel.getByRole('button', { name: /送信|承認/ })).toHaveCount(0)
+    expect(forbidden).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
+  } finally {
+    execFileSync(python, ['../backend/tests/e2e_user.py', 'cleanup'], { env })
+  }
+})
