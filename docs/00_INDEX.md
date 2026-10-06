@@ -181,6 +181,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [122_CF7_CANDIDATE_STORED_PREPARATION_API.md](122_CF7_CANDIDATE_STORED_PREPARATION_API.md): 管理下証拠の保存・CF7候補準備API・既存Human承認への二層snapshot結合
 
+- [123_CF7_CANDIDATE_HUMAN_UI_AND_REVISION.md](123_CF7_CANDIDATE_HUMAN_UI_AND_REVISION.md): CF7候補の同意確認・Human承認画面・immutable改訂履歴・失効案内と専用DBでの画面検証
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
