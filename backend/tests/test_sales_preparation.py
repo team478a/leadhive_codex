@@ -289,7 +289,7 @@ def test_site_match_requires_address_or_phone(auth, db, providers, monkeypatch, 
     monkeypatch.setattr(service, "analyze", web)
     job = execute(db, start(auth, project))
     item = db.scalar(select(SalesPreparationItem))
-    assert job.payload["used_search_requests"] == 1
+    assert job.payload["used_search_requests"] == (1 if matches else 2)
     assert item.details["website_candidates"][0]["url"] == "https://official.example"
     assert item.status == ("ready" if matches else "review")
     assert bool(row.website_url) == matches

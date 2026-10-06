@@ -8,8 +8,9 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models import CollectionJob, Company, SuppressionEntry
+from app.models import CollectionJob, Company, Project, SuppressionEntry
 from app.services.collection import Candidate, canonicalize_url
+from app.services.lead_enrichment import observe_candidate
 from app.services.location_identity import location_key
 from app.services.scraper import is_aggregator_domain
 
@@ -41,24 +42,21 @@ def start_job(
     return job
 
 
-def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
+def duplicate_company(db: Session, project_id: UUID, candidate: Candidate) -> Company | None:
     if candidate.record_type == "location":
         key = location_key(
             candidate.company_name,
             candidate.address,
             candidate.reference_url or candidate.website_url or "",
         )
-        return (
-            db.scalar(
-                select(Company.id)
-                .where(
-                    Company.project_id == project_id,
-                    Company.record_type == "location",
-                    Company.location_key == key,
-                )
-                .limit(1)
+        return db.scalar(
+            select(Company)
+            .where(
+                Company.project_id == project_id,
+                Company.record_type == "location",
+                Company.location_key == key,
             )
-            is not None
+            .limit(1)
         )
     conditions = []
     if candidate.website_url:
@@ -70,16 +68,20 @@ def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
             & (Company.address == candidate.address)
         )
     return (
-        bool(conditions)
-        and db.scalar(
-            select(Company.id)
+        db.scalar(
+            select(Company)
             .where(
                 Company.project_id == project_id, Company.record_type == "company", or_(*conditions)
             )
             .limit(1)
         )
-        is not None
+        if conditions
+        else None
     )
+
+
+def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
+    return duplicate_company(db, project_id, candidate) is not None
 
 
 def is_suppressed(db: Session, project_id: UUID, candidate: Candidate) -> bool:
@@ -121,6 +123,8 @@ def save_candidates(
     job.found_count = len(candidates) + error_count
     job.error_count = error_count
     job.import_errors = error_details
+    # Serialize same-project ingestion without holding this lock across network calls.
+    db.scalar(select(Project.id).where(Project.id == job.project_id).with_for_update())
     for candidate in candidates:
         if candidate.website_url:
             _, candidate_domain = canonicalize_url(candidate.website_url)
@@ -131,9 +135,13 @@ def save_candidates(
                 else:
                     job.excluded_count += 1
                     continue
-        if is_duplicate(db, job.project_id, candidate) or is_suppressed(
-            db, job.project_id, candidate
-        ):
+        if is_suppressed(db, job.project_id, candidate):
+            job.duplicate_count += 1
+            continue
+        duplicate = duplicate_company(db, job.project_id, candidate)
+        if duplicate:
+            db.refresh(duplicate, with_for_update=True)
+            observe_candidate(db, job, duplicate, candidate)
             job.duplicate_count += 1
             continue
         domain = None
@@ -170,8 +178,13 @@ def save_candidates(
                 db.flush()
         except IntegrityError:
             job.duplicate_count += 1
+            duplicate = duplicate_company(db, job.project_id, candidate)
+            if duplicate:
+                db.refresh(duplicate, with_for_update=True)
+                observe_candidate(db, job, duplicate, candidate)
         else:
             job.saved_count += 1
+            observe_candidate(db, job, company, candidate, new=True)
     job.status = "completed"
     job.finished_at = datetime.now(timezone.utc)
     job.processing_ms = max(0, int((job.finished_at - job.created_at).total_seconds() * 1000))

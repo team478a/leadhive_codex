@@ -4,6 +4,7 @@ import hashlib
 import json
 import re
 import unicodedata
+from typing import Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -13,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.models import (
     Company,
+    LeadSiteEvidence,
     OperationJob,
     OutreachDraft,
     Project,
@@ -26,6 +28,7 @@ from app.services.ai_analysis import analyze_company_ai
 from app.services.collection import ExternalServiceError, canonicalize_url, search_serper
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence.analyzer import analyze_company_forms
+from app.services.lead_identity import identity_hash, site_queries, website_match
 from app.services.scraper import ScrapeError, is_aggregator_domain, scrape_company
 from app.services.web_analysis import analyze
 
@@ -79,49 +82,68 @@ def discover_site(
     if not settings.serper_api_key:
         finish(db, item, "review", "公式サイト未登録。検索サービスが未設定です。")
         return False
-    if not reserve_call(db, job, "search"):
-        finish(db, item, "review", "公式サイト未登録。検索回数の上限に達しました。")
-        return False
     checkpoint(db, item, search_started=True)
-    candidates = search_serper(f"{company.company_name} {company.address} 公式サイト", "", 5)
-    suggestions = []
-    for candidate in candidates:
-        if not candidate.website_url:
-            continue
-        url, domain = canonicalize_url(candidate.website_url)
-        if is_aggregator_domain(domain):
-            continue
-        suggestions.append({"url": url, "title": candidate.company_name})
-    checkpoint(db, item, website_candidates=suggestions, search_completed=True)
-    # A common city and an AI opinion are insufficient evidence for a store match.
-    for suggestion in suggestions[:2]:
+    suggestions: list[dict[str, str]] = []
+    fetched: set[str] = set()
+    queries = []
+    for query in site_queries(company):
         if stopped():
             return False
-        try:
-            page, data = scrape_company(suggestion["url"])
-            if stopped():
-                return False
-            url, domain = canonicalize_url(page.url)
+        if not reserve_call(db, job, "search"):
+            break
+        queries.append(query)
+        candidates = search_serper(query, "", 5)
+        for candidate in candidates:
+            if not candidate.website_url:
+                continue
+            url, domain = canonicalize_url(candidate.website_url)
             if is_aggregator_domain(domain):
                 continue
-            name, text = normalized(company.company_name), normalized(data.website_text)
-            address = normalized(company.address)
-            phone = re.sub(r"\D", "", company.phone)
-            matches = (
-                len(name) >= 4
-                and name in text
-                and (
-                    (bool(re.search(r"\d", address)) and address in text)
-                    or (len(phone) >= 9 and phone == re.sub(r"\D", "", data.phone))
-                )
-            )
-            if not matches:
+            if not any(suggestion["url"] == url for suggestion in suggestions):
+                suggestions.append({"url": url, "title": candidate.company_name})
+        checkpoint(db, item, website_candidates=suggestions, search_queries=queries)
+        for suggestion in suggestions:
+            if suggestion["url"] in fetched or len(fetched) >= 3:
                 continue
-            company.website_url, company.domain = url, domain
-            checkpoint(db, item, matched_site=url, match_rule="name_and_address_or_phone")
-            return True
-        except (ScrapeError, ValueError):
-            continue
+            if stopped():
+                return False
+            fetched.add(suggestion["url"])
+            try:
+                page, data = scrape_company(suggestion["url"])
+                if stopped():
+                    return False
+                url, domain = canonicalize_url(page.url)
+                if is_aggregator_domain(domain):
+                    continue
+                confidence, reasons = website_match(company, data)
+                checkpoint(db, item, site_confidence=confidence, site_match_reasons=reasons)
+                if confidence != "CONFIRMED":
+                    continue
+                if "website_url" in (company.protected_fields or []):
+                    finish(db, item, "review", "公式サイトURLは手動保護されています。")
+                    return False
+                company.website_url, company.domain = url, domain
+                db.add(
+                    LeadSiteEvidence(
+                        company_id=company.id,
+                        source_url=url,
+                        identity_hash=identity_hash(company),
+                        confidence=confidence,
+                        reasons=reasons,
+                    )
+                )
+                checkpoint(
+                    db,
+                    item,
+                    matched_site=url,
+                    match_rule="name_and_address_or_phone",
+                    search_completed=True,
+                )
+                return True
+            except (ScrapeError, ValueError):
+                continue
+        # Repeating queries does not cause repeated GETs of the same candidate.
+    checkpoint(db, item, search_completed=True)
     finish(db, item, "review", "公式サイトを確実に照合できません。候補URLを確認してください。")
     return False
 
@@ -129,7 +151,13 @@ def discover_site(
 def prepare_item(db: Session, job: OperationJob, item: SalesPreparationItem, stopped=lambda: False):
     company = db.get(Company, item.company_id)
     project = db.get(Project, job.project_id)
+    if project is None:
+        finish(db, item, "blocked", "プロジェクトが見つかりません。")
+        return
     profile = db.get(TargetProfile, project.target_profile_id)
+    if profile is None:
+        finish(db, item, "blocked", "ターゲット条件が見つかりません。")
+        return
     actor = db.get(User, UUID(job.payload["requested_by_user_id"]))
     try:
         if actor is None:
@@ -229,7 +257,7 @@ def prepare_item(db: Session, job: OperationJob, item: SalesPreparationItem, sto
         provider = get_ai_provider()
         content = provider.generate_outreach(
             OutreachContext(
-                channel=channel,
+                channel=cast(Literal["email", "form", "sns"], channel),
                 company_name=company.company_name,
                 recipient_name="",
                 recipient_department="",
@@ -284,13 +312,14 @@ def run_preparation(db: Session, job: OperationJob, worker_id, stop_requested):
     db.commit()
 
     def update_counts():
-        counts = dict(
-            db.execute(
+        counts: dict[str, int] = {
+            status: count
+            for status, count in db.execute(
                 select(SalesPreparationItem.status, func.count())
                 .where(SalesPreparationItem.job_id == job.id)
                 .group_by(SalesPreparationItem.status)
             ).all()
-        )
+        }
         job.processed_count = sum(counts.get(s, 0) for s in TERMINAL)
         job.failed_count = counts.get("error", 0)
         job.success_count = job.processed_count - job.failed_count

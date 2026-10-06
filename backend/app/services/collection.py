@@ -224,6 +224,7 @@ def search_google_places(keyword: str, region: str, max_results: int) -> list[Ca
                             website_url=normalized,
                             address=(place.get("formattedAddress") or "")[:5000],
                             phone=(place.get("nationalPhoneNumber") or "")[:100],
+                            record_type="location",
                         )
                     )
                 page_token = data.get("nextPageToken")

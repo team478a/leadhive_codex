@@ -30,6 +30,7 @@ from app.form_observation_routes import router as form_observation_router
 from app.form_operations_routes import router as form_operations_router
 from app.form_readiness_routes import router as form_readiness_router
 from app.improvement_routes import router as improvement_router
+from app.lead_completion_routes import router as lead_completion_router
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
@@ -63,6 +64,7 @@ app.include_router(form_readiness_router)
 app.include_router(approved_email_router)
 app.include_router(email_feedback_router)
 app.include_router(preparation_router)
+app.include_router(lead_completion_router)
 
 
 app.add_middleware(
