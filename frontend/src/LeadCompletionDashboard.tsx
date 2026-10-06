@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import type { Project } from './types'
+import { CohortDestinationDiagnostics } from './CohortDestinationDiagnostics'
 
 type Cohort = { id: string; name: string; discovered: number; created_at: string }
 type Review = { id: string; company_id: string; started_at: string; finished_at: string | null; outcome: string | null }
 type Report = {
-  name: string; discovered: number; remaining_leads: number; context_changed: boolean; can_review: boolean
+  cohort_id: string; cohort_hash: string; name: string; discovered: number; remaining_leads: number; context_changed: boolean; can_review: boolean
   dm_ready_rate: number | null; measured_at: string; definition_version: string
   stages: { code: string; count: number | null; observed_count: number | null; conversion_rate: number | null; coverage: string }[]
   diagnostics: { states: Record<string, number>; reasons: Record<string, number>; website_registered: number; official_evidence: number; destination_candidate_leads: number; unique_candidate_destinations: number; shared_candidate_destinations: number }
@@ -14,7 +15,7 @@ type Report = {
   review_candidates: { id: string; name: string }[]; active_review: Review | null
 }
 const stages: Record<string, string> = { DISCOVERED: '発見・固定対象', MATCHED: '営業条件に一致', IDENTITY_CONFIRMED: '企業・店舗の照合', OFFICIAL_SITE_CONFIRMED: '公式サイト確認', DESTINATION_FOUND: '窓口確認', CONTACT_ALLOWED: '連絡可能', DM_READY: 'DM READY', HUMAN_APPROVED: 'Human承認', SENT: '送信' }
-const reasons: Record<string, string> = { OFFICIAL_SITE_NOT_FOUND: '公式サイト未登録', CONTACT_NOT_FOUND: '窓口候補なし', IDENTITY_UNCERTAIN: '企業・店舗の照合が未確認', SHARED_DESTINATION: '共通窓口', DESTINATION_PURPOSE_UNCERTAIN: '窓口用途が未確認', SUPPRESSED: '送信禁止リスト', DO_NOT_CONTACT: '連絡禁止', SALES_PROHIBITED: '営業禁止', DELIVERY_UNKNOWN: '送信結果不明', LEAD_REMOVED_OR_MERGED: '削除・統合された候補', CAPTCHA: 'CAPTCHA・人の操作が必要' }
+
 const numberOrUnknown = (value: number | null) => value === null ? '不明' : value.toLocaleString('ja-JP')
 
 export function LeadCompletionDashboard() {
@@ -65,13 +66,12 @@ export function LeadCompletionDashboard() {
     {projectId && <><button className="secondary" disabled={busy} onClick={() => void freeze()}>現在のリストを集計対象として固定</button><label className="field mt-4">固定した集計対象<select value={cohortId} disabled={busy} onChange={e => { setCohortId(e.target.value); setData(null); setReviewCompany('') }}><option value="">選択してください</option>{cohorts.map(c => <option key={c.id} value={c.id}>{c.name}（{c.discovered}件）</option>)}</select></label></>}
     {error && <p role="alert" className="error">{error}</p>}
     {data && <>
-      <div className="grid gap-3 sm:grid-cols-3"><article className="metric"><span>固定候補数</span><strong>{data.discovered}</strong></article><article className="metric"><span>DM READY率</span><strong>{data.dm_ready_rate === null ? '未判定' : `${data.dm_ready_rate}%`}</strong></article><article className="metric"><span>独立窓口候補</span><strong>{data.diagnostics.unique_candidate_destinations}</strong></article></div>
-      <p className="muted mt-3">DM READY・窓口用途の判定は次工程です。文面準備済みやURL登録だけで完成扱いにはしません。部分計測の変換率は不明です。</p>
+      <div className="grid gap-3 sm:grid-cols-3"><article className="metric"><span>固定候補数</span><strong>{data.discovered}</strong></article><article className="metric"><span>DM READY率</span><strong>{data.dm_ready_rate === null ? '未判定' : `${data.dm_ready_rate}%`}</strong></article><article className="metric"><span>窓口候補（重複除外）</span><strong>{data.diagnostics.unique_candidate_destinations}</strong></article></div>
+      <p className="muted mt-3">窓口のREADY診断は下の集計で確認できます。DM READYは文面・根拠との結合が未判定です。URL登録や窓口READYだけでDM完成扱いにはしません。部分計測の変換率は不明です。</p>
       {data.context_changed && <p role="status">固定後に営業条件が変更されています。旧条件との比較には注意してください。</p>}
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>段階</th><th>前段階通過を含む確認数</th><th>単独の根拠・候補数</th><th>変換率</th></tr></thead><tbody>{data.stages.map(s => <tr key={s.code}><td>{stages[s.code]}</td><td>{numberOrUnknown(s.count)}{s.coverage === 'PARTIAL' && '（部分計測）'}</td><td>{numberOrUnknown(s.observed_count)}</td><td>{s.conversion_rate === null ? '不明' : `${s.conversion_rate}%`}</td></tr>)}</tbody></table></div>
-      <p className="mt-4">在庫の暫定分類：REVIEW {data.diagnostics.states.REVIEW} / HOLD {data.diagnostics.states.HOLD} / BLOCKED {data.diagnostics.states.BLOCKED}</p>
-      <p>公式URL登録 {data.diagnostics.website_registered} / 有効な公式照合根拠 {data.diagnostics.official_evidence} / 窓口候補のあるLead {data.diagnostics.destination_candidate_leads} / 共通窓口 {data.diagnostics.shared_candidate_destinations}</p>
-      <ul>{Object.entries(data.diagnostics.reasons).map(([code, count]) => <li key={code}>{reasons[code] ?? code}：{count}件</li>)}</ul>
+      <p className="mt-4">公式URL登録 {data.diagnostics.website_registered} / 有効な公式照合根拠 {data.diagnostics.official_evidence} / 窓口候補のあるLead {data.diagnostics.destination_candidate_leads} / 固定範囲内の共通窓口候補 {data.diagnostics.shared_candidate_destinations}</p>
+      <CohortDestinationDiagnostics key={`${data.cohort_id}:${data.measured_at}`} cohortId={data.cohort_id} cohortHash={data.cohort_hash} discovered={data.discovered} />
       <h3 className="mt-5">処理コスト・レビュー</h3>
       <p>記録済み検索HTTP試行：{Object.entries(data.cost.search_api_attempts).map(([key, value]) => `${key} ${value}回`).join(' / ') || '記録なし'} / AI操作 {data.cost.ai_operations}回</p>
       <p>記録済みtoken：入力 {numberOrUnknown(data.cost.input_tokens)} / 出力 {numberOrUnknown(data.cost.output_tokens)}（{data.cost.token_observations}操作分）</p>

@@ -11,7 +11,7 @@ test('Human freezes the funnel denominator and records review effort without app
     if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/send(?:[/?]|$)|\/dispatch|\/execute|\/test-send|\/approve/.test(request.url())) forbidden.push(request.url())
   })
   try {
-    const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env, encoding: 'utf8' })) as { project_id: string }
+    const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'completion-fixture'], { env, encoding: 'utf8' })) as { project_id: string }
     await page.goto('/')
     await page.getByLabel('メールアドレス').fill(env.E2E_EMAIL)
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
@@ -24,14 +24,35 @@ test('Human freezes the funnel denominator and records review effort without app
     await expect(panel).toContainText('DM READY率')
     await expect(panel).toContainText('未判定')
     await expect(panel).toContainText('料金・Cost per DM READYは不明')
+    const diagnostic = panel.getByRole('region', { name: '固定リストの窓口診断' })
+    let release: () => void = () => {}
+    const gate = new Promise<void>(resolve => { release = resolve })
+    let hold = true
+    await page.route('**/destination-diagnostics?*', async route => {
+      if (new URL(route.request().url()).searchParams.get('offset') === '25' && hold) { hold = false; await gate }
+      await route.continue()
+    })
+    await diagnostic.getByRole('button', { name: '窓口診断を集計', exact: true }).click()
+    await expect(diagnostic).toContainText('診断済み 25 / 26件')
+    await expect(diagnostic).toContainText('部分集計・未診断分あり')
+    await diagnostic.getByRole('button', { name: '窓口集計を中断', exact: true }).click()
+    release()
+    await expect(diagnostic).toContainText('診断済み 25 / 26件')
+    await diagnostic.getByRole('button', { name: '窓口診断を集計', exact: true }).click()
+    await expect(diagnostic).toContainText('診断済み 26 / 26件 — 全件集計済み')
+    await expect(diagnostic).toContainText('READY 0 / REVIEW 0 / HOLD 26 / BLOCKED 0')
+    await expect(diagnostic).toContainText('公式サイト未登録：25件')
+    await expect(diagnostic).toContainText('DM READY率は未判定のまま')
+    await expect(diagnostic.locator('article').filter({ hasText: '診断範囲の共通窓口' })).toContainText('1')
+    await expect(diagnostic.locator('article').filter({ hasText: 'READYの独立窓口' })).toContainText('0')
     await panel.getByLabel('レビュー時間を記録する企業').selectOption({ index: 1 })
     await panel.getByRole('button', { name: 'レビュー時間の記録を開始', exact: true }).click()
-    await expect(panel.getByRole('status')).toContainText('レビュー計測中')
+    await expect(panel.getByRole('status').filter({ hasText: 'レビュー計測中' })).toContainText('レビュー計測中')
     await page.reload()
     await page.getByRole('button', { name: '⌂ ダッシュボード', exact: true }).click()
     await panel.getByLabel('完成率のプロジェクト').selectOption(fixture.project_id)
     await panel.getByLabel('固定した集計対象').selectOption({ index: 1 })
-    await expect(panel.getByRole('status')).toContainText('レビュー計測中')
+    await expect(panel.getByRole('status').filter({ hasText: 'レビュー計測中' })).toContainText('レビュー計測中')
     await panel.getByRole('button', { name: 'レビュー記録を終了', exact: true }).click()
     await expect(panel).toContainText('レビュー 1 / 1件終了')
     await expect(panel).toContainText('営業許可・Human承認を変更しません')

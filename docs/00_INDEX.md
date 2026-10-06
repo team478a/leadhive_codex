@@ -211,6 +211,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [137_HUMAN_IDENTITY_AND_DESTINATION_RECOMMENDATION.md](137_HUMAN_IDENTITY_AND_DESTINATION_RECOMMENDATION.md): Humanの名称・住所/電話照合、失効・取消、READY限定窓口推奨と同条件時の未選択境界
 
+- [138_COHORT_DESTINATION_DIAGNOSTICS.md](138_COHORT_DESTINATION_DIAGNOSTICS.md): 固定リストの25件単位診断、独立READY窓口・共通窓口・停止理由、部分集計・中断・再集計とDM READY未判定境界
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

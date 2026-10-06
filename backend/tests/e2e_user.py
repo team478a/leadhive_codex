@@ -47,6 +47,7 @@ with SessionLocal() as db:
         )
     elif sys.argv[1] in {
         "approval-fixture",
+        "completion-fixture",
         "approved-email-fixture",
         "email-feedback-fixture",
         "adapter-fixture",
@@ -69,11 +70,24 @@ with SessionLocal() as db:
             website_url="https://approval.example",
             domain="approval.example",
             email=f"recipient-{project.id.hex}@example.com"
-            if sys.argv[1] != "approval-fixture"
+            if sys.argv[1] not in {"approval-fixture", "completion-fixture"}
             else "",
         )
         db.add(company)
         db.flush()
+        if sys.argv[1] == "completion-fixture":
+            db.add_all(
+                [
+                    Company(
+                        project_id=project.id,
+                        source="url",
+                        company_name=f"Synthetic batch {index}",
+                        domain=f"batch-{index}.example",
+                        email="shared@fixture.example",
+                    )
+                    for index in range(25)
+                ]
+            )
         if sys.argv[1] == "adapter-fixture":
             company.contact_url = "https://fixture.example/contact"
             sender = db.get(FormSenderSettings, 1)
