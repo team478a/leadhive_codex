@@ -388,6 +388,14 @@ def cancel_operation(
     job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     job = owned_operation(job_id, db, user)
+    if job.operation_type == "cf7_observation":
+        from app.services import form_observation_jobs
+
+        job = form_observation_jobs.owned_job(db, job_id, user)
+        form_observation_jobs.cancel(db, job, user)
+        db.commit()
+        db.refresh(job)
+        return job
     if job.status == "queued":
         job.status = "cancelled"
         job.finished_at = datetime.now(timezone.utc)

@@ -15,6 +15,7 @@ import storage_contract as contract
 import store
 from app.models import Company, OperationJob, User
 from app.project_access import company_access, project_access
+from app.services.form_observation_jobs import record
 from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -68,6 +69,7 @@ def enqueue(sessions: Sessions, company_id: UUID, user_id: UUID) -> UUID:
         db.add(job)
         db.flush()  # Existing unique active project/type index rejects concurrent enqueue.
         result = job.id
+        record(db, job, "QUEUED", None, user=user, reason="QUEUED")
         db.commit()
         return result
 
@@ -140,6 +142,7 @@ def claim(sessions: Sessions, job_id: UUID, worker_id: UUID) -> contract.Binding
             return None
         if job.cancel_requested:
             job.status, job.finished_at = "cancelled", clock(db)
+            record(db, job, "CANCELLED", "queued", reason="CANCELLED")
             db.commit()
             return None
         job.status, job.worker_id = "running", worker_id
@@ -154,8 +157,10 @@ def claim(sessions: Sessions, job_id: UUID, worker_id: UUID) -> contract.Binding
             job.processed_count = job.failed_count = 1
             job.finished_at = clock(db)
             job.worker_id = job.lease_expires_at = None
+            record(db, job, "FAILED", "queued", reason="CLAIM_REJECTED")
             db.commit()
             return None
+        record(db, job, "CLAIMED", "queued", reason="CLAIMED")
         db.commit()
         return binding
 
@@ -215,6 +220,13 @@ def finish_failed(sessions: Sessions, binding: contract.Binding, reason: str) ->
         job.processed_count = 1
         job.finished_at = clock(db)
         job.worker_id = job.lease_expires_at = None
+        record(
+            db,
+            job,
+            "CANCELLED" if job.cancel_requested else "FAILED",
+            "running",
+            reason=reason,
+        )
         db.commit()
 
 
@@ -253,6 +265,10 @@ def run(
                 raise JobStopped("PERMISSION_CHANGED")
             row = store.save(db, envelope, user)
             evidence_id = row.id
+            job = db.get(OperationJob, binding.operation_job_id)
+            if not job:
+                raise JobStopped("BINDING_CHANGED")
+            record(db, job, "COMPLETED", "running", reason="EVIDENCE_SAVED")
             db.commit()
             return evidence_id
     except (ValueError, HTTPException, SQLAlchemyError, OSError):
@@ -282,5 +298,6 @@ def recover(sessions: Sessions) -> int:
             job.processed_count = 1
             job.finished_at = clock(db)
             job.worker_id = job.lease_expires_at = None
+            record(db, job, "RECOVERED", "running", reason=job.error_message)
         db.commit()
         return len(jobs)

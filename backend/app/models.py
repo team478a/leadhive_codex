@@ -32,6 +32,7 @@ from app.model_core import (
 from app.model_email_feedback import EmailFeedbackEvent, EmailHealthState
 from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
+from app.model_form_observation_job import FormObservationJobEvent
 from app.model_operations import (
     AnalysisRefreshSchedule,
     CollectionJob,
@@ -63,6 +64,7 @@ from app.model_settings import (
 )
 
 __all__ = [
+    "FormObservationJobEvent",
     "FormObservationEvent",
     "FormObservationEvidence",
     "CF7Observation",

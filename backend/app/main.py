@@ -25,6 +25,7 @@ from app.database import SessionLocal
 from app.email_feedback_routes import router as email_feedback_router
 from app.form_batch_routes import router as form_batch_router
 from app.form_intelligence_routes import router as form_intelligence_router
+from app.form_observation_job_routes import router as form_observation_job_router
 from app.form_observation_routes import router as form_observation_router
 from app.form_operations_routes import router as form_operations_router
 from app.form_readiness_routes import router as form_readiness_router
@@ -138,4 +139,5 @@ app.include_router(improvement_router)
 app.include_router(form_batch_router)
 app.include_router(form_intelligence_router)
 app.include_router(form_observation_router)
+app.include_router(form_observation_job_router)
 app.include_router(outreach_draft_router)
