@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { api, ApiError, errorMessage } from './api'
+import { CompletionWorkQueue } from './CompletionWorkQueue'
+import type { CompletionWorkRow } from './completionWorkQueueTypes'
 
 type Reason = { code: string; message: string; next_action: string }
 type DeliveryFunnel = { prepared_ever: boolean; human_approved: boolean; sent: boolean; attempt_count: number; results: Record<string, number>; queued: number; blocked: number; cancelled: number; preflight_failed: number; unverified_records: number }
@@ -9,12 +11,12 @@ const emptyHistory = (): History => ({ prepared: 0, approved: 0, sent: 0, attemp
 function validHistory(value: DeliveryFunnel): boolean {
   return !!value && [value.prepared_ever, value.human_approved, value.sent].every(v => typeof v === 'boolean') && !!value.results && Object.keys(resultNames).every(key => Number.isSafeInteger(value.results[key]) && value.results[key] >= 0) && [value.attempt_count, value.queued, value.blocked, value.cancelled, value.preflight_failed, value.unverified_records].every(v => Number.isSafeInteger(v) && v >= 0) && Object.values(value.results).reduce((sum, n) => sum + n, 0) === value.attempt_count && value.sent === (value.attempt_count > 0) && (!value.sent || value.human_approved) && (!value.human_approved || value.prepared_ever)
 }
-type Row = { delivery_funnel: DeliveryFunnel; dm_ready: boolean; dm_ready_reason: string | null; company_id: string; status: string; reasons: Reason[]; destinations: { key: string; type: string; status: string; shared: boolean }[] }
+type Row = CompletionWorkRow & { delivery_funnel: DeliveryFunnel; dm_ready: boolean; dm_ready_reason: string | null; company_id: string; status: string; reasons: Reason[]; destinations: { key: string; type: string; status: string; shared: boolean }[] }
 type Page = { cohort_id: string; cohort_hash: string; context_hash: string; definition_version: string; aggregation_definition: string; discovered: number; offset: number; inspected: number; next_offset: number | null; started_at: string; measured_at: string; rows: Row[] }
-type Summary = { history: History; dmReady: number; dmReasons: Record<string, number>; processed: number; states: Record<string, number>; destinations: Record<string, { leads: number; ready: boolean; shared: boolean }>; reasons: Record<string, { reason: Reason; count: number; states: Set<string> }>; first: string; last: string; complete: boolean }
-const empty = (): Summary => ({ history: emptyHistory(), dmReady: 0, dmReasons: {}, processed: 0, states: { READY: 0, REVIEW: 0, HOLD: 0, BLOCKED: 0 }, destinations: {}, reasons: {}, first: '', last: '', complete: false })
+type Summary = { rows: Row[]; history: History; dmReady: number; dmReasons: Record<string, number>; processed: number; states: Record<string, number>; destinations: Record<string, { leads: number; ready: boolean; shared: boolean }>; reasons: Record<string, { reason: Reason; count: number; states: Set<string> }>; first: string; last: string; complete: boolean }
+const empty = (): Summary => ({ rows: [], history: emptyHistory(), dmReady: 0, dmReasons: {}, processed: 0, states: { READY: 0, REVIEW: 0, HOLD: 0, BLOCKED: 0 }, destinations: {}, reasons: {}, first: '', last: '', complete: false })
 
-export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered }: { cohortId: string; cohortHash: string; discovered: number }) {
+export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered, onOpenCompany }: { cohortId: string; cohortHash: string; discovered: number; onOpenCompany: (id: string) => void }) {
   const [data, setData] = useState<Summary>(empty)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -41,7 +43,7 @@ export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered 
         if (next > discovered || batch.next_offset !== (next < discovered ? next : null)) throw new ApiError(409, '集計範囲を確認できません。再集計してください。')
         // Pages are observations over an interval; only confirmed received pages are counted.
         result = { ...result, history: { ...result.history, results: { ...result.history.results } }, states: { ...result.states }, destinations: { ...result.destinations }, reasons: { ...result.reasons }, dmReasons: { ...result.dmReasons } }
-        if (batch.rows.some(row => seen.has(row.company_id) || !['READY', 'REVIEW', 'HOLD', 'BLOCKED'].includes(row.status) || typeof row.dm_ready !== 'boolean' || !validHistory(row.delivery_funnel)) || new Set(batch.rows.map(row => row.company_id)).size !== batch.rows.length) throw new ApiError(409, '診断対象の重複または状態を確認できません。再集計してください。')
+        if (batch.rows.some(row => seen.has(row.company_id) || !['READY', 'REVIEW', 'HOLD', 'BLOCKED'].includes(row.status) || typeof row.dm_ready !== 'boolean' || !(row.company_name === null || typeof row.company_name === 'string') || !validHistory(row.delivery_funnel)) || new Set(batch.rows.map(row => row.company_id)).size !== batch.rows.length) throw new ApiError(409, '診断対象の重複または状態を確認できません。再集計してください。')
         for (const row of batch.rows) {
           seen.add(row.company_id)
           const history = row.delivery_funnel
@@ -67,6 +69,7 @@ export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered 
             result.reasons[reason.code] = { reason, count: (previous?.count ?? 0) + 1, states: new Set([...(previous?.states ?? []), row.status]) }
           }
         }
+        result.rows = [...result.rows, ...batch.rows]
         result.processed = next
         result.first ||= batch.started_at
         result.last = batch.measured_at
@@ -103,6 +106,7 @@ export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered 
         <p>予約・実行前 {data.history.queued}件 / 安全停止 {data.history.blocked}件 / 取消 {data.history.cancelled}件 / 実行前失敗 {data.history.preflightFailed}件 / 証跡不一致 {data.history.unverified}件</p>
         <p className="muted">根拠付きDMの承認提案に紐付く履歴のみです。旧経路の履歴を推定して混ぜません。過去の承認記録は取消・期限切れ後も残り、現在の送信許可とは異なります。予約だけでは送信実行に数えません。フォーム受付・SMTP受付は相手の閲覧や返信を意味しません。UNKNOWNの自動再送は行いません。</p>
       </section>
+      <CompletionWorkQueue rows={data.rows} complete={data.complete} onOpenCompany={onOpenCompany} />
       <h4 className="mt-4">不足・停止理由と次の作業</h4>
       <p className="muted">READY以外のLeadを理由ごとに一度だけ数えます。一つのLeadに複数理由があるため合計は候補数と一致しません。別窓口の理由も含むので、企業詳細で窓口別に確認してください。</p>
       <ul>{Object.values(data.reasons).sort((a, b) => b.count - a.count || a.reason.code.localeCompare(b.reason.code)).map(item => <li key={item.reason.code}><strong>{item.reason.message}：{item.count}件</strong>（{[...item.states].join(' / ')}）— {item.reason.next_action} <small>({item.reason.code})</small></li>)}</ul>

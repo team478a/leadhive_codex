@@ -221,6 +221,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [142_HUMAN_APPROVAL_AND_DELIVERY_FUNNEL.md](142_HUMAN_APPROVAL_AND_DELIVERY_FUNNEL.md): C2に紐付くHuman承認・送信実行・結果分類、現在状態と履歴の分離とread-only集計
 
+- [143_LEAD_COMPLETION_WORK_QUEUE.md](143_LEAD_COMPLETION_WORK_QUEUE.md): 停止理由・状態の作業一覧、部分集計・25件ページ・企業詳細への読み取り導線と送信境界
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

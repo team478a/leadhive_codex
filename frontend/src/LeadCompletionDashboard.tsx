@@ -18,7 +18,7 @@ const stages: Record<string, string> = { DISCOVERED: '発見・固定対象', MA
 
 const numberOrUnknown = (value: number | null) => value === null ? '不明' : value.toLocaleString('ja-JP')
 
-export function LeadCompletionDashboard() {
+export function LeadCompletionDashboard({ onOpenCompany }: { onOpenCompany: (projectId: string, companyId: string) => void }) {
   const [projects, setProjects] = useState<Project[]>([])
   const [projectId, setProjectId] = useState('')
   const [cohorts, setCohorts] = useState<Cohort[]>([])
@@ -71,7 +71,7 @@ export function LeadCompletionDashboard() {
       {data.context_changed && <p role="status">固定後に営業条件が変更されています。旧条件との比較には注意してください。</p>}
       <div className="company-table-wrap mt-4"><table className="company-table"><thead><tr><th>段階</th><th>前段階通過を含む確認数</th><th>単独の根拠・候補数</th><th>変換率</th></tr></thead><tbody>{data.stages.map(s => <tr key={s.code}><td>{stages[s.code]}</td><td>{numberOrUnknown(s.count)}{s.coverage === 'PARTIAL' && '（部分計測）'}</td><td>{numberOrUnknown(s.observed_count)}</td><td>{s.conversion_rate === null ? '不明' : `${s.conversion_rate}%`}</td></tr>)}</tbody></table></div>
       <p className="mt-4">公式URL登録 {data.diagnostics.website_registered} / 有効な公式照合根拠 {data.diagnostics.official_evidence} / 窓口候補のあるLead {data.diagnostics.destination_candidate_leads} / 固定範囲内の共通窓口候補 {data.diagnostics.shared_candidate_destinations}</p>
-      <CohortDestinationDiagnostics key={`${data.cohort_id}:${data.measured_at}`} cohortId={data.cohort_id} cohortHash={data.cohort_hash} discovered={data.discovered} />
+      <CohortDestinationDiagnostics key={`${data.cohort_id}:${data.measured_at}`} cohortId={data.cohort_id} cohortHash={data.cohort_hash} discovered={data.discovered} onOpenCompany={id => onOpenCompany(projectId, id)} />
       <h3 className="mt-5">処理コスト・レビュー</h3>
       <p>記録済み検索HTTP試行：{Object.entries(data.cost.search_api_attempts).map(([key, value]) => `${key} ${value}回`).join(' / ') || '記録なし'} / AI操作 {data.cost.ai_operations}回</p>
       <p>記録済みtoken：入力 {numberOrUnknown(data.cost.input_tokens)} / 出力 {numberOrUnknown(data.cost.output_tokens)}（{data.cost.token_observations}操作分）</p>

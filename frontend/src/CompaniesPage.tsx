@@ -28,11 +28,12 @@ import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTa
 
 type Filters = CompanyFilterValues
 
-export function CompaniesPage({ projects, projectRoles, initialProjectId, initialReplyInboundEmailId, initialFollowupCompanyId }: {
+export function CompaniesPage({ projects, projectRoles, initialProjectId, initialReplyInboundEmailId, initialFollowupCompanyId, initialCompanyId }: {
   projects: Project[]
   projectRoles: Record<string, ProjectMember['role']>
   initialProjectId: string
   initialReplyInboundEmailId: string | null
+  initialCompanyId: string | null
   initialFollowupCompanyId: string | null
 }) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
@@ -211,7 +212,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       setDeals(nextDeals); setExperiments(nextExperiments)
     }).catch(e => setError(errorMessage(e)))
   }, [selected])
-  async function open(company: Company) {
+  const open = useCallback(async (company: Company) => {
     setSelected(company); setStatus(company.status); setNotes(company.notes); setNotice('')
     setCompanyEdit(Object.fromEntries([
       'company_name', 'address', 'prefecture', 'city', 'phone', 'email', 'contact_url',
@@ -242,7 +243,16 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     setFormAnalysisLogs(primaryProfile ? await api<FormAnalysisLog[]>(`/form-profiles/${primaryProfile.id}/logs`) : [])
     setSelectedDraft(firstDraft); setEmailDelivery(nextDelivery); setFormDelivery(nextFormDelivery); setDeliveryRecipient(company.email)
     setDeliverySchedule(''); setDeliveryConfirmed(false); setFormPreview(null); setFormValues({}); setFormConfirmed(false); setAssistOutcome('pending'); setAssistNote(''); setAssistConfirmed(false); setDraftContactId(''); setDraftInstruction('')
-  }
+  }, [])
+  useEffect(() => {
+    let active = true
+    if (initialCompanyId && projectId === initialProjectId) {
+      api<Company>(`/companies/${initialCompanyId}`).then(company => {
+        if (active && company.project_id === projectId) return open(company)
+      }).catch(e => { if (active) setError(errorMessage(e)) })
+    }
+    return () => { active = false }
+  }, [initialCompanyId, initialProjectId, projectId, open])
   async function save() {
     if (!selected) return
     setBusy(true); setError('')

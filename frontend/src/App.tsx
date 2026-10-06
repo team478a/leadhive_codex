@@ -51,6 +51,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals'>('projects')
   const [collectionProjectId, setCollectionProjectId] = useState('')
   const [replyInboundEmailId, setReplyInboundEmailId] = useState<string | null>(null)
+  const [completionCompanyId, setCompletionCompanyId] = useState<string | null>(null)
   const [followupCompanyId, setFollowupCompanyId] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
   const [profiles, setProfiles] = useState<Profile[]>([])
@@ -140,7 +141,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           setTab('collection'); setEditor(null); setNotice('')
         }}>⌕ 企業収集</button>
         <button className={tab === 'companies' ? 'nav-item selected' : 'nav-item'} onClick={() => {
-          setTab('companies'); setEditor(null); setNotice('')
+          setCompletionCompanyId(null); setTab('companies'); setEditor(null); setNotice('')
         }}>▤ 企業一覧</button>
         <button className={tab === 'deliveries' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('deliveries'); setEditor(null); setNotice('')
@@ -185,7 +186,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
                 <div className="flex flex-wrap gap-2">{projectRoles[project.id] !== 'viewer' && <button disabled={busy} onClick={() => {
                   setCollectionProjectId(project.id); setTab('collection'); setNotice('')
                 }}>企業収集</button>}<button className="secondary" disabled={busy} onClick={() => {
-                  setCollectionProjectId(project.id); setTab('companies'); setNotice('')
+                  setCompletionCompanyId(null); setCollectionProjectId(project.id); setTab('companies'); setNotice('')
                 }}>企業一覧</button>{projectRoles[project.id] === 'owner' && <><button className="secondary" disabled={busy} onClick={() => void openMembers(project).catch(e => setError(errorMessage(e)))}>メンバー</button><button className="secondary" disabled={busy} onClick={() => setEditor({ type: 'project', value: project })}>編集</button>
                   <button className="danger" disabled={busy} onClick={() => {
                     if (window.confirm(`「${project.project_name}」を削除しますか？`)) void action(async () => {
@@ -196,11 +197,13 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           {memberProject && <section className="panel mt-6" aria-label="プロジェクトメンバー"><div className="flex justify-between gap-3"><div><h2>{memberProject.project_name}のメンバー</h2><p className="muted mt-2 text-sm">編集者は操作可能、閲覧者は参照のみです。</p></div><button className="secondary" onClick={() => setMemberProject(null)}>閉じる</button></div><div className="detail-grid mt-4"><label className="field">メンバーのメール<input type="email" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} /></label><label className="field">権限<select value={memberRole} onChange={e => setMemberRole(e.target.value as 'editor' | 'viewer')}><option value="editor">編集者</option><option value="viewer">閲覧者</option></select></label></div><div className="actions"><button disabled={busy || !memberEmail.trim()} onClick={() => void saveMember()}>メンバーを保存</button></div>{members.map(member => <article className="job-row" key={member.id}><div><strong>{member.email}</strong><p className="muted text-sm">{member.role === 'owner' ? '所有者' : member.role === 'editor' ? '編集者' : '閲覧者'}</p></div>{member.role !== 'owner' && <button className="danger" disabled={busy} onClick={() => void removeMember(member)}>削除</button>}</article>)}</section>}
         </> : loaded && tab === 'collection' ? <CollectionPage projects={projects.filter(project => projectRoles[project.id] !== 'viewer')} profiles={profiles}
           initialProjectId={collectionProjectId} /> : loaded && tab === 'companies' ?
-          <CompaniesPage projects={projects} projectRoles={projectRoles} initialProjectId={collectionProjectId} initialReplyInboundEmailId={replyInboundEmailId} initialFollowupCompanyId={followupCompanyId} /> : loaded && tab === 'dashboard' ?
-          <DashboardPage onUnreadChange={setUnreadNotifications} onOpenInboundReply={(projectId, inboundEmailId) => {
-            setCollectionProjectId(projectId); setFollowupCompanyId(null); setReplyInboundEmailId(inboundEmailId); setTab('companies'); setNotice('')
+          <CompaniesPage projects={projects} projectRoles={projectRoles} initialProjectId={collectionProjectId} initialReplyInboundEmailId={replyInboundEmailId} initialFollowupCompanyId={followupCompanyId} initialCompanyId={completionCompanyId} /> : loaded && tab === 'dashboard' ?
+          <DashboardPage onOpenCompany={(projectId, companyId) => {
+            setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(null); setCompletionCompanyId(companyId); setTab('companies'); setNotice('')
+          }} onUnreadChange={setUnreadNotifications} onOpenInboundReply={(projectId, inboundEmailId) => {
+            setCompletionCompanyId(null); setCollectionProjectId(projectId); setFollowupCompanyId(null); setReplyInboundEmailId(inboundEmailId); setTab('companies'); setNotice('')
           }} onOpenFollowup={(projectId, companyId) => {
-            setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
+            setCompletionCompanyId(null); setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
           <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'deliveries' ?
           <EmailDeliveriesPage projects={projects} projectRoles={projectRoles} /> : loaded && tab === 'approvals' ?
