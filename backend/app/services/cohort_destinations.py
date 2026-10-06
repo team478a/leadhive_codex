@@ -15,7 +15,7 @@ from app.services.sales_preparation import context_hash
 from app.services.sendability import DEFINITION, evaluate
 
 
-def page(db, cohort, project, offset, limit, expected_context=None):
+def page(db, cohort, project, offset, limit, expected_context=None, benchmark=False):
     profile = db.get(TargetProfile, project.target_profile_id)
     context = context_hash(project, profile)
     if expected_context is not None and expected_context != context:
@@ -32,6 +32,12 @@ def page(db, cohort, project, offset, limit, expected_context=None):
     started = datetime.now(timezone.utc)
     histories = page_history(db, project.id, ids)
     rows = []
+    if benchmark:
+        from app.services.benchmark_evidence import lead, missing
+        from app.services.benchmark_summary import baseline_for, costs
+        from app.services.completion_metrics import match_evidence
+
+        matched, assessed = match_evidence(db, list(companies.values()), project, profile)
     for company_id in ids:
         company = companies.get(company_id)
         if company is None:
@@ -53,6 +59,8 @@ def page(db, cohort, project, offset, limit, expected_context=None):
                     ],
                 )
             )
+            if benchmark:
+                rows[-1]["benchmark"] = missing(rows[-1])
             continue
         result = evaluate(db, company)
         completion = readiness(db, company, project)
@@ -78,9 +86,18 @@ def page(db, cohort, project, offset, limit, expected_context=None):
                 ],
             )
         )
+        if benchmark:
+            rows[-1]["benchmark"] = lead(
+                db,
+                company,
+                project,
+                result,
+                completion,
+                company.id in matched if company.id in assessed else None,
+            )
     # Each page reads current records; across pages this is an observation interval,
     # not an immutable authorization snapshot. No data or delivery states are written.
-    return dict(
+    output = dict(
         cohort_id=cohort.id,
         cohort_hash=cohort.cohort_hash,
         context_hash=context,
@@ -98,3 +115,10 @@ def page(db, cohort, project, offset, limit, expected_context=None):
         execution_allowed=False,
         consistency="CURRENT_PER_PAGE_OBSERVATION_INTERVAL",
     )
+    if benchmark:
+        output["benchmark_meta"] = dict(
+            definition="completion-benchmark-v1",
+            baseline=baseline_for(cohort.cohort_hash),
+            cost=costs(db, cohort, project),
+        )
+    return output

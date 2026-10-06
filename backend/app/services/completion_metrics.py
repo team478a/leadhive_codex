@@ -80,20 +80,10 @@ def create_cohort(db, project, user, name):
     return row
 
 
-def report(db, cohort, project):
-    ids = [UUID(value) for value in cohort.company_ids]
-    companies = db.scalars(
-        select(Company).where(Company.project_id == project.id, Company.id.in_(ids))
-    ).all()
-    ids_present = [c.id for c in companies]
-    sites = defaultdict(list)
-    for site in db.scalars(
-        select(LeadSiteEvidence).where(LeadSiteEvidence.company_id.in_(ids_present))
-    ):
-        sites[site.company_id].append(site)
-    profile = db.get(TargetProfile, project.target_profile_id)
+def match_evidence(db, companies, project, profile):
     current_context = context_hash(project, profile)
     company_map = {c.id: c for c in companies}
+    ids_present = list(company_map)
     matched = set()
     assessed = set()
     for item, job in db.execute(
@@ -119,6 +109,23 @@ def report(db, cohort, project):
             assessed.add(company.id)
             if company.is_target and company.score >= job.payload["minimum_score"]:
                 matched.add(company.id)
+    return matched, assessed
+
+
+def report(db, cohort, project):
+    ids = [UUID(value) for value in cohort.company_ids]
+    companies = db.scalars(
+        select(Company).where(Company.project_id == project.id, Company.id.in_(ids))
+    ).all()
+    ids_present = [c.id for c in companies]
+    sites = defaultdict(list)
+    for site in db.scalars(
+        select(LeadSiteEvidence).where(LeadSiteEvidence.company_id.in_(ids_present))
+    ):
+        sites[site.company_id].append(site)
+    profile = db.get(TargetProfile, project.target_profile_id)
+    current_context = context_hash(project, profile)
+    matched, assessed = match_evidence(db, companies, project, profile)
     evidence_ids = {
         c.id
         for c in companies

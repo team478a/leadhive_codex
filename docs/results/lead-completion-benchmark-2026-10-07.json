@@ -1,0 +1,453 @@
+{
+  "definition": "completion-benchmark-v1",
+  "discovered": 100,
+  "inspected": 100,
+  "complete": true,
+  "stages": [
+    {
+      "code": "DISCOVERED",
+      "observed_count": 100,
+      "unknown": 0,
+      "passed_count": 100,
+      "passed_unknown": 0,
+      "from_discovered": 100.0,
+      "conversion_rate": null
+    },
+    {
+      "code": "MATCHED",
+      "observed_count": 0,
+      "unknown": 100,
+      "passed_count": 0,
+      "passed_unknown": 100,
+      "from_discovered": null,
+      "conversion_rate": null
+    },
+    {
+      "code": "IDENTITY_CONFIRMED",
+      "observed_count": 0,
+      "unknown": 100,
+      "passed_count": 0,
+      "passed_unknown": 100,
+      "from_discovered": null,
+      "conversion_rate": null
+    },
+    {
+      "code": "OFFICIAL_SITE_CONFIRMED",
+      "observed_count": 0,
+      "unknown": 43,
+      "passed_count": 0,
+      "passed_unknown": 43,
+      "from_discovered": null,
+      "conversion_rate": null
+    },
+    {
+      "code": "DESTINATION_FOUND",
+      "observed_count": 24,
+      "unknown": 0,
+      "passed_count": 0,
+      "passed_unknown": 24,
+      "from_discovered": 24.0,
+      "conversion_rate": null
+    },
+    {
+      "code": "CONTACT_ALLOWED",
+      "observed_count": 0,
+      "unknown": 0,
+      "passed_count": 0,
+      "passed_unknown": 0,
+      "from_discovered": 0.0,
+      "conversion_rate": null
+    },
+    {
+      "code": "SENDABILITY_READY",
+      "observed_count": 0,
+      "unknown": 0,
+      "passed_count": 0,
+      "passed_unknown": 0,
+      "from_discovered": 0.0,
+      "conversion_rate": null
+    },
+    {
+      "code": "DM_PREPARED",
+      "observed_count": 0,
+      "unknown": 0,
+      "passed_count": 0,
+      "passed_unknown": 0,
+      "from_discovered": 0.0,
+      "conversion_rate": null
+    },
+    {
+      "code": "DM_READY",
+      "observed_count": 0,
+      "unknown": 0,
+      "passed_count": 0,
+      "passed_unknown": 0,
+      "from_discovered": 0.0,
+      "conversion_rate": null
+    }
+  ],
+  "distributions": {
+    "match": {
+      "UNKNOWN": 100
+    },
+    "identity": {
+      "UNKNOWN": 100
+    },
+    "official_site": {
+      "NOT_FOUND": 57,
+      "UNKNOWN": 43
+    },
+    "permission": {
+      "UNCERTAIN": 85,
+      "PROHIBITED": 15
+    },
+    "preparation": {
+      "NOT_STARTED": 100
+    }
+  },
+  "sendability": {
+    "HOLD": 98,
+    "REVIEW": 1,
+    "BLOCKED": 1
+  },
+  "dm_ready": 0,
+  "dm_ready_rate": 0.0,
+  "destinations": {
+    "leads": 24,
+    "total": 29,
+    "unique": 19,
+    "shared": 8,
+    "by_type": {
+      "email": 0,
+      "form": 19
+    }
+  },
+  "bottlenecks": [
+    {
+      "code": "DESTINATION_NOT_SELECTED",
+      "message": "有効な窓口選択なし",
+      "next_action": "READYの窓口をHumanが選択する",
+      "affected_leads": 100,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "DM_NOT_PREPARED",
+      "message": "根拠付きDM下書きなし",
+      "next_action": "確認した根拠から下書きを準備する",
+      "affected_leads": 100,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "UNKNOWN",
+      "message": "評価・根拠が未記録",
+      "next_action": "現在の条件に結び付く評価根拠を確認する",
+      "affected_leads": 100,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "CONTACT_NOT_FOUND",
+      "message": "窓口候補なし",
+      "next_action": "公式サイトで連絡先を確認する",
+      "affected_leads": 76,
+      "primary_leads": 19,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "OFFICIAL_SITE_NOT_FOUND",
+      "message": "公式サイト未登録",
+      "next_action": "公式サイト候補を探す",
+      "affected_leads": 57,
+      "primary_leads": 57,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "IDENTITY_UNCERTAIN",
+      "message": "企業・店舗と公式サイトの照合が未確認",
+      "next_action": "名称・住所・電話の照合根拠を確認する",
+      "affected_leads": 43,
+      "primary_leads": 23,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "DESTINATION_PURPOSE_UNCERTAIN",
+      "message": "用途の有効な確認証跡がない",
+      "next_action": "根拠を確認して用途確認を保存する。送信承認とは別の操作です",
+      "affected_leads": 24,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "REQUIRED_FIELD_UNKNOWN",
+      "message": "本文・必須項目の対応が未確認",
+      "next_action": "フォーム項目のマッピングを確認する",
+      "affected_leads": 21,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_NOT_READY",
+      "message": "フォームがREADYではない",
+      "next_action": "解析結果を確認する",
+      "affected_leads": 20,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_TECHNICALLY_UNSUPPORTED",
+      "message": "通常経路の技術対応が未確認",
+      "next_action": "対応方式を確認する。送信は開始しない",
+      "affected_leads": 16,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "SHARED_DESTINATION",
+      "message": "複数対象の共通窓口",
+      "next_action": "独立窓口または共有窓口への一度だけの対応を検討する",
+      "affected_leads": 14,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "CAPTCHA",
+      "message": "CAPTCHA・人の操作が必要",
+      "next_action": "Human Required。自動操作や回避は行わない",
+      "affected_leads": 9,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "CONTACT_PERMISSION_UNCERTAIN",
+      "message": "既存の連絡可否制御が許可していない",
+      "next_action": "連絡可否の理由を確認する",
+      "affected_leads": 9,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_PROFILE_MISMATCH",
+      "message": "選択候補と主フォームが異なる",
+      "next_action": "対象のフォームProfileを確認する",
+      "affected_leads": 3,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "SALES_PERMISSION_UNCERTAIN",
+      "message": "営業利用可否が未確認",
+      "next_action": "禁止表記・窓口の用途を確認する",
+      "affected_leads": 3,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_FINGERPRINT_MISSING",
+      "message": "フォーム構造の証拠がない",
+      "next_action": "再解析が必要",
+      "affected_leads": 2,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "SALES_PROHIBITED",
+      "message": "営業禁止の記録あり",
+      "next_action": "連絡しない",
+      "affected_leads": 1,
+      "primary_leads": 1,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    }
+  ],
+  "cost": {
+    "coverage": "RECORDED_PROJECT_USAGE_SINCE_COHORT_CREATION_NOT_TOTAL_COST",
+    "observed_search_calls": {},
+    "search_calls": null,
+    "places_calls": null,
+    "ai_calls": null,
+    "observed_ai_calls": 0,
+    "input_tokens": null,
+    "output_tokens": null,
+    "estimated_cost": null,
+    "currency": null,
+    "cost_per_dm_ready": null,
+    "human_review_seconds": null,
+    "review_sessions": 0,
+    "completed_reviews": 0,
+    "unmeasured_reviews": 0,
+    "category_timing_available": false
+  },
+  "human_work_queue": {
+    "official_site": 57,
+    "identity": 42,
+    "destination_purpose": 23,
+    "shared_destination": 14,
+    "form": 23,
+    "dm_evidence": 99
+  },
+  "potential_unlock_definition": "CONDITIONAL_SINGLE_RECORDED_PREPARATION_GATE_NOT_PREDICTED_GAIN_OR_SEND_PERMISSION; upstream MATCHED unknown is not solved",
+  "uninstrumented_reasons": {
+    "ROBOTS_BLOCKED": null,
+    "JS_FORM_UNSUPPORTED": null,
+    "CONFIRMATION_FORM_UNSUPPORTED": null,
+    "SENDER_NOT_READY": null
+  },
+  "reason_aliases": {
+    "CORE_PERMISSION_BLOCKED": "use specific DO_NOT_CONTACT/SUPPRESSED/SALES_PROHIBITED",
+    "FORM_REVIEW_REQUIRED": "FORM_NOT_READY",
+    "JS_FORM_UNSUPPORTED": "FORM_TECHNICALLY_UNSUPPORTED (JS subtype not instrumented)"
+  },
+  "execution_allowed": false,
+  "cohort_hash": "2f425b9a4c3fc2c48aca84441c7b65f1049c0980db1245a5ba715966b50f0e34",
+  "snapshot_sha256": "d8e7bc6f0708c6dc4259329dd01fe05878901c0f5fbd7ca918751d277ab0b31b",
+  "input_commit": "13a1d071d0f9d9c1d28b7d7a1f32f15245081c01",
+  "requested_baseline": "a0233d1a9a1a5b321c1e08f89e21ae021070db3f",
+  "source_migration": "fae47ac5e861",
+  "measured_at": "2026-10-06T21:55:05.912469+00:00",
+  "schema_projection_missing": [
+    "lead_source_observations",
+    "lead_site_evidence",
+    "contact_destinations",
+    "lead_destination_links",
+    "site_identity_review_events",
+    "destination_review_events",
+    "destination_choice_events",
+    "lead_dm_preparations",
+    "lead_processing_usage",
+    "lead_review_sessions",
+    "lead_completion_cohorts"
+  ],
+  "privacy": "AGGREGATES_ONLY",
+  "baseline": {
+    "baseline_commit": "6a8a213878e416484f7a2b7fba6515b571bcc0d1",
+    "recorded_at": "2026-10-06T17:47:00.666671+09:00",
+    "read_only": true,
+    "cohort": "Existing Himeji 100 locations",
+    "discovered": 100,
+    "website_url_present": 43,
+    "website_url_missing": 57,
+    "official_site_confirmed_automatic": null,
+    "identity_confirmed_automatic": null,
+    "destination_found": 24,
+    "destination_confirmed": null,
+    "unique_destinations": 19,
+    "shared_destinations": 8,
+    "legacy_contact_allowed": 0,
+    "statuses": {
+      "READY": 0,
+      "REVIEW": 23,
+      "HOLD": 76,
+      "BLOCKED": 1
+    },
+    "dm_ready": 0,
+    "dm_ready_rate": 0,
+    "reason_counts": {
+      "OFFICIAL_SITE_NOT_FOUND": 57,
+      "CONTACT_NOT_FOUND": 19,
+      "IDENTITY_UNCERTAIN": 9,
+      "SHARED_DESTINATION": 14,
+      "CORE_PERMISSION_BLOCKED": 1
+    },
+    "qualification": "Inventory baseline, not automatic enrichment accuracy. Legacy registered URLs include one-time manual review. Identity/official confidence evidence is not structured; unknown is null, never confirmed. READY conservatively requires this evidence; ALLOWED does not imply DM_READY.",
+    "costs": {
+      "search_calls": null,
+      "places_calls": null,
+      "ai_calls": null,
+      "ai_tokens": null,
+      "estimated_cost": null,
+      "human_review_seconds": null
+    },
+    "email_deliveries": 0,
+    "form_deliveries": 0
+  },
+  "benchmark_execution": {
+    "search_calls": 0,
+    "places_calls": 0,
+    "ai_calls": 0,
+    "email_sent": 0,
+    "form_sent": 0,
+    "approvals": 0,
+    "outbound": false,
+    "worker_started": false,
+    "external_get": 0
+  },
+  "reason_counts": {
+    "CAPTCHA": 9,
+    "CONTACT_INVALID": 0,
+    "CONTACT_NOT_FOUND": 76,
+    "CONTACT_PERMISSION_UNCERTAIN": 9,
+    "DELIVERY_UNKNOWN": 0,
+    "DESTINATION_INVALID": 0,
+    "DESTINATION_NOT_SELECTED": 100,
+    "DESTINATION_PURPOSE_UNCERTAIN": 24,
+    "DESTINATION_PURPOSE_UNSUITABLE": 0,
+    "DESTINATION_REVIEW_EXPIRED": 0,
+    "DESTINATION_REVIEW_REVOKED": 0,
+    "DESTINATION_REVIEW_STALE": 0,
+    "DESTINATION_SCOPE_UNCERTAIN": 0,
+    "DM_NOT_PREPARED": 100,
+    "DM_PREPARATION_EXPIRED": 0,
+    "DM_PREPARATION_INVALIDATED": 0,
+    "DM_REVIEW_REQUIRED": 0,
+    "DO_NOT_CONTACT": 0,
+    "DUPLICATE_DESTINATION": 0,
+    "EMAIL_UNVERIFIED": 0,
+    "FORM_ANALYSIS_STALE": 0,
+    "FORM_FINGERPRINT_MISSING": 2,
+    "FORM_NOT_READY": 20,
+    "FORM_PROFILE_MISMATCH": 3,
+    "FORM_TECHNICALLY_UNSUPPORTED": 16,
+    "FORM_UNANALYZED": 0,
+    "IDENTITY_UNCERTAIN": 43,
+    "LEAD_REMOVED_OR_MERGED": 0,
+    "OFFICIAL_SITE_NOT_FOUND": 57,
+    "REQUIRED_FIELD_UNKNOWN": 21,
+    "SALES_PERMISSION_UNCERTAIN": 3,
+    "SALES_PROHIBITED": 1,
+    "SHARED_DESTINATION": 14,
+    "SUPPRESSED": 0,
+    "UNKNOWN": 100
+  },
+  "primary_reason_counts": {
+    "OFFICIAL_SITE_NOT_FOUND": 57,
+    "CONTACT_NOT_FOUND": 19,
+    "IDENTITY_UNCERTAIN": 23,
+    "SALES_PROHIBITED": 1
+  },
+  "human_review_required_leads": 99,
+  "human_queue_blocked_excluded": 1,
+  "measurement_schema": "37945a503231",
+  "snapshot_hash_encoding": "UTF8_NORMALIZED_LF",
+  "snapshot_file_sha256": "d8e7bc6f0708c6dc4259329dd01fe05878901c0f5fbd7ca918751d277ab0b31b",
+  "registered_urls": 43,
+  "source_delivery_history": {
+    "email": 0,
+    "form": 0,
+    "approvals": 0
+  },
+  "safety_verified": {
+    "source_snapshot_unchanged": true,
+    "source_schema_unchanged": true,
+    "outbound": false,
+    "worker": "exited"
+  },
+  "snapshot_redaction": "Business states plus required-field predicates; no form values/freeform DOM/human identity"
+}

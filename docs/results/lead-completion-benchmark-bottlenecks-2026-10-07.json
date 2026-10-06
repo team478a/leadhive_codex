@@ -1,0 +1,160 @@
+{
+  "definition": "completion-benchmark-v1",
+  "cohort_hash": "2f425b9a4c3fc2c48aca84441c7b65f1049c0980db1245a5ba715966b50f0e34",
+  "bottlenecks": [
+    {
+      "code": "DESTINATION_NOT_SELECTED",
+      "message": "有効な窓口選択なし",
+      "next_action": "READYの窓口をHumanが選択する",
+      "affected_leads": 100,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "DM_NOT_PREPARED",
+      "message": "根拠付きDM下書きなし",
+      "next_action": "確認した根拠から下書きを準備する",
+      "affected_leads": 100,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "UNKNOWN",
+      "message": "評価・根拠が未記録",
+      "next_action": "現在の条件に結び付く評価根拠を確認する",
+      "affected_leads": 100,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "CONTACT_NOT_FOUND",
+      "message": "窓口候補なし",
+      "next_action": "公式サイトで連絡先を確認する",
+      "affected_leads": 76,
+      "primary_leads": 19,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "OFFICIAL_SITE_NOT_FOUND",
+      "message": "公式サイト未登録",
+      "next_action": "公式サイト候補を探す",
+      "affected_leads": 57,
+      "primary_leads": 57,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "IDENTITY_UNCERTAIN",
+      "message": "企業・店舗と公式サイトの照合が未確認",
+      "next_action": "名称・住所・電話の照合根拠を確認する",
+      "affected_leads": 43,
+      "primary_leads": 23,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "DESTINATION_PURPOSE_UNCERTAIN",
+      "message": "用途の有効な確認証跡がない",
+      "next_action": "根拠を確認して用途確認を保存する。送信承認とは別の操作です",
+      "affected_leads": 24,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "REQUIRED_FIELD_UNKNOWN",
+      "message": "本文・必須項目の対応が未確認",
+      "next_action": "フォーム項目のマッピングを確認する",
+      "affected_leads": 21,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_NOT_READY",
+      "message": "フォームがREADYではない",
+      "next_action": "解析結果を確認する",
+      "affected_leads": 20,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_TECHNICALLY_UNSUPPORTED",
+      "message": "通常経路の技術対応が未確認",
+      "next_action": "対応方式を確認する。送信は開始しない",
+      "affected_leads": 16,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "SHARED_DESTINATION",
+      "message": "複数対象の共通窓口",
+      "next_action": "独立窓口または共有窓口への一度だけの対応を検討する",
+      "affected_leads": 14,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "CAPTCHA",
+      "message": "CAPTCHA・人の操作が必要",
+      "next_action": "Human Required。自動操作や回避は行わない",
+      "affected_leads": 9,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "CONTACT_PERMISSION_UNCERTAIN",
+      "message": "既存の連絡可否制御が許可していない",
+      "next_action": "連絡可否の理由を確認する",
+      "affected_leads": 9,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_PROFILE_MISMATCH",
+      "message": "選択候補と主フォームが異なる",
+      "next_action": "対象のフォームProfileを確認する",
+      "affected_leads": 3,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "SALES_PERMISSION_UNCERTAIN",
+      "message": "営業利用可否が未確認",
+      "next_action": "禁止表記・窓口の用途を確認する",
+      "affected_leads": 3,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "FORM_FINGERPRINT_MISSING",
+      "message": "フォーム構造の証拠がない",
+      "next_action": "再解析が必要",
+      "affected_leads": 2,
+      "primary_leads": 0,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    },
+    {
+      "code": "SALES_PROHIBITED",
+      "message": "営業禁止の記録あり",
+      "next_action": "連絡しない",
+      "affected_leads": 1,
+      "primary_leads": 1,
+      "sole_blocker_leads": 0,
+      "potential_unlock": 0
+    }
+  ],
+  "qualification": "CONDITIONAL_SINGLE_RECORDED_PREPARATION_GATE_NOT_PREDICTED_GAIN_OR_SEND_PERMISSION; upstream MATCHED unknown is not solved"
+}

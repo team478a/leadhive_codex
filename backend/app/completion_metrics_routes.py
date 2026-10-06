@@ -200,6 +200,7 @@ def finish_review(
 @router.get("/completion-cohorts/{cohort_id}/destination-diagnostics")
 def destinations(
     cohort_id: UUID,
+    benchmark: bool = Query(default=False),
     offset: int = Query(default=0, ge=0, le=3000),
     limit: int = Query(default=25, ge=1, le=50),
     expected_context_hash: str | None = Query(default=None, pattern=r"^[a-f0-9]{64}$"),
@@ -207,4 +208,4 @@ def destinations(
     user: User = Depends(current_user),
 ):
     cohort, project = owned_cohort(db, user, cohort_id)
-    return destination_page(db, cohort, project, offset, limit, expected_context_hash)
+    return destination_page(db, cohort, project, offset, limit, expected_context_hash, benchmark)
