@@ -163,6 +163,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [113_CONTROLLED_ADAPTER_POSTGRES_HTTP.md](113_CONTROLLED_ADAPTER_POSTGRES_HTTP.md): 管理下HTTPとPostgreSQLの承認消費・永続UNKNOWN・プロセス停止/競合時の再POST防止
 
+- [114_CF7_PROTOCOL_READINESS.md](114_CF7_PROTOCOL_READINESS.md): 実CF7の公式protocol監査・nonce/hash/受付証拠・SSRF停止条件と管理下lab検証計画
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
