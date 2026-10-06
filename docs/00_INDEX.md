@@ -175,6 +175,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [119_CF7_CANDIDATE_WIRE_PROTOCOL_LAB.md](119_CF7_CANDIDATE_WIRE_PROTOCOL_LAB.md): 新候補encoderの実CF7受付・Browser field/mail hash照合・変更前停止と配送隔離
 
+- [120_CF7_CANDIDATE_APPROVAL_PREPARATION_DESIGN.md](120_CF7_CANDIDATE_APPROVAL_PREPARATION_DESIGN.md): CF7候補の証拠保存・既存Human承認への結合と非実行DB guardの先行設計
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
