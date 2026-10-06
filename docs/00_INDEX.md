@@ -199,6 +199,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [131_CF7_OBSERVATION_HUMAN_JOB_CONTROL.md](131_CF7_OBSERVATION_HUMAN_JOB_CONTROL.md): 管理下観察のHuman開始・停止・期限切れ回収API、append-only Job台帳、操作UIと独立プロセス検証
 
+- [132_CF7_OBSERVATION_RUNNER_AND_FAILURE_DIAGNOSTICS.md](132_CF7_OBSERVATION_RUNNER_AND_FAILURE_DIAGNOSTICS.md): 管理下1件runnerの起動・終了・回収、固定失敗理由とappend-only履歴保護
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
