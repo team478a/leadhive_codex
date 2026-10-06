@@ -1,4 +1,4 @@
-# CF7静的観察の管理下検証（O1/O2）
+# CF7静的観察の管理下検証（O1/O2/O3-A2）
 
 `observer.py` は渡された架空HTML bytesを解析する未登録prototypeです。URLの検査には既存pinned TLS labの純粋validatorだけを使います。HTTP/DNS、JavaScript実行、ファイル読み込み、DB、Human Approval、送信機能は呼び出しません。アプリ/workerへimportしていません。
 
@@ -24,3 +24,7 @@ backend/.venv/Scripts/python.exe -m compileall -q scripts/cf7_observer_lab
 型検査対象に `fetch.py` も含めます。robotsは保守的subsetで、404/未知directive/圧縮/redirect/非200等は停止。cancelは協調的で、parser隔離やOS強制停止はありません。
 
 設計は [docs/124](../../docs/124_REAL_SITE_OBSERVER_SAFETY_DESIGN.md)、O2の検証記録と制限は [docs/125](../../docs/125_CF7_OBSERVER_OWNED_TLS_GET_INTEGRATION.md) を参照してください。
+
+`storage_contract.py` はO3-A2のpure保存契約です。架空の取得receipt/HTMLから未検証の診断projectionとimmutable envelopeを生成し、保存bytesの版/hash/サイズ/Project・Job binding/期限を検査します。raw HTML・hidden・入力value・送信用endpointはJSONへ保存しません。HTTP/DNS/DB/承認/送信を呼ばず、O2への自動adapterもありません。型検査対象にこのファイルを追加します。
+
+保存設計は [docs/126](../../docs/126_CF7_OBSERVATION_STORAGE_AND_DIAGNOSTIC_DESIGN.md)、実装・13件のoffline試験・信頼境界の制限は [docs/127](../../docs/127_CF7_OBSERVATION_STORAGE_CONTRACT_VALIDATION.md)。取得receiptのtls/robots値は実通信の証明ではなく、将来server側の取得/DB境界で生成・検査する必要があります。
