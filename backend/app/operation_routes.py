@@ -403,6 +403,8 @@ def retry_operation(
     job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     source = owned_operation(job_id, db, user)
+    if source.operation_type == "cf7_observation":
+        raise HTTPException(409, "静的フォーム観察は検証専用です。再実行はできません。")
     if source.operation_type == "prepare_outreach":
         raise HTTPException(409, "営業準備専用の再開操作を使用してください。")
     if source.status not in {"failed", "cancelled"}:

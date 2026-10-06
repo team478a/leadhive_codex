@@ -82,6 +82,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
         select(OperationJob)
         .where(
             OperationJob.status == "running",
+            OperationJob.operation_type != "cf7_observation",
             OperationJob.operation_type.in_(
                 (
                     "collect_search",
@@ -481,6 +482,7 @@ def claim_job(db) -> OperationJob | None:
         select(OperationJob)
         .where(
             OperationJob.status == "queued",
+            OperationJob.operation_type != "cf7_observation",
             OperationJob.operation_type.in_(
                 (
                     "collect_search",
