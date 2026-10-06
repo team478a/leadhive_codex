@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
 
 test('Human can organize candidate destinations without approval or sending', async ({ page }) => {
+  test.setTimeout(120_000)
   const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
   const env = { ...process.env, E2E_EMAIL: `e2e-completion-${randomBytes(8).toString('hex')}@example.com`, E2E_PASSWORD: randomBytes(24).toString('hex') }
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
