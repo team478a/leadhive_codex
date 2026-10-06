@@ -173,6 +173,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [118_CF7_IMMUTABLE_CANDIDATE_CONTRACT.md](118_CF7_IMMUTABLE_CANDIDATE_CONTRACT.md): 実CF7候補の非実行契約・endpoint/文面/構造/wireの固定hashと変更検知
 
+- [119_CF7_CANDIDATE_WIRE_PROTOCOL_LAB.md](119_CF7_CANDIDATE_WIRE_PROTOCOL_LAB.md): 新候補encoderの実CF7受付・Browser field/mail hash照合・変更前停止と配送隔離
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

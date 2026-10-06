@@ -7,7 +7,7 @@ LeadHive API/worker/DBへ接続しない。Human承認や送信許可を生成�
 ## 必要条件
 
 - Docker Desktopが起動済み。既存containerを停止・初期化する必要はない。
-- リポジトリのBackend仮想環境（httpx/BeautifulSoup）とNode。
+- リポジトリのBackend仮想環境（httpx/BeautifulSoup/Pydantic/email-validator）とNode。
 - `frontend/npm ci` 相当の依存関係とPlaywright Chromium。
 - 公式imageの取得とCF7公開sourceのdownloadが可能な開発PC。
 
@@ -57,11 +57,14 @@ Dockerのlabel/nameを確認してそのlabだけを撤去する。`docker syste
 
 - `protocol.py`：I/Oなしのlab限定観測・保守的な受付分類。Production SSRF対策ではない。
 - `cases.py`：実CF7 HTTPとBrowserの比較。構造変更/応答変造はoffline判定として区別。
+- `contract_probe.py`：純粋なCF7候補契約のwireをlabだけで照合。契約内のHTTPS placeholder URLは実行せず、管理下loopback fixtureへbytesだけを渡す。DB/承認/dispatch未接続。
 - `run.py`：取得・隔離検査・起動・撤去。LeadHiveの承認・予約を変更しない。
 - `gateway.py` / `relay.php`：隔離を保ったままBrowser/HTTPを実Apacheへ中継。
   POSTは固定CF7 feedback routeだけ。credential/cookieを転送しない。
 - PHP fixture/MU plugin：管理下の標準フォーム、同意変種と捕捉/失敗/skip/abort/spam/demo。
-- Browser probe：実CF7 JavaScriptの標準multipart経路を1回観測。
+- Browser probe：従来fixtureと新候補比較の各ケースで、実CF7 JavaScriptのPOSTを1回ずつ観測。
+
+新候補のraw snapshot/wireとBrowser比較artifactもignored distへ保存する。共有するのは版・hash・件数だけ。新encoderの照合結果と制限は [docs/119](../../docs/119_CF7_CANDIDATE_WIRE_PROTOCOL_LAB.md)。
 
 `RECEIPT_REPORTED` はCF7受付応答の確認だけ。メール到達の証拠ではない。
 UNKNOWNの自動retryやdispatch連携をこのlabは実装しない。承認基盤のprocess停止/競合は
