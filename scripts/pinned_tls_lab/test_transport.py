@@ -18,6 +18,7 @@ from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
+from resolver import ResolutionFailure
 
 
 class TLSFixture:
@@ -302,13 +303,13 @@ class TransportTests(unittest.TestCase):
     def test_dns_failure_and_deadline_exhaustion_never_connect(self):
         with (
             patch.object(
-                socket, "getaddrinfo", side_effect=socket.gaierror("secret failure")
+                t, "isolated_resolve", side_effect=ResolutionFailure("secret failure")
             ),
             self.assertRaisesRegex(t.TransportBlocked, "^DNS resolution failed$"),
         ):
             t.resolve("managed.example")
 
-        def slow_dns(host):
+        def slow_dns(host, timeout):
             time.sleep(0.03)
             return ("8.8.8.8",)
 

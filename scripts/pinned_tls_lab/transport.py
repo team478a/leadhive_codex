@@ -17,6 +17,12 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 import httpcore
+from resolver import (
+    ResolutionCleanupFailure,
+    ResolutionFailure,
+    ResolutionTimeout,
+    isolated_resolve,
+)
 
 
 class TransportBlocked(ValueError):
@@ -61,18 +67,17 @@ def target(url: str) -> str:
     return host
 
 
-def resolve(host: str) -> tuple[str, ...]:
+def resolve(host: str, timeout: float = 5) -> tuple[str, ...]:
     try:
-        answers = socket.getaddrinfo(host, 443, type=socket.SOCK_STREAM)
-    except OSError:
+        return isolated_resolve(host, timeout)
+    except ResolutionTimeout:
+        raise httpcore.ConnectTimeout("DNS deadline exceeded") from None
+    except ResolutionCleanupFailure:
+        raise TransportBlocked(
+            "DNS termination unconfirmed; resolver blocked"
+        ) from None
+    except ResolutionFailure:
         raise TransportBlocked("DNS resolution failed") from None
-    addresses: list[str] = []
-    for answer in answers:
-        address = answer[4][0]
-        if not isinstance(address, str):
-            raise TransportBlocked("Invalid DNS result")
-        addresses.append(address)
-    return tuple(dict.fromkeys(addresses))
 
 
 def public_addresses(answers: tuple[str, ...]) -> tuple[str, ...]:
@@ -236,7 +241,7 @@ def exchange(
     if not context.check_hostname or context.verify_mode != ssl.CERT_REQUIRED:
         raise TransportBlocked("TLS verification required")
     deadline = time.monotonic() + timeout
-    addresses = public_addresses(resolve(host))
+    addresses = public_addresses(resolve(host, timeout))
     backend = PinnedBackend(host, addresses, deadline)
     headers = [
         (b"Host", host.encode()),
