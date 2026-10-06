@@ -23,6 +23,7 @@ from app.company_workflow_routes import router as company_workflow_router
 from app.completion_metrics_routes import router as completion_metrics_router
 from app.config import settings
 from app.database import SessionLocal
+from app.destination_review_routes import router as destination_review_router
 from app.email_feedback_routes import router as email_feedback_router
 from app.form_batch_routes import router as form_batch_router
 from app.form_intelligence_routes import router as form_intelligence_router
@@ -66,6 +67,7 @@ app.include_router(approved_email_router)
 app.include_router(email_feedback_router)
 app.include_router(preparation_router)
 app.include_router(lead_completion_router)
+app.include_router(destination_review_router)
 app.include_router(completion_metrics_router)
 
 

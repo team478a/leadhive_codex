@@ -1,6 +1,6 @@
 """Cached, read-only destination diagnostics. Never authorizes or schedules delivery.
 
-B1 deliberately cannot return READY: version-bound purpose attestations are B2.
+READY requires a current version-bound Human purpose attestation.
 The canonical contact guard remains the sending authority; these are stricter
 preparation diagnostics, not a second permission store.
 """
@@ -11,6 +11,7 @@ from pydantic import EmailStr, TypeAdapter, ValidationError
 from sqlalchemy import func, or_, select
 
 from app.models import (
+    ContactDestination,
     ContactPerson,
     EmailDelivery,
     FormDelivery,
@@ -20,12 +21,20 @@ from app.models import (
 )
 from app.services.contact_destinations import candidates, linked_inventory, normalize_destination
 from app.services.contact_permission import evaluate_contact_permission
+from app.services.destination_review import latest, public_review, snapshot_hash
 from app.services.form_intelligence.fields import mapping_review_reason
 from app.services.lead_identity import identity_hash
 
-DEFINITION = "sendability-b1-v1"
+DEFINITION = "sendability-b2-v1"
 EMAIL = TypeAdapter(EmailStr)
 REASONS = {
+    "DESTINATION_SCOPE_UNCERTAIN": (
+        "窓口の対象範囲が企業・店舗と一致していない",
+        "対象範囲を確認する。共有窓口はREADYにしません",
+    ),
+    "DESTINATION_REVIEW_STALE": ("用途確認後に対象情報が変わった", "再読込し、根拠を再確認する"),
+    "DESTINATION_REVIEW_EXPIRED": ("用途確認の有効期限切れ", "根拠を再確認する"),
+    "DESTINATION_REVIEW_REVOKED": ("用途確認を取り消し済み", "必要な場合に根拠を再確認する"),
     "DO_NOT_CONTACT": ("連絡禁止", "連絡しない"),
     "SUPPRESSED": ("送信禁止リストに登録済み", "連絡しない"),
     "SALES_PROHIBITED": ("営業禁止の記録あり", "連絡しない"),
@@ -40,7 +49,7 @@ REASONS = {
     "DESTINATION_INVALID": ("窓口の形式・URLが不適切", "登録先を確認する"),
     "DESTINATION_PURPOSE_UNCERTAIN": (
         "用途の有効な確認証跡がない",
-        "用途確認の保存機能は次工程。現在はREADYにできません",
+        "根拠を確認して用途確認を保存する。送信承認とは別の操作です",
     ),
     "DESTINATION_PURPOSE_UNSUITABLE": (
         "予約・採用・サポート専用の窓口",
@@ -115,7 +124,7 @@ def status_for(codes):
         return "BLOCKED"
     if codes & HOLDS:
         return "HOLD"
-    return "REVIEW"  # B2 must introduce bound review evidence before READY.
+    return "REVIEW" if codes else "READY"
 
 
 def _key(channel, value):
@@ -199,7 +208,20 @@ def evaluate(db, company):
         codes = set(lead_codes)
         saved = inventory.get((channel, value), {})
         purpose = saved.get("purpose", "unknown")
-        codes.add("DESTINATION_PURPOSE_UNCERTAIN")
+        destination = db.get(ContactDestination, saved["id"]) if saved.get("id") else None
+        digest = snapshot_hash(db, company, destination) if destination else None
+        review_row = latest(db, company.id, destination.id) if destination else None
+        review = public_review(review_row, digest, now)
+        if review["state"] == "CURRENT":
+            purpose = review["purpose"]
+            if review["scope"] != company.record_type:
+                codes.add("DESTINATION_SCOPE_UNCERTAIN")
+        else:
+            codes.add("DESTINATION_PURPOSE_UNCERTAIN")
+            if review["state"] in {"STALE", "EXPIRED", "REVOKED"}:
+                codes.add("DESTINATION_REVIEW_" + review["state"])
+        if purpose == "unknown":
+            codes.add("DESTINATION_PURPOSE_UNCERTAIN")
         if purpose in {"support", "recruitment", "reservation"}:
             codes.add("DESTINATION_PURPOSE_UNSUITABLE")
         decision = evaluate_contact_permission(db, company.project_id, company.id, channel, value)
@@ -275,6 +297,9 @@ def evaluate(db, company):
                 purpose=purpose,
                 status=status_for(codes),
                 reasons=reason_details(codes),
+                id=destination.id if destination else None,
+                expected_hash=digest,
+                review=review,
                 core_permission=decision.status,
                 execution_allowed=False,
             )
@@ -293,7 +318,11 @@ def evaluate(db, company):
         "BLOCKED"
         if global_codes
         else next(
-            (s for s in ["REVIEW", "HOLD", "BLOCKED"] if any(r["status"] == s for r in rows)),
+            (
+                s
+                for s in ["READY", "REVIEW", "HOLD", "BLOCKED"]
+                if any(r["status"] == s for r in rows)
+            ),
             status_for(lead_codes),
         )
     )
@@ -305,7 +334,7 @@ def evaluate(db, company):
         reasons=reason_details(codes),
         destinations=rows,
         recommended_destination=None,
-        ready_evaluation="PENDING_VERSION_BOUND_PURPOSE_REVIEW",
+        ready_evaluation="CACHED_DESTINATION_PREPARATION_ONLY",
         dm_ready=False,
         execution_allowed=False,
         live_destination_checked=False,

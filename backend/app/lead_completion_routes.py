@@ -35,7 +35,13 @@ def sendability(
     company_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     company = company_access(company_id, db, user, write=False)
-    return evaluate_sendability(db, company)
+    result = evaluate_sendability(db, company)
+    try:
+        project_access(company.project_id, db, user)
+        result["can_review"] = True
+    except HTTPException:
+        result["can_review"] = False
+    return result
 
 
 @router.get("/companies/{company_id}/lead-completion")
