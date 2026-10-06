@@ -1,4 +1,4 @@
-"""Unregistered owned-fixture job service. No CLI, API, scheduler or normal worker hookup."""
+"""Owned-fixture job service. No application scheduler or normal worker hookup."""
 
 from __future__ import annotations
 
@@ -15,7 +15,9 @@ import storage_contract as contract
 import store
 from app.models import Company, OperationJob, User
 from app.project_access import company_access, project_access
+from app.schema_form_observation_job import REASONS
 from app.services.form_observation_jobs import record
+from failures import ObservationFailure
 from fastapi import HTTPException
 from sqlalchemy import select, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -166,12 +168,18 @@ def claim(sessions: Sessions, job_id: UUID, worker_id: UUID) -> contract.Binding
 
 
 class Cancellation(Event):
-    def __init__(self, sessions: Sessions, binding: contract.Binding):
+    def __init__(
+        self, sessions: Sessions, binding: contract.Binding, stop: Event | None = None
+    ):
         super().__init__()
         self.sessions, self.binding = sessions, binding
         self.reason = "OBSERVATION_FAILED"
+        self.stop = stop
 
     def is_set(self) -> bool:
+        if self.stop is not None and self.stop.is_set():
+            self.reason = "RUNNER_STOPPED"
+            self.set()
         if super().is_set():
             return True
         try:
@@ -185,13 +193,16 @@ class Cancellation(Event):
             return False
         except (JobStopped, store.StoreBlocked, ValueError, HTTPException) as error:
             self.reason = (
-                str(error) if isinstance(error, JobStopped) else "BINDING_CHANGED"
+                str(error)
+                if isinstance(error, JobStopped) and str(error) in REASONS
+                else "BINDING_CHANGED"
             )
             self.set()
             return True
 
 
 def finish_failed(sessions: Sessions, binding: contract.Binding, reason: str) -> None:
+    reason = reason if reason in REASONS else "OBSERVATION_FAILED"
     with sessions() as db:
         # Shutdown may have disabled flags: failure cleanup still requires the dedicated DB.
         if not str(db.scalar(text("SELECT current_database()"))).endswith("_test"):
@@ -214,6 +225,8 @@ def finish_failed(sessions: Sessions, binding: contract.Binding, reason: str) ->
             or job.payload.get("run_id") != str(binding.run_id)
         ):
             return  # A late worker must not change its successor's state.
+        if reason == "RUNNER_STOPPED":
+            job.cancel_requested = True
         job.status = "cancelled" if job.cancel_requested else "failed"
         job.error_message = reason
         job.failed_count = 0 if job.cancel_requested else 1
@@ -235,18 +248,22 @@ def run(
     binding: contract.Binding,
     *,
     context: ssl.SSLContext | None = None,
+    stop: Event | None = None,
 ) -> UUID | None:
     """GET-only, default OFF. No DB transaction/row lock spans the network call."""
-    cancelled = Cancellation(sessions, binding)
+    cancelled = Cancellation(sessions, binding, stop)
+    stage = "preflight"
     try:
         with sessions() as db:
             if cancelled.is_set():
                 raise JobStopped(cancelled.reason)
             started = clock(db)
+        stage = "fetch"
         receipt = fetch.observe_owned_page(context=context, cancelled=cancelled)
         with sessions() as db:
             if cancelled.is_set():
                 raise JobStopped(cancelled.reason)
+            stage = "contract"
             envelope = contract.build(
                 binding,
                 evidence_id=uuid4(),
@@ -263,6 +280,7 @@ def run(
             user = db.get(User, binding.initiated_by_user_id)
             if not user:
                 raise JobStopped("PERMISSION_CHANGED")
+            stage = "persist"
             row = store.save(db, envelope, user)
             evidence_id = row.id
             job = db.get(OperationJob, binding.operation_job_id)
@@ -271,9 +289,21 @@ def run(
             record(db, job, "COMPLETED", "running", reason="EVIDENCE_SAVED")
             db.commit()
             return evidence_id
-    except (ValueError, HTTPException, SQLAlchemyError, OSError):
+    except (ValueError, HTTPException, SQLAlchemyError, OSError) as error:
         # DB, TLS, parser and source failures never expose their raw exception text.
-        finish_failed(sessions, binding, cancelled.reason)
+        reason = cancelled.reason
+        if reason == "OBSERVATION_FAILED":
+            if isinstance(error, ObservationFailure):
+                reason = error.code
+            elif isinstance(error, JobStopped):
+                reason = str(error) if str(error) in REASONS else "OBSERVATION_FAILED"
+            elif isinstance(error, HTTPException):
+                reason = "PERMISSION_CHANGED"
+            elif isinstance(error, SQLAlchemyError) or stage == "persist":
+                reason = "OBSERVATION_STORAGE_FAILED"
+            elif stage == "contract":
+                reason = "OBSERVATION_CONTRACT_INVALID"
+        finish_failed(sessions, binding, reason)
         return None
 
 

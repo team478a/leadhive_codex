@@ -13,6 +13,7 @@ from threading import Event
 import httpcore
 import observer
 import transport
+from failures import ObservationFailure, caused_by
 
 PAGE = "https://managed.example/contact/"
 ROBOTS = "https://managed.example/robots.txt"
@@ -31,10 +32,10 @@ class FetchResult:
 
 def checkpoint(deadline: float, cancelled: Event) -> float:
     if cancelled.is_set():
-        raise transport.TransportBlocked("Observation cancelled")
+        raise ObservationFailure("CANCELLED")
     remaining = deadline - time.monotonic()
     if remaining <= 0:
-        raise transport.TransportBlocked("Observation deadline exceeded")
+        raise ObservationFailure("OBSERVATION_TIMEOUT")
     return remaining
 
 
@@ -42,25 +43,25 @@ def metadata(headers: list[tuple[bytes, bytes]], *, robots: bool) -> tuple[str, 
     # Checked before reading the body. httpcore/h11 has its own header parse cap;
     # this smaller acceptance cap is not an OS allocation/sandbox guarantee.
     if len(headers) > 32 or sum(len(k) + len(v) for k, v in headers) > 8192:
-        raise transport.TransportBlocked("Response headers too large")
+        raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
     values: dict[bytes, list[bytes]] = {}
     for key, value in headers:
         values.setdefault(key.lower(), []).append(value)
     for key in (b"content-type", b"content-length", b"content-encoding"):
         if len(values.get(key, [])) > 1:
-            raise transport.TransportBlocked("Ambiguous response metadata")
+            raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
     if b"transfer-encoding" in values:
-        raise transport.TransportBlocked("Transfer encoding unsupported")
+        raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
     if values.get(b"content-encoding", [b"identity"])[0].lower() != b"identity":
-        raise transport.TransportBlocked("Compression unsupported")
+        raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
     content_type = values.get(b"content-type", [b""])[0].lower()
     expected = b"text/plain" if robots else b"text/html"
     if content_type not in (expected, expected + b"; charset=utf-8"):
-        raise transport.TransportBlocked("Unsupported response type")
+        raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
     length = values.get(b"content-length", [b""])[0]
     limit = 16384 if robots else 65536
     if not length.isdigit() or len(length) > 6 or not 0 < int(length) <= limit:
-        raise transport.TransportBlocked("Invalid response length")
+        raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
     return content_type.decode("ascii"), int(length)
 
 
@@ -75,10 +76,19 @@ def get(
     if os.environ.get("CF7_OBSERVER_GET_LAB") != "1" or url != (
         ROBOTS if robots else PAGE
     ):
-        raise transport.TransportBlocked("Only owned lab GET supported")
+        raise ObservationFailure("LAB_DISABLED")
     remaining = checkpoint(deadline, cancelled)
     host = transport.target(url)
-    addresses = transport.public_addresses(transport.resolve(host, remaining))
+    try:
+        answers = transport.resolve(host, remaining)
+    except httpcore.TimeoutException:
+        raise ObservationFailure("OBSERVATION_TIMEOUT") from None
+    except transport.TransportBlocked:
+        raise ObservationFailure("OBSERVATION_DNS_FAILED") from None
+    try:
+        addresses = transport.public_addresses(answers)
+    except transport.TransportBlocked:
+        raise ObservationFailure("OBSERVATION_UNSAFE_DNS") from None
     remaining = checkpoint(deadline, cancelled)
     backend = transport.PinnedBackend(host, addresses, deadline)
     with (
@@ -108,16 +118,16 @@ def get(
     ):
         checkpoint(deadline, cancelled)
         if response.status != 200:
-            raise transport.TransportBlocked("Response status unsupported")
+            raise ObservationFailure("OBSERVATION_HTTP_REJECTED")
         media_type, length = metadata(response.headers, robots=robots)
         data = bytearray()
         for chunk in response.iter_stream():
             checkpoint(deadline, cancelled)
             if len(data) + len(chunk) > length:
-                raise transport.TransportBlocked("Response length exceeded")
+                raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
             data.extend(chunk)
         if len(data) != length:
-            raise transport.TransportBlocked("Response length mismatch")
+            raise ObservationFailure("OBSERVATION_RESPONSE_INVALID")
         checkpoint(deadline, cancelled)
         return bytes(data), media_type, addresses[0]
 
@@ -126,9 +136,9 @@ def robots_allowed(body: bytes) -> bool:
     try:
         text = body.decode("utf-8", errors="strict")
     except UnicodeDecodeError:
-        raise transport.TransportBlocked("Invalid robots encoding") from None
+        raise ObservationFailure("OBSERVATION_ROBOTS_INVALID") from None
     if any(ord(c) < 32 and c not in "\r\n\t" for c in text):
-        raise transport.TransportBlocked("Invalid robots text")
+        raise ObservationFailure("OBSERVATION_ROBOTS_INVALID")
     # Conservative subset: unsupported directives (including crawl-delay) and
     # malformed policies stop, rather than being silently interpreted as allow.
     groups: list[tuple[list[str], list[tuple[str, str]]]] = []
@@ -144,10 +154,10 @@ def robots_allowed(body: bytes) -> bool:
         key, separator, value = line.partition(":")
         key, value = key.strip().lower(), value.strip()
         if not separator or key not in ("user-agent", "allow", "disallow"):
-            raise transport.TransportBlocked("Unsupported robots policy")
+            raise ObservationFailure("OBSERVATION_ROBOTS_INVALID")
         if key == "user-agent":
             if not value or any(c.isspace() for c in value):
-                raise transport.TransportBlocked("Invalid robots agent")
+                raise ObservationFailure("OBSERVATION_ROBOTS_INVALID")
             if rules:
                 groups.append((agents, rules))
                 agents, rules = [], []
@@ -157,7 +167,7 @@ def robots_allowed(body: bytes) -> bool:
             or (value and not value.startswith("/"))
             or any(c in value for c in "*$%")
         ):
-            raise transport.TransportBlocked("Invalid robots rule")
+            raise ObservationFailure("OBSERVATION_ROBOTS_INVALID")
         else:
             rules.append((key, value))
     if agents:
@@ -168,7 +178,7 @@ def robots_allowed(body: bytes) -> bool:
         if any(agent == "*" or agent in USER_AGENT.lower() for agent in agents)
     ]
     if not applicable:
-        raise transport.TransportBlocked("Missing applicable robots policy")
+        raise ObservationFailure("OBSERVATION_ROBOTS_INVALID")
     # Deliberately stricter than RFC longest-match precedence: a matching
     # disallow in ANY applicable group wins. Never weaken a prohibition via allow.
     return not any(
@@ -191,33 +201,41 @@ def observe_owned_page(
     wait until the shared deadline. Parsing has no process-level CPU deadline.
     """
     if os.environ.get("CF7_OBSERVER_GET_LAB") != "1":
-        raise transport.TransportBlocked("Observer GET lab disabled")
+        raise ObservationFailure("LAB_DISABLED")
     if url != PAGE:
-        raise transport.TransportBlocked("Only owned lab contact page supported")
+        raise ObservationFailure("LAB_DISABLED")
     if not math.isfinite(timeout) or not 0 < timeout <= 30:
-        raise transport.TransportBlocked("Invalid observation budget")
+        raise ObservationFailure("LAB_DISABLED")
     context = context if context is not None else httpcore.default_ssl_context()
     if not context.check_hostname or context.verify_mode != ssl.CERT_REQUIRED:
-        raise transport.TransportBlocked("TLS verification required")
+        raise ObservationFailure("OBSERVATION_TLS_FAILED")
     cancelled = cancelled if cancelled is not None else Event()
     deadline = time.monotonic() + timeout
     try:
         robots, _, robots_ip = get(ROBOTS, context, deadline, cancelled, robots=True)
         if not robots_allowed(robots):
-            raise transport.TransportBlocked("Robots disallows contact observation")
+            raise ObservationFailure("OBSERVATION_ROBOTS_DENIED")
         body, media_type, page_ip = get(
             PAGE, context, deadline, cancelled, robots=False
         )
-    except httpcore.NetworkError:
-        raise transport.TransportBlocked("Observation network failure") from None
+    except httpcore.NetworkError as error:
+        code = (
+            "OBSERVATION_TLS_FAILED"
+            if caused_by(error, ssl.SSLError)
+            else "OBSERVATION_TIMEOUT"
+            if caused_by(error, TimeoutError)
+            else "OBSERVATION_NETWORK_FAILED"
+        )
+        raise ObservationFailure(code) from None
     except httpcore.TimeoutException:
-        raise transport.TransportBlocked(
-            "Observation network deadline exceeded"
-        ) from None
+        raise ObservationFailure("OBSERVATION_TIMEOUT") from None
     except httpcore.ProtocolError:
-        raise transport.TransportBlocked("Observation protocol failure") from None
+        raise ObservationFailure("OBSERVATION_RESPONSE_INVALID") from None
     checkpoint(deadline, cancelled)
-    observation = observer.analyze(PAGE, body, status=200, media_type=media_type)
+    try:
+        observation = observer.analyze(PAGE, body, status=200, media_type=media_type)
+    except ValueError:
+        raise ObservationFailure("OBSERVATION_PARSE_FAILED") from None
     checkpoint(deadline, cancelled)
     return FetchResult(
         observation,

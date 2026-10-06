@@ -190,7 +190,12 @@ def test_fetch_failures_do_not_persist_or_retry(db, driver, workspace, users, ca
     assert runner.run(sessions, binding, context=context) is None
     db.expire_all()
     job = db.get(OperationJob, job_id)
-    assert job.status == "failed" and job.error_message == "OBSERVATION_FAILED"
+    expected = {
+        "robots": "OBSERVATION_ROBOTS_DENIED",
+        "http": "OBSERVATION_HTTP_REJECTED",
+        "tls": "OBSERVATION_TLS_FAILED",
+    }[case_name]
+    assert job.status == "failed" and job.error_message == expected
     assert evidence_count(db) == 0
     requests = len(case.lab.events)
     assert runner.claim(sessions, job_id, uuid4()) is None
@@ -239,7 +244,7 @@ def test_staged_save_failure_rolls_back_evidence_ledger_and_completion(
     assert evidence_count(db) == 0
     assert db.scalar(select(func.count()).select_from(FormObservationEvent)) == 0
     job = db.get(OperationJob, job_id)
-    assert job.status == "failed" and job.error_message == "OBSERVATION_FAILED"
+    assert job.status == "failed" and job.error_message == "OBSERVATION_STORAGE_FAILED"
     assert job.success_count == 0 and job.failed_count == 1
     assert len(case.lab.events) == 2
 
