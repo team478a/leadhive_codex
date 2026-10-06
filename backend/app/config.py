@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     human_approved_email_enabled: bool = False
     human_approved_form_enabled: bool = False
     form_adapter_preparation_enabled: bool = False
+    cf7_candidate_preparation_enabled: bool = False
     form_adapter_lab_execution_enabled: bool = False
     legacy_form_delivery_enabled: bool = False
     email_feedback_webhook_enabled: bool = False

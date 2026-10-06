@@ -6,7 +6,7 @@ test('approved form reservations show disabled execution, cancellation and unkno
   const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string }
   const item = {
     id: 'form-approval', company_name: 'フォーム予約テスト会社', company_id: fixture.company_id,
-    channel: 'form', recipient: null, form_url: 'https://example.com/contact', form_action_url: 'https://example.com/submit',
+    channel: 'form', delivery_method: 'form_direct', recipient: null, form_url: 'https://example.com/contact', form_action_url: 'https://example.com/submit',
     subject: '営業提案', body: '承認した本文', sender: { name: '担当者', email: 'sender@example.com' },
     field_values: { message: '承認した本文' }, payload_hash: 'a'.repeat(64), payload_version: 1,
     status: 'APPROVED', created_by_principal_type: 'HUMAN', created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString(),
@@ -58,7 +58,7 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
   const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string }
   const item = {
     id: 'bulk-form', company_name: '一括フォーム会社', company_id: fixture.company_id,
-    channel: 'form', recipient: null, form_url: 'https://example.com/contact', form_action_url: 'https://example.com/submit',
+    channel: 'form', delivery_method: 'form_direct', recipient: null, form_url: 'https://example.com/contact', form_action_url: 'https://example.com/submit',
     subject: '提案', body: '会社別文面', sender: { name: '担当者', email: 'sender@example.com' }, field_values: { message: '会社別文面' },
     payload_hash: 'b'.repeat(64), payload_version: 1, status: 'PENDING', created_by_principal_type: 'HUMAN',
     created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString(),
@@ -108,7 +108,7 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
   await panel.getByRole('button', { name: '承認済みフォーム1件を一括予約', exact: true }).click()
   await expect(panel.getByRole('status')).toContainText('実送信はOFF')
   await panel.getByRole('button', { name: '承認済みフォーム1件を一括予約', exact: true }).click()
-  expect(keys).toHaveLength(2)
+  await expect.poll(() => keys.length).toBe(2)
   expect(keys[0]).toBe(keys[1])
   await panel.getByLabel('フォーム24時間上限').fill('500')
   await panel.getByLabel('同じサイトへの試行間隔（秒）').fill('600')

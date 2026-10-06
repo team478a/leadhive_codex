@@ -24,7 +24,7 @@ from app.models import (
     OutreachDraft,
     User,
 )
-from app.schema_approval import ExpectedPayload, Proposal
+from app.schema_approval import ExpectedPayload, Proposal, Revision
 from app.security import password_hasher, token_digest
 from app.services.form_adapter_contract import adapter_plan_hash, adapter_snapshot, canonical_plan
 from app.services.form_execution_plan import plan_hash
@@ -197,6 +197,11 @@ def invalidate_if_needed(db, item):
         reason = "fixture execution plan binding mismatch"
     elif item.delivery_method == "form_adapter" and not valid_adapter_plan(item):
         reason = "adapter execution plan binding mismatch"
+    elif item.delivery_method == "cf7_candidate_only":
+        from app.services.cf7_candidate_preparation import valid_request
+
+        if not valid_request(db, item):
+            reason = "CF7 candidate evidence or payload changed"
     elif company_fingerprint(db.get(Company, item.company_id)) != item.payload_snapshot.get(
         "company_source_hash"
     ):
@@ -229,7 +234,7 @@ def invalidate_if_needed(db, item):
         )
 
 
-def expected(item, body: ExpectedPayload):
+def expected(item, body: ExpectedPayload | Revision):
     if body.expected_hash != item.payload_hash or body.expected_version != item.payload_version:
         raise HTTPException(409, "提案内容が更新されています。再取得してください。")
 
@@ -252,6 +257,10 @@ def create_proposal(
     commit=True,
     allow_adapter_preparation=False,
 ):
+    if previous and previous.delivery_method == "cf7_candidate_only":
+        raise HTTPException(
+            409, "CF7候補の改訂は未公開です。専用準備から新しい候補を作成してください。"
+        )
     if body.delivery_method == "form_adapter":
         if not allow_adapter_preparation or principal_type != "HUMAN" or previous:
             raise HTTPException(409, "管理下フォームは専用の保存済み準備から作成してください。")

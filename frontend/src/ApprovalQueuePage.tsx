@@ -130,6 +130,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
       </div>
       {selected && <article className="panel mt-4">
         <h2>{selected.company_name} の提案内容</h2>
+        {selected.delivery_method === 'cf7_candidate_only' && <p role="status">CF7候補内容の承認のみです。送信予約・実送信には使用できません。</p>}
         <dl><dt>チャネル / 状態</dt><dd>{selected.channel} / {names[selected.status]}</dd>
           <dt>宛先 / フォームURL</dt><dd className="break-all">{selected.recipient ?? selected.form_url}</dd>
           {selected.channel === 'form' && <><dt>POST先</dt><dd className="break-all">{selected.form_action_url || '未確定・再解析が必要'}</dd></>}

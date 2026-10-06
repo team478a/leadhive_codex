@@ -36,6 +36,8 @@ def locked_items(db, project_id, selections, user):
     ).all()
     if len(items) != len(selections) or any(i.project_id != project_id for i in items):
         raise HTTPException(404, "提案が見つかりません。")
+    if any(i.delivery_method == "cf7_candidate_only" for i in items):
+        raise HTTPException(409, "CF7候補は個別のHuman確認が必要です。送信はできません。")
     expected = {s.request_id: s for s in selections}
     for item in items:
         approval.expected(item, expected[item.id])

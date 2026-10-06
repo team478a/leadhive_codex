@@ -13,6 +13,7 @@ from app.model_approved_email import (
     EmailSendAttempt,
 )
 from app.model_approved_form import ApprovedFormDispatch, FormDispatchLimits, FormDispatchSite
+from app.model_cf7 import CF7Observation
 from app.model_company import (
     Activity,
     AiReview,
@@ -61,6 +62,7 @@ from app.model_settings import (
 )
 
 __all__ = [
+    "CF7Observation",
     "ApprovedFormDispatch",
     "FormDispatchLimits",
     "FormDispatchSite",

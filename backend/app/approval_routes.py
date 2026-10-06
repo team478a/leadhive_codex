@@ -68,7 +68,10 @@ def human_item(db, request_id, user, write=True, owner=False):
         .with_for_update()
     )
     project_access(item.project_id, db, user, write=write, owner=owner)
-    return request_item(db, request_id)
+    item = request_item(db, request_id)
+    if item.delivery_method == "cf7_candidate_only" and write:
+        lock_preparation_sources(db, db.get(Company, item.company_id), user)
+    return item
 
 
 def serialize(db, item):
@@ -84,7 +87,7 @@ def serialize(db, item):
 
 
 def preparation_source(db, draft_id, user):
-    draft = db.scalar(select(OutreachDraft).where(OutreachDraft.id == draft_id).with_for_update())
+    draft = db.get(OutreachDraft, draft_id)
     if not draft:
         raise HTTPException(404, "Draftが見つかりません。")
     company = company_access(draft.company_id, db, user)
@@ -134,6 +137,13 @@ def lock_preparation_sources(db, company, user):
         .with_for_update()
         .execution_options(populate_existing=True)
     )
+    db.scalars(
+        select(OutreachDraft)
+        .where(OutreachDraft.company_id == company.id)
+        .order_by(OutreachDraft.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).all()
     db.scalar(select(FormSenderSettings).where(FormSenderSettings.id == 1).with_for_update())
     db.scalars(
         select(FormProfile).where(FormProfile.company_id == company.id).with_for_update()
