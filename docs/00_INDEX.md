@@ -191,6 +191,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [127_CF7_OBSERVATION_STORAGE_CONTRACT_VALIDATION.md](127_CF7_OBSERVATION_STORAGE_CONTRACT_VALIDATION.md): 非認可の保存envelope・診断projection・hash・Project/Job結合のoffline検証と保存前の残る境界
 
+- [128_CF7_OBSERVATION_DATABASE_STORAGE_VALIDATION.md](128_CF7_OBSERVATION_DATABASE_STORAGE_VALIDATION.md): 専用DBへの非認可証拠保存・append-only台帳・Project/Job/lease/atomic保存・migration検証とworker停止境界
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

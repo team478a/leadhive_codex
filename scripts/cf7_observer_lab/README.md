@@ -1,4 +1,4 @@
-# CF7静的観察の管理下検証（O1/O2/O3-A2）
+# CF7静的観察の管理下検証（O1/O2/O3-A2/O3-B）
 
 `observer.py` は渡された架空HTML bytesを解析する未登録prototypeです。URLの検査には既存pinned TLS labの純粋validatorだけを使います。HTTP/DNS、JavaScript実行、ファイル読み込み、DB、Human Approval、送信機能は呼び出しません。アプリ/workerへimportしていません。
 
@@ -28,3 +28,7 @@ backend/.venv/Scripts/python.exe -m compileall -q scripts/cf7_observer_lab
 `storage_contract.py` はO3-A2のpure保存契約です。架空の取得receipt/HTMLから未検証の診断projectionとimmutable envelopeを生成し、保存bytesの版/hash/サイズ/Project・Job binding/期限を検査します。raw HTML・hidden・入力value・送信用endpointはJSONへ保存しません。HTTP/DNS/DB/承認/送信を呼ばず、O2への自動adapterもありません。型検査対象にこのファイルを追加します。
 
 保存設計は [docs/126](../../docs/126_CF7_OBSERVATION_STORAGE_AND_DIAGNOSTIC_DESIGN.md)、実装・13件のoffline試験・信頼境界の制限は [docs/127](../../docs/127_CF7_OBSERVATION_STORAGE_CONTRACT_VALIDATION.md)。取得receiptのtls/robots値は実通信の証明ではなく、将来server側の取得/DB境界で生成・検査する必要があります。
+
+`store.py` はO3-Bの未登録保存labです。`CF7_OBSERVER_STORAGE_LAB=1` と専用test DBが必要。アプリのrouter/workerから呼びません。証拠・SAVED履歴・Job完了を同じtransactionへstageし、呼出側でcommit/rollbackします。retireは履歴の追加だけ。通常workerはcf7_observationをclaim/recoveryせず、既存retry APIも拒否します。
+
+DB試験は専用PostgreSQL DB末尾 `_test` を `TEST_DATABASE_URL` へ設定し、backendから `.venv/Scripts/python.exe -m pytest tests/test_form_observation_storage.py -q`。conftestがupgrade/model checkし、ケースごとにrollbackします。稼働DBのURLを設定しないでください。receiptはsyntheticで、GET adapter/read API/診断UIは未実装です。詳細と検証記録は [docs/128](../../docs/128_CF7_OBSERVATION_DATABASE_STORAGE_VALIDATION.md)。
