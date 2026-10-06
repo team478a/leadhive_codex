@@ -33,6 +33,12 @@ from app.model_email_feedback import EmailFeedbackEvent, EmailHealthState
 from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
 from app.model_form_observation_job import FormObservationJobEvent
+from app.model_lead_completion import (
+    ContactDestination,
+    LeadDestinationLink,
+    LeadSiteEvidence,
+    LeadSourceObservation,
+)
 from app.model_operations import (
     AnalysisRefreshSchedule,
     CollectionJob,
@@ -64,6 +70,10 @@ from app.model_settings import (
 )
 
 __all__ = [
+    "ContactDestination",
+    "LeadDestinationLink",
+    "LeadSiteEvidence",
+    "LeadSourceObservation",
     "FormObservationJobEvent",
     "FormObservationEvent",
     "FormObservationEvidence",
