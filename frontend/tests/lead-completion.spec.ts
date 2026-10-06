@@ -8,7 +8,7 @@ test('Human can organize candidate destinations without approval or sending', as
   execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
   const forbidden: string[] = []
   page.on('request', request => {
-    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/send|\/dispatch|\/execute|\/test-send/.test(request.url())) forbidden.push(request.url())
+    if (!['localhost', '127.0.0.1'].includes(new URL(request.url()).hostname) || /\/(?:send|dispatch|execute|test-send|approve)(?:[/?]|$)/.test(request.url())) forbidden.push(request.url())
   })
   try {
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env, encoding: 'utf8' })) as { project_id: string }
@@ -24,6 +24,12 @@ test('Human can organize candidate destinations without approval or sending', as
     await page.getByLabel('メール', { exact: true }).fill('synthetic-recipient@example.com')
     await page.getByRole('button', { name: '企業情報を保存', exact: true }).click()
     await expect(panel).toContainText('窓口候補 1件')
+    const assessment = panel.getByRole('region', { name: '窓口の利用可否と理由' })
+    await expect(assessment).toContainText('判定：要確認（REVIEW）')
+    await expect(assessment).toContainText('EMAIL_UNVERIFIED')
+    await expect(assessment).toContainText('DESTINATION_PURPOSE_UNCERTAIN')
+    await expect(assessment).toContainText('送信承認、送信は行いません')
+    await expect(assessment.getByRole('button')).toHaveCount(0)
     await expect(panel).toContainText('企業・店舗の照合：要確認')
     await expect(panel).toContainText('営業許可・DM READY・送信承認を意味しません')
     await panel.getByRole('button', { name: 'プロジェクトの窓口候補を整理', exact: true }).click()

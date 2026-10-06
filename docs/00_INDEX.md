@@ -205,6 +205,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [134_LEAD_COMPLETION_FUNNEL_AND_MEASUREMENT.md](134_LEAD_COMPLETION_FUNNEL_AND_MEASUREMENT.md): 固定リストのFunnel・不足理由・共通窓口、レビュー時間・検索HTTP/AI操作の部分計測と未判定境界
 
+- [135_SENDABILITY_DESTINATION_DIAGNOSTICS.md](135_SENDABILITY_DESTINATION_DIAGNOSTICS.md): Phase B1の窓口別利用可否・固定理由・次の確認作業、100店舗事前集計とREADY未確定境界
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

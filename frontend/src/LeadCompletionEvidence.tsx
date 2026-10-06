@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
+import { SendabilityPanel } from './SendabilityPanel'
 
 type Inventory = {
   identity_status: string; official_site_confidence: string; can_refresh: boolean; candidate_destination_count: number
@@ -34,5 +35,6 @@ export function LeadCompletionEvidence({ companyId, projectId, updatedAt }: { co
     <ul>{data.destinations.map(item => <li key={item.id} className="break-all">{item.type}：{item.destination} — {item.current ? '現在の候補' : '登録内容変更・要更新'}{item.shared ? ` / 共通窓口（${item.linked_lead_count}件）` : ''} / 用途・送信可否は未確認</li>)}</ul>
     {data.destinations.length === 0 && <p>保存済みの窓口候補はありません。候補整理後に表示します。</p>}
     <ul>{data.observations.map(item => <li key={item.id}>{item.source}：{labels[item.identity_status] ?? '未確認'} / 補完 {item.applied_fields.length}項目{item.allowed_usage === 'REVIEW_REQUIRED' ? ' / 利用条件要確認' : ''}</li>)}</ul>
+    <SendabilityPanel companyId={companyId} updatedAt={updatedAt} inventoryRevision={reload} />
   </section>
 }

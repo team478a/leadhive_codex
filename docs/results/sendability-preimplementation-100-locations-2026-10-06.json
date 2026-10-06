@@ -1,0 +1,29 @@
+{
+  "read_only": true,
+  "discovered": 100,
+  "registered_sites": 43,
+  "registered_emails": 0,
+  "contact_people_emails": 0,
+  "form_profiles": 139,
+  "form_statuses": {
+    "STALE": 25,
+    "ERROR": 69,
+    "READY": 6,
+    "REVIEW_REQUIRED": 38,
+    "BLOCKED": 1
+  },
+  "sales_permissions": {
+    "UNCERTAIN": 109,
+    "ALLOWED": 29,
+    "PROHIBITED": 1
+  },
+  "captcha_types": {
+    "CAPTCHA_NONE": 129,
+    "CAPTCHA_OTHER": 2,
+    "CAPTCHA_RECAPTCHA": 8
+  },
+  "delivery_supported": 12,
+  "structured_destination_purpose": "NOT_AVAILABLE_IN_BASELINE",
+  "structured_official_site_evidence": "NOT_AVAILABLE_IN_BASELINE",
+  "score_validation": "No score calibration; deterministic hard blocks and evidence gaps only"
+}
