@@ -161,6 +161,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [112_FORM_ADAPTER_APPROVAL_RESERVATION.md](112_FORM_ADAPTER_APPROVAL_RESERVATION.md): 保存済み計画のHuman承認・共通台帳への予約・DBとworkerの実行禁止
 
+- [113_CONTROLLED_ADAPTER_POSTGRES_HTTP.md](113_CONTROLLED_ADAPTER_POSTGRES_HTTP.md): 管理下HTTPとPostgreSQLの承認消費・永続UNKNOWN・プロセス停止/競合時の再POST防止
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない

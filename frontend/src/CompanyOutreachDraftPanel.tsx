@@ -238,7 +238,9 @@ export function CompanyOutreachDraftPanel({
                         ? 'メール送信承認'
                         : approval.approval_type === 'form_direct'
                           ? 'フォーム送信承認'
-                          : 'Codex支援フォーム承認'}
+                          : approval.approval_type === 'form_adapter'
+                            ? '管理下テストフォーム承認'
+                            : 'Codex支援フォーム承認'}
                     </strong>
                     <p className="muted text-xs">
                       {approval.subject || '件名なし'} / {approval.body.slice(0, 120)}

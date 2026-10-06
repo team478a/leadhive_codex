@@ -1,5 +1,7 @@
 # 管理下フォームの準備・Human承認・非実行予約
 
+この文書は工程2時点の実装記録。工程3のテスト専用実行・追加のDB証拠制御は [113_CONTROLLED_ADAPTER_POSTGRES_HTTP.md](113_CONTROLLED_ADAPTER_POSTGRES_HTTP.md) を参照する。通常worker・利用中環境・工程2のUIは引き続き新方式を実行しない。
+
 ## 今回のゴール
 
 110の工程2をまとめて実装する。保存済みDraftと解析情報から計画を準備し、Humanが計画と入力値を確認して再認証・承認し、既存フォーム予約台帳に保存できる状態。基準はcodex/integration@f328f3d。

@@ -135,7 +135,7 @@ export interface OutreachDraft {
   ai_provider: string; ai_model: string; created_at: string; updated_at: string
 }
 export interface OutreachTemplate { id: string; project_id: string; created_by_user_id: string | null; name: string; channel: 'email' | 'form' | 'sns'; subject: string; body: string; created_at: string; updated_at: string }
-export interface OutreachDraftApproval { id: string; draft_id: string; approved_by_user_id: string | null; approval_type: 'email' | 'form_direct' | 'form_codex'; subject: string; body: string; approved_at: string; delivered_at: string | null }
+export interface OutreachDraftApproval { id: string; draft_id: string; approved_by_user_id: string | null; approval_type: 'email' | 'form_direct' | 'form_codex' | 'form_adapter'; subject: string; body: string; approved_at: string; delivered_at: string | null }
 export interface EmailDelivery {
   id: string; draft_id: string; company_id: string; created_by_user_id: string | null
   recipient_email: string; recipient_name: string; subject: string; body: string
@@ -157,7 +157,7 @@ export interface FormCodexPayload { task_reference: string; skill_name: string; 
 export interface FormCodexTask extends FormCodexPayload { item_id: string; batch_id: string; company_id: string; codex_status: 'open' | 'running' | 'submitted' | 'failed'; codex_assignee: string }
 export interface FormField { name: string; label: string; field_type: 'text' | 'email' | 'tel' | 'textarea' | 'select'; required: boolean; value: string; options: string[]; mapped_key: string; confidence: number; decision_source: string }
 export interface FormPreview { form_url: string; action_url: string; fields: FormField[]; form_profile_id: string | null; form_status: FormStatus; fingerprint: string }
-export interface FormDelivery { id: string; draft_id: string; company_id: string; form_profile_id: string | null; delivery_method: 'direct' | 'codex_assisted'; status: 'pending' | 'submitted' | 'failed' | 'unknown'; action_url: string; response_status: number | null; final_url: string; confirmation_used: boolean; completion_evidence: string; submitted_at: string | null; error_message: string; result_note: string; profile_fingerprint: string; field_mapping_snapshot: Array<Record<string, unknown>>; created_at: string }
+export interface FormDelivery { id: string; draft_id: string; company_id: string; form_profile_id: string | null; delivery_method: 'direct' | 'codex_assisted' | 'adapter'; status: 'pending' | 'submitted' | 'failed' | 'unknown'; action_url: string; response_status: number | null; final_url: string; confirmation_used: boolean; completion_evidence: string; submitted_at: string | null; error_message: string; result_note: string; profile_fingerprint: string; field_mapping_snapshot: Array<Record<string, unknown>>; created_at: string }
 
 export type FormStatus = 'UNANALYZED' | 'READY' | 'REVIEW_REQUIRED' | 'BLOCKED' | 'STALE' | 'ERROR'
 export type FormMappedKey = 'company_name' | 'department' | 'position' | 'contact_name' | 'last_name' | 'first_name' | 'furigana' | 'email' | 'phone' | 'postal_code' | 'prefecture' | 'city' | 'address' | 'building' | 'website' | 'contact_category' | 'contact_method' | 'subject' | 'message' | 'privacy_consent' | 'newsletter_consent' | 'other' | 'unknown'
@@ -243,5 +243,5 @@ export interface InboundEmailCompanyCandidate {
 }
 export interface OutreachEffectivenessAnalytics {
   days: number
-  items: Array<{ approval_type: 'email' | 'form_direct' | 'form_codex'; subject: string; approvals: number; replied: number; meetings: number; won: number; reply_rate: number }>
+  items: Array<{ approval_type: 'email' | 'form_direct' | 'form_codex' | 'form_adapter'; subject: string; approvals: number; replied: number; meetings: number; won: number; reply_rate: number }>
 }
