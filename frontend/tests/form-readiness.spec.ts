@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
 test('stored form overview filters, paginates and does not authorize sending', async ({ page }) => {
-  const python = process.env.PYTHON || '../backend/.venv/Scripts/python.exe'
+  const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
   const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string }
   const row = { company_id: fixture.company_id, company_name: '集計テスト会社', category: 'candidate', form_url: 'https://example.com/contact', form_status: 'READY', analysis_version: '1.2', last_analyzed_at: null, review_reason: '', permission: { status: 'PROHIBITED', reason_code: 'suppression_domain', message: 'Suppression Listに登録された宛先には送信できません。' } }
   await page.route(`**/api/projects/${fixture.project_id}/form-readiness?**`, route => {

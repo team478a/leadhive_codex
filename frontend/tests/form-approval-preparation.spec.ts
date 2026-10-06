@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
 test('stored form Draft preparation submits only the reviewed hash without dispatch', async ({ page }) => {
-  const python = process.env.PYTHON || '../backend/.venv/Scripts/python.exe'
+  const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
   const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string; company_id: string }
   const forbidden: string[] = []
   page.on('request', request => { if (/\/send|\/execute|\/test-send|\/dispatch|\/form-delivery|\/form-preview/.test(request.url())) forbidden.push(request.url()) })

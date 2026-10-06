@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
 test('Human operations prepare a new candidate and record UNKNOWN without dispatch', async ({ page }) => {
-  const python = process.env.PYTHON || '../backend/.venv/Scripts/python.exe'
+  const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
   const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'approval-fixture'], { env: process.env, encoding: 'utf8' })) as { project_id: string }
   const common = { form_url: 'https://example.com/contact', reason: '', expires_at: new Date().toISOString(), started_at: null, approval_status: 'EXPIRED', payload_hash: 'a'.repeat(64), payload_version: 1, review: null }
   const rows = [

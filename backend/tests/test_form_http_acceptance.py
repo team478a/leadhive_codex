@@ -139,6 +139,7 @@ def source(db, users):
                 field_type=f.field_type,
                 required=f.required,
                 mapped_key="email" if f.name == "email" else "message",
+                confidence=1.0,  # These fixture fields have deliberately verified mappings.
             )
             for i, f in enumerate(parsed.fields)
         ]

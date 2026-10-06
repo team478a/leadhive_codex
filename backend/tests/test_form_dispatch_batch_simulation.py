@@ -75,6 +75,7 @@ def test_50_prepared_approved_reserved_mock_dispatches(auth, form_source, db, mo
                     field_type=kind,
                     required=True,
                     mapped_key=key,
+                    confidence=1.0,  # Explicit, known synthetic mapping; not production inference.
                 )
                 for i, (name, kind, key) in enumerate(
                     [("email", "email", "email"), ("message", "textarea", "message")]
