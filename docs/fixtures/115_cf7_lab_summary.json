@@ -1,0 +1,319 @@
+{
+  "started_at": "2026-10-06T02:16:27.225165+00:00",
+  "finished_at": "2026-10-06T02:19:06.400963+00:00",
+  "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+  "source_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+  "images": {
+    "wp": {
+      "tag": "wordpress:6.8.3-php8.3-apache",
+      "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+      "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+    },
+    "db": {
+      "tag": "mariadb:11.4",
+      "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+      "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+    }
+  },
+  "httpx_version": "0.28.1",
+  "browser_version": "153.0.8010.12",
+  "multipart_encoding": "lab-browser-crlf-v1",
+  "passed": true,
+  "cleanup_failures": [],
+  "checks": [
+    {
+      "name": "container publishes no ports",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "no requested port publication",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "internal runtime network",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "wp isolated network only",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "db isolated network only",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "WP HTTP and numeric external sockets blocked",
+      "passed": true,
+      "detail": {
+        "wp_http_blocked": true,
+        "external_socket_blocked": [
+          true,
+          true,
+          true
+        ]
+      }
+    },
+    {
+      "name": "mail capture active before feedback",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "canonical fixture URL is local",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "real rendered DOM",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "location": null
+      }
+    },
+    {
+      "name": "path REST root observed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "multipart standard",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_calls_delta": 1,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "urlencoded rejected",
+      "passed": true,
+      "detail": {
+        "http": 415,
+        "status": "wpcf7_unsupported_media_type",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 0
+      }
+    },
+    {
+      "name": "unit tag missing",
+      "passed": true,
+      "detail": {
+        "http": 400,
+        "status": "wpcf7_unit_tag_not_found",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 0
+      }
+    },
+    {
+      "name": "required field missing",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "validation_failed",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "required acceptance missing",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "acceptance_missing",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "optional acceptance omitted",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_calls_delta": 1,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "invert acceptance omitted",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_calls_delta": 1,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "invert acceptance checked rejected",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "acceptance_missing",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "mail capture failure",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "mail_failed",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 1,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "before-mail abort",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "aborted",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "spam decision",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "spam",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "skip-mail reports receipt without mail call",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_calls_delta": 0,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "demo-mode not receipt evidence",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "UNKNOWN",
+        "mail_calls_delta": 0,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "browser standard uses matching multipart endpoint",
+      "passed": true,
+      "detail": {
+        "endpoint": true,
+        "multipart": true,
+        "hidden": true,
+        "mail_delta": 1,
+        "submission_delta": 1,
+        "mail_hash_matches": true
+      }
+    },
+    {
+      "name": "different form ID remains UNKNOWN",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "different unit tag remains UNKNOWN",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "demo receipt remains UNKNOWN",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "custom status remains UNKNOWN",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "contradictory validation remains UNKNOWN",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "consent text changes structure evidence",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "unit tag changes structure evidence",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "query-root rendered DOM",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "query REST root observed",
+      "passed": true,
+      "detail": null
+    },
+    {
+      "name": "query-root multipart receipt",
+      "passed": true,
+      "detail": {
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_calls_delta": 1,
+        "submissions_delta": 1
+      }
+    },
+    {
+      "name": "fixed explicit cases have no extra submission",
+      "passed": true,
+      "detail": null
+    }
+  ],
+  "feedback_post_count": 15,
+  "setup_mail_calls_captured": 2,
+  "versions": {
+    "wp_version": "6.8.3",
+    "cf7_version": "6.1.4",
+    "php_version": "8.3.28"
+  },
+  "cf7_submission_count": 13,
+  "protocol_mail_calls_captured": 6,
+  "scope": {
+    "real_wordpress_cf7": true,
+    "production_adapter": false,
+    "human_approval_dispatch_integration": false,
+    "external_mail_delivery_tested": false,
+    "smtp_invoked": false,
+    "company_site_accessed": false,
+    "live_database_changed": false
+  }
+}

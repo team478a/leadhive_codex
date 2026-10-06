@@ -165,6 +165,8 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 - [114_CF7_PROTOCOL_READINESS.md](114_CF7_PROTOCOL_READINESS.md): 実CF7の公式protocol監査・nonce/hash/受付証拠・SSRF停止条件と管理下lab検証計画
 
+- [115_REAL_CF7_ISOLATED_PROTOCOL_LAB.md](115_REAL_CF7_ISOLATED_PROTOCOL_LAB.md): 外部配送を遮断した実WordPress/CF7検証器・Browser multipartとREST rootの照合
+
 ## 基本原則
 
 - 業種固有ロジックをコードに埋め込まない
