@@ -95,11 +95,12 @@ APIの確認結果を第三者の実データ精度測定として扱わない�
 ## 検証
 
 - 条件テスト22件PASS。9通りのpriority真理値、複数MUST、期限・context変更、公式URLだけでは未確認、未知条件、version競合、hash改変、Project/viewer/Agent、対象job削除、Raw Project拒否、read-only/outboundを検証。
-- 関連収集・Presence回帰も実行。最終集計はCI結果と合わせて報告する。
+- 条件・収集・Presenceの関連Backend回帰は最終61件PASS。
 - Ruff check/format、追加4モジュールmypy、Frontend typecheck/lint/build PASS。既存bundleサイズwarningは残る。
 - 独立DBでupgrade→downgrade→upgrade、Alembic check PASS。データがあるdowngrade拒否もPASS。
 - PC/Mobile E2Eの2件PASS。模擬データのみで、条件版を更新し、一致→不一致→確認待ちの表示と収集/送信なしを検証した。
-- ローカル稼働への反映とGitHub CI結果は完了報告に記載する。
+- `a33b101`の[GitHub CI run 37563255548](https://github.com/team478a/leadhive_codex/actions/runs/37563255548)は全7項目成功。Backend全体・E2E・Frontend・静的検査・Migration・模擬HTTPフォーム・Windows配布検証がPASS。
+- ローカル`http://localhost:18985/`へ反映し、API healthと新規APIのOpenAPI登録を確認。Pilot DBのRaw Snapshot 40件、Human Review 0件、Approval 0件、Email/Form Delivery 0件は変更していない。旧18984の100店舗DBも変更していない。
 
 ## 残る工程
 
