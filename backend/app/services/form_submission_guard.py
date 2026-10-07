@@ -35,6 +35,10 @@ def reserve_form_submission(
     delivery_method="direct",
     execution_authorization=None,
 ):
+    from app.services.sending_window import allowed
+
+    if not allowed(db):
+        raise FormDeliveryError("送信可能時間外のため待機してください。", "sending_window_closed")
     if delivery_method not in {"direct", "adapter"}:
         raise FormDeliveryError("未対応の実行方式です。", "unsupported")
     # Short global lock serializes reservation only; network I/O starts after commit.

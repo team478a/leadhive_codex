@@ -317,6 +317,10 @@ def capacity(db, batch, now):
 
 
 def begin_attempt(db, delivery):
+    from app.services.sending_window import defer_email
+
+    if defer_email(db, delivery):
+        return None
     worker_id = delivery.worker_id
     row = reservation(db, delivery.id)
     initial = db.get(ApprovalRequest, row.approval_id)

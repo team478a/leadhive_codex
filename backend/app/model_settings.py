@@ -18,6 +18,24 @@ from app.database import Base
 from app.model_core import Timestamps
 
 
+class SendingWindow(Timestamps, Base):
+    __tablename__ = "sending_windows"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_sending_window_singleton"),
+        CheckConstraint(
+            "start_minute >= 0 AND start_minute < end_minute AND end_minute <= 1440",
+            name="ck_sending_window_minutes",
+        ),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False)
+    start_minute: Mapped[int] = mapped_column(Integer, default=480)
+    end_minute: Mapped[int] = mapped_column(Integer, default=1200)
+    updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+
+
 class ApplicationSettings(Timestamps, Base):
     """Administrator-managed service settings. Secrets are stored encrypted."""
 

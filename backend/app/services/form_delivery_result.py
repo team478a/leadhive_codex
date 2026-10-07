@@ -7,6 +7,7 @@ from bs4 import BeautifulSoup
 from app.config import settings
 from app.services.outbound_guard import require_outbound_enabled
 from app.services.scraper import SafeFetcher, ScrapeError, validate_public_url
+from app.services.sending_window import require_sending_time
 
 
 class FormDeliveryError(Exception):
@@ -119,6 +120,8 @@ def _request_result(
     current_payload = payload
     for _ in range(6):
         require_outbound_enabled()
+        if current_method == "POST":
+            require_sending_time()
         normalized = _same_delivery_origin(current_url, url)
         try:
             with fetcher.client.stream(

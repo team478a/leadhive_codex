@@ -1,0 +1,37 @@
+import { test, expect } from '@playwright/test'
+
+test('daily sending hours persist without sending on desktop and mobile', async ({ page }) => {
+  await page.goto('/')
+  await page.getByLabel('メールアドレス').fill(process.env.E2E_EMAIL!)
+  await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
+  await page.getByRole('button', { name: 'ログインする', exact: true }).click()
+  const guide = page.getByRole('dialog', { name: '3ステップで始めましょう' })
+  await expect(guide).toBeVisible()
+  await guide.getByRole('button', { name: 'あとで見る' }).click()
+  await page.getByRole('button', { name: '⚙ 運用設定' }).click()
+  const panel = page.getByRole('region', { name: '送信可能時間', exact: true })
+  await expect(panel.getByRole('button', { name: '送信可能時間を保存' })).toBeEnabled()
+  let sends = 0
+  page.on('request', request => {
+    if (request.method() === 'POST' && /smtp-settings\/test|form-dispatch|email-batches/.test(request.url())) sends++
+  })
+  await panel.getByRole('checkbox').check()
+  await panel.getByLabel('送信開始時刻').fill('08:00')
+  await panel.getByLabel('送信終了時刻').fill('20:00')
+  await panel.getByRole('button', { name: '送信可能時間を保存' }).click()
+  await expect(panel.getByRole('status')).toContainText('保存しました')
+  await expect(panel).toContainText('毎日 08:00〜20:00')
+  await page.reload()
+  await page.getByRole('button', { name: '⚙ 運用設定' }).click()
+  await expect(panel.getByRole('button', { name: '送信可能時間を保存' })).toBeEnabled()
+  await expect(panel.getByRole('checkbox')).toBeChecked()
+  await expect(panel.getByLabel('送信開始時刻')).toHaveValue('08:00')
+  await panel.getByLabel('送信終了時刻').fill('07:00')
+  await panel.getByRole('button', { name: '送信可能時間を保存' }).click()
+  await expect(panel.getByRole('alert')).toContainText('終了時刻は開始時刻より後')
+  await panel.getByLabel('送信終了時刻').fill('20:00')
+  await panel.getByRole('checkbox').uncheck()
+  await panel.getByRole('button', { name: '送信可能時間を保存' }).click()
+  await expect(panel).toContainText('保存済み：時間帯の制限なし')
+  expect(sends).toBe(0)
+})

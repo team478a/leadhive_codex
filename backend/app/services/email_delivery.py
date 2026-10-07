@@ -8,6 +8,7 @@ from cryptography.fernet import Fernet, InvalidToken
 from app.config import settings
 from app.models import SmtpSettings
 from app.services.outbound_guard import require_outbound_enabled
+from app.services.sending_window import require_sending_time
 
 
 class EmailDeliveryError(Exception):
@@ -104,6 +105,7 @@ def send_with_configuration(
     unsubscribe_url: str | None = None,
 ) -> None:
     require_outbound_enabled()
+    require_sending_time()
     if not config.host or not config.from_email:
         raise EmailDeliveryError("メール送信設定が未完了です。")
     message = EmailMessage()
@@ -127,6 +129,7 @@ def send_with_configuration(
             if config.username:
                 client.login(config.username, config.password)
             require_outbound_enabled()
+            require_sending_time()
             transmitting = True
             client.send_message(message)
             accepted = True

@@ -169,6 +169,11 @@ def claim_email_delivery(db) -> EmailDelivery | None:
         return claim(db)
     if not settings.outbound_enabled:
         return None
+    from app.services.sending_window import allowed
+
+    if not allowed(db):
+        db.commit()
+        return None
     now = datetime.now(timezone.utc)
     db.execute(select(func.pg_advisory_xact_lock(EMAIL_CLAIM_LOCK_ID)))
     limits = email_delivery_limits(db)
@@ -260,6 +265,10 @@ def delivery_body_with_unsubscribe(delivery: EmailDelivery) -> str:
 
 def run_email_delivery(db, delivery: EmailDelivery) -> None:
     require_outbound_enabled()
+    from app.services.sending_window import defer_email
+
+    if defer_email(db, delivery):
+        return
     from app.services.approved_email import reservation
 
     if reservation(db, delivery.id):
@@ -479,11 +488,15 @@ def enqueue_due_refresh_schedules(db) -> int:
 
 
 def claim_job(db) -> OperationJob | None:
+    from app.services.sending_window import allowed
+
+    sending_allowed = allowed(db)
     job = db.scalar(
         select(OperationJob)
         .where(
             OperationJob.status == "queued",
             OperationJob.operation_type != "cf7_observation",
+            OperationJob.operation_type != "form_delivery" if not sending_allowed else True,
             OperationJob.operation_type.in_(
                 (
                     "collect_search",
@@ -721,6 +734,12 @@ def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     db.commit()
     for item in items:
         if stop_requested(db, job, worker_id):
+            return
+        from app.services.sending_window import allowed
+
+        if not allowed(db):
+            job.status, job.worker_id, job.lease_expires_at = "queued", None, None
+            db.commit()
             return
         success = process_form_batch_item(db, item, user_id)
         if not progress(db, job, worker_id, success):

@@ -23,6 +23,11 @@ def claim(db):
     from app.services.email_feedback import refresh_pending
 
     refresh_pending(db)
+    from app.services.sending_window import allowed
+
+    if not allowed(db):
+        db.commit()
+        return None
     if not settings.outbound_enabled or not settings.human_approved_email_enabled:
         return None
     now = approval.now()

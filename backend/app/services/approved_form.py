@@ -220,6 +220,11 @@ def capacity(db):
 
 
 def claim(db, *, controlled_lab=False):
+    from app.services.sending_window import allowed
+
+    if not allowed(db):
+        db.commit()
+        return None
     if controlled_lab:
         from app.services.controlled_form_execution import ensure_enabled
 

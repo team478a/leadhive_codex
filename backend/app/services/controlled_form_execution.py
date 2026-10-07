@@ -128,6 +128,9 @@ def run(db, claimed, transport: ControlledTransport):
         return
     submission = None
     try:
+        from app.services.sending_window import require_sending_time
+
+        require_sending_time()
         submission = transport.post(plan, row.delivery_id)  # Only after durable commit.
     except Exception:
         pass

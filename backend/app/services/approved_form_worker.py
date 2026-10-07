@@ -47,6 +47,13 @@ def begin(db, row_id, worker_id, context, *, adapter_plan=None):
     if row.status != "checking" or row.worker_id != worker_id:
         db.commit()
         return None
+    from app.services.sending_window import allowed
+
+    if not allowed(db):
+        row.status, row.worker_id, row.lease_expires_at = "queued", None, None
+        row.reason = "送信可能時間外のため待機中です。"
+        db.commit()
+        return None
     if not settings.outbound_enabled or not settings.human_approved_form_enabled:
         raise HTTPException(409, "フォーム実行設定が停止されています。")
     if row.lease_expires_at <= approval.now() or not service.capacity(db):

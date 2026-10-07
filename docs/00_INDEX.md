@@ -280,3 +280,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [sns-agency-real-e2e-pilot.md](sns-agency-real-e2e-pilot.md): SNS事業者30社の実運用Pilot。商品Purpose・Template不足で事前確認段階停止、実送信なし
 
 - [162_WINDOWS_NATIVE_PROTOTYPE.md](162_WINDOWS_NATIVE_PROTOTYPE.md): Docker不要のWindows x64方式検証・隔離DB・送信OFF・配布先ランタイム同梱
+
+- [163_DAILY_SENDING_WINDOW.md](163_DAILY_SENDING_WINDOW.md): 曜日を問わない日本時間の送信時間帯、時間外待機・再開と送信直前の共通guard
