@@ -4,6 +4,7 @@ import json
 import os
 import sys
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import delete, select
 from sqlalchemy.engine import make_url
@@ -77,6 +78,12 @@ with SessionLocal() as db:
             if sys.argv[1] not in {"approval-fixture", "completion-fixture"}
             else "",
         )
+        # Completion queue assertions require a shared-destination record on
+        # the last page. Random UUID ordering occasionally put the unrelated
+        # primary record there instead. Keep IDs project-specific and ordered.
+        completion_id_base = project.id.int & ~((1 << 32) - 1)
+        if sys.argv[1] == "completion-fixture":
+            company.id = UUID(int=completion_id_base)
         db.add(company)
         db.flush()
         if sys.argv[1] == "destination-selection-fixture":
@@ -96,6 +103,7 @@ with SessionLocal() as db:
                     Company(
                         project_id=project.id,
                         source="url",
+                        id=UUID(int=completion_id_base + index + 1),
                         company_name=f"Synthetic batch {index}",
                         domain=f"batch-{index}.example",
                         email="shared@fixture.example",
