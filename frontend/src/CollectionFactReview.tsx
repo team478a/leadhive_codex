@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { api, errorMessage } from './api'
 
-export type FactCondition = { type: string; value: string; review_version?: number; company_fact_hash?: string; evidence_excerpt?: string; observed_value?: string; review_hints?: { status: string; reason: string; excerpts: { text: string; source_url: string; observed_at: string }[] } }
+export type FactCondition = { type: string; value: string; review_version?: number; company_fact_hash?: string; evidence_excerpt?: string; observed_value?: string; review_hints?: { status: string; reason: string; terms?: string[]; excerpts: { text: string; source_url: string; observed_at: string; matched_term?: string }[] } }
 export function CollectionFactReview({ companyId, condition, onSaved }: { companyId: string; condition: FactCondition; onSaved: () => void }) {
   const [outcome, setOutcome] = useState('MATCH')
   const [source, setSource] = useState('')
@@ -27,7 +27,9 @@ export function CollectionFactReview({ companyId, condition, onSaved }: { compan
     <p>人がこの企業・店舗について確認した結果を記録します。有効期間は24時間。送信承認ではありません。</p>
     {condition.type === 'INDUSTRY' && <section aria-label="業種の確認を助ける文章">
       <p>保存済み公式サイト本文の候補です。業種名の記載だけでは、この企業の業種が一致する証明になりません。顧客事例・求人・否定表現や、別店舗の説明ではないか確認してください。</p>
+      {condition.review_hints?.terms && <p>確認候補の表記：{condition.review_hints.terms.join('・')}（条件の変更ではありません）</p>}
       {condition.review_hints?.excerpts.map((hint, i) => <div key={`${hint.source_url}-${i}`}>
+        {hint.matched_term && <p>見つかった表記：{hint.matched_term}</p>}
         <blockquote>{hint.text}</blockquote>
         <p>取得日時：{new Date(hint.observed_at).toLocaleString('ja-JP')} <a href={hint.source_url} target="_blank" rel="noopener noreferrer">候補の公開ページ ↗</a></p>
         <button type="button" disabled={busy} onClick={() => { setSource(hint.source_url); setExcerpt(hint.text); setHintUsed(true); setHintChecked('') }}>この文章を確認欄に入れる</button>

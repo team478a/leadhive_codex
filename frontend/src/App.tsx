@@ -94,8 +94,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     finally { setBusy(false) }
   }
   async function saved() {
-    setEditor(null); setNotice('保存しました。')
-    try { await reload() } catch (e) { setError(errorMessage(e)) }
+    try {
+      await reload()
+      setEditor(null); setNotice('保存しました。')
+    } catch (e) { setError(errorMessage(e)) }
   }
   async function openMembers(project: Project) {
     setMemberProject(project); setMemberEmail(''); setMemberRole('editor')

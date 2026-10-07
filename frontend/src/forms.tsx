@@ -2,6 +2,7 @@ import { cloneElement, useId, useState, type FormEvent, type ReactElement } from
 import { api, errorMessage } from './api'
 import { RegionSelector } from './RegionSelector'
 import type { Profile, ProfileInput, Project, ProjectInput } from './types'
+import { aliasText, industryAliasKey, parseAliases } from './industryAliases'
 
 export function Field({ label, children }: { label: string; children: ReactElement<{ id?: string }> }) {
   const id = useId()
@@ -73,7 +74,8 @@ export function ProfileForm({ initial, onSaved, onCancel }: {
   const [keywords, setKeywords] = useState(() => Object.fromEntries(
     keywordFields.map(([key]) => [key, (initial ?? blankProfile)[key].join('\n')]),
   ))
-  const [rules, setRules] = useState(JSON.stringify(initial?.scoring_rules ?? {}, null, 2))
+  const [aliases, setAliases] = useState(aliasText(initial?.scoring_rules[industryAliasKey]))
+  const [rules, setRules] = useState(JSON.stringify(Object.fromEntries(Object.entries(initial?.scoring_rules ?? {}).filter(([key]) => key !== industryAliasKey)), null, 2))
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {
@@ -83,6 +85,11 @@ export function ProfileForm({ initial, onSaved, onCancel }: {
       scoring_rules = JSON.parse(rules)
       if (!scoring_rules || Array.isArray(scoring_rules) || typeof scoring_rules !== 'object') throw Error()
     } catch { setError('スコアルールには有効なJSONオブジェクトを入力してください。'); return }
+    try {
+      if (industryAliasKey in scoring_rules) throw Error('業種の別名は専用の入力欄で設定してください。')
+      const mapping = parseAliases(aliases)
+      if (Object.keys(mapping).length) scoring_rules[industryAliasKey] = mapping
+    } catch (e) { setError(e instanceof Error ? e.message : '業種の別名を確認してください。'); return }
     const body: ProfileInput = { ...blankProfile }
     for (const key of Object.keys(blankProfile) as (keyof ProfileInput)[]) {
       Object.assign(body, { [key]: value[key] })
@@ -108,6 +115,8 @@ export function ProfileForm({ initial, onSaved, onCancel }: {
       <div className="grid gap-x-6 sm:grid-cols-2">{keywordFields.map(([key, label]) =>
         <Field key={key} label={label}><textarea rows={4} value={keywords[key]}
           onChange={e => setKeywords({ ...keywords, [key]: e.target.value })} /></Field>)}</div>
+      <Field label="業種確認に使う別名（1行に1業種）"><textarea rows={3} maxLength={24000} placeholder="美容院: 美容室, ヘアサロン" value={aliases} onChange={e => setAliases(e.target.value)} /></Field>
+      <p className="muted">例：美容院: 美容室, ヘアサロン。最大20業種、各10別名。保存済み公式サイトの確認候補にだけ使います。検索語の追加・AIスコア変更・自動一致判定は行いません。</p>
       <Field label="スコアルール（JSON）"><textarea className="font-mono" rows={8} value={rules}
         onChange={e => setRules(e.target.value)} spellCheck={false} /></Field>
       <Field label="AIへの指示"><textarea rows={4} maxLength={20000} value={value.ai_instruction}
