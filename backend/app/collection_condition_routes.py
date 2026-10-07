@@ -31,6 +31,26 @@ from app.services.collection_conditions import evaluate, snapshot_hash
 router = APIRouter(prefix="/api")
 
 
+class ConditionProposalInput(Input):
+    text: str = Field(min_length=1, max_length=2000)
+
+
+@router.post("/projects/{project_id}/collection-conditions/propose")
+def propose_conditions(
+    project_id: UUID,
+    body: ConditionProposalInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.services.condition_proposal import propose
+
+    project_access(project_id, db, user)
+    try:
+        return propose(body.text)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+
+
 class FactReviewInput(Input):
     condition_type: Literal["AREA", "INDUSTRY"]
     value: Keyword
