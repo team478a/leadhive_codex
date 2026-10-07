@@ -264,3 +264,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [148_RAW_REVIEW_SIMPLIFICATION.md](148_RAW_REVIEW_SIMPLIFICATION.md): 収集候補を1件ずつ確認する画面・操作削減・Human判定の維持
 
 - [149_OFFICIAL_SITE_COLLECTION_POLICY.md](149_OFFICIAL_SITE_COLLECTION_POLICY.md): 予約・まとめ・SNSページの営業候補除外とRaw検証データの分離
+
+- [157_CONDITION_REVIEW_NAVIGATION.md](157_CONDITION_REVIEW_NAVIGATION.md): 表示ページの条件確認待ち絞り込み・次候補移動・Human判定の維持
