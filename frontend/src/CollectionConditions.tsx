@@ -8,7 +8,7 @@ type Condition = { id: string; priority: 'MUST' | 'WANT' | 'EXCLUDE'; type: stri
 export type ConditionRevision = { id: string; project_id: string; version: number; payload_hash: string; snapshot: { conditions: Condition[]; original_request?: string } }
 type Candidate = { company_id: string; company_name: string; state: string; want_matched: number; want_unknown: number; conditions: (FactCondition & { id: string; priority: string; outcome: string; reason: string; evidence_url: string })[] }
 type Report = { candidates: Candidate[]; total_candidates: number; evaluated_count: number; page_counts: Record<string, number>; note: string }
-const kinds: Record<string, string> = { MEDIA_EXISTS: '掲載・SNSの存在', OFFICIAL_SITE: '確認済み公式サイト', AREA: '地域（根拠を人が確認）', INDUSTRY: '業種（根拠を人が確認）', ACTIVE_JOB: '現在募集中（検証未対応）', UNRESOLVED: 'その他・解釈待ち' }
+const kinds: Record<string, string> = { MEDIA_EXISTS: '掲載・SNSの存在', OFFICIAL_SITE: '確認済み公式サイト', AREA: '地域（確認済み住所を利用）', INDUSTRY: '業種（根拠を人が確認）', ACTIVE_JOB: '現在募集中（検証未対応）', UNRESOLVED: 'その他・解釈待ち' }
 const newCondition = (): Condition => ({ id: crypto.randomUUID(), priority: 'MUST', type: 'MEDIA_EXISTS', operator: 'EXISTS', value: 'INSTAGRAM' })
 
 export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraftChanged }: { projectId: string; onConfirmed?: (row: ConditionRevision | null) => void; onApplied?: (row: ConditionRevision) => void; onDraftChanged?: (dirty: boolean) => void }) {
@@ -65,11 +65,11 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
   }
   return <details className="panel min-w-0"><summary className="font-semibold">対象条件を確認・分類する</summary>
     <p>必須条件はすべて一致した場合のみ採用。希望条件は採用を妨げず、除外条件が一致した対象は除外します。未確認の必須・除外条件は確認待ちです。</p>
-    <p className="muted">地域・業種は候補ごとに根拠を確認できます。募集中の検証と自然文の条件解析はまだ未対応です。</p>
+    <p className="muted">地域は都道府県を明示し、確認済み住所があれば自動判定します。根拠不足・業種は候補ごとに人が確認できます。募集中の検証はまだ未対応です。</p>
     {error && <p role="alert" className="error">{error}</p>}{notice && <p role="status" className="notice">{notice}</p>}
     <fieldset disabled={busy || !projectId} className="space-y-3">
-      <label>探したい対象<textarea rows={3} maxLength={2000} value={requestText} onChange={e => { setRequestText(e.target.value); onDraftChanged?.(true) }} placeholder={'姫路市の美容院でInstagramあり\n希望:公式サイトあり'} /></label>
-      <p className="muted">例の書き方、または「地域:姫路市」「業種:美容院」「除外:Instagramあり」を1行ずつ入力できます。複雑な文・件数・求人の現在性は自動解釈しません。</p>
+      <label>探したい対象<textarea rows={3} maxLength={2000} value={requestText} onChange={e => { setRequestText(e.target.value); onDraftChanged?.(true) }} placeholder={'兵庫県姫路市の美容院でInstagramあり\n希望:公式サイトあり'} /></label>
+      <p className="muted">例の書き方、または「地域:兵庫県姫路市」「業種:美容院」「除外:Instagramあり」を1行ずつ入力できます。複雑な文・件数・求人の現在性は自動解釈しません。</p>
       <button type="button" disabled={!requestText.trim()} onClick={() => void propose()}>文章から条件案を作る</button>
       {warnings.length > 0 && <div role="status">{warnings.map((warning, i) => <p key={i}>{warning}</p>)}</div>}
       {conditions.map((c, i) => <div key={c.id} className="grid gap-2 min-w-0">
