@@ -4,6 +4,7 @@ import { PresenceSearchControls } from './ExternalPresence'
 import { defaultPresencePlan } from './externalPresenceShared'
 import { PresenceEvidenceQueue } from './PresenceEvidenceQueue'
 import { PresenceRequirements } from './PresenceRequirements'
+import { CollectionConditions } from './CollectionConditions'
 import { Field } from './forms'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
@@ -188,6 +189,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
 
   return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
     <SalesPreparationPanel key={projectId} projectId={projectId} />
+    <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} />
     <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} companies={companies} />
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
