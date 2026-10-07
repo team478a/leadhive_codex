@@ -68,6 +68,10 @@ PREFECTURES = (
 
 AGGREGATOR_DOMAINS = {
     "hotpepper.jp",
+    "beauty.rakuten.co.jp",
+    "minimodel.jp",
+    "ekiten.jp",
+    "hairlog.jp",
     "facebook.com",
     "instagram.com",
     "x.com",
@@ -134,7 +138,7 @@ class PageData:
 
 
 def is_aggregator_domain(domain: str) -> bool:
-    normalized = domain.lower().removeprefix("www.")
+    normalized = domain.lower().rstrip(".").removeprefix("www.")
     return any(normalized == item or normalized.endswith("." + item) for item in AGGREGATOR_DOMAINS)
 
 

@@ -29,6 +29,7 @@ from app.services.collection import ExternalServiceError, search_gbizinfo, searc
 from app.services.contact_destinations import normalize_destination
 from app.services.raw_benchmark import OUTCOMES, commit_id, digest, latest_review, report
 from app.services.raw_capture import capturing
+from app.services.raw_site_policy import site_policy
 
 router = APIRouter(prefix="/api/raw-benchmarks")
 
@@ -211,6 +212,7 @@ def snapshots(
             "id": r.id,
             "payload": r.payload,
             "candidate_key": raw_candidate_key(r),
+            "site_policy": site_policy(r.payload),
             "snapshot_hash": r.snapshot_hash,
             "review": public_review(latest_review(db, r.id)),
         }

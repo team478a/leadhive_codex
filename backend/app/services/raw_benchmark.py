@@ -8,6 +8,7 @@ from collections import Counter
 from sqlalchemy import select
 
 from app.models import RawLeadReview, RawLeadSnapshot, RawPairReview, RawQueryRun
+from app.services.raw_site_policy import RULE_VERSION, site_policy
 
 OUTCOMES = (
     "CORRECT",
@@ -217,6 +218,20 @@ def report(db, benchmark):
     ).all()
     latest_pairs = {(r.left_id, r.right_id): r for r in pair_reviews}
     return {
+        "site_policy": {
+            "rule_version": RULE_VERSION,
+            "excluded_observations": sum(
+                site_policy(s.payload)["status"] == "EXCLUDED_THIRD_PARTY" for s in snapshots
+            ),
+            "excluded_unique_candidates": len(
+                {
+                    candidate_key(s.payload, s.id)
+                    for s in snapshots
+                    if site_policy(s.payload)["status"] == "EXCLUDED_THIRD_PARTY"
+                }
+            ),
+            "human_truth_unchanged": True,
+        },
         "definition_version": benchmark.definition_version,
         "code_commit": benchmark.code_commit,
         "region": benchmark.region,
