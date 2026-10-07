@@ -206,6 +206,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       setConfirmedConditions(row)
       if (source === 'csv' || source === 'url') return
       setUseConditions(true)
+      if (source === 'serper' && row.snapshot.requested_count_explicit && row.snapshot.requested_count) setTargetCount(row.snapshot.requested_count)
       const areas = row.snapshot.conditions.filter(c => c.type === 'AREA' && c.priority === 'MUST')
       const industries = row.snapshot.conditions.filter(c => c.type === 'INDUSTRY' && c.priority === 'MUST')
       if (areas.length === 1) setRegion(areas[0].value)

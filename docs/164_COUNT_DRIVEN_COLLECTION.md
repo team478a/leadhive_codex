@@ -4,6 +4,8 @@
 
 Serperのバックグラウンド収集へ`target_count`（1〜500）を追加する。UIでは「収集する新規候補数」を指定し、ページ数は設定しない。既存APIで未指定の場合と他Sourceは従来の方式を維持する。Raw BenchmarkのPilot上限やHuman Truthは変更しない。
 
+文章から確定した条件に明示的な目標件数がある場合は、Serperの収集目標欄へ反映する。上限500を超える値は入力検証で止め、黙って上限まで減らさない。収集開始前に目標欄の値を確認・変更できる。
+
 目標は今回の収集で新しく保存できた候補数。既存企業の再発見、同一ドメインの重複、既知aggregator、suppression対象は加算しない。確定条件を指定した場合はMATCHのみ加算し、REVIEW_REQUIRED/NO_MATCHは含めない。新規保存のSource Observation根拠を利用し、時刻の大小だけで新規企業と判定しない。
 
 この件数は人が確認済みの営業対象数ではない。現行の除外・同一性判定を再利用するため、未知の比較記事や所在地未確認の候補が残る制限は継続する。精度改善やHuman Truth生成を、この変更の成果として主張しない。
@@ -43,3 +45,4 @@ Project・Human認証・既存Agent拒否を維持する。実メール・Form P
 - Desktop/Mobile Playwright 2 passed。終了表示はUI用固定結果、実workerの停止・再実行はBackendテストで検証。
 - Ruff lint/format、対象mypy、Frontend typecheck/lint/build成功。既存bundle size warningあり。専用DBのAlembic upgrade/model check成功。
 - 実API再検索・送信・承認は0。今回の変更ではRaw Pilot/既存実データを変更していない。
+- 文章からの件数反映を含む条件入力フロー: Desktop/Mobile 6 passed。変更後のFrontend typecheck/lint成功。

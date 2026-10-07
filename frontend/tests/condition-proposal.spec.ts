@@ -96,7 +96,7 @@ test('Purpose sentence preserves mandatory recruiting and target count without s
     expect(confirmed.snapshot.requested_count).toBe(20)
     expect(confirmed.snapshot.requested_count_explicit).toBe(true)
     await expect(page.getByRole('region', { name: '条件判定結果' })).toContainText('目標 20件（達成保証なし）')
-    await expect(page.getByLabel('収集する新規候補数')).toHaveValue('100')
+    await expect(page.getByLabel('収集する新規候補数')).toHaveValue('20')
     await page.reload()
     await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
