@@ -109,15 +109,15 @@ Humanによる確認はdiscoveryMethodを別用途へ流用せず、Evidenceのa
 
 ## 13. テスト結果
 
-- 関連Backend: **62 PASS**（Presence、既存収集、Raw site policy、DM preparation）。
+- 関連Backend: **63 PASS**（Presence、既存収集、Raw site policy、DM preparation）。
 - 必須12ケース: OFF時保存/OFF時未検索/ONでFOUND/ONでNOT_FOUND/MUST優先/HotPepper保存/求人保存/複数SNS重複防止/リンク/状態の区別/OFF時余計な検索なし/予算上限を確認。
-- 追加: entity変更、期限切れ根拠、Human選択保護、他Project拒否、viewer、Agent・認証混在拒否、検索失敗、再実行抑制、Google Places保持制限。
+- 追加: entity変更、期限切れ根拠、Human選択・既存保護済みSNSの上書き防止、他Project拒否、viewer、Agent・認証混在拒否、検索失敗、再実行抑制、Google Places保持制限。保護済みSNS値の変更もcontext hashに含め、古い観測を有効と扱わない。
 - Ruff check / format check: PASS。mypy: 新規5ファイルPASS。
 - Frontend typecheck / lint / build: PASS。既存のbundleサイズwarningは残る。
 - Playwright: 新規PC/Mobileの2件PASS。Raw Quick Reviewとの回帰を含めた4件もPASS。模擬データのみで外部アクセスなし。
-- Migration: 独立したテストDBでupgrade→downgrade→upgrade、Alembic check PASS。
+- Migration: 独立したテストDBでupgrade→downgrade→upgrade、Alembic check PASS。データがある場合のdowngrade拒否も模擬データでPASS。
 - 既存Backend全体のローカル試行: 368 PASS / 50 subtests PASSの後、既存並列フォーム模擬試験が20秒timeout。同じ試験の単独再実行はPASS。これを全体PASSとは報告しない。
-- GitHub Actions: 実装・文書push後の対象commitについて結果を別途確認する。上記ローカル結果とは区別する。
+- GitHub Actions: `a0eb86f`の[run 37560512159](https://github.com/team478a/leadhive_codex/actions/runs/37560512159)は全7ジョブPASS。保護済みSNSの互換性補足を含む最終HEADは別runで確認する。上記ローカル結果とは区別する。
 
 今回の作業で実企業の追加検索、AI呼出、Email送信、外部Form送信、Human送信承認、Lead Completion実行は行っていない。ローカルのoutbound OFFと送信worker停止を維持する。模擬フォーム試験はテスト用loopback fixtureを使用する。
 

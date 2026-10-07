@@ -300,6 +300,23 @@ def test_automatic_capture_cannot_overwrite_human_selection(db, sample, users):
     assert db.scalar(select(func.count()).select_from(ExternalPresenceEvidence)) == 2
 
 
+def test_legacy_protected_social_is_not_silently_overridden(db, sample):
+    project, job, company = sample
+    company.instagram_url = "https://instagram.com/humanprotected"
+    company.protected_fields = ["instagram_url"]
+    capture_url(
+        db,
+        project.id,
+        "https://instagram.com/automatic",
+        company.website_url,
+        company=company,
+        job=job,
+    )
+    assert status(db, company)["status"] == "ERROR"
+    assert status(db, company)["reason"] == "PROTECTED_PRESENCE_CONFLICT"
+    assert company.instagram_url == "https://instagram.com/humanprotected"
+
+
 def test_read_link_and_project_permissions(db, auth, sample, users):
     project, job, company = sample
     capture_url(

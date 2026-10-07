@@ -1,5 +1,7 @@
 """Passive capture + bounded extra search. Presence never authorizes outreach."""
 
+import hashlib
+import json
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import func, select
@@ -16,9 +18,26 @@ from app.schema_external_presence import PresenceSearchPlan
 from app.services.lead_identity import identity_hash, normalize
 from app.services.presence_platforms import DOMAINS, classify
 
+SOCIAL_FIELDS = {
+    "INSTAGRAM": "instagram_url",
+    "X": "x_url",
+    "FACEBOOK": "facebook_url",
+    "YOUTUBE": "youtube_url",
+    "TIKTOK": "tiktok_url",
+}
+
+
+def presence_context_hash(company):
+    protected = set(company.protected_fields or [])
+    context = [
+        identity_hash(company),
+        {field: getattr(company, field) for field in SOCIAL_FIELDS.values() if field in protected},
+    ]
+    return hashlib.sha256(json.dumps(context, sort_keys=True).encode()).hexdigest()
+
 
 def inventory(db, company_id):
-    current_hash = identity_hash(db.get(Company, company_id))
+    current_hash = presence_context_hash(db.get(Company, company_id))
     rows = {
         r.platform: r
         for r in db.scalars(
@@ -62,6 +81,18 @@ def set_status(
             ExternalPresence.company_id == company.id, ExternalPresence.platform == platform
         )
     )
+    field = SOCIAL_FIELDS.get(platform)
+    protected_conflict = (
+        not human_verified
+        and field is not None
+        and field in (company.protected_fields or [])
+        and url != getattr(company, field, "")
+        and status == "FOUND"
+    )
+    if protected_conflict:
+        if row is not None:
+            return row
+        status, reason, url = "ERROR", "PROTECTED_PRESENCE_CONFLICT", ""
     if row is None:
         row = ExternalPresence(company_id=company.id, platform=platform, status=status)
         db.add(row)
@@ -76,11 +107,13 @@ def set_status(
     ):
         return row  # Automatic observations cannot overwrite a Human-selected presence.
     elif (
-        row.status == "FOUND" and status != "FOUND" and row.identity_hash == identity_hash(company)
+        row.status == "FOUND"
+        and status != "FOUND"
+        and row.identity_hash == presence_context_hash(company)
     ):
         return row  # A failed/empty later search does not erase a positive observation.
     row.status, row.reason = status, reason
-    row.identity_hash = identity_hash(company)
+    row.identity_hash = presence_context_hash(company)
     row.discovery_method = method
     if status == "FOUND":
         row.url, row.source_url = url, source_url
@@ -234,7 +267,7 @@ def extra_searches(db, job, plan: PresenceSearchPlan, *, stopped=lambda: False, 
             if (
                 current
                 and current.status == "FOUND"
-                and current.identity_hash == identity_hash(company)
+                and current.identity_hash == presence_context_hash(company)
                 and (
                     mode != "REQUIRED"
                     or (
