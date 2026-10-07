@@ -37,3 +37,12 @@ MUST不一致は候補不一致、EXCLUDE一致は候補不一致、WANTは採�
 BackendでAI/keywordだけではUNKNOWN、優先度別判定、訂正/取り消し、期限切れ、Company変更・version競合、Project/Viewer/Agent境界、公開URL制約を検証する。PC/Mobileの合成データで条件確定→確認→再判定→取り消し→再読込を検証する。実企業GET・検索API・AI・承認作成・メール・Form送信を実施しない。outbound OFF、worker停止を維持する。
 
 本工程で停止する。自動地域/業種抽出Adapterや求人検証は次工程であり、本工程を一次収集Precision改善の実測成果として扱わない。
+
+## 実行結果（2026-10-07）
+
+- Backend実装 `9b8d767`、UI `fd3a9e1`。検証対象HEAD `4cba7f7c2fba1812c5c812c5d60d0ac17ef52cdd`。
+- 関連Backend回帰82件PASS、PC/Mobile関連E2E6件PASS。Ruff / format / mypy、Frontend typecheck / lint / build PASS。
+- [GitHub Actions 37566815342](https://github.com/team478a/leadhive_codex/actions/runs/37566815342): 全7ジョブ成功。Backend全テスト、E2E、Migration往復/model差分、Windows packageを含む。
+- ローカルAPI 127.0.0.1:18986のhealth・新endpointを確認。保存済みRaw Snapshot40件を保持。Companies / Raw Human Review / ApprovalRequest / EmailDelivery / FormDeliveryは0件のまま。outbound OFF、worker未起動。
+- 新migrationの空DB upgrade / downgrade / upgradeとAlembic check成功。レビュー記録が残る場合のdowngrade拒否テスト成功。
+- Frontend buildに既存bundle size警告は残る。成功結果を収集Precisionや全条件の自動検証完了として解釈しない。
