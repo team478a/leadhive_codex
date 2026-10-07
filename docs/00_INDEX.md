@@ -268,3 +268,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [157_CONDITION_REVIEW_NAVIGATION.md](157_CONDITION_REVIEW_NAVIGATION.md): 表示ページの条件確認待ち絞り込み・次候補移動・Human判定の維持
 
 - [purpose-based-list-engine-completion-report.md](purpose-based-list-engine-completion-report.md): 最新CIと完成指示の差分・Source利用条件による停止・Pilot未実行・再開条件
+
+- [158_PURPOSE_SENTENCE_PREVIEW.md](158_PURPOSE_SENTENCE_PREVIEW.md): 限定自然文から非実行の条件案・目標件数を確認保存。求人検証・媒体Pilotは保留
