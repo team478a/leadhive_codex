@@ -220,6 +220,7 @@ jobs:
           backend/.venv/Scripts/python scripts/package-windows-native.py
           backend/.venv/Scripts/python scripts/native/verify_package.py
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: LeadHive-Windows-Native-Prototype
           path: |

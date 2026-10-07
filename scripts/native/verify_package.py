@@ -51,6 +51,16 @@ def main():
         capture_output=True,
     )
     if result.returncode or not output.exists():
+        print(json.dumps({"native_exit_code": result.returncode}))
+        if output.exists():
+            print(output.read_text())
+        for line in result.stderr.decode("utf-8", errors="replace").splitlines():
+            try:
+                diagnostic = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(diagnostic, dict) and "error_type" in diagnostic:
+                print(json.dumps(diagnostic))
         raise RuntimeError(
             "Native acceptance failed. Inspect private instance diagnostics."
         )

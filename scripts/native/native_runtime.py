@@ -149,15 +149,17 @@ def command(root, executable, *args):
     if getattr(sys, "frozen", False):
         ctypes.windll.kernel32.SetDllDirectoryW(None)
     try:
-        result = subprocess.run(
-            [str(exe), *map(str, args)],
-            cwd=root,
-            creationflags=HIDDEN,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=120,
-            check=False,
-        )
+        # pg_ctl's server child may inherit stdout. A PIPE would wait for daemon EOF.
+        with (root / "postgres-setup.log").open("ab") as log:
+            result = subprocess.run(
+                [str(exe), *map(str, args)],
+                cwd=root,
+                creationflags=HIDDEN,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                timeout=120,
+                check=False,
+            )
     finally:
         if getattr(sys, "frozen", False):
             ctypes.windll.kernel32.SetDllDirectoryW(str(sys._MEIPASS))

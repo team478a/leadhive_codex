@@ -233,6 +233,23 @@ def smoke(data, output):
 if __name__ == "__main__":
     try:
         main()
-    except Exception:  # noqa: BLE001 -- never expose credentials through tracebacks.
-        # Exception messages may contain credentials. Preserve a failure exit code only.
+    except Exception as error:  # noqa: BLE001 -- never expose credentials through tracebacks.
+        import traceback
+
+        # Log exception type and frame locations, never exception values or source lines.
+        diagnostic = {
+            "error_type": type(error).__name__,
+            "frames": [
+                {
+                    "file": Path(frame.filename).name,
+                    "line": frame.lineno,
+                    "function": frame.name,
+                }
+                for frame in traceback.extract_tb(error.__traceback__)[-5:]
+            ],
+        }
+        if isinstance(error, ModuleNotFoundError):
+            diagnostic["missing_module"] = error.name
+        if sys.stderr is not None:
+            sys.stderr.write(json.dumps(diagnostic) + "\n")
         sys.exit(1)
