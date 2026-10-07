@@ -1,0 +1,68 @@
+import { execFileSync } from 'node:child_process'
+import { randomBytes } from 'node:crypto'
+import { test, expect } from '@playwright/test'
+
+test('Simple review requires an explicit Human choice and never transfers truth to repeated observations', async ({ page }) => {
+  test.setTimeout(120_000)
+  const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
+  const env = { ...process.env, E2E_EMAIL: `e2e-quick-${randomBytes(8).toString('hex')}@example.com`, E2E_PASSWORD: randomBytes(24).toString('hex') }
+  execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
+  const forbidden: string[] = []
+  page.on('request', r => { if (!['localhost', '127.0.0.1'].includes(new URL(r.url()).hostname) || /\/(send|dispatch|execute|approve|test-send|search|queries)([/?]|$)/.test(r.url())) forbidden.push(r.url()) })
+  try {
+    await page.goto('/#raw')
+    await page.getByLabel('メールアドレス').fill(env.E2E_EMAIL)
+    await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
+    await page.getByRole('button', { name: 'ログインする', exact: true }).click()
+    await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
+    const raw = page.getByRole('region', { name: 'Raw Collection Benchmark', exact: true })
+    await raw.getByLabel('Benchmark地域', { exact: true }).fill('兵庫県姫路市')
+    await raw.getByLabel('Benchmark業種', { exact: true }).fill('美容院')
+    await raw.getByRole('button', { name: '空のRaw Benchmarkを作成', exact: true }).click()
+    await expect(raw.getByLabel('Raw Benchmark', { exact: true })).toBeHidden()
+    await raw.getByText('検索条件・詳しい集計を見る', { exact: true }).click()
+    const benchmark = await raw.getByLabel('Raw Benchmark', { exact: true }).inputValue()
+    execFileSync(python, ['../backend/tests/e2e_raw_benchmark.py', benchmark], { env })
+    await page.reload()
+    const queue = raw.getByRole('region', { name: '候補の確認', exact: true })
+    await expect(queue).toContainText('候補 2件 ／ 確認済み 0件 ／ 未確認 2件')
+    await expect(raw.getByLabel('Raw Benchmark', { exact: true })).toBeHidden()
+    const card = queue.getByRole('article', { name: '確認する候補', exact: true })
+    await expect(card.getByRole('link', { name: '掲載ページを開く ↗' })).toHaveAttribute('href', 'https://synthetic.example/')
+    await expect(card.getByRole('button', { name: '対象に合うと確認して次へ', exact: true })).toBeEnabled()
+    if (test.info().project.name === 'mobile') {
+      await expect(page.getByRole('button', { name: '▦ プロジェクト', exact: true })).toBeHidden()
+      await page.getByRole('button', { name: 'メニュー', exact: true }).click()
+      await expect(page.getByRole('button', { name: '▦ プロジェクト', exact: true })).toBeVisible()
+      await page.getByRole('button', { name: 'メニュー', exact: true }).click()
+    }
+    await page.screenshot({ path: `test-results/raw-quick-${test.info().project.name}.png`, fullPage: true })
+    // Skipping writes no truth. Return explicitly before deciding.
+    await card.getByRole('button', { name: '保存せず後で確認', exact: true }).click()
+    await card.getByRole('button', { name: '保存せず後で確認', exact: true }).click()
+    await expect(queue).toContainText('判定は保存されていません')
+    await queue.getByRole('button', { name: '残りの確認を再開', exact: true }).click()
+    await page.route('**/raw-benchmarks/snapshots/*/reviews', r => r.fulfill({ status: 409, json: { detail: 'Synthetic review conflict' } }))
+    await card.getByRole('button', { name: '判断できないとして次へ', exact: true }).click()
+    await expect(card.getByRole('alert')).toContainText('Synthetic review conflict')
+    await expect(queue).toContainText('確認済み 0件')
+    await page.unroute('**/raw-benchmarks/snapshots/*/reviews')
+    await card.getByRole('button', { name: '判断できないとして次へ', exact: true }).click()
+    await expect(queue).toContainText('確認済み 1件 ／ 未確認 1件')
+    await card.getByRole('button', { name: '対象に合うと確認して次へ', exact: true }).click()
+    await expect(queue).toContainText('表示した候補の確認が終わりました')
+    await raw.getByText('検索条件・詳しい集計を見る', { exact: true }).click()
+    const metrics = raw.getByRole('region', { name: 'Raw Collection集計', exact: true })
+    await expect(metrics).toContainText('Found 3 / Reviewed 2 / Correct 1')
+    await expect(metrics).toContainText('Strict Precision 50.0% / Resolved Precision 100.0%')
+    await queue.getByText('確認済みの候補を見る・判定を直す', { exact: true }).click()
+    await queue.getByRole('button', { name: 'Synthetic store：対象として正しい', exact: true }).click()
+    await card.getByRole('button', { name: '対象外・違う', exact: true }).click()
+    await card.getByRole('button', { name: '地域が違うと確認して次へ', exact: true }).click()
+    await expect(metrics).toContainText('Found 3 / Reviewed 2 / Correct 0')
+    await page.reload()
+    await expect(queue).toContainText('候補 2件 ／ 確認済み 2件 ／ 未確認 0件')
+    expect(forbidden).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBeTruthy()
+  } finally { execFileSync(python, ['../backend/tests/e2e_user.py', 'cleanup'], { env }) }
+})

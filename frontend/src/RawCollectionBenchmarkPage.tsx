@@ -1,15 +1,17 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 import { RawBenchmarkMetrics } from './RawBenchmarkMetrics'
 import type { RawReport } from './rawBenchmarkTypes'
 import { RawLeadReview, type RawRow } from './RawLeadReview'
 import { RawPairReview } from './RawPairReview'
 import { RawRunStability } from './RawRunStability'
+import { RawQuickReview } from './RawQuickReview'
 
 type Benchmark = { id: string; region: string; industry: string }
 type Source = { source: string; configured: boolean; pilot_allowed: boolean; reason?: string }
 
 export function RawCollectionBenchmarkPage() {
+  const [initialized, setInitialized] = useState(false)
   const [list, setList] = useState<Benchmark[]>([])
   const [sources, setSources] = useState<Source[]>([])
   const [selected, setSelected] = useState('')
@@ -25,12 +27,7 @@ export function RawCollectionBenchmarkPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const generation = useRef(0)
-  useEffect(() => {
-    let active = true
-    Promise.all([api<Benchmark[]>('/raw-benchmarks'), api<Source[]>('/raw-benchmarks/sources')]).then(([v, s]) => { if (active) { setList(v); setSources(s) } }).catch(e => { if (active) setError(errorMessage(e)) })
-    return () => { active = false }
-  }, [])
-  async function reload(id = selected) {
+  const reload = useCallback(async (id: string) => {
     const current = ++generation.current
     setError(''); setReport(null); setRows([])
     if (!id) return
@@ -38,7 +35,12 @@ export function RawCollectionBenchmarkPage() {
       const [r, s] = await Promise.all([api<RawReport>(`/raw-benchmarks/${id}/report`), api<RawRow[]>(`/raw-benchmarks/${id}/snapshots`)])
       if (current === generation.current) { setReport(r); setRows(s) }
     } catch (e) { if (current === generation.current) setError(errorMessage(e)) }
-  }
+  }, [])
+  useEffect(() => {
+    let active = true
+    Promise.all([api<Benchmark[]>('/raw-benchmarks'), api<Source[]>('/raw-benchmarks/sources')]).then(([v, s]) => { if (active) { setList(v); setSources(s); setInitialized(true); if (v[0]) { setSelected(v[0].id); void reload(v[0].id) } } }).catch(e => { if (active) { setInitialized(true); setError(errorMessage(e)) } })
+    return () => { active = false }
+  }, [reload])
   async function create() {
     setBusy(true); setError('')
     try {
@@ -48,16 +50,19 @@ export function RawCollectionBenchmarkPage() {
   }
   async function collect() {
     setBusy(true); setError('')
-    try { await api(`/raw-benchmarks/${selected}/queries`, 'POST', { source, keyword, requested_count: count, repeat }); await reload() }
-    catch (e) { await reload(); setError(errorMessage(e)) } finally { setBusy(false) }
+    try { await api(`/raw-benchmarks/${selected}/queries`, 'POST', { source, keyword, requested_count: count, repeat }); await reload(selected) }
+    catch (e) { await reload(selected); setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function cancel(id: string) {
-    try { await api(`/raw-benchmarks/${selected}/queries/${id}/cancel`, 'POST', {}); await reload() }
+    try { await api(`/raw-benchmarks/${selected}/queries/${id}/cancel`, 'POST', {}); await reload(selected) }
     catch (e) { setError(errorMessage(e)) }
   }
+  if (!initialized) return <section aria-label="Raw Collection Benchmark"><p role="status">確認するリストを読み込み中…</p></section>
   return <section aria-label="Raw Collection Benchmark">
-    <h2>一次収集の精度を測る</h2>
-    <p>Raw Collection / Completion / DM READYは別段階です。ここでは新しい空Projectで一次収集だけを固定します。補完・AI営業判定・DM・承認・送信は実行しません。</p>
+    {error && <div role="alert">{error}{selected && <button className="secondary mt-3" onClick={() => void reload(selected)}>もう一度読み込む</button>}</div>}
+    {selected && !report && !error && <p role="status">候補を読み込み中…</p>}
+    {report && <RawQuickReview rows={rows} region={list.find(v => v.id === selected)?.region ?? ""} industry={list.find(v => v.id === selected)?.industry ?? ""} canReview={report.can_review} onSaved={() => reload(selected)} />}
+    <details className="mt-5" open={list.length === 0}><summary>検索条件・詳しい集計を見る</summary>
     <section className="panel mt-5" aria-label="Raw Benchmark作成">
       <h3>少量Pilotを作成</h3>
       <label className="field">Benchmark地域<input value={region} maxLength={500} disabled={busy} onChange={e => setRegion(e.target.value)} /></label>
@@ -73,12 +78,12 @@ export function RawCollectionBenchmarkPage() {
       <label className="field">Raw依頼件数<input type="number" min={1} max={30} value={count} disabled={busy} onChange={e => setCount(Number(e.target.value))} /></label>
       <label className="checkbox-row"><input type="checkbox" checked={repeat} disabled={busy || !report?.can_review || report.repeat_limit < 3} onChange={e => setRepeat(e.target.checked)} />同じQueryを反復測定する（最大3回）</label>
       <button disabled={busy || !report?.can_review || !keyword.trim() || !Number.isInteger(count) || count < 1 || count > 30 || !sources.find(s => s.source === source)?.configured || !sources.find(s => s.source === source)?.pilot_allowed} onClick={() => void collect()}>{busy ? '収集中…' : 'このQueryだけ一次収集'}</button>
-      <button className="secondary" onClick={() => void reload()}>Raw結果を再読込</button>
+      <button className="secondary" onClick={() => void reload(selected)}>Raw結果を再読込</button>
       <p className="muted">画面を閉じても開始済み通信は取り消せません。再読込してジョブ状態を確認してください。中断は新しいQueryを追加しません。</p>
     </section>}
-    {error && <p role="alert">{error}</p>}
     {report && <><RawBenchmarkMetrics report={report} onCancel={id => void cancel(id)} /><RawRunStability report={report} /></>}
-    {report && <RawPairReview rows={rows} canReview={report.can_review} onSaved={() => void reload()} />}
-    {selected && <section className="mt-5" aria-label="Raw結果とHuman Review"><h3>Raw結果 / Human Truth</h3>{report && rows.length === 0 && <p>Raw候補は0件です。精度は未測定です。</p>}<label className="checkbox-row"><input type="checkbox" checked={representatives} onChange={e => setRepresentatives(e.target.checked)} />未レビューRaw観測の代表候補だけを表示（店舗Identityの確定ではありません）</label>{rows.filter((row, i) => !representatives || (!row.review && rows.findIndex(r => !r.review && r.candidate_key === row.candidate_key) === i)).map(row => <RawLeadReview key={`${row.id}:${row.review?.version ?? 0}`} row={row} rows={rows} canReview={report?.can_review ?? false} onSaved={() => void reload()} />)}</section>}
+    {report && <RawPairReview rows={rows} canReview={report.can_review} onSaved={() => void reload(selected)} />}
+    {selected && <section className="mt-5" aria-label="Raw結果とHuman Review"><h3>Raw結果 / Human Truth</h3>{report && rows.length === 0 && <p>Raw候補は0件です。精度は未測定です。</p>}<label className="checkbox-row"><input type="checkbox" checked={representatives} onChange={e => setRepresentatives(e.target.checked)} />未レビューRaw観測の代表候補だけを表示（店舗Identityの確定ではありません）</label>{rows.filter((row, i) => !representatives || (!row.review && rows.findIndex(r => !r.review && r.candidate_key === row.candidate_key) === i)).map(row => <RawLeadReview key={`${row.id}:${row.review?.version ?? 0}`} row={row} rows={rows} canReview={report?.can_review ?? false} onSaved={() => void reload(selected)} />)}</section>}
+    </details>
   </section>
 }
