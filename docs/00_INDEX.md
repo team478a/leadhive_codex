@@ -242,4 +242,6 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - Codexには一度に全機能を作らせず、Phase単位で進める
 
 - [146_COLLECTION_OSS_RESEARCH.md](146_COLLECTION_OSS_RESEARCH.md): 7 OSSのcommit固定コード監査・公式API方針・比較表
-- [147_RAW_COLLECTION_PILOT.md](147_RAW_COLLECTION_PILOT.md): 反復Run・集合安定性・Human Pair測定。実データPilotは未実行
+- [147_RAW_COLLECTION_PILOT.md](147_RAW_COLLECTION_PILOT.md): 反復Run・集合安定性・Human Pair測定。Serper Pilot収集済み、Human Review待ち
+
+- [148_RAW_REVIEW_SIMPLIFICATION.md](148_RAW_REVIEW_SIMPLIFICATION.md): 収集候補を1件ずつ確認する画面・操作削減・Human判定の維持
