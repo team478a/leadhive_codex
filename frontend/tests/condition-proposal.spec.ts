@@ -109,3 +109,54 @@ test('Purpose sentence preserves mandatory recruiting and target count without s
     execFileSync(python, ['../backend/tests/e2e_user.py', 'cleanup'], { env })
   }
 })
+
+test('Condition summary distinguishes shortfall, partial counts and errors without execution', async ({ page }) => {
+  const python = process.env.PYTHON || (process.platform === 'win32' ? '../backend/.venv/Scripts/python.exe' : '../backend/.venv/bin/python')
+  const env = { ...process.env, E2E_EMAIL: `e2e-summary-${randomBytes(8).toString('hex')}@example.com`, E2E_PASSWORD: randomBytes(24).toString('hex') }
+  execFileSync(python, ['../backend/tests/e2e_user.py', 'create'], { env })
+  const forbidden: string[] = []
+  page.on('request', r => {
+    if (!['localhost', '127.0.0.1'].includes(new URL(r.url()).hostname) || /\/(send|dispatch|execute|approve|test-send|operations)([/?]|$)/.test(r.url()) && r.method() === 'POST') forbidden.push(r.url())
+  })
+  try {
+    const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'destination-selection-fixture'], { env, encoding: 'utf8' })) as { project_id: string }
+    await page.goto('/')
+    await page.getByLabel('メールアドレス').fill(env.E2E_EMAIL)
+    await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
+    await page.getByRole('button', { name: 'ログインする', exact: true }).click()
+    await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
+    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
+    await page.getByText('対象条件を確認・分類する', { exact: true }).click()
+    await page.getByLabel('条件1の種類').selectOption('ACTIVE_JOB')
+    await page.getByLabel('条件1の内容').fill('CURRENTLY_RECRUITING')
+    await page.getByLabel('目標件数（条件一致の達成保証なし）').fill('20')
+    await page.getByRole('button', { name: '条件を確認して確定', exact: true }).click()
+    const summary = page.getByRole('region', { name: '条件一致と不足件数', exact: true })
+    await summary.getByRole('button', { name: '条件一致と不足件数を集計' }).click()
+    await expect(summary).toContainText('全件集計')
+    await expect(summary).toContainText('条件一致 0件 / 不一致・除外 0件 / 確認待ち 1件')
+    await expect(summary).toContainText('不足：20件')
+    await expect(summary).toContainText('現在求人募集中（検証未対応）')
+    let error = false
+    await page.route('**/collection-conditions/*/summary?*', async route => {
+      await route.fulfill({ status: error ? 503 : 200, contentType: 'application/json', body: JSON.stringify(error ? { detail: '集計を再試行してください。' } : {
+        scope: 'PROJECT', evaluated_at: new Date().toISOString(), total_candidates: 2, evaluated_count: 1, unevaluated_count: 1, complete: false,
+        counts: { MATCH: 1, NO_MATCH: 0, REVIEW_REQUIRED: 0 }, requested_count: 20, shortfall: null, target_met: null, excluded_duplicate_count: 0, reasons: [], note: '部分集計のテスト',
+      }) })
+    })
+    await summary.getByRole('button', { name: '条件一致と不足件数を集計' }).click()
+    await expect(summary).toContainText('一部集計（未集計 1件）')
+    await expect(summary).toContainText('不足：未確定（一部集計のため）')
+    error = true
+    await summary.getByRole('button', { name: '条件一致と不足件数を集計' }).click()
+    await expect(summary.getByRole('alert')).toContainText('集計を再試行してください')
+    await expect(summary).not.toContainText('一部集計（未集計')
+    await page.getByRole('button', { name: '最新の根拠で再表示' }).click()
+    await expect(summary.getByRole('alert')).toHaveCount(0)
+    expect(forbidden).toEqual([])
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
+  } finally {
+    execFileSync(python, ['../backend/tests/e2e_user.py', 'cleanup'], { env })
+  }
+})

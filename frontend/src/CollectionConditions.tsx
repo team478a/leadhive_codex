@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 import { CollectionFactReview, type FactCondition } from './CollectionFactReview'
 import { ConditionReviewNavigation } from './ConditionReviewNavigation'
+import { ConditionSummary } from './ConditionSummary'
 import { matchesReviewFilter } from './conditionReviewFilter'
 import { presenceLabels } from './externalPresenceShared'
 import { conditionOutcomes as labels, conditionPriorities as priorities, conditionReasons as reasons } from './collectionConditionLabels'
@@ -18,6 +19,7 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
   const [latest, setLatest] = useState<ConditionRevision | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [offset, setOffset] = useState(0)
+  const [summaryEpoch, setSummaryEpoch] = useState(0)
   const [selection, setSelection] = useState({ scope: '', filter: 'ALL' })
   const scope = `${projectId}:${latest?.id ?? ''}:${offset}`
   const filter = selection.scope === scope ? selection.filter : 'ALL'
@@ -44,6 +46,7 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
   const readResults = useCallback(async () => {
     if (!latest) return
     const generation = ++resultGeneration.current
+    setSummaryEpoch(n => n + 1)
     setBusy(true); setError('')
     try {
       const value = await api<Report>(`/collection-conditions/${latest.id}/results?offset=${offset}&limit=20`)
@@ -101,6 +104,7 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
     </fieldset>
     {latest && <section aria-label="条件判定結果" data-condition-results>
       <p>確定条件：第{latest.version}版。{latest.snapshot.requested_count_explicit && `目標 ${latest.snapshot.requested_count}件（達成保証なし）。`}以下は確定版の判定です。入力の変更は再確定するまで反映されません。</p>
+      <ConditionSummary key={`${latest.id}:${summaryEpoch}`} requestId={latest.id} disabled={busy} />
       <button type="button" disabled={busy} onClick={() => void readResults()}>最新の根拠で再表示</button>
       {report && <><p>表示ページ内：一致 {report.page_counts.MATCH}件、不一致 {report.page_counts.NO_MATCH}件、確認待ち {report.page_counts.REVIEW_REQUIRED}件（候補全体 {report.total_candidates}件）</p>
         <p className="muted">条件一致はDM準備完了・送信承認を意味しません。</p>
