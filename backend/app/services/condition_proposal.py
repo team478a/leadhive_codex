@@ -4,6 +4,7 @@ import re
 import unicodedata
 
 from app.schema_collection_conditions import CollectionCondition
+from app.services.condition_sentence import prepare
 
 MEDIA = {
     "instagram": "INSTAGRAM",
@@ -30,13 +31,7 @@ MEDIA = {
 def propose(text):
     normalized = unicodedata.normalize("NFKC", text).strip()
     clauses = [s.strip() for s in re.split(r"[\n、。;]+", normalized) if s.strip()]
-    expanded = []
-    for clause in clauses:
-        match = re.fullmatch(r"([^:]+?(?:市|区|町|村))の([^で:]+)で(.+)", clause)
-        if match:
-            expanded.extend([f"地域:{match[1]}", f"業種:{match[2]}", match[3]])
-        else:
-            expanded.append(clause)
+    expanded, requested_count = prepare(clauses, MEDIA)
     if not expanded or len(expanded) > 20 or any(len(s) > 300 for s in expanded):
         raise ValueError("条件は20項目以内、1項目300文字以内に分けて入力してください。")
     rows, warnings, seen = [], [], set()
@@ -50,7 +45,14 @@ def propose(text):
             content = prefix[2].strip()
         kind, operator, value = "UNRESOLVED", "EQUALS", clause
         field = re.fullmatch(r"(地域|業種)\s*:\s*(.+)", content)
-        if field and not re.search(r"または|もしくは|かつ|\bOR\b|\bAND\b", field[2], re.I):
+        if content == "現在求人募集中":
+            kind, value = "ACTIVE_JOB", "CURRENTLY_RECRUITING"
+            warnings.append(
+                "現在求人募集中の検証は未対応です。求人URLの存在だけでは条件一致にしません。"
+            )
+        elif field and not re.search(
+            r"または|もしくは|かつ|勢いのある|困っている|良さそう|\bOR\b|\bAND\b", field[2], re.I
+        ):
             kind, value = ("AREA" if field[1] == "地域" else "INDUSTRY"), field[2].strip()
         else:
             existence = re.fullmatch(
@@ -95,7 +97,8 @@ def propose(text):
         original_request=text,
         suggested_region=regions[0] if len(regions) == 1 else None,
         suggested_keywords=industries if len(industries) == 1 else [],
+        requested_count=requested_count,
         confirmation_required=True,
         collection_started=False,
-        parser_version="bounded-templates-v1",
+        parser_version="bounded-templates-v2",
     )

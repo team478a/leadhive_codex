@@ -36,6 +36,7 @@ class ConfirmCollectionConditions(Input):
     confirmed: Literal[True]
     original_request: str = Field(default="", max_length=5000)
     requested_count: int = Field(default=100, ge=1, le=1000)
+    requested_count_explicit: bool = False
     collection_job_id: UUID | None = None
 
     @model_validator(mode="after")

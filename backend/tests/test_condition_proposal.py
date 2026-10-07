@@ -85,3 +85,74 @@ def test_proposal_api_is_read_only_and_human_scoped(auth, db, sample, users):
     member.role = "editor"
     db.commit()
     assert auth.post(url, json=body).status_code == 200
+
+
+def test_purpose_sentence_is_only_a_proposal():
+    proposal = propose(
+        "兵庫県姫路市の美容院で、HotPepper Beautyに掲載していて、"
+        "現在求人募集中の店舗を100件探す。できればInstagramと公式サイトがある店舗。"
+    )
+    assert proposal["requested_count"] == 100
+    assert proposal["confirmation_required"] and not proposal["collection_started"]
+    assert [(c["type"], c["priority"], c["value"]) for c in proposal["conditions"]] == [
+        ("AREA", "MUST", "兵庫県姫路市"),
+        ("INDUSTRY", "MUST", "美容院"),
+        ("MEDIA_EXISTS", "MUST", "HOTPEPPER_BEAUTY"),
+        ("ACTIVE_JOB", "MUST", "CURRENTLY_RECRUITING"),
+        ("MEDIA_EXISTS", "WANT", "INSTAGRAM"),
+        ("OFFICIAL_SITE", "WANT", "OFFICIAL_SITE"),
+    ]
+    assert any("検証は未対応" in message for message in proposal["warnings"])
+
+
+@pytest.mark.parametrize("count", ["0", "1001", "-20", "20.5"])
+def test_invalid_count_is_not_silently_truncated(count):
+    proposal = propose(f"姫路市の美容院を{count}件探す")
+    assert proposal["requested_count"] is None
+    assert any(c["type"] == "UNRESOLVED" for c in proposal["conditions"])
+
+
+def test_ambiguous_counts_and_vague_fit_are_unresolved():
+    proposal = propose("姫路市の美容院20件\n神戸市の美容室30件")
+    assert proposal["requested_count"] is None
+    assert any(c["type"] == "UNRESOLVED" for c in proposal["conditions"])
+    assert propose("姫路市の勢いのある会社20件")["conditions"][1]["type"] == "UNRESOLVED"
+
+
+def test_simple_count_and_confirmed_snapshot_do_not_start_collection(auth, db, sample):
+    project, _, company = sample
+    proposal = propose("兵庫県姫路市の美容院20件探して")
+    before = db.scalar(select(func.count()).select_from(OperationJob))
+    assert proposal["requested_count"] == 20
+    confirmed = auth.post(
+        f"/api/projects/{project.id}/collection-conditions",
+        json={
+            "conditions": proposal["conditions"],
+            "expected_version": 0,
+            "confirmed": True,
+            "requested_count": 20,
+            "requested_count_explicit": True,
+        },
+    )
+    assert confirmed.status_code == 201
+    assert confirmed.json()["snapshot"]["requested_count"] == 20
+    assert confirmed.json()["snapshot"]["requested_count_explicit"] is True
+    assert db.scalar(select(func.count()).select_from(OperationJob)) == before
+    from app.schema_collection_conditions import CollectionCondition
+    from app.services.collection_conditions import evaluate
+
+    result = evaluate(
+        db,
+        company,
+        [
+            CollectionCondition(
+                id="job",
+                priority="MUST",
+                type="ACTIVE_JOB",
+                operator="EQUALS",
+                value="CURRENTLY_RECRUITING",
+            )
+        ],
+    )
+    assert result["state"] == "REVIEW_REQUIRED"
+    assert result["conditions"][0]["outcome"] == "UNKNOWN"
