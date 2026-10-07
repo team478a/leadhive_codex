@@ -278,4 +278,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [161_RAW_HUMAN_REVIEW_PROGRESS.md](161_RAW_HUMAN_REVIEW_PROGRESS.md): Raw代表候補から各回の取得結果へのHuman確認導線、進捗・Strict/Resolved精度の常時表示
 
 - [sns-agency-real-e2e-pilot.md](sns-agency-real-e2e-pilot.md): SNS事業者30社の実運用Pilot。商品Purpose・Template不足で事前確認段階停止、実送信なし
-`n- [162_WINDOWS_NATIVE_PROTOTYPE.md](162_WINDOWS_NATIVE_PROTOTYPE.md): Docker不要のWindows x64方式検証・隔離DB・送信OFF・配布先ランタイム同梱
+
+- [162_WINDOWS_NATIVE_PROTOTYPE.md](162_WINDOWS_NATIVE_PROTOTYPE.md): Docker不要のWindows x64方式検証・隔離DB・送信OFF・配布先ランタイム同梱
