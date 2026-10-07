@@ -6,6 +6,7 @@ import { RawLeadReview, type RawRow } from './RawLeadReview'
 import { RawPairReview } from './RawPairReview'
 import { RawRunStability } from './RawRunStability'
 import { RawQuickReview } from './RawQuickReview'
+import { RawReviewProgress } from './RawReviewProgress'
 
 type Benchmark = { id: string; region: string; industry: string }
 type Source = { source: string; configured: boolean; pilot_allowed: boolean; reason?: string }
@@ -22,6 +23,7 @@ export function RawCollectionBenchmarkPage() {
   const [count, setCount] = useState(10)
   const [repeat, setRepeat] = useState(false)
   const [representatives, setRepresentatives] = useState(false)
+  const [reviewMode, setReviewMode] = useState({ benchmarkId: '', all: false })
   const [rows, setRows] = useState<RawRow[]>([])
   const [report, setReport] = useState<RawReport | null>(null)
   const [busy, setBusy] = useState(false)
@@ -61,7 +63,8 @@ export function RawCollectionBenchmarkPage() {
   return <section aria-label="Raw Collection Benchmark">
     {error && <div role="alert">{error}{selected && <button className="secondary mt-3" onClick={() => void reload(selected)}>もう一度読み込む</button>}</div>}
     {selected && !report && !error && <p role="status">候補を読み込み中…</p>}
-    {report && <RawQuickReview rows={rows} region={list.find(v => v.id === selected)?.region ?? ""} industry={list.find(v => v.id === selected)?.industry ?? ""} canReview={report.can_review} onSaved={() => reload(selected)} />}
+    {report && <RawQuickReview rows={rows} region={list.find(v => v.id === selected)?.region ?? ""} industry={list.find(v => v.id === selected)?.industry ?? ""} canReview={report.can_review} allObservations={reviewMode.benchmarkId === selected && reviewMode.all} onModeChange={all => setReviewMode({ benchmarkId: selected, all })} onSaved={() => reload(selected)} />}
+    {report && <RawReviewProgress report={report} loadedCount={rows.length} />}
     <details className="mt-5" open={list.length === 0}><summary>検索条件・詳しい集計を見る</summary>
     <section className="panel mt-5" aria-label="Raw Benchmark作成">
       <h3>少量Pilotを作成</h3>
