@@ -36,6 +36,8 @@ PC/Mobileでは候補表示 → 入力欄へ反映 → チェック前保存不�
 - PC/Mobile関連E2E6件PASS。確認チェックを判定結果へ結び付けた最終UIでも、業種確認の2件PASS。
 - Ruff / format / mypy、Frontend typecheck / lint / build、Alembic check成功。既存bundle size警告は残る。新Migrationなし。
 - ローカルAPI 127.0.0.1:18986のhealth / DB疎通 / OpenAPI確認成功。Raw Snapshot40件、Raw Human Review0件を保持。Companies / ApprovalRequest / EmailDelivery / FormDeliveryも0件のまま。outbound OFF・worker未起動。
+- Backend `1a8feef`、UI `0da2ccd`、確認チェックの文脈固定 `4dd2c8b`。全体検証対象 `16c5692741d1fa816a1e51b2f31a267074144ca0`。
+- [GitHub Actions 37576093509](https://github.com/team478a/leadhive_codex/actions/runs/37576093509)：最終版 `16c5692` で全7ジョブ成功。Backend全テスト、Ruff/format/mypy、Frontend typecheck/lint/build、全PC/Mobile E2E、Migration往復/model差分、Windows配布、テスト用HTTPフォーム検証を含む。
 
 ## 制限・残課題
 
