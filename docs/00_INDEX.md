@@ -270,3 +270,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [purpose-based-list-engine-completion-report.md](purpose-based-list-engine-completion-report.md): 最新CIと完成指示の差分・Source利用条件による停止・Pilot未実行・再開条件
 
 - [158_PURPOSE_SENTENCE_PREVIEW.md](158_PURPOSE_SENTENCE_PREVIEW.md): 限定自然文から非実行の条件案・目標件数を確認保存。求人検証・媒体Pilotは保留
+
+- [159_INDUSTRY_ALIAS_REVIEW.md](159_INDUSTRY_ALIAS_REVIEW.md): プロファイル別業種の別名・保存済み公式本文の根拠候補・Human確認維持
