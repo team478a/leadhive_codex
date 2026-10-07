@@ -276,3 +276,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [160_CONDITION_TARGET_SUMMARY.md](160_CONDITION_TARGET_SUMMARY.md): 保存済み候補の条件一致・目標不足・停止理由、上限500件と未確定の区別
 
 - [161_RAW_HUMAN_REVIEW_PROGRESS.md](161_RAW_HUMAN_REVIEW_PROGRESS.md): Raw代表候補から各回の取得結果へのHuman確認導線、進捗・Strict/Resolved精度の常時表示
+
+- [sns-agency-real-e2e-pilot.md](sns-agency-real-e2e-pilot.md): SNS事業者30社の実運用Pilot。商品Purpose・Template不足で事前確認段階停止、実送信なし
