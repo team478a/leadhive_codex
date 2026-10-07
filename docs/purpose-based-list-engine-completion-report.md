@@ -127,3 +127,9 @@ Stage 1はPARTIALを維持。限定パターンの決定的な構文解析であ
 Stage 7全体の目標達成制御・緩和効果試算は未完了。Source利用許諾、求人現在性、店舗同定、Human Truth、指定実データPilotは保留を維持する。
 
 検証HEAD `4ff590d` の [CI 37593499599](https://github.com/team478a/leadhive_codex/actions/runs/37593499599) は全7 job成功。Backend 1,296 passed / 45 skipped / 50 subtests、E2E 76 passed / 2 skipped。Migration追加なし。ローカル画面・DB正常、Raw観測40件と送信関連0件は不変、outbound OFF。文書のみの結果追記後にこの限定工程を停止する。
+
+## Raw PilotのHuman確認導線
+
+後続の「進めてください」に基づき、[161_RAW_HUMAN_REVIEW_PROGRESS.md](161_RAW_HUMAN_REVIEW_PROGRESS.md)の限定画面改善を実装。代表候補から各回の未確認取得結果へ切り替え、既存Humanレビューを1件ずつ保存できる。既存Strict/Resolved Precisionと未確認件数を折りたたみ外に表示する。自動ラベル・自動転記・外部収集・Completion・承認・送信は追加しない。
+
+実PilotのRawReviewは0で、精度測定・Human Truthは未完了。画面機能の検証はSynthetic候補のみで行う。媒体利用許諾、求人現在性、指定条件付きPilotは引き続き保留。

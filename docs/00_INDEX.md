@@ -274,3 +274,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [159_INDUSTRY_ALIAS_REVIEW.md](159_INDUSTRY_ALIAS_REVIEW.md): プロファイル別業種の別名・保存済み公式本文の根拠候補・Human確認維持
 
 - [160_CONDITION_TARGET_SUMMARY.md](160_CONDITION_TARGET_SUMMARY.md): 保存済み候補の条件一致・目標不足・停止理由、上限500件と未確定の区別
+
+- [161_RAW_HUMAN_REVIEW_PROGRESS.md](161_RAW_HUMAN_REVIEW_PROGRESS.md): Raw代表候補から各回の取得結果へのHuman確認導線、進捗・Strict/Resolved精度の常時表示
