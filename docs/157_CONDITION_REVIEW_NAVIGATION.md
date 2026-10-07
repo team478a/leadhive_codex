@@ -29,3 +29,10 @@ Frontend typecheck/build、lint、PC/mobileの条件確認E2E、希望条件と�
 ## CIで発見した既存テストの不安定要因
 最初のrun 37582038813はBackend・Frontend・Migrationなど6項目成功、E2Eだけ失敗。新しい確認操作は成功したが、既存completion-metricsのmobileで最後の候補が共有メール店舗ではなく主レコードになり、HOLD 1 / BLOCKED 25の前提を満たさなかった。原因はCompany UUIDのランダム順。
 専用_test DBのcompletion-fixtureだけ、Project由来のUUID接頭部と連番で主レコード→共有メール25店舗の順番を固定。製品コード・送信禁止・期待値を緩めず、当該PC/mobile 2件は再実行PASS。
+
+## 最終検証
+- 最終実装・テストfixtureのCI対象commit: a8f26612a614445ca9312e1943ec571607efb92d（製品UI 8b13058、fixture 16f7906）。
+- [GitHub Actions run 37583063757](https://github.com/team478a/leadhive_codex/actions/runs/37583063757): 全7ジョブPASS。Backend tests、Ruff/format/mypy、Frontend typecheck/lint/build、Migration upgrade/downgrade/upgrade/model diff、PC/mobile E2E、Windows package、隔離フォームHTTP acceptance。
+- ローカル関連Playwright計14件PASS（当初12件＋修正したCompletion集計PC/mobile 2件）。
+- localhost:18985の画面、localhost:18986/api/healthともHTTP 200。worker process 0。
+- DB/Migration/APIの変更なし。次の工程・実レビュー・収集拡大・送信には進まず、このゴールで停止。
