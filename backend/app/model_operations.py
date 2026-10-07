@@ -118,6 +118,14 @@ class OperationJob(Base):
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    @property
+    def condition_request_id(self) -> str | None:
+        return ((self.payload or {}).get("condition_binding") or {}).get("request_id")
+
+    @property
+    def condition_version(self) -> int | None:
+        return ((self.payload or {}).get("condition_binding") or {}).get("version")
+
 
 class SearchSchedule(Timestamps, Base):
     __tablename__ = "search_schedules"

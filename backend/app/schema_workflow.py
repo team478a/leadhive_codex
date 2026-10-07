@@ -65,6 +65,9 @@ class ReplyQueueItemOut(BaseModel):
 
 
 class OperationJobInput(Input):
+    condition_request_id: UUID | None = None
+    condition_version: int | None = Field(default=None, ge=1)
+    condition_hash: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
     presence_search: PresenceSearchPlan | None = None
     operation_type: Literal["collect_search", "web_analysis", "ai_analysis", "form_intelligence"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
@@ -76,12 +79,21 @@ class OperationJobInput(Input):
 
     @model_validator(mode="after")
     def validate_operation(self):
+        binding = (self.condition_request_id, self.condition_version, self.condition_hash)
+        if any(v is not None for v in binding) and not all(v is not None for v in binding):
+            raise ValueError("条件ID・版・hashをすべて指定してください。")
         if self.operation_type == "collect_search":
             if not self.source or not self.keywords or not self.region:
                 raise ValueError("Search collection requires source, keywords and region")
             if self.source == "google_places" and self.max_results > 60:
                 raise ValueError("Google Places supports at most 60 results")
-        elif self.source or self.keywords or self.region or self.presence_search:
+        elif (
+            self.source
+            or self.keywords
+            or self.region
+            or self.presence_search
+            or self.condition_request_id
+        ):
             raise ValueError("Analysis operations do not accept search conditions")
         return self
 
@@ -89,6 +101,8 @@ class OperationJobInput(Input):
 class OperationJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
+    condition_request_id: UUID | None = None
+    condition_version: int | None = None
     project_id: UUID
     operation_type: str
     status: str

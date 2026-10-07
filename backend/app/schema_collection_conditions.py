@@ -51,7 +51,9 @@ def required_presence_plan(conditions: list[CollectionCondition]) -> PresenceSea
     return PresenceSearchPlan.model_validate(
         {
             "required_platforms": [
-                c.value for c in conditions if c.type == "MEDIA_EXISTS" and c.priority == "MUST"
+                c.value
+                for c in conditions
+                if c.type == "MEDIA_EXISTS" and c.priority in {"MUST", "EXCLUDE"}
             ]
         }
     )

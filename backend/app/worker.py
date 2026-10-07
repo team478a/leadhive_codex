@@ -541,7 +541,16 @@ def progress(db, job: OperationJob, worker_id: uuid.UUID, success: bool) -> bool
 
 
 def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    from app.services.collection_conditions import evaluate
+    from app.services.condition_collection import execution_conditions, merged_plan
+
+    conditions = execution_conditions(db, job)
     payload = job.payload
+    if conditions:
+        payload = {
+            **payload,
+            "presence_search": merged_plan(conditions, payload.get("presence_search")).model_dump(),
+        }
     keywords = payload["keywords"]
     job.total_count = len(keywords)
     db.commit()
@@ -590,6 +599,8 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     for keyword in keywords:
         if stop_requested(db, job, worker_id):
             return
+        if conditions:
+            execution_conditions(db, job)
         company_limit = payload.get("company_limit")
         if company_limit:
             company_count = (
@@ -638,6 +649,9 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                     collection,
                     PresenceSearchPlan.model_validate(payload["presence_search"]),
                     stopped=lambda: stop_requested(db, job, worker_id),
+                    eligible=lambda company: (
+                        not conditions or evaluate(db, company, conditions)["state"] != "NO_MATCH"
+                    ),
                 )
             if not progress(db, job, worker_id, True):
                 return
@@ -805,7 +819,13 @@ def run_once() -> bool:
                 job.status = "failed"
                 job.worker_id = None
                 job.lease_expires_at = None
-                job.error_message = "バックグラウンド処理に失敗しました。"
+                from app.services.condition_collection import ConditionCollectionError
+
+                job.error_message = (
+                    str(exc)
+                    if isinstance(exc, ConditionCollectionError)
+                    else "バックグラウンド処理に失敗しました。"
+                )
                 job.finished_at = datetime.now(timezone.utc)
                 db.commit()
             logger.error("operation error: id=%s type=%s", job.id, type(exc).__name__)

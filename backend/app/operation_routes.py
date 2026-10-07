@@ -358,7 +358,31 @@ def enqueue_operation(
     )
     if active:
         raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
-    payload = body.model_dump(mode="json", exclude={"operation_type"})
+    payload = body.model_dump(
+        mode="json",
+        exclude={"operation_type", "condition_request_id", "condition_version", "condition_hash"},
+    )
+    if body.condition_request_id:
+        from app.schema_collection_conditions import CollectionCondition
+        from app.services.condition_collection import binding, merged_plan
+
+        try:
+            frozen = binding(
+                db,
+                project_id,
+                body.condition_request_id,
+                body.condition_version,
+                body.condition_hash,
+            )
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        conditions = [
+            CollectionCondition.model_validate(c) for c in frozen["snapshot"]["conditions"]
+        ]
+        payload["condition_binding"] = frozen
+        payload["presence_search"] = merged_plan(
+            conditions, payload.get("presence_search")
+        ).model_dump()
     job = OperationJob(project_id=project_id, operation_type=body.operation_type, payload=payload)
     if not add_operation_job(db, job):
         raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
@@ -381,6 +405,26 @@ def list_operations(
         .order_by(OperationJob.created_at.desc(), OperationJob.id)
         .limit(limit)
     ).all()
+
+
+@router.get("/operations/{job_id}/collection-conditions")
+def condition_results(
+    job_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    job = db.get(OperationJob, job_id)
+    if job is None:
+        raise HTTPException(404, "処理ジョブが見つかりません。")
+    project_access(job.project_id, db, user, write=False)
+    from app.services.condition_collection import operation_results
+
+    try:
+        return operation_results(db, job, offset, limit)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
 
 
 @router.post("/operations/{job_id}/cancel", response_model=OperationJobOut)
@@ -439,6 +483,13 @@ def retry_operation(
     )
     if active:
         raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
+    if "condition_binding" in source.payload:
+        from app.services.condition_collection import execution_conditions
+
+        try:
+            execution_conditions(db, source)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
     job = OperationJob(
         project_id=source.project_id,
         operation_type=source.operation_type,

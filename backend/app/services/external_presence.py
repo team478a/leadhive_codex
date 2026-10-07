@@ -235,7 +235,15 @@ def matches_company(company, candidate):
     )
 
 
-def extra_searches(db, job, plan: PresenceSearchPlan, *, stopped=lambda: False, budget_job_id=None):
+def extra_searches(
+    db,
+    job,
+    plan: PresenceSearchPlan,
+    *,
+    stopped=lambda: False,
+    budget_job_id=None,
+    eligible=lambda company: True,
+):
     from app.services.collection import ExternalServiceError, search_serper
     from app.services.processing_usage import capture_usage, persist_usage
 
@@ -253,12 +261,14 @@ def extra_searches(db, job, plan: PresenceSearchPlan, *, stopped=lambda: False, 
             mode = plan.mode(platform)
             if mode == "AUTO":
                 continue
+            if stopped():
+                return
+            if not eligible(company):
+                break  # Known MUST failure / EXCLUDE match: no further investigation.
             if job.source == "google_places":
                 set_status(db, company, platform, "ERROR", reason="SOURCE_TERMS_REVIEW_REQUIRED")
                 db.commit()
                 continue
-            if stopped():
-                return
             current = db.scalar(
                 select(ExternalPresence).where(
                     ExternalPresence.company_id == company.id, ExternalPresence.platform == platform
