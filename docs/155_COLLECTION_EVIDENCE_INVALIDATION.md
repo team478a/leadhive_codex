@@ -35,6 +35,9 @@ Human地域・業種Fact Reviewも未来の作成日時はUNKNOWN。期限切れ
 - Backend関連84件PASS。その後追加した未来Human Fact Reviewと最新地域根拠選択を含む最終の根拠・地域39件PASS（重複を含む）。合計85種類の関連テストを確認した。
 - PC/Mobile関連E2E6件PASS。条件確定・地域確認・公式サイト取消と根拠URLを含む。追加した取消テストでは外部アクセス・収集Operation開始・送信がないことを検査する。
 - Ruff / format / mypy、Frontend typecheck / lint / build、Alembic check成功。既存bundle size警告は残る。新Migrationなし。
+- Backend `7ac0c2d`、UI/E2E `3c509f9`、全体検証対象 `318e04441634df6bbbe8a33b4f2d5defa215761d`。
+- ローカルAPI 127.0.0.1:18986のhealth / DB疎通 / OpenAPI確認成功。既存Raw Snapshot40件、Raw Human Review0件を維持。Companies / ApprovalRequest / EmailDelivery / FormDeliveryも0件のまま。送信OFF・worker未起動。
+- [GitHub Actions 37572274083](https://github.com/team478a/leadhive_codex/actions/runs/37572274083)：検証対象 `318e044` で全7ジョブ成功。Backend全テスト、Ruff/format/mypy、Frontend typecheck/lint/build、全PC/Mobile E2E、Migration往復/model差分、Windows配布、ローカルHTTPフォーム検証を含む。
 
 ## 残課題
 
