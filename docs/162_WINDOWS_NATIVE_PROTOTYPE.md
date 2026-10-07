@@ -24,6 +24,12 @@ GUI用と隠して動かすサービス用のEXEを分け、PowerShellの一瞬�
 画面はビルド済みで、APIと同じlocalhost originから配信する。
 セットアップ時に外部からランタイムを取得しない。
 
+同梱EXEのmanifestはprocess単位の `activeCodePage=UTF-8` を指定し、
+日本語/英語WindowsのANSI codepage差を減らす。OS全体の言語設定やregistryは変更しない。
+PostgreSQLの元ZIPは固定hashで検証し、EXEのmanifest調整前hashと調整理由を記録する。
+既存の `asInvoker` は維持し、管理者権限を要求する設定へ変更しない。
+各配布ファイルの調整後hashはMANIFESTで照合できる。
+
 ## データと安全制御
 
 - データは `%LOCALAPPDATA%/LeadHiveNative/instance-v1`。専用PostgreSQL 16を同梱。
@@ -82,3 +88,32 @@ Hosted runnerには開発環境がインストールされているため、PATH
 Windows上でinterpreterを含むonedir packageを作成する。
 
 実測結果・commit・CI・ZIPは検証完了時にこの文書へ追記する。
+
+## 2026-10-07の実測結果
+
+- 実装commit：`61521d58f1e3106a6774470f66d84b2118eb92d1`。
+- 追加migration：なし。新規の隔離PostgreSQLへ既存migrationを適用。
+- native boundary/manifest unit tests：9件PASS。
+- このPCのWindows 11と、英語環境のGitHub Windows runnerでfrozen acceptance成功。
+- このPCではGUI用 `LeadHive.exe` とサービス用 `LeadHiveEngine.exe` の両方から成功。
+  GUIの手動クリック・高DPIのvisual確認まで実施したという意味ではない。
+- 初回DB作成、管理者作成、ログイン、session、health、frontend、承認API存在、
+  不明APIの404、同じinstanceの停止/再起動を確認。
+- 受入試験はPATHをSystem32のみとし、日本語・空白を含む専用データフォルダを使用。
+- EmailDelivery 0件、FormDelivery 0件、ApprovalRequest 0件、worker未起動。
+  ローカルサービス以外を試験から呼び出していない。全OS通信をcaptureした結果ではない。
+- 同梱6,061ファイルのhashをZIPから再照合し、instance.json/.env/secrets.bin等の混入なし。
+- ZIP：`dist/LeadHive-Windows-Native-61521d58.zip`（106,097,427 bytes）。
+- SHA-256：`d366421d783a8b0f222906ccaf6e86641d71525172e0d38df1120fd1091e4d02`。
+- native CI：[run 37615830087](https://github.com/team478a/leadhive_codex/actions/runs/37615830087) の
+  `windows-native` 成功。試作ZIPと受入結果は同runのartifactから取得可能。
+- Backend regression：1,296 PASS、45 SKIP、50 subtests PASS。
+  SKIPを実行済み成功に含めない。
+
+初期試作で見つかったdaemonの出力PIPE待ちとWindowsファイルパスのcodepage差は修正し、
+テストへ追加した。既存Docker版・業務DB・収集/送信機能のコードは変更していない。
+本番配布には、VCランタイムがないクリーンPC、一般ユーザー、署名/SmartScreen、
+GUI DPI、バックアップ/更新/復旧の検証が残る。
+
+[Microsoft公式のUTF-8 process codepage仕様](https://learn.microsoft.com/en-us/windows/apps/design/globalizing/use-utf8-code-page)
+を参考に、同梱アプリのmanifestだけを調整した。

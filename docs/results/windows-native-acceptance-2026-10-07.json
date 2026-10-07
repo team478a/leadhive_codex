@@ -1,0 +1,37 @@
+{
+  "worker_started": false,
+  "external_service_calls": "not invoked by this test",
+  "admin_login": true,
+  "session": true,
+  "health": {
+    "status": "ok",
+    "database": "ok"
+  },
+  "frontend": 200,
+  "approval_api": true,
+  "outbound": "false",
+  "records": {
+    "email_deliveries": 0,
+    "form_deliveries": 0,
+    "approval_requests": 0,
+    "users": 1
+  },
+  "unknown_api_status": 404,
+  "restart_same_instance": true,
+  "success": true,
+  "source_commit": "61521d58f1e3106a6774470f66d84b2118eb92d1",
+  "ci_run": 37615830087,
+  "native_ci": "success",
+  "boundary_tests_passed": 9,
+  "zip_sha256": "d366421d783a8b0f222906ccaf6e86641d71525172e0d38df1120fd1091e4d02",
+  "verified_package_files": 6061,
+  "clean_pc_validation": false,
+  "manual_gui_visual_validation": false,
+  "ci_conclusion": "success",
+  "ci_jobs_passed": 8,
+  "backend_tests": {
+    "passed": 1296,
+    "skipped": 45,
+    "subtests_passed": 50
+  }
+}
