@@ -17,3 +17,15 @@ DB、Migration、API、評価基準、Humanレビューの認証・権限・hash
 
 ## 検証
 Frontend typecheck/build、lint、PC/mobileの条件確認E2E、希望条件と必須・除外条件の絞り込み分類を検証する。最終結果とCIは検証後に追記する。
+
+## ローカル検証結果
+- 実装commit: 8b13058。CI対象: fbb499132c7c90cb80f1871b07cbfe93c4278083。
+- Frontend typecheck・lint・build: PASS。既存の500kB超bundle警告は継続。
+- 関連Playwright: PC/mobile計12件PASS。地域・業種Human確認、公式サイト確認撤回、種類別絞り込み、希望条件の除外、0件の収集結果を検証。
+- 最終の軽微なscope変更はGitHub Actionsの全E2Eで再確認する。
+- 実Pilot DB: Companies 0 / Raw Snapshot 40 / Raw Human Review 0 / ApprovalRequest 0 / EmailDelivery 0 / FormDelivery 0。保存件数は不変。
+- outbound OFF、送信用worker起動なし。実企業への外部アクセス・追加検索・AI・実送信・Human Approval実行なし。
+
+## CIで発見した既存テストの不安定要因
+最初のrun 37582038813はBackend・Frontend・Migrationなど6項目成功、E2Eだけ失敗。新しい確認操作は成功したが、既存completion-metricsのmobileで最後の候補が共有メール店舗ではなく主レコードになり、HOLD 1 / BLOCKED 25の前提を満たさなかった。原因はCompany UUIDのランダム順。
+専用_test DBのcompletion-fixtureだけ、Project由来のUUID接頭部と連番で主レコード→共有メール25店舗の順番を固定。製品コード・送信禁止・期待値を緩めず、当該PC/mobile 2件は再実行PASS。
