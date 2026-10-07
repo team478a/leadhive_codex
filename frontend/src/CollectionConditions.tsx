@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 import { CollectionFactReview, type FactCondition } from './CollectionFactReview'
+import { ConditionReviewNavigation } from './ConditionReviewNavigation'
+import { matchesReviewFilter } from './conditionReviewFilter'
 import { presenceLabels } from './externalPresenceShared'
 import { conditionOutcomes as labels, conditionPriorities as priorities, conditionReasons as reasons } from './collectionConditionLabels'
 
@@ -16,6 +18,11 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
   const [latest, setLatest] = useState<ConditionRevision | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [offset, setOffset] = useState(0)
+  const [selection, setSelection] = useState({ scope: '', filter: 'ALL' })
+  const scope = `${projectId}:${latest?.id ?? ''}:${offset}`
+  const filter = selection.scope === scope ? selection.filter : 'ALL'
+  useEffect(() => { setSelection({ scope, filter: 'ALL' }) }, [scope])
+  const resultGeneration = useRef(0)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -24,6 +31,8 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
   const [warnings, setWarnings] = useState<string[]>([])
   useEffect(() => {
     let active = true
+    resultGeneration.current += 1
+    setLatest(null); setReport(null); setOffset(0); setBusy(false)
     if (!projectId) return
     api<ConditionRevision[]>(`/projects/${projectId}/collection-conditions?limit=1`).then(rows => {
       if (active) { setLatest(rows[0] ?? null); if (rows[0]) { setConditions(rows[0].snapshot.conditions); setOriginalRequest(rows[0].snapshot.original_request ?? '') } }
@@ -33,12 +42,15 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
   useEffect(() => { onConfirmed?.(latest) }, [latest, onConfirmed])
   const readResults = useCallback(async () => {
     if (!latest) return
+    const generation = ++resultGeneration.current
     setBusy(true); setError('')
-    try { setReport(await api<Report>(`/collection-conditions/${latest.id}/results?offset=${offset}&limit=20`)) }
-    catch (e) { setReport(null); setError(errorMessage(e)) }
-    finally { setBusy(false) }
+    try {
+      const value = await api<Report>(`/collection-conditions/${latest.id}/results?offset=${offset}&limit=20`)
+      if (generation === resultGeneration.current) setReport(value)
+    } catch (e) { if (generation === resultGeneration.current) { setReport(null); setError(errorMessage(e)) } }
+    finally { if (generation === resultGeneration.current) setBusy(false) }
   }, [latest, offset])
-  useEffect(() => { void readResults() }, [readResults])
+  useEffect(() => { setReport(null); void readResults(); return () => { resultGeneration.current += 1 } }, [readResults])
   function update(index: number, change: Partial<Condition>) {
     onDraftChanged?.(true)
     setConditions(rows => rows.map((c, i) => i === index ? { ...c, ...change } : c))
@@ -84,13 +96,14 @@ export function CollectionConditions({ projectId, onConfirmed, onApplied, onDraf
       {requestText.trim() && requestText !== originalRequest && <p>文章を変更しました。「文章から条件案を作る」で内容を反映してから確定してください。</p>}
       <p className="muted">確定すると今回の収集に条件を選択します。地域・業種が各1つの必須条件なら検索欄にも反映します。件数・追加調査予算は変更しません。「収集を開始」を押すまで実行しません。</p>
     </fieldset>
-    {latest && <section aria-label="条件判定結果">
+    {latest && <section aria-label="条件判定結果" data-condition-results>
       <p>確定条件：第{latest.version}版。以下は確定版の判定です。入力の変更は再確定するまで反映されません。</p>
       <button type="button" disabled={busy} onClick={() => void readResults()}>最新の根拠で再表示</button>
       {report && <><p>表示ページ内：一致 {report.page_counts.MATCH}件、不一致 {report.page_counts.NO_MATCH}件、確認待ち {report.page_counts.REVIEW_REQUIRED}件（候補全体 {report.total_candidates}件）</p>
         <p className="muted">条件一致はDM準備完了・送信承認を意味しません。</p>
         {!report.candidates.length && <p>保存済みの候補はありません。</p>}
-        {report.candidates.map(c => <details key={c.company_id}><summary>{c.company_name}：{labels[c.state]}（希望一致 {c.want_matched}、希望未確認 {c.want_unknown}）</summary>
+        <ConditionReviewNavigation candidates={report.candidates} filter={filter} busy={busy} onFilter={value => setSelection({ scope, filter: value })} />
+        {report.candidates.filter(c => matchesReviewFilter(c, filter)).map(c => <details key={c.company_id} data-condition-candidate data-review-required={c.state === 'REVIEW_REQUIRED'}><summary tabIndex={0}>{c.company_name}：{labels[c.state]}（希望一致 {c.want_matched}、希望未確認 {c.want_unknown}）</summary>
           {c.conditions.map(r => <div key={r.id}><p>{priorities[r.priority]}・{presenceLabels[r.value] ?? (r.type === 'OFFICIAL_SITE' ? '公式サイト' : r.value)}：{labels[r.outcome]}。{reasons[r.reason] ?? r.reason} {r.evidence_url && <a href={r.evidence_url} target="_blank" rel="noopener noreferrer">根拠 ↗</a>}</p><CollectionFactReview companyId={c.company_id} condition={r} onSaved={() => void readResults()} /></div>)}
         </details>)}
         <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || offset === 0} onClick={() => setOffset(n => Math.max(0, n - 20))}>前の20件</button><button type="button" disabled={busy || offset + 20 >= report.total_candidates} onClick={() => setOffset(n => n + 20)}>次の20件</button></div>
