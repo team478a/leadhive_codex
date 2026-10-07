@@ -63,8 +63,9 @@ class NativeBoundaryTests(unittest.TestCase):
             ),
         ):
             env = native.environment(self.root)
-        for key in ("SMTP_PASSWORD", "OPENAI_API_KEY", "PYTHONPATH"):
-            self.assertNotIn(key, env)
+        for key in ("SMTP_PASSWORD", "OPENAI_API_KEY"):
+            self.assertEqual(env[key], "")
+        self.assertNotIn("PYTHONPATH", env)
         for key in native.OFF_FLAGS:
             self.assertEqual(env[key], "false")
         self.assertIn("127.0.0.1:25432/leadhive_native", env["DATABASE_URL"])

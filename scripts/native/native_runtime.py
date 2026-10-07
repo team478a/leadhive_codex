@@ -19,6 +19,7 @@ OFF_FLAGS = (
     "LEGACY_FORM_DELIVERY_ENABLED",
     "AGENT_FEATURES_ENABLED",
     "EMAIL_FEEDBACK_WEBHOOK_ENABLED",
+    "FORM_ADAPTER_LAB_EXECUTION_ENABLED",
 )
 
 
@@ -136,6 +137,17 @@ def environment(root):
         COOKIE_SECURE="false",
         WORKER_PAUSED="false",
         PYTHONNOUSERSITE="1",
+        OPENAI_API_KEY="",
+        SERPER_API_KEY="",
+        GOOGLE_PLACES_API_KEY="",
+        GBIZINFO_API_TOKEN="",
+        SMTP_HOST="",
+        SMTP_USERNAME="",
+        SMTP_PASSWORD="",
+        SMTP_FROM_EMAIL="",
+        IMAP_HOST="",
+        IMAP_USERNAME="",
+        IMAP_PASSWORD="",
     )
     env.update({key: "false" for key in OFF_FLAGS})
     return env

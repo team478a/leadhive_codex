@@ -82,7 +82,7 @@ a = Analysis([{str(ROOT / "scripts/native/entry.py")!r}],
         collect_submodules('sqlalchemy.dialects.postgresql') + ['psycopg', 'psycopg_binary'],
     hookspath=[], runtime_hooks=[], excludes=['pytest', 'ruff', 'mypy'], noarchive=False)
 pyz = PYZ(a.pure)
-manifest = utf8_manifest(create_application_manifest())
+manifest = utf8_manifest(create_application_manifest()).decode('utf-8')
 gui = EXE(pyz, a.scripts, [], exclude_binaries=True, name='LeadHive', console=False, manifest=manifest)
 engine = EXE(pyz, a.scripts, [], exclude_binaries=True, name='LeadHiveEngine', console=True, manifest=manifest)
 bundle = COLLECT(gui, engine, a.binaries, a.datas, strip=False, upx=False, name={name!r})
@@ -140,6 +140,24 @@ bundle = COLLECT(gui, engine, a.binaries, a.datas, strip=False, upx=False, name=
         ROOT / "backend/requirements.lock",
         package / "licenses/backend-requirements.lock",
     )
+    python_license = Path(sys.base_prefix) / "LICENSE.txt"
+    if python_license.exists():
+        shutil.copy(python_license, package / "licenses/Python-LICENSE.txt")
+    for dependency in ("react", "react-dom", "scheduler"):
+        license_file = ROOT / "frontend/node_modules" / dependency / "LICENSE"
+        if not license_file.is_file():
+            raise RuntimeError(f"Missing frontend license: {dependency}")
+        shutil.copy(license_file, package / "licenses" / f"{dependency}-LICENSE.txt")
+    final_commit = subprocess.check_output(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, text=True
+    ).strip()
+    final_dirty = subprocess.check_output(
+        ["git", "status", "--porcelain"], cwd=ROOT, text=True
+    ).strip()
+    if final_commit != commit or final_dirty != dirty:
+        raise RuntimeError(
+            "Checkout changed during packaging; rebuild from a stable checkout"
+        )
     manifest = {
         "format": "leadhive-native-package-v1",
         "commit": commit,
