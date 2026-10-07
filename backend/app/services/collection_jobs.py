@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CollectionJob, Company, Project, SuppressionEntry
 from app.services.collection import Candidate, canonicalize_url
+from app.services.external_presence import capture_candidate
 from app.services.lead_enrichment import observe_candidate
 from app.services.location_identity import location_key
 from app.services.scraper import is_aggregator_domain
@@ -124,8 +125,12 @@ def save_candidates(
     job.error_count = error_count
     job.import_errors = error_details
     # Serialize same-project ingestion without holding this lock across network calls.
-    db.scalar(select(Project.id).where(Project.id == job.project_id).with_for_update())
+    # Same-project ingestion remains serialized; FK key-share locks stay compatible.
+    db.scalar(
+        select(Project.id).where(Project.id == job.project_id).with_for_update(key_share=True)
+    )
     for candidate in candidates:
+        capture_candidate(db, job, candidate)
         if candidate.website_url:
             _, candidate_domain = canonicalize_url(candidate.website_url)
             if is_aggregator_domain(candidate_domain):
@@ -142,6 +147,7 @@ def save_candidates(
         if duplicate:
             db.refresh(duplicate, with_for_update=True)
             observe_candidate(db, job, duplicate, candidate)
+            capture_candidate(db, job, candidate, duplicate)
             job.duplicate_count += 1
             continue
         domain = None
@@ -185,6 +191,7 @@ def save_candidates(
         else:
             job.saved_count += 1
             observe_candidate(db, job, company, candidate, new=True)
+            capture_candidate(db, job, candidate, company)
     job.status = "completed"
     job.finished_at = datetime.now(timezone.utc)
     job.processing_ms = max(0, int((job.finished_at - job.created_at).total_seconds() * 1000))

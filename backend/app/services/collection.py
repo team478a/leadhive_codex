@@ -1,7 +1,7 @@
 import csv
 import io
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from urllib.parse import urlsplit, urlunsplit
 
 import httpx
@@ -28,6 +28,8 @@ class Candidate:
     email: str = ""
     record_type: str = "company"
     reference_url: str = ""
+    presence_urls: list[str] = field(default_factory=list)
+    search_excerpt: str = ""
 
 
 def canonicalize_url(value: str) -> tuple[str, str]:
@@ -178,7 +180,13 @@ def search_serper(keyword: str, region: str, max_results: int) -> list[Candidate
             normalized, domain = canonicalize_url(url)
         except ValueError:
             continue
-        candidates.append(Candidate(company_name=(title or domain)[:500], website_url=normalized))
+        candidates.append(
+            Candidate(
+                company_name=(title or domain)[:500],
+                website_url=normalized,
+                search_excerpt=str(item.get("snippet") or "")[:2000],
+            )
+        )
     return candidates
 
 

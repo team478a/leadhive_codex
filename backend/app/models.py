@@ -38,6 +38,11 @@ from app.model_destination_choice import DestinationChoiceEvent
 from app.model_destination_review import DestinationReviewEvent
 from app.model_dm_preparation import LeadDmPreparation
 from app.model_email_feedback import EmailFeedbackEvent, EmailHealthState
+from app.model_external_presence import (
+    ExternalPresence,
+    ExternalPresenceEvidence,
+    ExternalPresenceSearch,
+)
 from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
 from app.model_form_observation_job import FormObservationJobEvent
@@ -87,6 +92,9 @@ from app.model_settings import (
 from app.model_site_identity_review import SiteIdentityReviewEvent
 
 __all__ = [
+    "ExternalPresence",
+    "ExternalPresenceEvidence",
+    "ExternalPresenceSearch",
     "RawBenchmark",
     "RawQueryRun",
     "RawLeadSnapshot",

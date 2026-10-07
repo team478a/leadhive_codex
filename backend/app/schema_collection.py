@@ -11,6 +11,7 @@ from pydantic import (
 )
 
 from app.schema_core import Input, Keyword
+from app.schema_external_presence import PresenceSearchPlan
 
 
 class CollectionJobOut(BaseModel):
@@ -40,6 +41,7 @@ class CsvPreviewOut(BaseModel):
 
 
 class SearchCollectionInput(Input):
+    presence_search: PresenceSearchPlan = Field(default_factory=PresenceSearchPlan)
     source: Literal["serper", "google_places", "gbizinfo"]
     keywords: Annotated[list[Keyword], Field(min_length=1, max_length=20)]
     region: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=500)]

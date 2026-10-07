@@ -120,6 +120,9 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             company.website_url = website_url
             company.domain = domain
             update_unprotected_fields(company, data)
+            from app.services.external_presence import capture_website_links
+
+            capture_website_links(db, company, data, page.url)
             company.business_summary = data.business_summary
             company.website_text = data.website_text
             company.scraped_urls = data.scraped_urls or [page.url]

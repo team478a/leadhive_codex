@@ -12,6 +12,7 @@ from pydantic import (
 
 from app.schema_collection import CollectionJobOut
 from app.schema_core import CompanyOut, Input, Keyword
+from app.schema_external_presence import PresenceSearchPlan
 
 
 class OutreachQueueItemOut(BaseModel):
@@ -64,6 +65,7 @@ class ReplyQueueItemOut(BaseModel):
 
 
 class OperationJobInput(Input):
+    presence_search: PresenceSearchPlan | None = None
     operation_type: Literal["collect_search", "web_analysis", "ai_analysis", "form_intelligence"]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
     source: Literal["serper", "google_places", "gbizinfo"] | None = None
@@ -79,7 +81,7 @@ class OperationJobInput(Input):
                 raise ValueError("Search collection requires source, keywords and region")
             if self.source == "google_places" and self.max_results > 60:
                 raise ValueError("Google Places supports at most 60 results")
-        elif self.source or self.keywords or self.region:
+        elif self.source or self.keywords or self.region or self.presence_search:
             raise ValueError("Analysis operations do not accept search conditions")
         return self
 

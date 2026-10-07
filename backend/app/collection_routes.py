@@ -102,8 +102,12 @@ def collect_search(
 ):
     owned_project(project_id, db, user)
     jobs = []
+    budget_job_id = None
     for keyword in body.keywords:
         job = start_job(db, project_id, body.source, keyword, body.region)
+        budget_job_id = budget_job_id or job.id
+        job.presence_search_plan = body.presence_search.model_dump(mode="json")
+        db.commit()
         try:
             search = {
                 "serper": search_serper,
@@ -112,6 +116,9 @@ def collect_search(
             }[body.source]
             candidates = measured_search(db, job, search, keyword, body.region, body.max_results)
             jobs.append(save_candidates(db, job, candidates, keyword))
+            from app.services.external_presence import extra_searches
+
+            extra_searches(db, job, body.presence_search, budget_job_id=budget_job_id)
         except ExternalServiceError as exc:
             jobs.append(fail_job(db, job, exc.public_message))
     return jobs

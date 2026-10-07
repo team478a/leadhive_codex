@@ -545,7 +545,7 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     keywords = payload["keywords"]
     job.total_count = len(keywords)
     db.commit()
-    if not payload.get("company_limit"):
+    if not payload.get("company_limit") and not payload.get("presence_search"):
         search = {
             "serper": search_serper,
             "google_places": search_google_places,
@@ -627,6 +627,18 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                 db, collection, search, keyword, payload["region"], max_results
             )
             save_candidates(db, collection, candidates, keyword)
+            if payload.get("presence_search"):
+                from app.schema_external_presence import PresenceSearchPlan
+                from app.services.external_presence import extra_searches
+
+                collection.presence_search_plan = payload["presence_search"]
+                db.commit()
+                extra_searches(
+                    db,
+                    collection,
+                    PresenceSearchPlan.model_validate(payload["presence_search"]),
+                    stopped=lambda: stop_requested(db, job, worker_id),
+                )
             if not progress(db, job, worker_id, True):
                 return
         except ExternalServiceError as exc:

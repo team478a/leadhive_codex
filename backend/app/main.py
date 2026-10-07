@@ -28,6 +28,7 @@ from app.destination_review_routes import router as destination_review_router
 from app.dm_approval_routes import router as dm_approval_router
 from app.dm_preparation_routes import router as dm_preparation_router
 from app.email_feedback_routes import router as email_feedback_router
+from app.external_presence_routes import router as external_presence_router
 from app.form_batch_routes import router as form_batch_router
 from app.form_intelligence_routes import router as form_intelligence_router
 from app.form_observation_job_routes import router as form_observation_job_router
@@ -141,6 +142,7 @@ async def internal_error(request: Request, exc: Exception):
     return JSONResponse(status_code=500, content={"detail": "処理に失敗しました。"})
 
 
+app.include_router(external_presence_router)
 app.include_router(router)
 app.include_router(admin_router)
 app.include_router(collection_router)

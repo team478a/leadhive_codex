@@ -21,6 +21,7 @@ jobs:
           backend/.venv/bin/python -m ruff format --check backend
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/benchmark_evidence.py backend/app/services/benchmark_summary.py backend/app/services/cohort_destinations.py backend/app/services/completion_metrics.py backend/app/completion_metrics_routes.py backend/scripts/run_completion_benchmark.py backend/app/site_identity_review_routes.py backend/app/lead_completion_routes.py backend/app/raw_collection_routes.py backend/app/model_raw_collection.py backend/app/project_access.py backend/app/services/raw_capture.py backend/app/services/raw_benchmark.py backend/app/services/raw_repeat.py backend/app/raw_pair_routes.py
           backend/.venv/bin/python -c "from app.main import app; print(app.title)"
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_external_presence.py backend/app/schema_external_presence.py backend/app/services/external_presence.py backend/app/services/presence_platforms.py backend/app/external_presence_routes.py
 
   backend-tests:
     runs-on: ubuntu-24.04
