@@ -40,3 +40,4 @@
 - Frontend typecheck/lint/build成功（従来のbundle size warningあり）。設定保存・再読込のDesktop/Mobile Playwrightは2 passed。
 - Ruff lint/format、対象mypy、API import/compile、専用DBでmigration upgrade / downgrade / upgrade / Alembic model check成功。
 - 稼働環境への適用では既存cohort/承認/送信記録の件数を適用前後で照合する。outbound、Agent、旧送信、承認送信の各実行flagはOFF、送信用workerは起動しない。
+- 初回GitHub CIは8 job中7成功。Backend全体は1309 passed / 45 skipped / 1 failedで、既存通知テストの当日23時固定データが実行時刻23:06には期限超過となった。通知の製品コードは変更せず、テスト時刻を固定し昼・23:30・23:59:59の3ケースで再検証して3 passed。

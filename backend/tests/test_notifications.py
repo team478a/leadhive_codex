@@ -2,8 +2,10 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+import pytest
 from sqlalchemy import select
 
+from app import notification_routes
 from app.models import Company, Notification, OperationJob
 
 JST = ZoneInfo("Asia/Tokyo")
@@ -23,9 +25,23 @@ def make_project(auth):
     ).json()
 
 
-def test_notifications_are_deduplicated_and_can_be_read(auth, users, db):
+@pytest.mark.parametrize("hour,minute,second", [(12, 0, 0), (23, 30, 0), (23, 59, 59)])
+def test_notifications_are_deduplicated_and_can_be_read(
+    auth, users, db, monkeypatch, hour, minute, second
+):
     project = make_project(auth)
-    now = datetime.now(timezone.utc)
+    now = (
+        datetime.now(JST)
+        .replace(hour=hour, minute=minute, second=second, microsecond=0)
+        .astimezone(timezone.utc)
+    )
+
+    class NotificationClock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return now.astimezone(tz) if tz else now.replace(tzinfo=None)
+
+    monkeypatch.setattr(notification_routes, "datetime", NotificationClock)
     company = Company(
         project_id=UUID(project["id"]),
         company_name="Notify",
@@ -48,7 +64,7 @@ def test_notifications_are_deduplicated_and_can_be_read(auth, users, db):
         status="replied",
         next_followup_at=(
             now.astimezone(JST).replace(hour=0, minute=0, second=0, microsecond=0)
-            + timedelta(days=1, hours=-1)
+            + timedelta(days=1, microseconds=-1)
         ),
     )
     db.add(due_today)
