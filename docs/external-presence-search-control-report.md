@@ -11,6 +11,7 @@
 
 - Backend / Migration / tests / CI: `8aee39a729178b4c01d4f4cf01757cb26101dc42`
 - Frontend / Desktop・Mobile E2E: `436a244c412161896abf54b669afee2edea76ad9`
+- 既存保護済みSNS互換性・最終実装: `6ff73825977869653b812131ab02bc68ec892c9f`
 - 本書は上記実装後の文書コミットに格納する。
 
 ## 3. DB変更
@@ -115,9 +116,12 @@ Humanによる確認はdiscoveryMethodを別用途へ流用せず、Evidenceのa
 - Ruff check / format check: PASS。mypy: 新規5ファイルPASS。
 - Frontend typecheck / lint / build: PASS。既存のbundleサイズwarningは残る。
 - Playwright: 新規PC/Mobileの2件PASS。Raw Quick Reviewとの回帰を含めた4件もPASS。模擬データのみで外部アクセスなし。
+- 最終実装でのローカル再確認: Mobile PASS。PCはfixture準備後の初回画面ロードで60秒timeout、同じテストの単独再実行はPASS（判定・timeout設定の緩和なし）。
 - Migration: 独立したテストDBでupgrade→downgrade→upgrade、Alembic check PASS。データがある場合のdowngrade拒否も模擬データでPASS。
 - 既存Backend全体のローカル試行: 368 PASS / 50 subtests PASSの後、既存並列フォーム模擬試験が20秒timeout。同じ試験の単独再実行はPASS。これを全体PASSとは報告しない。
-- GitHub Actions: `a0eb86f`の[run 37560512159](https://github.com/team478a/leadhive_codex/actions/runs/37560512159)は全7ジョブPASS。保護済みSNSの互換性補足を含む最終HEADは別runで確認する。上記ローカル結果とは区別する。
+- GitHub Actions: 最終実装`6ff7382`の[run 37561704469](https://github.com/team478a/leadhive_codex/actions/runs/37561704469)は全7ジョブPASS。Backend全体、E2E、Frontend、静的検査、Migration、模擬HTTPフォーム試験、Windows配布検証が成功。上記ローカル結果とは区別する。
+
+ローカル`http://localhost:18985/`へ最終実装を反映し、API healthと追加endpointを確認した。独立したPilot DBのRaw Snapshot 40件は維持し、Company 0件、Human Review 0件、Approval 0件、Email/Form Delivery 0件も変更していない。以前の`18984`の100店舗DBは変更していない。
 
 今回の作業で実企業の追加検索、AI呼出、Email送信、外部Form送信、Human送信承認、Lead Completion実行は行っていない。ローカルのoutbound OFFと送信worker停止を維持する。模擬フォーム試験はテスト用loopback fixtureを使用する。
 
