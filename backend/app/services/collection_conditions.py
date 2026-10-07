@@ -6,11 +6,10 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.models import ExternalPresenceSearch, LeadSiteEvidence
+from app.models import ExternalPresenceSearch
 from app.schema_collection_conditions import CollectionCondition
 from app.services.external_presence import inventory
-from app.services.lead_identity import identity_hash
-from app.services.site_identity_review import latest, state
+from app.services.official_site_condition import evaluate_site
 
 
 def snapshot_hash(snapshot: dict) -> str:
@@ -50,10 +49,14 @@ def evaluate(db, company, conditions: list[CollectionCondition], now=None):
             evidence_url, observed_at = presence["url"], presence["observed_at"]
             reason = presence["reason"] or presence["status"]
             if presence["status"] == "FOUND":
-                if observed_at is not None and observed_at >= fresh_after:
+                if observed_at is not None and fresh_after <= observed_at <= now:
                     outcome, reason = "MATCH", "PRESENCE_FOUND"
                 else:
-                    reason = "EVIDENCE_EXPIRED"
+                    reason = (
+                        "EVIDENCE_FUTURE"
+                        if observed_at is not None and observed_at > now
+                        else "EVIDENCE_EXPIRED"
+                    )
             elif presence["status"] == "NOT_FOUND" and presence["reason"] == "SEARCH_NO_MATCH":
                 attempt = db.scalar(
                     select(ExternalPresenceSearch)
@@ -66,37 +69,14 @@ def evaluate(db, company, conditions: list[CollectionCondition], now=None):
                     .limit(1)
                 )
                 # NOT_FOUND without a completed fresh investigation is not proof of absence.
-                if attempt is not None and attempt.created_at >= fresh_after:
+                if attempt is not None and fresh_after <= attempt.created_at <= now:
                     outcome, reason, observed_at = "NO_MATCH", "SEARCH_NO_MATCH", attempt.created_at
                 else:
                     reason = "NEGATIVE_EVIDENCE_UNAVAILABLE"
         elif condition.type == "OFFICIAL_SITE":
-            automatic = db.scalar(
-                select(LeadSiteEvidence)
-                .where(
-                    LeadSiteEvidence.company_id == company.id,
-                    LeadSiteEvidence.confidence == "CONFIRMED",
-                    LeadSiteEvidence.identity_hash == identity_hash(company),
-                    LeadSiteEvidence.observed_at >= fresh_after,
-                )
-                .order_by(LeadSiteEvidence.observed_at.desc())
-                .limit(1)
-            )
-            human = latest(db, company.id)
-            human_current = (
-                human is not None
-                and state(human, identity_hash(company), now) == "CURRENT"
-                and human.created_at >= fresh_after
-            )
-            if automatic is not None or human_current:
-                outcome, reason, evidence_url = (
-                    "MATCH",
-                    "OFFICIAL_SITE_CONFIRMED",
-                    company.website_url,
-                )
-                observed_at = automatic.observed_at if automatic is not None else human.created_at
-            else:
-                reason = "OFFICIAL_SITE_UNCONFIRMED"
+            proof = evaluate_site(db, company, now)
+            outcome, reason = proof["outcome"], proof["reason"]
+            evidence_url, observed_at = proof["evidence_url"], proof["observed_at"]
         results.append(
             dict(
                 id=condition.id,

@@ -54,6 +54,8 @@ def result(db, company, kind, value, now=None):
             reason = "FACT_REVIEW_WITHDRAWN"
         elif row.expires_at <= now:
             reason = "EVIDENCE_EXPIRED"
+        elif row.created_at > now:
+            reason = "EVIDENCE_FUTURE"
         else:
             outcome, reason = row.outcome, "HUMAN_FACT_VERIFIED"
     automatic = {}

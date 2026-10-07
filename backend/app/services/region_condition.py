@@ -81,13 +81,13 @@ def evaluate_region(db, company, value, now):
             select(LeadSiteEvidence)
             .where(
                 LeadSiteEvidence.company_id == company.id,
-                LeadSiteEvidence.identity_hash == digest,
             )
             .order_by(LeadSiteEvidence.observed_at.desc(), LeadSiteEvidence.id.desc())
             .limit(1)
         )
         if (
             evidence is None
+            or evidence.identity_hash != digest
             or evidence.confidence != "CONFIRMED"
             or not fresh <= evidence.observed_at <= now
         ):
