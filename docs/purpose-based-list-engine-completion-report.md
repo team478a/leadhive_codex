@@ -125,3 +125,5 @@ Stage 1はPARTIALを維持。限定パターンの決定的な構文解析であ
 後続の「次のゴールへ」に基づき、[160_CONDITION_TARGET_SUMMARY.md](160_CONDITION_TARGET_SUMMARY.md)の限定集計を実装。最大500件の保存済み候補を既存基準で評価し、全件評価・明示目標の場合だけ不足を確定する。登録済み重複は目標から除外し、理由件数は重複ありとして表示する。部分集計を全体件数、条件一致をDM READYや独立送信先と混同しない。追加検索・条件緩和・送信を起動しない。
 
 Stage 7全体の目標達成制御・緩和効果試算は未完了。Source利用許諾、求人現在性、店舗同定、Human Truth、指定実データPilotは保留を維持する。
+
+検証HEAD `4ff590d` の [CI 37593499599](https://github.com/team478a/leadhive_codex/actions/runs/37593499599) は全7 job成功。Backend 1,296 passed / 45 skipped / 50 subtests、E2E 76 passed / 2 skipped。Migration追加なし。ローカル画面・DB正常、Raw観測40件と送信関連0件は不変、outbound OFF。文書のみの結果追記後にこの限定工程を停止する。

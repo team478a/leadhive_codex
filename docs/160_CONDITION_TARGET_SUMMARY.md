@@ -32,4 +32,24 @@ MUST未一致、EXCLUDE未除外を条件・outcome・reason別に集計する�
 - 関連PlaywrightはPC/Mobile合計4件成功。実APIの未確認求人・不足表示と、UI用模擬応答による一部集計・エラー・結果解除を検証。一部集計の実API計算はBackendテストで別途確認。合成データであり、実店舗精度を意味しない。
 - Ruff / format / mypy、Frontend typecheck / lint / buildと全体CIは最終結果を追記する。既存bundle 500kB警告は継続。
 
+ローカルRuff / format、CIと同じ `--check-untyped-defs --follow-imports=silent` のmypy4ファイル、Frontend typecheck / lint / buildは成功。最初のmypyはCIと異なるimport追跡設定で実行し、変更対象外の既存scraperで2件の型エラーを検出した。今回そのコードを変更しておらず、CI設定での成功と全依存モジュールの型検証を区別する。
+
+## ローカル反映
+
+実装HEAD `4ff590dbb7e125e1866fbbf90fb707d3055825fc` をloopback APIへ反映。`http://localhost:18985/` はHTTP200、同画面の `/api/health` は `status=ok / database=ok`、OpenAPIのsummary endpointを確認した。
+
+更新前後のCompany0 / RawSnapshot40 / RawReview0 / Approval0 / EmailDelivery0 / FormDelivery0は不変。実Projectに現在Companyがないため、上記の実画面動作試験は合成E2E用Projectで行ったもの。40 Raw観測をCompany件数やHuman正解件数へ転用していない。送信用worker未起動、outbound OFF。Production deploymentなし。
+
+## 最終CIと完了
+
+Backend実装 `50ead5b`、UI・E2E `c3854b3`。検証HEAD `4ff590dbb7e125e1866fbbf90fb707d3055825fc` の [CI 37593499599](https://github.com/team478a/leadhive_codex/actions/runs/37593499599) は全7 job成功。
+
+- Backend: 1,296 passed / 45 skipped / 50 subtests passed。
+- E2E: 76 passed / 2 skipped。今回の集計はPC/Mobileとも成功。skipを成功扱いしない。
+- Ruff / format / CI設定mypy / API import、Frontend typecheck / lint / build成功。
+- Migration upgrade / downgrade・upgrade / Alembic check成功。追加Migration・DB Model差分なし。
+- Windows package、ローカル模擬フォームHTTP acceptance成功。実企業への外部送信なし。
+
+この結果追記は文書のみで、検証HEADの製品コードから変更していない。限定ゴール完了。外部媒体取得・求人検証・実データPilot・条件緩和の次工程は開始せず停止する。
+
 製品のSearch API / AI call / Completion job / 承認作成 / メール・フォーム送信は0。outbound OFF、送信用worker未起動を維持。HotPepper・求人媒体の取得許諾、求人現在性、店舗同定、指定Pilot・Full Benchmarkは保留。Stage 7全体の目標達成制御・緩和シミュレーションは未完成で、この限定ゴール完了後に停止する。
