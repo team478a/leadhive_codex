@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import { allPages, api, download, errorMessage, upload } from './api'
+import { PresenceSearchControls } from './ExternalPresence'
+import { defaultPresencePlan } from './externalPresenceShared'
+import { PresenceEvidenceQueue } from './PresenceEvidenceQueue'
+import { PresenceRequirements } from './PresenceRequirements'
 import { Field } from './forms'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
@@ -26,6 +30,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
 }) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
   const [source, setSource] = useState<CollectionSource>('serper')
+  const [presencePlan, setPresencePlan] = useState(defaultPresencePlan)
   const [keywords, setKeywords] = useState('')
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
@@ -98,6 +103,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         const values = keywords.split('\n').map(value => value.trim()).filter(Boolean)
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
           operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
+          presence_search: presencePlan,
         })
         await reload()
         setNotice('検索収集をバックグラウンド処理へ登録しました。')
@@ -182,11 +188,13 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
 
   return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
     <SalesPreparationPanel key={projectId} projectId={projectId} />
+    <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} companies={companies} />
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       <fieldset disabled={loading}>
+        {source !== 'csv' && source !== 'url' && <PresenceSearchControls value={presencePlan} onChange={setPresencePlan} />}
         <Field label="プロジェクト"><select required value={projectId}
           onChange={e => setProjectId(e.target.value)}>{projects.map(item =>
           <option key={item.id} value={item.id}>{item.project_name}</option>)}</select></Field>
@@ -275,7 +283,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             <div className="flex justify-between gap-3"><strong>{sourceNames[job.source]}</strong>
               <span className="badge">{statusNames[job.status]}</span></div>
             {(job.keyword || job.region) && <p className="muted my-2 text-sm">{[job.keyword, job.region].filter(Boolean).join(' / ')}</p>}
-            <div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
+            <PresenceRequirements key={`${job.id}-${job.status}-${operations.map(o => o.status).join()}-${companies.length}`} jobId={job.id} /><div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
               <span>重複 {job.duplicate_count}</span><span>公式外 {job.excluded_count}</span><span>エラー {job.error_count}</span><span>{job.processing_ms}ms</span></div>
             {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
             {job.source === 'csv' && job.error_count > 0 && <button type="button" className="secondary mt-3" onClick={() => void download(`/collection-jobs/${job.id}/errors.csv`, 'csv-import-errors.csv').catch(e => setError(errorMessage(e)))}>行別エラーをダウンロード</button>}
