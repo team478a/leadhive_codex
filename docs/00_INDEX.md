@@ -240,6 +240,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [154_VERIFIED_ADDRESS_REGION_CONDITIONS.md](154_VERIFIED_ADDRESS_REGION_CONDITIONS.md): 確認済み住所による地域条件判定、根拠不足・店舗・Human取消の安全境界
 
+- [155_COLLECTION_EVIDENCE_INVALIDATION.md](155_COLLECTION_EVIDENCE_INVALIDATION.md): 公式サイト・SNS条件の根拠失効、Human取消優先、最新証拠と未来日時の検証
+
 - [146_RAW_COLLECTION_BENCHMARK_PILOT.md](146_RAW_COLLECTION_BENCHMARK_PILOT.md): Raw専用Pilot・不変Snapshot・Human Truth・Source/Query精度。実測は収集キーとHumanレビュー待ち
 
 - [145_GUIDED_SITE_IDENTITY_REVIEW.md](145_GUIDED_SITE_IDENTITY_REVIEW.md): 登録情報の比較、非保存の照合プレビュー、Human確認記録と不一致理由
