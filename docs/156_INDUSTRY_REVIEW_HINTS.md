@@ -18,7 +18,7 @@
 
 既存のCollectionFactReviewに「業種の確認を助ける文章」を表示する。公開ページへのリンク、取得日時、候補文章と「この文章を確認欄に入れる」を提供する。
 
-入力ボタンはsource URLとexcerptを確認欄へ入れるだけで、保存・分類・送信承認を実行しない。候補から入力した場合は「公開ページとこの企業・店舗の事業内容を確認しました」のチェック後に、人の確認結果を保存できる。URL/文章を編集するとチェックを解除する。判断不能・取消はこの追加確認で妨げない。候補がなくても従来の手入力を利用できる。
+入力ボタンはsource URLとexcerptを確認欄へ入れるだけで、保存・分類・送信承認を実行しない。候補から入力した場合は「公開ページとこの企業・店舗の事業内容を確認しました」のチェック後に、人の確認結果を保存できる。チェックは会社・条件種類/値・company hash・review version・URL・文章・判定結果の組合せへ結び付け、異なる組合せへ使い回さない。URL/文章を編集するとチェックを解除する。判断不能・取消はこの追加確認で妨げない。候補がなくても従来の手入力を利用できる。
 
 このチェックは誤操作を減らすUI上の確認であり、新しい認証証明ではない。確定APIは既存Human owner/editor限定、company hash・review version検査、24時間有効期間、追記式ledgerを再利用する。Viewerは参照のみ、Agent・別Projectは既存境界で拒否する。HumanのNO_MATCH/UNKNOWNを文章候補で復活させない。
 
@@ -31,6 +31,11 @@
 Backendでは非保存、候補があってもUNKNOWN、Human判断の優先、出典URL、本文不足、解析失敗、期限切れ・未来、AIのみ、未取得二次ページ、不正なURL一覧、正規表現入力、Untrusted Data、上限、Project・Viewer・Agentを検証する。
 
 PC/Mobileでは候補表示 → 入力欄へ反映 → チェック前保存不可 → 人の確認保存 → 取消 → 確認待ちの流れを合成データで検証する。地域・公式サイトの取消も回帰確認する。外部アクセス・収集Operation・送信を新規E2Eで検査する。結果は最終検証後に追記する。
+
+- Backend関連50件PASS。最終の権限・URL一覧検証を含む根拠関連52件PASS（重複あり、合計89種類の関連テスト）。
+- PC/Mobile関連E2E6件PASS。確認チェックを判定結果へ結び付けた最終UIでも、業種確認の2件PASS。
+- Ruff / format / mypy、Frontend typecheck / lint / build、Alembic check成功。既存bundle size警告は残る。新Migrationなし。
+- ローカルAPI 127.0.0.1:18986のhealth / DB疎通 / OpenAPI確認成功。Raw Snapshot40件、Raw Human Review0件を保持。Companies / ApprovalRequest / EmailDelivery / FormDeliveryも0件のまま。outbound OFF・worker未起動。
 
 ## 制限・残課題
 
