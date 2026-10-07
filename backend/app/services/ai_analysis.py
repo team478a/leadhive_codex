@@ -54,7 +54,11 @@ def context_for(company: Company, project: Project, profile: TargetProfile) -> A
         positive_keywords=profile.positive_keywords,
         negative_keywords=profile.negative_keywords,
         exclusion_keywords=profile.exclusion_keywords,
-        scoring_rules=profile.scoring_rules,
+        scoring_rules={
+            key: value
+            for key, value in profile.scoring_rules.items()
+            if key != "industry_review_aliases"
+        },
         ai_instruction=profile.ai_instruction,
         sales_objective=project.sales_objective,
         region=project.region,
@@ -116,7 +120,10 @@ def analyze_company_ai(
     except AiAnalysisError as exc:
         notify_usage(usage_callback, company.id, provider, "failed")
         db.rollback()
-        company = db.get(Company, company.id)
+        refreshed = db.get(Company, company.id)
+        if refreshed is None:
+            raise ValueError("Company not found") from exc
+        company = refreshed
         company.ai_status = "failed"
         company.ai_error = exc.public_message[:500]
         company.ai_analyzed_at = datetime.now(timezone.utc)
@@ -126,7 +133,10 @@ def analyze_company_ai(
         return company
     except Exception as exc:
         db.rollback()
-        company = db.get(Company, company.id)
+        refreshed = db.get(Company, company.id)
+        if refreshed is None:
+            raise ValueError("Company not found") from exc
+        company = refreshed
         company.ai_status = "failed"
         company.ai_error = "AI判定中にエラーが発生しました。"
         company.ai_analyzed_at = datetime.now(timezone.utc)

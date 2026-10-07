@@ -4,6 +4,7 @@ import re
 import unicodedata
 from datetime import timedelta
 
+from app.services.industry_aliases import terms_for
 from app.services.official_site_condition import evaluate_site
 from app.services.site_identity_review import official_evidence_url
 
@@ -20,6 +21,8 @@ def hints(db, company, value, now):
     term = unicodedata.normalize("NFKC", value).strip()
     if len(term) < 2 or len(term) > 100:
         return {**empty, "reason": "INDUSTRY_TERM_UNSUPPORTED"}
+    terms = terms_for(db, company, term)
+    pattern = "|".join(re.escape(item) for item in sorted(terms, key=len, reverse=True))
     stored_urls = company.scraped_urls if isinstance(company.scraped_urls, list) else []
     urls = {url for url in stored_urls if isinstance(url, str)}
     source = stored_urls[0] if stored_urls and isinstance(stored_urls[0], str) else ""
@@ -36,7 +39,7 @@ def hints(db, company, value, now):
         except (ValueError, UnicodeError):
             continue
         text = " ".join(unicodedata.normalize("NFKC", text).split())
-        for match in re.finditer(re.escape(term), text, re.IGNORECASE):
+        for match in re.finditer(pattern, text, re.IGNORECASE):
             start = max(0, match.start() - 90)
             end = min(len(text), match.end() + 130)
             excerpt = text[start:end]
@@ -45,7 +48,12 @@ def hints(db, company, value, now):
                 continue
             seen.add(key)
             excerpts.append(
-                dict(text=excerpt, source_url=safe_source, observed_at=company.scraped_at)
+                dict(
+                    text=excerpt,
+                    source_url=safe_source,
+                    observed_at=company.scraped_at,
+                    matched_term=match[0],
+                )
             )
             if len(excerpts) == 3:
                 break
@@ -55,4 +63,5 @@ def hints(db, company, value, now):
         status="AVAILABLE" if excerpts else "NO_LITERAL_MATCH",
         reason="INDUSTRY_TEXT_CANDIDATES" if excerpts else "INDUSTRY_TEXT_NOT_FOUND",
         excerpts=excerpts,
+        terms=terms,
     )

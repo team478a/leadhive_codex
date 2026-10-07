@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     JsonValue,
     StringConstraints,
+    field_validator,
 )
 
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
@@ -45,6 +46,15 @@ class ProfileInput(Input):
     default_regions: Keywords = Field(default_factory=list)
     active: bool = True
 
+    @field_validator("scoring_rules")
+    @classmethod
+    def valid_review_aliases(cls, value):
+        from app.services.industry_aliases import KEY, validate
+
+        if KEY in value:
+            validate(value[KEY])
+        return value
+
 
 class ProfileOut(ProfileInput):
     model_config = ConfigDict(from_attributes=True)
@@ -53,6 +63,12 @@ class ProfileOut(ProfileInput):
     is_system: bool
     created_at: datetime
     updated_at: datetime
+
+    @field_validator("scoring_rules")
+    @classmethod
+    def valid_review_aliases(cls, value):
+        # Older arbitrary JSON remains readable; writes validate in ProfileInput.
+        return value
 
 
 class ProjectInput(Input):

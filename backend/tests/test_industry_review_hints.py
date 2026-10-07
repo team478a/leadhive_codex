@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 from sqlalchemy import func, select
 
-from app.models import CollectionFactReview, OperationJob
+from app.models import CollectionFactReview, OperationJob, TargetProfile
 from app.services.collection_conditions import evaluate
 from app.services.collection_fact_reviews import result
 from app.services.industry_review_hints import hints
@@ -150,3 +150,98 @@ def test_human_decision_and_withdrawal_remain_authoritative(auth, db, sample):
         value = result(db, company, "INDUSTRY", "美容院")
         assert value["outcome"] == outcome
         assert value["review_hints"]["status"] == "AVAILABLE"
+
+
+def test_profile_alias_excerpts_never_become_human_truth(db, sample):
+    project, _, company = sample
+    profile = db.get(TargetProfile, project.target_profile_id)
+    profile.scoring_rules = {"industry_review_aliases": {"美容院": ["美容室", "ヘアサロン"]}}
+    company.website_text = "当社はヘアサロン向けシステムを提供しており、美容室ではありません。"
+    db.commit()
+    value = result(db, company, "INDUSTRY", "美容院")
+    assert value["outcome"] == "UNKNOWN"
+    review = value["review_hints"]
+    assert review["terms"] == ["美容院", "美容室", "ヘアサロン"]
+    assert review["excerpts"]
+    assert {r["matched_term"] for r in review["excerpts"]} <= {"美容室", "ヘアサロン"}
+    assert "美容室ではありません" in review["excerpts"][0]["text"]
+    assert db.scalar(select(func.count()).select_from(CollectionFactReview)) == 0
+    profile.scoring_rules = {"industry_review_aliases": {"運送": ["美容室"]}}
+    db.commit()
+    assert result(db, company, "INDUSTRY", "美容院")["review_hints"]["excerpts"] == []
+
+
+def test_aliases_do_not_leak_from_other_owner_or_malformed_profile(db, sample, users):
+    from app.services.industry_aliases import terms_for
+
+    project, _, company = sample
+    profile = TargetProfile(
+        user_id=users[1].id,
+        profile_name="他の利用者",
+        scoring_rules={"industry_review_aliases": {"美容院": ["美容室"]}},
+    )
+    db.add(profile)
+    db.flush()
+    project.target_profile_id = profile.id
+    db.commit()
+    assert terms_for(db, company, "美容院") == ["美容院"]
+    profile.user_id = project.user_id
+    profile.scoring_rules = {"industry_review_aliases": {"美容院": "美容室"}}
+    db.commit()
+    assert terms_for(db, company, "美容院") == ["美容院"]
+
+
+@pytest.mark.parametrize(
+    "mapping",
+    [
+        None,
+        [],
+        {"美容院": []},
+        {"美容院": ["a"]},
+        {"美容院": ["美容室"] * 11},
+        {"美容院": ["美容室"], " 美容院 ": ["サロン"]},
+        {"美容院": ["美容,室"]},
+    ],
+)
+def test_alias_config_is_bounded(mapping):
+    from pydantic import ValidationError
+
+    from app.schema_core import ProfileInput
+
+    with pytest.raises(ValidationError):
+        ProfileInput(profile_name="業種", scoring_rules={"industry_review_aliases": mapping})
+
+
+def test_profile_alias_settings_roundtrip_and_ai_rules_unchanged(auth, db, sample):
+    from app.services.ai_analysis import context_for
+
+    project, _, company = sample
+    body = {
+        "profile_name": "確認用別名",
+        "scoring_rules": {
+            "rank_thresholds": {"A": 85},
+            "industry_review_aliases": {"美容院": ["美容室", "ヘアサロン"]},
+        },
+    }
+    response = auth.post("/api/target-profiles", json=body)
+    assert response.status_code == 201
+    profile_id = response.json()["id"]
+    assert (
+        auth.get(f"/api/target-profiles/{profile_id}").json()["scoring_rules"]
+        == body["scoring_rules"]
+    )
+    clone = auth.post(f"/api/target-profiles/{profile_id}/clone")
+    assert clone.status_code == 201
+    assert clone.json()["scoring_rules"] == body["scoring_rules"]
+    profile = db.get(TargetProfile, profile_id)
+    assert context_for(company, project, profile).scoring_rules == {"rank_thresholds": {"A": 85}}
+    body["scoring_rules"]["industry_review_aliases"] = {"美容院": "美容室"}
+    assert auth.put(f"/api/target-profiles/{profile_id}", json=body).status_code == 422
+
+
+def test_legacy_bad_alias_config_remains_readable(auth, db, sample):
+    project, _, _ = sample
+    profile = db.get(TargetProfile, project.target_profile_id)
+    profile.scoring_rules = {"industry_review_aliases": {"美容院": "invalid legacy"}}
+    db.commit()
+    assert auth.get(f"/api/target-profiles/{profile.id}").status_code == 200
