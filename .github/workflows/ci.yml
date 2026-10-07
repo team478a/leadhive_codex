@@ -194,3 +194,35 @@ jobs:
       - name: Build and verify the Windows distribution package
         shell: powershell
         run: .\scripts\package-windows.ps1
+
+  windows-native:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - run: |
+          python -m venv backend/.venv
+          backend/.venv/Scripts/python -m pip install -r backend/requirements.lock
+          backend/.venv/Scripts/python -m pip install --no-deps -e backend
+          backend/.venv/Scripts/python -m pip install -r scripts/native/build-requirements.txt
+      - working-directory: frontend
+        run: npm ci
+      - run: |
+          backend/.venv/Scripts/python -m ruff check scripts/native scripts/package-windows-native.py
+          backend/.venv/Scripts/python -m ruff format --check scripts/native scripts/package-windows-native.py
+          backend/.venv/Scripts/python -m unittest discover -s scripts/native -p test_native_runtime.py
+          backend/.venv/Scripts/python scripts/package-windows-native.py
+          backend/.venv/Scripts/python scripts/native/verify_package.py
+      - uses: actions/upload-artifact@v7
+        with:
+          name: LeadHive-Windows-Native-Prototype
+          path: |
+            dist/LeadHive-Windows-Native-*.zip
+            dist/LeadHive-Windows-Native-*.zip.sha256
+            dist/native-acceptance-result.json
