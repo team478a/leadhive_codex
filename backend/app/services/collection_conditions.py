@@ -30,7 +30,9 @@ def classification(results: list[dict]) -> str:
     return "MATCH"
 
 
-def evaluate(db, company, conditions: list[CollectionCondition], now=None):
+def evaluate(
+    db, company, conditions: list[CollectionCondition], now=None, *, include_review_hints=True
+):
     now = now or datetime.now(timezone.utc)
     fresh_after = now - timedelta(hours=24)
     presences = {r["platform"]: r for r in inventory(db, company.id)}
@@ -41,7 +43,14 @@ def evaluate(db, company, conditions: list[CollectionCondition], now=None):
         if condition.type in {"AREA", "INDUSTRY"}:
             from app.services.collection_fact_reviews import result
 
-            review = result(db, company, condition.type, condition.value, now)
+            review = result(
+                db,
+                company,
+                condition.type,
+                condition.value,
+                now,
+                include_review_hints=include_review_hints,
+            )
             outcome, reason = review["outcome"], review["reason"]
             evidence_url, observed_at = review["evidence_url"], review["observed_at"]
         elif condition.type == "MEDIA_EXISTS":

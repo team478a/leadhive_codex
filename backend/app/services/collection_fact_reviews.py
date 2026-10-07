@@ -43,7 +43,7 @@ def latest(db, company, kind, value):
     )
 
 
-def result(db, company, kind, value, now=None):
+def result(db, company, kind, value, now=None, *, include_review_hints=True):
     now = now or datetime.now(timezone.utc)
     row = latest(db, company, kind, value)
     outcome, reason = "UNKNOWN", "FACT_REVIEW_REQUIRED"
@@ -65,7 +65,7 @@ def result(db, company, kind, value, now=None):
         automatic = evaluate_region(db, company, value, now)
         outcome, reason = automatic["outcome"], automatic["reason"]
     review_hints = {}
-    if kind == "INDUSTRY":
+    if kind == "INDUSTRY" and include_review_hints:
         from app.services.industry_review_hints import hints
 
         review_hints["review_hints"] = hints(db, company, value, now)

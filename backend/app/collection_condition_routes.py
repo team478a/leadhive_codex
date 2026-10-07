@@ -188,14 +188,7 @@ def confirm(
     return public(row)
 
 
-@router.get("/collection-conditions/{request_id}/results")
-def results(
-    request_id: UUID,
-    offset: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100),
-    db: Session = Depends(get_db),
-    user: User = Depends(current_user),
-):
+def checked_cohort(request_id, db, user):
     row = db.get(CollectionConditionRequest, request_id)
     if row is None:
         raise HTTPException(404, "条件が見つかりません。")
@@ -215,6 +208,18 @@ def results(
                 )
             )
         )
+    return row, query
+
+
+@router.get("/collection-conditions/{request_id}/results")
+def results(
+    request_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    row, query = checked_cohort(request_id, db, user)
     total = db.scalar(select(func.count()).select_from(query.subquery()))
     conditions = [CollectionCondition.model_validate(c) for c in row.snapshot["conditions"]]
     candidates = [
@@ -234,4 +239,44 @@ def results(
         candidates=candidates,
         required_presence_plan=required_presence_plan(conditions).model_dump(),
         note="保存済み根拠のみを評価。条件確定は検索・補完・送信承認を開始しません。件数は表示ページ内の集計です。",
+    )
+
+
+@router.get("/collection-conditions/{request_id}/summary")
+def summary(
+    request_id: UUID,
+    limit: int = Query(200, ge=1, le=500),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.services.condition_summary import summarize
+
+    row, query = checked_cohort(request_id, db, user)
+    now = datetime.now(timezone.utc)
+    # One statement fixes candidate membership and total; company rows are never multiplied.
+    rows = db.execute(
+        query.add_columns(func.count().over()).order_by(Company.id).limit(limit)
+    ).all()
+    total = int(rows[0][1]) if rows else 0
+    conditions = [CollectionCondition.model_validate(c) for c in row.snapshot["conditions"]]
+    candidates = [
+        (
+            dict(state="KNOWN_DUPLICATE", conditions=[])
+            if item[0].duplicate_of_id is not None
+            else evaluate(db, item[0], conditions, now, include_review_hints=False)
+        )
+        for item in rows
+    ]
+    return dict(
+        **summarize(row.snapshot, candidates, total),
+        request_id=row.id,
+        request_version=row.version,
+        payload_hash=row.payload_hash,
+        scope="COLLECTION" if row.snapshot.get("collection_job_id") else "PROJECT",
+        evaluated_at=now,
+        limit=limit,
+        note="保存済み候補の条件一致を集計。登録済み重複は目標件数から除外します。"
+        "DM READY・独立送信先・承認件数ではありません。"
+        "理由の件数は重複します。集計中の根拠変更は再集計してください。"
+        "不足を補う検索・条件緩和・送信は開始しません。",
     )
