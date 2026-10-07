@@ -111,3 +111,5 @@ Google Placesの保存/再利用条件確認は既存の課題として維持。
 「進めてください」に基づき、[158_PURPOSE_SENTENCE_PREVIEW.md](158_PURPOSE_SENTENCE_PREVIEW.md)の範囲で条件Proposalを拡張した。指定自然文の例と目標件数をHuman確認して保存する。上記の「コード変更なし」「指定自然文未対応」は47990b4時点の監査記録であり、後続の今回のコード変更とは区別する。
 
 Stage 1はPARTIALを維持。限定パターンの決定的な構文解析であり、汎用AI理解、目標件数達成制御、Source取得許諾、求人現在性検証、HotPepper店舗同定、実データPilotは未完了。条件保存は送信承認を作成せず、既存UNKNOWN判定を緩和しない。
+
+後続実装の検証HEAD `e42d8f0`、[CI 37586892513](https://github.com/team478a/leadhive_codex/actions/runs/37586892513) は全7 job成功。Backend 1,275 passed / 45 skipped / 50 subtests、E2E 74 passed / 2 skipped。Migration追加なし。限定工程は完了、媒体利用許諾・実データHuman Truth・指定Pilotは引き続き未完了。

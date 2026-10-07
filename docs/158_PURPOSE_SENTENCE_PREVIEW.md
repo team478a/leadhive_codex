@@ -40,9 +40,22 @@
 
 ## 検証
 
-関連Backend 53件成功。mypy 3 file成功。Frontend build（typecheck含む）・lint成功。PC/Mobile E2Eおよび最終CIの結果は下記に追記する。
+関連Backend 53件成功。mypy 3 file成功。Ruff/format成功。Frontend build（typecheck含む）・lint成功。PC/Mobile E2Eの4ケースは全ケース成功を確認した（初回3成功/1失敗、失敗したmobileケースは単独再実行で成功）。初回は再読込後のタイムアウトとテスト用DBの接続・cleanupタイムアウトを併発した。テストをskipしたりtimeoutを延長したりせず再実行した。最終CIの結果は下記に追記する。
 
 合成テストは指定文章の分解、MUST/WANT、件数保存・再読込、無効件数、曖昧件数、非実行、Project境界、Agent拒否、求人の未検証維持を確認する。Human Truthによる実データ精度の測定ではない。
+
+ローカルAPI `127.0.0.1:18986` を今回のコードへ更新しhealth成功。保存済みCompany0 / RawSnapshot40 / RawReview0 / Approval0 / EmailDelivery0 / FormDelivery0の件数が更新前後で不変。UIは `http://localhost:18985/`。outbound OFF・送信用worker未起動。
+
+実装commitはBackend `bb10c86`、UI `a5aba07`。検証対象HEAD `e42d8f0d36f6b54aeadb0283f287778fc96dabc3` の [CI run 37586892513](https://github.com/team478a/leadhive_codex/actions/runs/37586892513) は全7 job成功。
+
+- Backend: 1,275 passed / 45 skipped / 50 subtests passed。
+- E2E: 74 passed / 2 skipped。今回追加したPC/Mobileケースは成功。既存skipを全機能検証済みとは扱わない。
+- backend-lint: Ruff、format、mypy、API import成功。
+- frontend: typecheck、lint、build成功。
+- migration-validation: upgrade、downgrade/upgrade、Alembic check成功（model diffなし）。今回のMigration追加なし。
+- windows-package成功。form-http-acceptanceはローカル模擬サーバーで15 passed、実企業への送信なし。
+
+この結果追記は文書だけの変更で、CIが検証したコードから製品コードを変更していない。
 
 ## 未完了
 
