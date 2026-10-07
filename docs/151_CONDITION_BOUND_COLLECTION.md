@@ -40,4 +40,12 @@ MEDIA_EXISTSのMUSTとEXCLUDEは既存ExternalPresence調査計画のREQUIREDへ
 
 ## 残課題と停止点
 
+### 実行結果（2026-10-07）
+
+- 実装commit: backend b30d6c5 / frontend 24769d5。検証対象HEAD: 4762fabd02c21eb1976176dd971904f4786b61a4。
+- ローカルBackend関連テスト67件PASS、PC/Mobile関連E2E4件PASS。Ruff / format / mypy、Frontend typecheck / lint / build PASS。
+- [GitHub Actions 37565482339](https://github.com/team478a/leadhive_codex/actions/runs/37565482339): 全7ジョブ成功。Backend全テスト、全E2E、Migration upgrade/downgrade/upgrade・Model差分、Windows packageを含む。
+- ローカルAPI 127.0.0.1:18986を更新しhealthと追加endpointを確認。既存Raw Snapshot40件を保持。Companies / Human Review / ApprovalRequest / EmailDelivery / FormDeliveryはいずれも0件で変更なし。outbound OFF、worker未起動。
+- Frontend buildには既存のbundle size警告が残る。ビルドは成功。今回bundle分割は対象外。
+
 用途目的別エンジン全体の完了ではない。自然言語からの条件提案、地域・業種・求人等の検証Adapter、追加Source、DM根拠生成は次工程。実収集精度・Human Truthの改善はこのmock検証から主張しない。本工程は確定条件の収集接続までで停止する。
