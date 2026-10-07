@@ -94,6 +94,7 @@ def evaluate(db, company, conditions: list[CollectionCondition], now=None):
                         "company_fact_hash",
                         "evidence_excerpt",
                         "observed_value",
+                        "review_hints",
                     )
                     if k in review
                 },

@@ -64,6 +64,11 @@ def result(db, company, kind, value, now=None):
 
         automatic = evaluate_region(db, company, value, now)
         outcome, reason = automatic["outcome"], automatic["reason"]
+    review_hints = {}
+    if kind == "INDUSTRY":
+        from app.services.industry_review_hints import hints
+
+        review_hints["review_hints"] = hints(db, company, value, now)
     return dict(
         outcome=outcome,
         reason=reason,
@@ -73,4 +78,5 @@ def result(db, company, kind, value, now=None):
         company_fact_hash=company_hash(company),
         evidence_excerpt=row.evidence_excerpt if row else "",
         observed_value=company.address if kind == "AREA" else company.business_type,
+        **review_hints,
     )
