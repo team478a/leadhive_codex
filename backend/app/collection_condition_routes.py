@@ -1,28 +1,99 @@
+from datetime import datetime, timedelta, timezone
+from typing import Literal
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
     CollectionConditionRequest,
+    CollectionFactReview,
     CollectionJob,
     Company,
     LeadSourceObservation,
     Project,
     User,
 )
-from app.project_access import project_access
+from app.project_access import company_access, project_access
 from app.schema_collection_conditions import (
     CollectionCondition,
     ConfirmCollectionConditions,
     required_presence_plan,
 )
+from app.schema_core import Input, Keyword
 from app.security import current_user
 from app.services.collection_conditions import evaluate, snapshot_hash
 
 router = APIRouter(prefix="/api")
+
+
+class FactReviewInput(Input):
+    condition_type: Literal["AREA", "INDUSTRY"]
+    value: Keyword
+    outcome: Literal["MATCH", "NO_MATCH", "UNKNOWN"]
+    expected_version: int = Field(ge=0)
+    expected_company_hash: str = Field(pattern="^[0-9a-f]{64}$")
+    source_url: str = Field(default="", max_length=2048)
+    evidence_excerpt: str = Field(min_length=10, max_length=1000)
+
+
+@router.post("/companies/{company_id}/collection-fact-reviews", status_code=201)
+def review_fact(
+    company_id: UUID,
+    body: FactReviewInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.services.collection_fact_reviews import company_hash, latest, predicate_value, result
+    from app.services.contact_destinations import normalize_destination
+
+    company = company_access(company_id, db, user)
+    db.scalar(
+        select(Project.id).where(Project.id == company.project_id).with_for_update(key_share=True)
+    )
+    db.scalar(select(Company.id).where(Company.id == company.id).with_for_update())
+    db.refresh(company)
+    previous = latest(db, company, body.condition_type, body.value)
+    if (
+        company_hash(company) != body.expected_company_hash
+        or (previous.version if previous else 0) != body.expected_version
+    ):
+        raise HTTPException(409, "企業情報または確認記録が変わりました。再表示してください。")
+    source = ""
+    if body.outcome != "UNKNOWN":
+        try:
+            parsed = urlsplit(body.source_url)
+            source = normalize_destination("form", body.source_url)
+            if parsed.query or parsed.fragment:
+                raise ValueError("Private parameters are not evidence")
+        except (ValueError, UnicodeError):
+            raise HTTPException(
+                422,
+                "根拠には公開ページのURLを指定してください。クエリ・秘密情報は含めないでください。",
+            ) from None
+    now = datetime.now(timezone.utc)
+    db.add(
+        CollectionFactReview(
+            project_id=company.project_id,
+            company_id=company.id,
+            actor_user_id=user.id,
+            condition_type=body.condition_type,
+            value=predicate_value(body.value),
+            version=body.expected_version + 1,
+            outcome=body.outcome,
+            company_hash=company_hash(company),
+            source_url=source,
+            evidence_excerpt=body.evidence_excerpt,
+            created_at=now,
+            expires_at=now + timedelta(hours=24),
+        )
+    )
+    db.commit()
+    return result(db, company, body.condition_type, body.value)
 
 
 def public(row):

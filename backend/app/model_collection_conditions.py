@@ -7,6 +7,7 @@ from sqlalchemy import (
     ForeignKey,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -41,3 +42,36 @@ class CollectionConditionRequest(Base):
     confirmed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class CollectionFactReview(Base):
+    """Human predicate evidence; append-only API, never a sending approval."""
+
+    __tablename__ = "collection_fact_reviews"
+    __table_args__ = (
+        UniqueConstraint(
+            "company_id", "condition_type", "value", "version", name="uq_fact_review_version"
+        ),
+        CheckConstraint("condition_type IN ('AREA','INDUSTRY')", name="ck_fact_review_type"),
+        CheckConstraint("outcome IN ('MATCH','NO_MATCH','UNKNOWN')", name="ck_fact_review_outcome"),
+        CheckConstraint("version > 0", name="ck_fact_review_version"),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    company_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), index=True
+    )
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    condition_type: Mapped[str] = mapped_column(String(20))
+    value: Mapped[str] = mapped_column(String(300))
+    version: Mapped[int] = mapped_column(Integer)
+    outcome: Mapped[str] = mapped_column(String(20))
+    company_hash: Mapped[str] = mapped_column(String(64))
+    source_url: Mapped[str] = mapped_column(Text, default="")
+    evidence_excerpt: Mapped[str] = mapped_column(String(1000), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

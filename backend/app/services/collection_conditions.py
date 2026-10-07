@@ -37,8 +37,15 @@ def evaluate(db, company, conditions: list[CollectionCondition], now=None):
     presences = {r["platform"]: r for r in inventory(db, company.id)}
     results = []
     for condition in conditions:
+        review = {}
         outcome, reason, evidence_url, observed_at = "UNKNOWN", "VERIFICATION_UNSUPPORTED", "", None
-        if condition.type == "MEDIA_EXISTS":
+        if condition.type in {"AREA", "INDUSTRY"}:
+            from app.services.collection_fact_reviews import result
+
+            review = result(db, company, condition.type, condition.value, now)
+            outcome, reason = review["outcome"], review["reason"]
+            evidence_url, observed_at = review["evidence_url"], review["observed_at"]
+        elif condition.type == "MEDIA_EXISTS":
             presence = presences[condition.value]
             evidence_url, observed_at = presence["url"], presence["observed_at"]
             reason = presence["reason"] or presence["status"]
@@ -100,6 +107,16 @@ def evaluate(db, company, conditions: list[CollectionCondition], now=None):
                 reason=reason,
                 evidence_url=evidence_url,
                 observed_at=observed_at,
+                **{
+                    k: review[k]
+                    for k in (
+                        "review_version",
+                        "company_fact_hash",
+                        "evidence_excerpt",
+                        "observed_value",
+                    )
+                    if k in review
+                },
             )
         )
     return dict(
