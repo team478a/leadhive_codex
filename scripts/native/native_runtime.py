@@ -300,11 +300,12 @@ def install(root, email, password):
         )
     sid = (
         subprocess.check_output(
-            ["whoami", "/user", "/fo", "csv", "/nh"], creationflags=HIDDEN, text=True
+            ["whoami", "/user", "/fo", "csv", "/nh"], creationflags=HIDDEN
         )
         .strip()
-        .split(",")[-1]
-        .strip('"')
+        .split(b",")[-1]
+        .strip(b'"')
+        .decode("ascii")
     )
     subprocess.run(
         ["icacls", str(root), "/inheritance:r", "/grant:r", f"*{sid}:(OI)(CI)F"],

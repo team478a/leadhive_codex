@@ -14,6 +14,7 @@ import zipfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts/native"))
 
 
 def run(*args, cwd=ROOT):
@@ -68,7 +69,11 @@ def main():
     name = f"LeadHive-Windows-Native-{commit[:8]}" + ("-DEVELOPMENT" if dirty else "")
     spec = stage / "native.spec"
     spec.write_text(
-        f"""from PyInstaller.utils.hooks import collect_submodules, collect_data_files
+        f"""import sys
+sys.path.insert(0, {str(ROOT / "scripts/native")!r})
+from packaging_resources import utf8_manifest
+from PyInstaller.utils.win32.winmanifest import create_application_manifest
+from PyInstaller.utils.hooks import collect_submodules, collect_data_files
 a = Analysis([{str(ROOT / "scripts/native/entry.py")!r}],
     pathex={[str(ROOT / "backend"), str(ROOT / "scripts/native")]!r},
     binaries=[], datas=[({str(ROOT / "backend/migrations")!r}, 'migrations'),
@@ -77,8 +82,9 @@ a = Analysis([{str(ROOT / "scripts/native/entry.py")!r}],
         collect_submodules('sqlalchemy.dialects.postgresql') + ['psycopg', 'psycopg_binary'],
     hookspath=[], runtime_hooks=[], excludes=['pytest', 'ruff', 'mypy'], noarchive=False)
 pyz = PYZ(a.pure)
-gui = EXE(pyz, a.scripts, [], exclude_binaries=True, name='LeadHive', console=False)
-engine = EXE(pyz, a.scripts, [], exclude_binaries=True, name='LeadHiveEngine', console=True)
+manifest = utf8_manifest(create_application_manifest())
+gui = EXE(pyz, a.scripts, [], exclude_binaries=True, name='LeadHive', console=False, manifest=manifest)
+engine = EXE(pyz, a.scripts, [], exclude_binaries=True, name='LeadHiveEngine', console=True, manifest=manifest)
 bundle = COLLECT(gui, engine, a.binaries, a.datas, strip=False, upx=False, name={name!r})
 """,
         encoding="utf-8",
@@ -114,6 +120,9 @@ bundle = COLLECT(gui, engine, a.binaries, a.datas, strip=False, upx=False, name=
                 target.parent.mkdir(parents=True, exist_ok=True)
                 with archive.open(item) as source, target.open("wb") as dest:
                     shutil.copyfileobj(source, dest)
+    from packaging_resources import configure_postgres
+
+    adjustments = configure_postgres(pgroot / "bin")
     shutil.copy(ROOT / "scripts/native/README-FIRST.txt", package / "README-FIRST.txt")
     notices = package / "licenses/python-packages"
     for distribution in importlib.metadata.distributions():
@@ -136,6 +145,7 @@ bundle = COLLECT(gui, engine, a.binaries, a.datas, strip=False, upx=False, name=
         "commit": commit,
         "development": bool(dirty),
         "runtime": lock,
+        "runtime_adjustments": adjustments,
         "outbound": False,
         "worker_default": False,
         "files": {

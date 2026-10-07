@@ -3,10 +3,12 @@ import os
 import tempfile
 import unittest
 import uuid
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import native_runtime as native
+from packaging_resources import utf8_manifest
 
 
 class NativeBoundaryTests(unittest.TestCase):
@@ -100,6 +102,24 @@ class NativeBoundaryTests(unittest.TestCase):
         )
         with patch("ctypes.windll.kernel32.GetACP", return_value=932):
             self.assertEqual(native.cluster_directory(db), target.resolve())
+
+    def test_utf8_manifest_preserves_privileges_and_is_idempotent(self):
+        original = b'<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0"><trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges><requestedExecutionLevel level="asInvoker" uiAccess="false"/></requestedPrivileges></security></trustInfo></assembly>'
+        manifest = utf8_manifest(original)
+        tree = ET.fromstring(manifest)
+        level = tree.find(
+            ".//{urn:schemas-microsoft-com:asm.v3}requestedExecutionLevel"
+        )
+        self.assertEqual(level.get("level"), "asInvoker")
+        self.assertEqual(manifest, utf8_manifest(manifest))
+        self.assertEqual(
+            len(
+                tree.findall(
+                    ".//{http://schemas.microsoft.com/SMI/2019/WindowsSettings}activeCodePage"
+                )
+            ),
+            1,
+        )
 
 
 if __name__ == "__main__":
