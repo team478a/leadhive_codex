@@ -15,6 +15,7 @@ from app.approved_email_routes import router as approved_email_router
 from app.approved_form_routes import router as approved_form_router
 from app.campaign_routes import router as campaign_router
 from app.cf7_candidate_routes import router as cf7_candidate_router
+from app.collection_condition_routes import router as collection_condition_router
 from app.collection_routes import router as collection_router
 from app.company_quality_routes import router as company_quality_router
 from app.company_reporting_routes import router as company_reporting_router
@@ -66,6 +67,7 @@ app = FastAPI(
     dependencies=[Depends(reject_mixed_credentials)],
 )
 app.include_router(raw_collection_router)
+app.include_router(collection_condition_router)
 app.include_router(raw_pair_router)
 app.include_router(approval_router)
 app.include_router(cf7_candidate_router)
