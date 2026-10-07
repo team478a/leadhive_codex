@@ -45,3 +45,12 @@ POST `/api/projects/{project_id}/collection-conditions/propose`。textは最大2
 Backend: テンプレート、優先度、否定、矛盾、未知条件保持、上限、Project/Viewer/Agent、解析の非保存を検証する。Frontend: PC/Mobileで提案、解釈待ち、確定、検索欄反映、編集後開始拒否、取り消し、合成ジョブenqueue/cancelを検証する。E2Eでworkerは起動せず、外部収集・AI・送信は行わない。
 
 一次収集のPrecisionを実測した成果ではない。PilotのHumanレビュー・正解ラベルと実データ評価は引き続き必要。本工程で停止する。
+
+## 実行結果（2026-10-07）
+
+- Backend `9ed7ab7` / UI `e54969b`。検証対象HEAD `b0453b981b6263df928e523c9240884030535fcc`。
+- Backend関連回帰97件PASS。PC/Mobile関連E2E8件PASS。最初のE2Eで未確定による停止理由が汎用エラーに隠れる問題を検出し、具体的な案内に修正して再実行で成功した。
+- Ruff / format / mypy、Frontend typecheck / lint / build、Alembic check成功。新Migrationなし。既存bundle size警告は残る。
+- [GitHub Actions 37568873607](https://github.com/team478a/leadhive_codex/actions/runs/37568873607): 全7ジョブ成功。Backend全テスト・全E2E・Migration往復/model差分・Windows packageを含む。
+- ローカルAPI 127.0.0.1:18986のhealthとproposal endpointを確認。既存Raw Snapshot40件を保持。Companies / Raw Human Review / ApprovalRequest / EmailDelivery / FormDeliveryは0件で変更なし。outbound OFF・worker未起動。
+- 実検索・外部AI・実企業GET・Human Approval・メール/Form送信は未実行。任意自然文の完全解析、地域/業種の自動検証、求人現在性、DM根拠引渡し、PilotのHuman Truth測定は残課題。
