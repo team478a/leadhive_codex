@@ -56,11 +56,17 @@ def result(db, company, kind, value, now=None):
             reason = "EVIDENCE_EXPIRED"
         else:
             outcome, reason = row.outcome, "HUMAN_FACT_VERIFIED"
+    automatic = {}
+    if row is None and kind == "AREA":
+        from app.services.region_condition import evaluate_region
+
+        automatic = evaluate_region(db, company, value, now)
+        outcome, reason = automatic["outcome"], automatic["reason"]
     return dict(
         outcome=outcome,
         reason=reason,
-        evidence_url=row.source_url if row else "",
-        observed_at=row.created_at if row else None,
+        evidence_url=row.source_url if row else automatic.get("evidence_url", ""),
+        observed_at=row.created_at if row else automatic.get("observed_at"),
         review_version=row.version if row else 0,
         company_fact_hash=company_hash(company),
         evidence_excerpt=row.evidence_excerpt if row else "",

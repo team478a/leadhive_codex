@@ -26,6 +26,7 @@ jobs:
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/condition_collection.py backend/app/schema_workflow.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/collection_fact_reviews.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/condition_proposal.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/region_condition.py
 
   backend-tests:
     runs-on: ubuntu-24.04
