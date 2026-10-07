@@ -2,7 +2,9 @@
 
 ## 実行状態
 
-**実データPilotはNOT RUN。完了条件の精度測定には到達していない。** 現在のローカル運用設定をread-onlyで確認し、Serper / Google Places / gBizINFOの収集credentialが未設定であることを確認した。秘密値は出力・成果物に保存しない。Human Truthも未取得であるため、Found、Correct、Precision等の実測値はnull。合成fixtureのテスト結果をPilot結果として流用しない。
+**Raw収集は完了、Human Truth待ち。精度測定の完了条件には未到達。** 2026-10-07に利用者が運用画面へSerperキーを保存したため、暗号化保存を確認した。既存運用DBの企業・店舗データとschemaは変更せず、最新の測定コードと専用DBを持つ隔離Pilot環境を起動し、4回だけSerper検索した。未実行時点の文書・JSONは`d06dc78`のGit履歴に保持する。
+
+Source/Query/Runと不変Snapshotは保存済み。Humanレビューは0件であり、Precision、Field Completeness、Unique Correct Gainはnull。AIやCodexによるHuman正解ラベルの生成は行わない。
 
 開始基準は `codex/integration@203a6eff31ec2cb93cc26e2d74a24b56afa1fe61`。開始CIは[37545890953](https://github.com/team478a/leadhive_codex/actions/runs/37545890953)、全7 job成功。今回の検証対象commitは、この文書を含むGit履歴と、そのHEADのActions runで特定する。
 
@@ -15,13 +17,13 @@
 - 過去の `raw-pilot-v1` の定義・Snapshotは変更しない。過去Benchmarkは反復不可、新しい空Benchmarkでv2を開始する。
 - Raw収集はCompany保存・通常worker・Completion・AI判定・DM・Approvalへ渡さない。既存Raw専用Source境界とdownstream拒否を維持する。
 
-## Pilot条件（計画、未実行）
+## Pilot条件（収集実行済み）
 
 | 項目 | 計画 |
 |---|---|
 | 地域 | 兵庫県姫路市 |
 | 業種 | 美容院・美容室 |
-| 最初のSource | Serper（キー設定後） |
+| 最初のSource | Serper（暗号化保存を確認後、実行） |
 | Query 1 | 美容院、10件まで、同条件最大3 Run |
 | Query 2 | 美容室、10件まで、1 Run |
 | 初回allocation / 最大Raw Hit | 20 / 40 |
@@ -77,34 +79,48 @@ PairのUPDATE / DELETE / TRUNCATEをDB guardで拒否。Primary ReviewとPairで
 
 ## 現在の実測結果
 
+収集コードcommit `d06dc784a2a214c9bdeb3c5303efeb47c787e3b6`。[全7 CI成功](https://github.com/team478a/leadhive_codex/actions/runs/37548744782)。Backend 1,114 passed / 45 skipped / 50 subtests、E2E 52 passed / 2 skipped。
+
 | 指標 | Current |
 |---|---|
-| Run / Raw Hit / Unique Candidate / Human reviewed | null（未実行） |
-| Correct / Strict / Resolved / Error Rates | null |
-| Union / Intersection / Repeat / Single-run | null |
-| Source / Query / Field Completeness | 未測定 |
-| Human Pair SAME / DIFFERENT / UNSURE | null |
-| Collection API calls（今回の実操作） | 0 |
-| Estimated API cost / Human review seconds | null |
-| Coverage | null |
+| Runs / Raw Hit / Raw観測Unique Candidate | 4 / 40 / 11 |
+| Human reviewed / Correct labels | 0 / 0（正解が存在しないという意味ではない） |
+| Strict / Resolved Precision / Error Rates | null・Human Truth待ち |
+| 美容院3 Run: Union / Intersection | 10 / 10 |
+| 美容院3 Run: Intersection / Repeat / Single-run Rate | 100% / 100% / 0%（Raw観測のみ） |
+| 美容室1 Run: Found / Raw Unique | 10 / 10 |
+| 美容室を追加したRaw観測の集合差 | +1（Unique Correct Gainではない） |
+| Human Entity Stability / Coverage | null |
+| Field Completeness / Human review seconds | null |
+| Human Pair SAME / DIFFERENT / UNSURE | 0 / 0 / 0（未レビュー） |
+| Collection API calls | 4 |
+| Estimated API cost | null（単価・請求は未確認） |
+
+3回は短時間の連続検索であり、Serper/Google側のcacheや同じランキングの影響を分離できない。100%のRaw共通率を地域内Coverageや翌日の再現性と解釈しない。20〜30独立店舗を発見したとは主張しない。Raw観測のdistinctが11に留まったため、水増しせず停止した。Error件数0は未レビュー件数の帰結であり、誤業種・ポータルが無いという証明ではない。
+
+## Humanレビュー入口
+
+専用画面は `http://localhost:18985/`、APIはloopbackのみの18986。既存18984はそのまま維持。元の管理者ログインだけを専用DBへ複製し、企業・店舗・既存100件・SMTP/IMAP/OpenAI等の設定は複製していない。Serper設定は暗号文のみを移し、値を表示していない。送信用workerは無い。
+
+ログイン後「一次収集Benchmark」で姫路市・美容院のBenchmarkを選択し、「未レビューRaw観測の代表候補だけを表示」で11観測から確認を開始する。判定理由・根拠URL・店舗照合ID（CORRECTの場合）をHumanが入力する。代表の確認を他Runへ自動転記しないため、全体・Query別の値はレビュー済み部分のみであり、全HitのHuman照合が終わるまでHuman Entity Stabilityはnull。
 
 ## 安全確認と検証範囲
 
-運用上のCollection外部request、AI、Completion job、Email、Form POST、Approvalはすべて0。outbound=false、送信用workerは起動していない。運用DBの100店舗・設定・schemaは変更していない。OSS clone・公式ドキュメント参照の通信はCollection API callsとは別であり、インターネット通信が一切なかったという意味ではない。
+今回のPilotのCollection外部requestは4。AI、Completion job、Email、Form POST、Approvalはすべて0。outbound=false、送信用workerは起動していない。既存100店舗と運用DB schemaは変更していない。Serper設定は利用者が保存したものを再利用し、保存状態確認のログインに伴うAuthSession作成は発生する。OSS clone・公式ドキュメント参照の通信はCollection API callsとは別であり、インターネット通信が一切なかったという意味ではない。
 
 テスト用の隔離DBのみMigration・合成fixtureを使用。Backendでは反復上限・count/commit差・Snapshot固定・欠損・集合/zero denominator・Pair版/hash/session/replay/expire・Project/Viewer/Agent境界を検証。既存Raw testsはSource/Query・Outcome・精度・Completeness・null・downstream拒否を継続検証する。Desktop/Mobile E2EはRun集合とPair SAME→DIFFERENT→UNSURE履歴を確認し、Pair判定後もRaw precisionがnullのまま残ることを確認する。
 
 ## 未完了と次候補（最大3件）
 
-1. **キー設定後に小規模PilotとHuman Truthを取得**。現在のError件数、Unique Correct Gain、精度、Human作業時間は未測定で、改善順位は確定できない。費用はSourceの契約・実request数を確認して記録する。
+1. **保存済みRaw候補へHuman Truthを取得**。現在のError件数、Unique Correct Gain、精度、Human作業時間は未測定で、改善順位は確定できない。費用はSourceの契約・実request数を確認して記録する。
 2. **Google Places公式APIの保存・表示条件を満たす最小provenance設計の確認**。店舗Discovery候補として評価する価値があるが、精度・Coverage向上は未証明。API field mask / page数で課金が変わる。全面Gridは未承認。
 3. **Human Pair Truthを蓄積してBlocking/Identityルールを評価**。Missing values・誤統合・店舗/法人差を先に検証する。学習モデル依存を増やす前に20〜100件で誤統合を測る。今回Pairは観測用で自動統合なし。
 
-キー未設定とHumanレビュー未実施が残るため、**Full Benchmarkには進めない**。Pilot実測後にHumanが確認してから次の工程を決める。数字改善・後工程機能・送信へは進まない。
+Humanレビュー未実施が残るため、**Full Benchmarkには進めない**。Pilot実測後にHumanが確認してから次の工程を決める。数字改善・後工程機能・送信へは進まない。
 
 ## 実装・検証記録
 
-- Backend実装commit: `39268d8`。UI/E2E実装commit: `6827f89`。この文書は実データPilotが未実行である状態を保存する。
+- Backend実装commit: `39268d8`。UI/E2E実装commit: `6827f89`。この文書の未実行版は`d06dc78`の履歴に保存し、現在はRaw収集済み・Human Truth待ちを記録する。
 - Raw Collection / Repeat / Collection関連Backend: 22 passed。追加入力・秘匿URL fingerprint変更後の全体回帰は、この成果物HEADのGitHub Actionsで確認する。
 - Desktop/Mobile: 既存Raw画面2 passed、新規Repeat/Pair画面2 passed。合成fixtureのみ。
 - Ruff / format / 新規境界mypy: PASS。Frontend typecheck / lint / buildを実施。APIは隔離DBで正常起動。
