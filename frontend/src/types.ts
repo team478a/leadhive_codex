@@ -185,6 +185,7 @@ export interface OutreachQueueItem {
   due_state: 'overdue' | 'today' | 'upcoming' | 'unset'
 }
 export interface OperationJob {
+  collection_progress?: { target_count: number; collected_count: number; requests: number; request_budget: number; stop_reason: string | null } | null
   condition_request_id?: string | null
   condition_version?: number | null
   id: string; project_id: string

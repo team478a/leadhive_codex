@@ -39,6 +39,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [keywords, setKeywords] = useState('')
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
+  const [targetCount, setTargetCount] = useState(100)
   const [file, setFile] = useState<File | null>(null)
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
@@ -115,6 +116,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
           operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
           presence_search: presencePlan,
+          ...(source === 'serper' ? { target_count: targetCount } : {}),
           ...(useConditions && confirmedConditions ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
         })
         await reload()
@@ -234,10 +236,12 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         </Field>}
         {(['serper', 'google_places', 'gbizinfo'].includes(source)) && <div className="grid gap-5 sm:grid-cols-2">
           <Field label="地域"><input required maxLength={500} value={region} onChange={e => setRegion(e.target.value)} /></Field>
-          <Field label="キーワードごとの最大件数"><input type="number" min={1}
+          {source === 'serper' ? <Field label="収集する新規候補数"><input type="number" min={1} max={500} required value={targetCount}
+            onChange={e => setTargetCount(Number(e.target.value))} /></Field> : <Field label="キーワードごとの最大件数"><input type="number" min={1}
             max={source === 'google_places' ? 60 : 100} value={maxResults}
-            onChange={e => setMaxResults(Number(e.target.value))} /></Field>
+            onChange={e => setMaxResults(Number(e.target.value))} /></Field>}
         </div>}
+        {source === 'serper' && <p className="muted text-sm">目標件数まで収集します。新しい対象候補が増えないページで、その検索語を終了し、次の検索語へ進みます。重複・対象外は目標件数に含めません。検索は全体で最大50回。保存候補の所在地・営業適性は別途確認が必要です。</p>}
         {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
         <div className="actions"><button type="submit">{loading ? (['serper', 'google_places', 'gbizinfo'].includes(source) ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
@@ -316,7 +320,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
         {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
             <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
-            <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>
+            {job.collection_progress ? <p className="muted my-2 text-sm">新規候補 {job.collection_progress.collected_count} / {job.collection_progress.target_count} 件・検索 {job.collection_progress.requests} / {job.collection_progress.request_budget} 回{job.collection_progress.stop_reason && `・${({ TARGET_REACHED: '目標件数に到達', QUERIES_EXHAUSTED: '新規対象が増えず検索を終了', REQUEST_BUDGET_REACHED: '検索上限に到達', SOURCE_ERROR: '検索サービスでエラー' } as Record<string, string>)[job.collection_progress.stop_reason] ?? job.collection_progress.stop_reason}`}</p> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}

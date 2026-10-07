@@ -1,0 +1,165 @@
+"""Count-driven Serper discovery, bounded and resumable without outbound work."""
+
+from uuid import UUID
+
+from sqlalchemy import select
+
+from app.models import CollectionJob, Company, LeadSourceObservation
+from app.schema_external_presence import PresenceSearchPlan
+from app.services.collection import ExternalServiceError, canonicalize_url, search_serper_page
+from app.services.collection_conditions import evaluate
+from app.services.collection_jobs import (
+    fail_job,
+    is_duplicate,
+    is_suppressed,
+    save_candidates,
+    start_job,
+)
+from app.services.external_presence import extra_searches
+from app.services.processing_usage import capture_usage, persist_usage
+from app.services.scraper import is_aggregator_domain
+
+REQUEST_BUDGET = 50
+PAGE_SIZE = 10
+
+
+def collected_companies(db, job, conditions):
+    scope = (job.payload.get("collection_progress") or {}).get("operation_ids", [])
+    operation_ids = {UUID(value) for value in scope} | {job.id}
+    rows = db.scalars(
+        select(Company)
+        .join(LeadSourceObservation, LeadSourceObservation.company_id == Company.id)
+        .join(CollectionJob, CollectionJob.id == LeadSourceObservation.collection_job_id)
+        .where(
+            CollectionJob.operation_job_id.in_(operation_ids),
+            Company.project_id == job.project_id,
+            LeadSourceObservation.identity_reasons.contains(["SINGLE_SOURCE_DISCOVERY"]),
+            Company.analysis_status.notin_(("duplicate", "excluded")),
+        )
+        .distinct()
+    ).all()
+    return {
+        str(company.id)
+        for company in rows
+        if not conditions or evaluate(db, company, conditions)["state"] == "MATCH"
+    }
+
+
+def bounded_candidates(db, job, candidates, remaining):
+    """Do not overshoot the goal; retain duplicate/excluded observations for ingestion."""
+    selected = []
+    keys: set[str | tuple[str, str]] = set()
+    for candidate in candidates:
+        domain = canonicalize_url(candidate.website_url)[1] if candidate.website_url else ""
+        if (
+            is_duplicate(db, job.project_id, candidate)
+            or is_suppressed(db, job.project_id, candidate)
+            or (domain and is_aggregator_domain(domain))
+        ):
+            selected.append(candidate)
+            continue
+        key = domain or (candidate.company_name, candidate.address)
+        if key in keys or len(keys) < remaining:
+            keys.add(key)
+            selected.append(candidate)
+    return selected
+
+
+def run(db, job, payload, conditions, stopped):
+    target = payload["target_count"]
+    state = dict(job.payload.get("collection_progress") or {})
+    index = state.get("keyword_index", 0)
+    page = state.get("next_page", 1)
+    requests = state.get("requests", 0)
+    query_stops = list(state.get("query_stops", []))
+    operation_ids = sorted(set(state.get("operation_ids", [])) | {str(job.id)})
+
+    def record(reason=None):
+        nonlocal state
+        state = dict(
+            target_count=target,
+            collected_count=len(collected_companies(db, job, conditions)),
+            requests=requests,
+            request_budget=REQUEST_BUDGET,
+            keyword_index=index,
+            next_page=page,
+            query_stops=query_stops,
+            operation_ids=operation_ids,
+            stop_reason=reason,
+        )
+        job.payload = {**job.payload, "collection_progress": state}
+        db.commit()
+
+    record()
+    while index < len(payload["keywords"]):
+        if stopped():
+            return
+        if state["collected_count"] >= target:
+            record("TARGET_REACHED")
+            return
+        if requests >= REQUEST_BUDGET:
+            record("REQUEST_BUDGET_REACHED")
+            return
+        keyword = payload["keywords"][index]
+        collection = start_job(
+            db, job.project_id, "serper", keyword, payload["region"], operation_job_id=job.id
+        )
+        before = collected_companies(db, job, conditions)
+        # Reserve the attempt before HTTP, retaining the ceiling after a crash/retry.
+        requests += 1
+        record()
+        with capture_usage() as usage:
+            try:
+                candidates = search_serper_page(keyword, payload["region"], PAGE_SIZE, page)
+                error = None
+            except ExternalServiceError as exc:
+                candidates, error = [], exc
+        persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
+        if stopped():
+            fail_job(db, collection, "収集が中断されました。")
+            return
+        if error:
+            fail_job(db, collection, error.public_message)
+            job.failed_count += 1
+            record("SOURCE_ERROR")
+            return
+        save_candidates(
+            db,
+            collection,
+            bounded_candidates(db, job, candidates, target - len(before)),
+            keyword,
+        )
+        collection.found_count = len(candidates)
+        db.commit()
+        if payload.get("presence_search"):
+            collection.presence_search_plan = payload["presence_search"]
+            db.commit()
+            extra_searches(
+                db,
+                collection,
+                PresenceSearchPlan.model_validate(payload["presence_search"]),
+                budget_job_id=db.scalar(
+                    select(CollectionJob.id)
+                    .where(
+                        CollectionJob.operation_job_id.in_([UUID(value) for value in operation_ids])
+                    )
+                    .order_by(CollectionJob.created_at, CollectionJob.id)
+                    .limit(1)
+                ),
+                stopped=stopped,
+                eligible=lambda company: (
+                    not conditions or evaluate(db, company, conditions)["state"] != "NO_MATCH"
+                ),
+            )
+        if stopped():
+            return
+        after = collected_companies(db, job, conditions)
+        job.processed_count += 1
+        job.success_count += 1
+        if not (after - before):
+            query_stops.append(dict(keyword=keyword, page=page, reason="NO_NEW_TARGETS"))
+            index, page = index + 1, 1
+        else:
+            page += 1
+        record()
+    record("TARGET_REACHED" if state["collected_count"] >= target else "QUERIES_EXHAUSTED")

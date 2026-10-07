@@ -154,6 +154,12 @@ def parse_csv(content: bytes, record_type: str = "company") -> tuple[list[Candid
 
 
 def search_serper(keyword: str, region: str, max_results: int) -> list[Candidate]:
+    return search_serper_page(keyword, region, max_results, 1)
+
+
+def search_serper_page(keyword: str, region: str, max_results: int, page: int) -> list[Candidate]:
+    if not 1 <= page <= 50:
+        raise ValueError("Search page is outside the internal request budget")
     if not settings.serper_api_key:
         raise ExternalServiceError("Serper APIキーが設定されていません。")
     query = f"{keyword} {region}".strip()
@@ -164,7 +170,13 @@ def search_serper(keyword: str, region: str, max_results: int) -> list[Candidate
                 client.post,
                 "https://google.serper.dev/search",
                 headers={"X-API-KEY": settings.serper_api_key},
-                json={"q": query, "gl": "jp", "hl": "ja", "num": min(max_results, 100)},
+                json={
+                    "q": query,
+                    "gl": "jp",
+                    "hl": "ja",
+                    "num": min(max_results, 100),
+                    **({"page": page} if page > 1 else {}),
+                },
             )
             response.raise_for_status()
             data = response.json()

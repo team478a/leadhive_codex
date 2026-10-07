@@ -1,5 +1,7 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
+- [件数目標と新規対象増分による収集終了](164_COUNT_DRIVEN_COLLECTION.md)
+
 LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公式サイト・連絡窓口の確認、DM準備、Human承認、送信を支援する営業リスト完成システムです。主要KPIはDM READY率です。現行方針と段階的実装は `133_LEAD_COMPLETION_DIRECTION_AND_PHASE_A.md` を参照してください。
 
 ## 開発前提

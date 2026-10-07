@@ -565,6 +565,13 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             "presence_search": merged_plan(conditions, payload.get("presence_search")).model_dump(),
         }
     keywords = payload["keywords"]
+    if payload.get("target_count"):
+        from app.services.target_collection import run
+
+        job.total_count = payload["target_count"]
+        db.commit()
+        run(db, job, payload, conditions, lambda: stop_requested(db, job, worker_id))
+        return
     job.total_count = len(keywords)
     db.commit()
     if not payload.get("company_limit") and not payload.get("presence_search"):
