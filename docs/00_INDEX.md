@@ -272,3 +272,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [158_PURPOSE_SENTENCE_PREVIEW.md](158_PURPOSE_SENTENCE_PREVIEW.md): 限定自然文から非実行の条件案・目標件数を確認保存。求人検証・媒体Pilotは保留
 
 - [159_INDUSTRY_ALIAS_REVIEW.md](159_INDUSTRY_ALIAS_REVIEW.md): プロファイル別業種の別名・保存済み公式本文の根拠候補・Human確認維持
+
+- [160_CONDITION_TARGET_SUMMARY.md](160_CONDITION_TARGET_SUMMARY.md): 保存済み候補の条件一致・目標不足・停止理由、上限500件と未確定の区別

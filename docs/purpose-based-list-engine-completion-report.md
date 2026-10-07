@@ -119,3 +119,9 @@ Stage 1はPARTIALを維持。限定パターンの決定的な構文解析であ
 後続の「次のタスクへ」「続けてください」に基づき、[159_INDUSTRY_ALIAS_REVIEW.md](159_INDUSTRY_ALIAS_REVIEW.md)の限定工程を実装。TargetProfileごとの別名を保存済み公式本文のHuman確認候補に使う。検索展開や自動一致判定は追加しない。Stage 3全体の自動業種検証・実データ精度を完成済みとはしない。Stage 2の地域Evidence判定は変更せず回帰確認する。Stage 4/5の外部媒体取得・求人現在性・指定Pilotは保留を維持。
 
 検証HEAD `9ddbd85` の [CI 37590459996](https://github.com/team478a/leadhive_codex/actions/runs/37590459996) は全7 job成功。Backend 1,286 passed / 45 skipped / 50 subtests、E2E 74 passed / 2 skipped。Migration追加なし。ローカルAPI・画面・DBの正常応答、保存済み40 Raw観測の不変、outbound OFFを確認した。
+
+## Stage 7の条件一致・不足表示
+
+後続の「次のゴールへ」に基づき、[160_CONDITION_TARGET_SUMMARY.md](160_CONDITION_TARGET_SUMMARY.md)の限定集計を実装。最大500件の保存済み候補を既存基準で評価し、全件評価・明示目標の場合だけ不足を確定する。登録済み重複は目標から除外し、理由件数は重複ありとして表示する。部分集計を全体件数、条件一致をDM READYや独立送信先と混同しない。追加検索・条件緩和・送信を起動しない。
+
+Stage 7全体の目標達成制御・緩和効果試算は未完了。Source利用許諾、求人現在性、店舗同定、Human Truth、指定実データPilotは保留を維持する。
