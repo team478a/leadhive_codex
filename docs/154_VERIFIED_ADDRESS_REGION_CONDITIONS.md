@@ -35,7 +35,13 @@ locationレコードはチェーン共通Web本文の住所だけで自動確定
 
 Backend関連85件PASS。根拠のない住所、期限切れ・未来の証拠、企業変更、URL不一致、本文削除、最新未確認、店舗、Human取消、優先度、INDUSTRYの非確定を含む。既存監査履歴の更新禁止を維持し、取消テストは新イベントの追記で検証する。
 
-Ruff / format / mypy、Frontend typecheck / lint / build、Alembic check成功。既存bundle size警告は残る。PC/Mobile E2E・GitHub Actions・ローカル起動の最終結果は検証後に追記する。
+Ruff / format / mypy、Frontend typecheck / lint / build、Alembic check成功。既存bundle size警告は残る。
+
+- Backend `a2cc1b9`、UI `4247d7d`、全体検証対象 `abaf33ccda32922e39c7eae0774aac9170014eb2`。
+- PC/Mobileの条件確定・文章提案回帰4件、新規地域判定・根拠リンク・Human取消2件PASS。新規テストの初回はフォーム要素の指定で停止したが、役割と名前を使う指定へ修正して成功した。
+- ローカルAPI 127.0.0.1:18986を更新、health / DB疎通 / OpenAPI確認成功。Raw Snapshot40件、Raw Human Review0件を保持。Companies / ApprovalRequest / EmailDelivery / FormDeliveryも0件のまま。
+- outbound OFF・worker未起動。新Migrationなし。
+- [GitHub Actions 37570854977](https://github.com/team478a/leadhive_codex/actions/runs/37570854977)：検証対象 `abaf33c` で全7ジョブ成功。Backend全テスト・Ruff/format/mypy・Frontend typecheck/lint/build・全PC/Mobile E2E・Migration往復/model差分・Windows配布・ローカルHTTPフォーム検証を含む。
 
 実企業GET・追加検索・外部AI・送信・Human Approval作成は行わない。Raw Snapshot・Human Truth・既存100店舗の評価値は変更しない。
 
