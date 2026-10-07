@@ -35,6 +35,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [presencePlan, setPresencePlan] = useState(defaultPresencePlan)
   const [confirmedConditions, setConfirmedConditions] = useState<ConditionRevision | null>(null)
   const [useConditions, setUseConditions] = useState(false)
+  const [conditionsDirty, setConditionsDirty] = useState(false)
   const [keywords, setKeywords] = useState('')
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
@@ -90,7 +91,12 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   }, [projectId, projectRegion, suggestedKeywordText])
 
   async function submit(event: FormEvent) {
-    event.preventDefault(); setError(''); setNotice(''); setLoading(true)
+    event.preventDefault(); setError(''); setNotice('')
+    if (conditionsDirty && source !== 'csv' && source !== 'url') {
+      setError('対象条件の変更を確定するか、未確定の変更を取り消してください。')
+      return
+    }
+    setLoading(true)
     try {
       if (!projectId) throw new Error('プロジェクトを選択してください。')
       let result: CollectionJob[]
@@ -194,17 +200,26 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
 
   return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
     <SalesPreparationPanel key={projectId} projectId={projectId} />
-    <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} onConfirmed={setConfirmedConditions} />
+    <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} onConfirmed={setConfirmedConditions} onDraftChanged={setConditionsDirty} onApplied={row => {
+      setConfirmedConditions(row)
+      if (source === 'csv' || source === 'url') return
+      setUseConditions(true)
+      const areas = row.snapshot.conditions.filter(c => c.type === 'AREA' && c.priority === 'MUST')
+      const industries = row.snapshot.conditions.filter(c => c.type === 'INDUSTRY' && c.priority === 'MUST')
+      if (areas.length === 1) setRegion(areas[0].value)
+      if (industries.length === 1) setKeywords(industries[0].value)
+    }} />
     <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} companies={companies} />
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
+      {conditionsDirty && source !== 'csv' && source !== 'url' && <p role="status">対象条件に未確定の変更があります。確定するか、変更を取り消してから収集してください。</p>}
       <fieldset disabled={loading}>
         {source !== 'csv' && source !== 'url' && <PresenceSearchControls value={presencePlan} onChange={setPresencePlan} />}
         {source !== 'csv' && source !== 'url' && <label><input type="checkbox" checked={useConditions} disabled={confirmedConditions?.project_id !== projectId} onChange={e => setUseConditions(e.target.checked)} />確定条件を今回の収集に使う{confirmedConditions?.project_id === projectId ? `（第${confirmedConditions.version}版）` : '（先に条件を確定してください）'}<span className="muted block">必須・除外の媒体は追加調査OFFでも、上限内で確認します。未対応・上限不足は確認待ちです。</span></label>}
         <Field label="プロジェクト"><select required value={projectId}
-          onChange={e => { setProjectId(e.target.value); setUseConditions(false); setConfirmedConditions(null) }}>{projects.map(item =>
+          onChange={e => { setProjectId(e.target.value); setUseConditions(false); setConfirmedConditions(null); setConditionsDirty(false) }}>{projects.map(item =>
           <option key={item.id} value={item.id}>{item.project_name}</option>)}</select></Field>
         <Field label="収集元"><select value={source} onChange={e => {
           const next = e.target.value as CollectionSource; setSource(next); setFile(null)
