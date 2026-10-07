@@ -2,7 +2,7 @@ import { useId, useState } from 'react'
 import { api, errorMessage } from './api'
 import { outcomeLabels } from './rawBenchmarkTypes'
 
-export type RawRow = { id: string; candidate_key: string; snapshot_hash: string; payload: Record<string, string | number | string[]>; review: { version: number; outcome: string; reason: string; evidence_url: string; entity_key: string; duplicate_of: string | null; reviewer: string; reviewed_at: string; duration_seconds: number } | null }
+export type RawRow = { id: string; candidate_key: string; snapshot_hash: string; site_policy?: { status: string; reason_code: string; rule_version: string }; payload: Record<string, string | number | string[]>; review: { version: number; outcome: string; reason: string; evidence_url: string; entity_key: string; duplicate_of: string | null; reviewer: string; reviewed_at: string; duration_seconds: number } | null }
 
 export function RawLeadReview({ row, rows, canReview, onSaved }: { row: RawRow; rows: RawRow[]; canReview: boolean; onSaved: () => void }) {
   const reasonId = useId()

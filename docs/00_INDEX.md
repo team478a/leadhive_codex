@@ -245,3 +245,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [147_RAW_COLLECTION_PILOT.md](147_RAW_COLLECTION_PILOT.md): 反復Run・集合安定性・Human Pair測定。Serper Pilot収集済み、Human Review待ち
 
 - [148_RAW_REVIEW_SIMPLIFICATION.md](148_RAW_REVIEW_SIMPLIFICATION.md): 収集候補を1件ずつ確認する画面・操作削減・Human判定の維持
+
+- [149_OFFICIAL_SITE_COLLECTION_POLICY.md](149_OFFICIAL_SITE_COLLECTION_POLICY.md): 予約・まとめ・SNSページの営業候補除外とRaw検証データの分離

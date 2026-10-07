@@ -59,7 +59,7 @@ function ReviewCard({ row, rows, region, industry, canReview, onSaved, onSkip }:
     <p className="mt-3">この候補は「{region}」の「{industry}」に合っていますか？</p>
     <dl className="mt-3"><dt>住所</dt><dd>{String(row.payload.address || '検索結果に住所の記載なし')}</dd><dt>電話番号</dt><dd>{String(row.payload.phone || '検索結果に電話番号の記載なし')}</dd></dl>
     {link && <a href={link} target="_blank" rel="noopener noreferrer" className="inline-flex rounded-lg border border-[#c9d8ce] px-5 py-3 font-semibold text-[#235c4c] mt-3">掲載ページを開く ↗</a>}
-    <p className="muted mt-3">掲載ページで地域・業種を確認し、下から選んでください。選ぶと判定を保存して次へ進みます。</p>
+    <p className="muted mt-3">掲載ページが自社サイトで、地域・業種が合っているか確認し、下から選んでください。選ぶと判定を保存して次へ進みます。</p>
     {!canReview ? <p>閲覧のみの権限です。確認結果は編集できません。</p> : <>
       {!link && <label className="field mt-3">確認したページのURL<input value={evidence} maxLength={2048} onChange={e => setEvidence(e.target.value)} /></label>}
       <details className="mt-3"><summary>メモ・確認先を変更する（任意）</summary>
@@ -68,7 +68,7 @@ function ReviewCard({ row, rows, region, industry, canReview, onSaved, onSkip }:
       </details>
       {earlier.length > 0 && <p className="muted mt-3">確認済みの会社・店舗と同じなら「確認済みの候補と同じ対象」を選んでください。</p>}
       <div className="actions flex-wrap justify-start mt-5">
-        <button disabled={disabled} onClick={() => void record('CORRECT')}>対象に合うと確認して次へ</button>
+        <button disabled={disabled} onClick={() => void record('CORRECT')}>自社サイト・対象条件を確認して次へ</button>
         <button className="secondary" disabled={busy || !session} onClick={() => { setOutside(!outside); setDuplicate(false) }}>対象外・違う</button>
         <button className="secondary" disabled={disabled} onClick={() => void record('UNCERTAIN')}>判断できないとして次へ</button>
       </div>
@@ -91,17 +91,21 @@ export function RawQuickReview({ rows, region, industry, canReview, onSaved }: {
 }) {
   const [skipped, setSkipped] = useState<string[]>([])
   const [history, setHistory] = useState('')
-  const representatives = rows.filter((r, i) => rows.findIndex(v => v.candidate_key === r.candidate_key) === i)
+  const allRepresentatives = rows.filter((r, i) => rows.findIndex(v => v.candidate_key === r.candidate_key) === i)
+  const excluded = allRepresentatives.filter(r => r.site_policy?.status === "EXCLUDED_THIRD_PARTY")
+  const representatives = allRepresentatives.filter(r => r.site_policy?.status !== "EXCLUDED_THIRD_PARTY")
   const pending = representatives.filter(r => !r.review)
   const current = history ? representatives.find(r => r.id === history) : pending.find(r => !skipped.includes(r.id))
   return <section aria-label="候補の確認" className="mt-5">
     <h2>集めた候補を確認する</h2>
+    <p className="muted">自社サイトのある企業・店舗が対象です。予約・まとめサイトやSNSのページ自体は対象外です。</p>
+    {excluded.length > 0 && <details className="mt-3"><summary>予約・まとめサイト等 {excluded.length}件を対象外にしました</summary><p>システムのURL判定です。Humanの正解ラベルや精度には自動加算していません。</p>{excluded.map(r => <p key={r.id}>{String(r.payload.company_name)} — 自社サイト以外</p>)}</details>}
     <p role="status">候補 {representatives.length}件 ／ 確認済み {representatives.length - pending.length}件 ／ 未確認 {pending.length}件</p>
     <p className="muted">同じ検索結果はまとめて表示しています。判断は他の取得結果へ自動転記されません。</p>
     {current ? <ReviewCard key={`${current.id}:${current.review?.version ?? 0}`} row={current} rows={rows} region={region} industry={industry} canReview={canReview}
       onSaved={async () => { setHistory(''); await onSaved() }} onSkip={() => { setHistory(''); setSkipped(v => [...v, current.id]) }} />
       : pending.length ? <div className="panel mt-3"><p>残りは後で確認する候補です。判定は保存されていません。</p><button onClick={() => setSkipped([])}>残りの確認を再開</button></div>
-        : <div className="panel mt-3"><p>{rows.length ? '表示した候補の確認が終わりました。各回の取得結果との照合は詳細画面で確認できます。' : '候補はまだありません。検索条件を設定すると、ここから順番に確認できます。'}</p></div>}
+        : <div className="panel mt-3"><p>{representatives.length ? '表示した候補の確認が終わりました。各回の取得結果との照合は詳細画面で確認できます。' : (excluded.length ? '現在の結果には、自社サイトの確認へ進める候補がありません。対象外の検索結果は詳細に残しています。' : '候補はまだありません。検索条件を設定すると、ここから順番に確認できます。')}</p></div>}
     {representatives.some(r => r.review) && <details className="mt-5"><summary>確認済みの候補を見る・判定を直す</summary>{representatives.filter(r => r.review).map(r => <button key={r.id} className="secondary mt-3" onClick={() => setHistory(r.id)}>{String(r.payload.company_name)}：{outcomeLabels[r.review!.outcome]}</button>)}</details>}
   </section>
 }

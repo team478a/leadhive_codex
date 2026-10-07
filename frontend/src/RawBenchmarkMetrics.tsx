@@ -8,6 +8,7 @@ export function RawBenchmarkMetrics({ report, onCancel }: { report: RawReport; o
     <p>Duplicate Rate {percent(report.duplicate_rate)} / Uncertain Rate {percent(report.uncertain_rate)} / Coverage {percent(report.coverage)}</p>
     <p className="muted">FoundはSourceから返却された候補の出現数です。独立店舗数とは異なります。Strictは全レビュー、ResolvedはUNCERTAINを除いたレビューが分母です。未レビューをCORRECT・UNCERTAINへ推測しません。</p>
     <p>Human照合IDによるUnique Correct {report.unique_correct} / 作業時間 {report.human_review_seconds === null ? '未測定 / null' : `${report.human_review_seconds}秒`} / 推定API費用 {report.estimated_api_cost ?? '未測定 / null'}</p>
+    {report.site_policy && <p>自社サイト以外のシステム除外：Raw観測 {report.site_policy.excluded_observations}件 / 代表候補 {report.site_policy.excluded_unique_candidates}件。元のFound・Human判定・精度の分母は変更しません。</p>}
     <h3>Error Breakdown</h3>
     <ul>{Object.entries(report.error_breakdown).map(([code, value]) => <li key={code}>{outcomeLabels[code] ?? code}: {value.count} / {percent(value.rate)}</li>)}</ul>
     <h3>Source Comparison</h3>
