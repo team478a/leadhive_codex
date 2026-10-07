@@ -192,12 +192,31 @@ def assert_cluster(root):
                 0
             ]
         )
-        data = Path(db.execute("SHOW data_directory").fetchone()[0]).resolve()
+        data = cluster_directory(db)
     if (
         identity != state.get("cluster_id")
         or data != (root / "postgres-data").resolve()
     ):
         raise RuntimeError("Database instance mismatch")
+
+
+def cluster_directory(db):
+    # PostgreSQL on Windows may expose its filesystem path in the system ANSI codepage,
+    # even when the database is UTF-8. Fetch bytes before psycopg's text decoder runs.
+    from psycopg.adapt import Loader
+
+    class PathBytesLoader(Loader):
+        def load(self, data):
+            return bytes(data)
+
+    with db.cursor() as cursor:
+        cursor.adapters.register_loader("text", PathBytesLoader)
+        raw = cursor.execute("SHOW data_directory").fetchone()[0]
+    try:
+        value = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        value = raw.decode(f"cp{ctypes.windll.kernel32.GetACP()}")
+    return Path(value).resolve()
 
 
 def start_db(root):
@@ -336,6 +355,8 @@ def install(root, email, password):
         )
     start_db(root)
     with db_connection(root) as db:
+        if cluster_directory(db) != (root / "postgres-data").resolve():
+            raise RuntimeError("Database instance mismatch")
         state["cluster_id"] = str(
             db.execute("SELECT system_identifier FROM pg_control_system()").fetchone()[
                 0

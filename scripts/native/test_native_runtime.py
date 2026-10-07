@@ -4,7 +4,7 @@ import tempfile
 import unittest
 import uuid
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import native_runtime as native
 
@@ -77,6 +77,29 @@ class NativeBoundaryTests(unittest.TestCase):
     def test_drive_root_rejected(self):
         with self.assertRaises(ValueError):
             native.checked_root(Path(self.root.anchor))
+
+    def test_postgres_daemon_uses_regular_log_not_pipe(self):
+        exe = self.root / "postgresql/bin/pg_ctl.exe"
+        exe.parent.mkdir(parents=True)
+        exe.touch()
+        with (
+            patch.object(native, "bundle", return_value=self.root),
+            patch.object(native.subprocess, "run") as run,
+        ):
+            run.return_value.returncode = 0
+            native.command(self.root, "pg_ctl.exe", "start")
+            self.assertNotEqual(run.call_args.kwargs["stdout"], native.subprocess.PIPE)
+
+    @unittest.skipUnless(os.name == "nt", "Windows filesystem codepage")
+    def test_postgres_path_decoded_before_utf8_loader(self):
+        target = self.root / "日本語"
+        db = MagicMock()
+        cursor = db.cursor.return_value.__enter__.return_value
+        cursor.execute.return_value.fetchone.return_value = (
+            str(target).encode("cp932"),
+        )
+        with patch("ctypes.windll.kernel32.GetACP", return_value=932):
+            self.assertEqual(native.cluster_directory(db), target.resolve())
 
 
 if __name__ == "__main__":
