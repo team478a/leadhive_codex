@@ -236,6 +236,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [152_REGION_INDUSTRY_FACT_REVIEW.md](152_REGION_INDUSTRY_FACT_REVIEW.md): 地域・業種のHuman根拠記録、訂正・失効・企業変更と条件判定への接続
 
+- [153_GUIDED_CONDITION_PROPOSAL.md](153_GUIDED_CONDITION_PROPOSAL.md): 上限付き文章テンプレートの条件提案、未解釈保持、確定後の検索欄反映と未確定開始の防止
+
 - [146_RAW_COLLECTION_BENCHMARK_PILOT.md](146_RAW_COLLECTION_BENCHMARK_PILOT.md): Raw専用Pilot・不変Snapshot・Human Truth・Source/Query精度。実測は収集キーとHumanレビュー待ち
 
 - [145_GUIDED_SITE_IDENTITY_REVIEW.md](145_GUIDED_SITE_IDENTITY_REVIEW.md): 登録情報の比較、非保存の照合プレビュー、Human確認記録と不一致理由
