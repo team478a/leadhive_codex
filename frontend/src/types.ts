@@ -185,6 +185,8 @@ export interface OutreachQueueItem {
   due_state: 'overdue' | 'today' | 'upcoming' | 'unset'
 }
 export interface OperationJob {
+  condition_request_id?: string | null
+  condition_version?: number | null
   id: string; project_id: string
   operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach'
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'

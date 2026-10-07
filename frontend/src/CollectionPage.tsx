@@ -4,7 +4,8 @@ import { PresenceSearchControls } from './ExternalPresence'
 import { defaultPresencePlan } from './externalPresenceShared'
 import { PresenceEvidenceQueue } from './PresenceEvidenceQueue'
 import { PresenceRequirements } from './PresenceRequirements'
-import { CollectionConditions } from './CollectionConditions'
+import { CollectionConditions, type ConditionRevision } from './CollectionConditions'
+import { ConditionCollectionReport } from './ConditionCollectionReport'
 import { Field } from './forms'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
@@ -32,6 +33,8 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
   const [source, setSource] = useState<CollectionSource>('serper')
   const [presencePlan, setPresencePlan] = useState(defaultPresencePlan)
+  const [confirmedConditions, setConfirmedConditions] = useState<ConditionRevision | null>(null)
+  const [useConditions, setUseConditions] = useState(false)
   const [keywords, setKeywords] = useState('')
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
@@ -102,9 +105,11 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         result = [await api<CollectionJob>(`/projects/${projectId}/collection-jobs/urls`, 'POST', { urls })]
       } else {
         const values = keywords.split('\n').map(value => value.trim()).filter(Boolean)
+        if (useConditions && confirmedConditions?.project_id !== projectId) throw new Error('対象条件を先に確定してください。')
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
           operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
           presence_search: presencePlan,
+          ...(useConditions && confirmedConditions ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
         })
         await reload()
         setNotice('検索収集をバックグラウンド処理へ登録しました。')
@@ -189,7 +194,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
 
   return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
     <SalesPreparationPanel key={projectId} projectId={projectId} />
-    <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} />
+    <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} onConfirmed={setConfirmedConditions} />
     <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} companies={companies} />
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
@@ -197,8 +202,9 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       {notice && <p className="notice" role="status">{notice}</p>}
       <fieldset disabled={loading}>
         {source !== 'csv' && source !== 'url' && <PresenceSearchControls value={presencePlan} onChange={setPresencePlan} />}
+        {source !== 'csv' && source !== 'url' && <label><input type="checkbox" checked={useConditions} disabled={confirmedConditions?.project_id !== projectId} onChange={e => setUseConditions(e.target.checked)} />確定条件を今回の収集に使う{confirmedConditions?.project_id === projectId ? `（第${confirmedConditions.version}版）` : '（先に条件を確定してください）'}<span className="muted block">必須・除外の媒体は追加調査OFFでも、上限内で確認します。未対応・上限不足は確認待ちです。</span></label>}
         <Field label="プロジェクト"><select required value={projectId}
-          onChange={e => setProjectId(e.target.value)}>{projects.map(item =>
+          onChange={e => { setProjectId(e.target.value); setUseConditions(false); setConfirmedConditions(null) }}>{projects.map(item =>
           <option key={item.id} value={item.id}>{item.project_name}</option>)}</select></Field>
         <Field label="収集元"><select value={source} onChange={e => {
           const next = e.target.value as CollectionSource; setSource(next); setFile(null)
@@ -297,6 +303,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
             <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
+            {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
             {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
           </article>)}

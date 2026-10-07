@@ -1,20 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import { presenceLabels } from './externalPresenceShared'
+import { conditionOutcomes as labels, conditionPriorities as priorities, conditionReasons as reasons } from './collectionConditionLabels'
 
 type Condition = { id: string; priority: 'MUST' | 'WANT' | 'EXCLUDE'; type: string; operator: string; value: string }
-type Revision = { id: string; version: number; payload_hash: string; snapshot: { conditions: Condition[] } }
+export type ConditionRevision = { id: string; project_id: string; version: number; payload_hash: string; snapshot: { conditions: Condition[] } }
 type Candidate = { company_id: string; company_name: string; state: string; want_matched: number; want_unknown: number; conditions: { id: string; priority: string; type: string; value: string; outcome: string; reason: string; evidence_url: string }[] }
 type Report = { candidates: Candidate[]; total_candidates: number; evaluated_count: number; page_counts: Record<string, number>; note: string }
 const kinds: Record<string, string> = { MEDIA_EXISTS: '掲載・SNSの存在', OFFICIAL_SITE: '確認済み公式サイト', AREA: '地域（検証未対応）', INDUSTRY: '業種（検証未対応）', ACTIVE_JOB: '現在募集中（検証未対応）', UNRESOLVED: 'その他・解釈待ち' }
-const labels: Record<string, string> = { MATCH: '一致', NO_MATCH: '不一致', REVIEW_REQUIRED: '確認待ち', UNKNOWN: '未確認' }
-const priorities: Record<string, string> = { MUST: '必須', WANT: '希望', EXCLUDE: '除外' }
-const reasons: Record<string, string> = { VERIFICATION_UNSUPPORTED: 'この条件の検証は未対応', OFFICIAL_SITE_UNCONFIRMED: '公式サイトの根拠が未確認', PRESENCE_FOUND: '関連するページを確認', EVIDENCE_EXPIRED: '根拠の有効期間が終了', NEGATIVE_EVIDENCE_UNAVAILABLE: '有効な調査記録なし', SEARCH_NO_MATCH: '追加調査で見つからず', NOT_CHECKED: '未調査', ENTITY_CHANGED: '企業情報変更後の再確認が必要', SEARCH_BUDGET_EXHAUSTED: '検索上限に到達', ERROR: '調査結果を確認できません' }
 const newCondition = (): Condition => ({ id: crypto.randomUUID(), priority: 'MUST', type: 'MEDIA_EXISTS', operator: 'EXISTS', value: 'INSTAGRAM' })
 
-export function CollectionConditions({ projectId }: { projectId: string }) {
+export function CollectionConditions({ projectId, onConfirmed }: { projectId: string; onConfirmed?: (row: ConditionRevision | null) => void }) {
   const [conditions, setConditions] = useState<Condition[]>([newCondition()])
-  const [latest, setLatest] = useState<Revision | null>(null)
+  const [latest, setLatest] = useState<ConditionRevision | null>(null)
   const [report, setReport] = useState<Report | null>(null)
   const [offset, setOffset] = useState(0)
   const [busy, setBusy] = useState(false)
@@ -23,11 +21,12 @@ export function CollectionConditions({ projectId }: { projectId: string }) {
   useEffect(() => {
     let active = true
     if (!projectId) return
-    api<Revision[]>(`/projects/${projectId}/collection-conditions?limit=1`).then(rows => {
+    api<ConditionRevision[]>(`/projects/${projectId}/collection-conditions?limit=1`).then(rows => {
       if (active) { setLatest(rows[0] ?? null); if (rows[0]) setConditions(rows[0].snapshot.conditions) }
     }).catch(e => { if (active) setError(errorMessage(e)) })
     return () => { active = false }
   }, [projectId])
+  useEffect(() => { onConfirmed?.(latest) }, [latest, onConfirmed])
   const readResults = useCallback(async () => {
     if (!latest) return
     setBusy(true); setError('')
@@ -42,7 +41,7 @@ export function CollectionConditions({ projectId }: { projectId: string }) {
   async function confirm() {
     setBusy(true); setError(''); setNotice('')
     try {
-      const row = await api<Revision>(`/projects/${projectId}/collection-conditions`, 'POST', { conditions, expected_version: latest?.version ?? 0, confirmed: true })
+      const row = await api<ConditionRevision>(`/projects/${projectId}/collection-conditions`, 'POST', { conditions, expected_version: latest?.version ?? 0, confirmed: true })
       setOffset(0); setReport(null); setLatest(row); setNotice(`条件を第${row.version}版として確定しました。検索や送信は開始していません。`)
     } catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
