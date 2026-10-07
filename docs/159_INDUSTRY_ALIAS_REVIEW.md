@@ -45,3 +45,23 @@ Docker停止により最初のローカルDBテストは接続不能で未実行
 Human Truth・実データ業種判定精度・作業時間削減率は未測定。本文に別名がなければ「不一致」ではなく確認候補なし。別名追加を収集精度改善の実測成果とは扱わない。Frontend bundleの既存500kB警告は継続。
 
 製品の外部API/AI call、Completion job、送信承認、メール・フォーム送信はいずれも0。outbound OFF、送信用worker未起動を維持。HotPepper・求人媒体の取得許諾、求人現在性、媒体店舗同定、Full Benchmarkは保留。
+
+## ローカル追加検証
+
+業種レビューの追加・互換テスト24件成功（地域等を含む初回62件とは重複あり）。Backend mypy4ファイル成功。古い予約キーの不正JSONもGET可能で、候補生成には使用しないことを確認した。
+
+起動中APIを実装HEAD `9ddbd853be6f69217e60c94bf846df5e6e0858e9` へ更新。保存前後のCompany0 / RawSnapshot40 / RawReview0 / Approval0 / EmailDelivery0 / FormDelivery0は不変。送信用worker未起動。画面サーバーは通常の管理されたターミナルで `http://localhost:18985/` に起動する。バックグラウンド起動は自動承認レビューのポリシーで拒否され、管理されたターミナル起動は許可された。
+
+画面HTTP200、同じ画面の `/api/health` で `status=ok / database=ok` を確認した。
+
+## 最終CI
+
+Backend実装 `009e980`、UI・E2E `166742f`。検証HEAD `9ddbd853be6f69217e60c94bf846df5e6e0858e9` の [CI run 37590459996](https://github.com/team478a/leadhive_codex/actions/runs/37590459996) は全7 job成功。
+
+- Backend: 1,286 passed / 45 skipped / 50 subtests passed。
+- E2E: 74 passed / 2 skipped。今回の業種別名設定・保存再読込・Human確認・取り消しはPC/Mobileとも成功。既存skipを未検証機能の成功と扱わない。
+- Ruff / format / mypy / API import、Frontend typecheck / lint / build成功。
+- Migration upgrade / downgrade・upgrade / Alembic check成功。DB Model差分・Migration追加なし。
+- Windows packageおよびローカル模擬フォームHTTP acceptance成功。実企業への送信なし。
+
+結果追記は文書だけで、CIが検証した製品コードから変更していない。限定ゴール完了。実データ精度・求人現在性・媒体取得許諾・指定Pilotは未完了のまま停止する。

@@ -117,3 +117,5 @@ Stage 1はPARTIALを維持。限定パターンの決定的な構文解析であ
 ## Stage 3の確認支援
 
 後続の「次のタスクへ」「続けてください」に基づき、[159_INDUSTRY_ALIAS_REVIEW.md](159_INDUSTRY_ALIAS_REVIEW.md)の限定工程を実装。TargetProfileごとの別名を保存済み公式本文のHuman確認候補に使う。検索展開や自動一致判定は追加しない。Stage 3全体の自動業種検証・実データ精度を完成済みとはしない。Stage 2の地域Evidence判定は変更せず回帰確認する。Stage 4/5の外部媒体取得・求人現在性・指定Pilotは保留を維持。
+
+検証HEAD `9ddbd85` の [CI 37590459996](https://github.com/team478a/leadhive_codex/actions/runs/37590459996) は全7 job成功。Backend 1,286 passed / 45 skipped / 50 subtests、E2E 74 passed / 2 skipped。Migration追加なし。ローカルAPI・画面・DBの正常応答、保存済み40 Raw観測の不変、outbound OFFを確認した。
