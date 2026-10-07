@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
+import { CollectionFactReview, type FactCondition } from './CollectionFactReview'
 import { presenceLabels } from './externalPresenceShared'
 import { conditionOutcomes as labels, conditionPriorities as priorities, conditionReasons as reasons } from './collectionConditionLabels'
 
 type Condition = { id: string; priority: 'MUST' | 'WANT' | 'EXCLUDE'; type: string; operator: string; value: string }
 export type ConditionRevision = { id: string; project_id: string; version: number; payload_hash: string; snapshot: { conditions: Condition[] } }
-type Candidate = { company_id: string; company_name: string; state: string; want_matched: number; want_unknown: number; conditions: { id: string; priority: string; type: string; value: string; outcome: string; reason: string; evidence_url: string }[] }
+type Candidate = { company_id: string; company_name: string; state: string; want_matched: number; want_unknown: number; conditions: (FactCondition & { id: string; priority: string; outcome: string; reason: string; evidence_url: string })[] }
 type Report = { candidates: Candidate[]; total_candidates: number; evaluated_count: number; page_counts: Record<string, number>; note: string }
-const kinds: Record<string, string> = { MEDIA_EXISTS: '掲載・SNSの存在', OFFICIAL_SITE: '確認済み公式サイト', AREA: '地域（検証未対応）', INDUSTRY: '業種（検証未対応）', ACTIVE_JOB: '現在募集中（検証未対応）', UNRESOLVED: 'その他・解釈待ち' }
+const kinds: Record<string, string> = { MEDIA_EXISTS: '掲載・SNSの存在', OFFICIAL_SITE: '確認済み公式サイト', AREA: '地域（根拠を人が確認）', INDUSTRY: '業種（根拠を人が確認）', ACTIVE_JOB: '現在募集中（検証未対応）', UNRESOLVED: 'その他・解釈待ち' }
 const newCondition = (): Condition => ({ id: crypto.randomUUID(), priority: 'MUST', type: 'MEDIA_EXISTS', operator: 'EXISTS', value: 'INSTAGRAM' })
 
 export function CollectionConditions({ projectId, onConfirmed }: { projectId: string; onConfirmed?: (row: ConditionRevision | null) => void }) {
@@ -48,7 +49,7 @@ export function CollectionConditions({ projectId, onConfirmed }: { projectId: st
   }
   return <details className="panel min-w-0"><summary className="font-semibold">対象条件を確認・分類する</summary>
     <p>必須条件はすべて一致した場合のみ採用。希望条件は採用を妨げず、除外条件が一致した対象は除外します。未確認の必須・除外条件は確認待ちです。</p>
-    <p className="muted">保存済み情報の確認機能です。地域・業種・募集中の自動検証と、自然文の条件解析はまだ未対応です。</p>
+    <p className="muted">地域・業種は候補ごとに根拠を確認できます。募集中の検証と自然文の条件解析はまだ未対応です。</p>
     {error && <p role="alert" className="error">{error}</p>}{notice && <p role="status" className="notice">{notice}</p>}
     <fieldset disabled={busy || !projectId} className="space-y-3">
       {conditions.map((c, i) => <div key={c.id} className="grid gap-2 min-w-0">
@@ -67,7 +68,7 @@ export function CollectionConditions({ projectId, onConfirmed }: { projectId: st
         <p className="muted">条件一致はDM準備完了・送信承認を意味しません。</p>
         {!report.candidates.length && <p>保存済みの候補はありません。</p>}
         {report.candidates.map(c => <details key={c.company_id}><summary>{c.company_name}：{labels[c.state]}（希望一致 {c.want_matched}、希望未確認 {c.want_unknown}）</summary>
-          {c.conditions.map(r => <p key={r.id}>{priorities[r.priority]}・{presenceLabels[r.value] ?? (r.type === 'OFFICIAL_SITE' ? '公式サイト' : r.value)}：{labels[r.outcome]}。{reasons[r.reason] ?? r.reason} {r.evidence_url && <a href={r.evidence_url} target="_blank" rel="noopener noreferrer">根拠 ↗</a>}</p>)}
+          {c.conditions.map(r => <div key={r.id}><p>{priorities[r.priority]}・{presenceLabels[r.value] ?? (r.type === 'OFFICIAL_SITE' ? '公式サイト' : r.value)}：{labels[r.outcome]}。{reasons[r.reason] ?? r.reason} {r.evidence_url && <a href={r.evidence_url} target="_blank" rel="noopener noreferrer">根拠 ↗</a>}</p><CollectionFactReview companyId={c.company_id} condition={r} onSaved={() => void readResults()} /></div>)}
         </details>)}
         <div className="flex flex-wrap gap-2"><button type="button" disabled={busy || offset === 0} onClick={() => setOffset(n => Math.max(0, n - 20))}>前の20件</button><button type="button" disabled={busy || offset + 20 >= report.total_candidates} onClick={() => setOffset(n => n + 20)}>次の20件</button></div>
       </>}
