@@ -266,3 +266,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [149_OFFICIAL_SITE_COLLECTION_POLICY.md](149_OFFICIAL_SITE_COLLECTION_POLICY.md): 予約・まとめ・SNSページの営業候補除外とRaw検証データの分離
 
 - [157_CONDITION_REVIEW_NAVIGATION.md](157_CONDITION_REVIEW_NAVIGATION.md): 表示ページの条件確認待ち絞り込み・次候補移動・Human判定の維持
+
+- [purpose-based-list-engine-completion-report.md](purpose-based-list-engine-completion-report.md): 最新CIと完成指示の差分・Source利用条件による停止・Pilot未実行・再開条件
