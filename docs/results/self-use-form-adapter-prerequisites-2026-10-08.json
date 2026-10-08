@@ -1,0 +1,41 @@
+{
+  "baseline_commit": "5a892c15dfdf2a42d1fb74f57aef007a9dd96754",
+  "working_tree_modified": true,
+  "source": "SAVED_EVIDENCE_ONLY",
+  "profiles": 2,
+  "checks": {
+    "CONTACT_PERMISSION": {
+      "REVIEW": 2
+    },
+    "STRUCTURE_COMPARISON": {
+      "OBSERVED": 2
+    },
+    "FIELD_IDENTITY": {
+      "OBSERVED": 2
+    },
+    "CHOICE_REVIEW": {
+      "REVIEW": 2
+    },
+    "CF7_CONTRACT_SHAPE": {
+      "REVIEW": 2
+    },
+    "EXECUTION_ROUTE": {
+      "UNSUPPORTED": 2
+    },
+    "HUMAN_APPROVAL": {
+      "SEPARATE_REVIEW": 2
+    }
+  },
+  "cf7_shape_issues": {
+    "STATIC_SHAPE_UNVERIFIED": 2
+  },
+  "database_unchanged": true,
+  "database_tables_hashed": 12,
+  "read_only": true,
+  "external_requests": 0,
+  "review_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound": false
+}

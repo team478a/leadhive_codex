@@ -30,6 +30,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
+from app.services.form_adapter_prerequisites import assess as assess_adapter_prerequisites
 from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
 from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
@@ -244,6 +245,16 @@ def get_form_review_material(
     permission = evaluate_contact_permission(
         db, company.project_id, company.id, "form", profile.form_url
     )
+    observation = latest_live_check(db, profile)
+    diagnostic = diagnose_saved_route(
+        profile,
+        [field.model_dump() for field in fields],
+        observation,
+        permission_status=permission.status,
+        permission_reason=permission.reason_code,
+        do_not_contact=company.do_not_contact,
+        permission_message=permission.message,
+    )
     return result | {
         "profile_id": profile.id,
         "company_id": company.id,
@@ -261,14 +272,9 @@ def get_form_review_material(
         "saved_choice_structure": saved_choice_structure(
             [field.model_dump() for field in fields], profile.fingerprint
         ),
-        "technical_diagnostic": diagnose_saved_route(
-            profile,
-            [field.model_dump() for field in fields],
-            latest_live_check(db, profile),
-            permission_status=permission.status,
-            permission_reason=permission.reason_code,
-            do_not_contact=company.do_not_contact,
-            permission_message=permission.message,
+        "technical_diagnostic": diagnostic,
+        "adapter_prerequisites": assess_adapter_prerequisites(
+            diagnostic, observation, saved_choice_reviews(db, profile)
         ),
     }
 

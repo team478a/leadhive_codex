@@ -108,6 +108,10 @@ def test_read_only_material_missing_draft_and_agent_rejected(auth, db):
     assert body["draft_id"] is None and body["missing_required_values"] == 2
     assert not body["execution_supported"] and not body["human_approved"]
     assert not body["live_form_checked"]
+    prerequisites = body["adapter_prerequisites"]
+    assert not prerequisites["execution_allowed"] and not prerequisites["eligible_for_approval"]
+    assert not prerequisites["live_fetch_performed"]
+    assert len(prerequisites["checks"]) == 7
     structure = body["saved_choice_structure"]
     assert len(structure["groups"]) == 1
     assert not structure["execution_allowed"] and not structure["eligible_for_approval"]

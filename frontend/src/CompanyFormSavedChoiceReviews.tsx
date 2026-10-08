@@ -31,7 +31,7 @@ function Editor({ group, readOnly, busy, onSave }: { group: Group; readOnly: boo
   </article>
 }
 
-export function CompanyFormSavedChoiceReviews({ profileId, readOnly }: { profileId: string; readOnly: boolean }) {
+export function CompanyFormSavedChoiceReviews({ profileId, readOnly, onSaved }: { profileId: string; readOnly: boolean; onSaved?: () => Promise<void> }) {
   const [groups, setGroups] = useState<Group[] | null>(null)
   const [needsOnly, setNeedsOnly] = useState(false)
   const [error, setError] = useState('')
@@ -49,7 +49,7 @@ export function CompanyFormSavedChoiceReviews({ profileId, readOnly }: { profile
   }
   async function save(group: Group, rule: string, selected: Set<string>) {
     setBusy(true); setError('')
-    try { setGroups(await api<Group[]>(`${path}/${group.group_id}`, 'POST', { expected_source_hash: group.source_hash, rule, options: group.options.map(o => ({ option_id: o.option_id, checked: selected.has(o.option_id) })), membership_and_rule_confirmed: true, non_consent_purpose_confirmed: true })) }
+    try { setGroups(await api<Group[]>(`${path}/${group.group_id}`, 'POST', { expected_source_hash: group.source_hash, rule, options: group.options.map(o => ({ option_id: o.option_id, checked: selected.has(o.option_id) })), membership_and_rule_confirmed: true, non_consent_purpose_confirmed: true })); await onSaved?.() }
     catch (e) { setGroups(null); setError(e instanceof Error ? e.message : '記録できません。読み直してください。') } finally { setBusy(false) }
   }
   return <section className="mt-4" aria-label="複数選択の確認記録">

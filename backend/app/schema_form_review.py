@@ -27,3 +27,4 @@ class FormReviewMaterialOut(BaseModel):
 
     technical_diagnostic: dict
     saved_choice_structure: dict
+    adapter_prerequisites: dict

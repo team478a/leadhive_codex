@@ -7,8 +7,11 @@ import { CompanyFormLiveCheck } from './CompanyFormLiveCheck'
 import { CompanyFormSavedChoices } from './CompanyFormSavedChoices'
 import type { SavedChoiceStructure } from './CompanyFormSavedChoices'
 import { CompanyFormSavedChoiceReviews } from './CompanyFormSavedChoiceReviews'
+import { CompanyFormAdapterPrerequisites } from './CompanyFormAdapterPrerequisites'
+import type { AdapterPrerequisites } from './CompanyFormAdapterPrerequisites'
 
 type Material = {
+  adapter_prerequisites?: AdapterPrerequisites
   saved_choice_structure?: SavedChoiceStructure
   technical_diagnostic?: { route: string; boundary: string; reasons: { code: string; message: string }[]; observation_freshness: string; missing_field_names: number; execution_allowed: false; next_action: string }
   draft_id: string | null
@@ -100,7 +103,7 @@ export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, finge
     <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : '入力候補を更新'}</button>
     {error && <p className="error mt-3" role="alert">{error}</p>}
     <CompanyFormSavedChoices profileId={profileId} structure={material?.saved_choice_structure ?? null} />
-    {material?.saved_choice_structure ? <CompanyFormSavedChoiceReviews key={material.saved_choice_structure.source_hash} profileId={profileId} readOnly={readOnly} /> : null}
+    {material?.saved_choice_structure ? <CompanyFormSavedChoiceReviews key={material.saved_choice_structure.source_hash} profileId={profileId} readOnly={readOnly} onSaved={load} /> : null}
     {material && <div className="mt-3">
       <h3>フォーム入力の確認資料</h3>
       <p className="notice mt-3">保存済み情報から作った候補です。この表示では承認・送信されません。現在のページの確認結果は上の欄で確認してください。</p>
@@ -131,6 +134,7 @@ export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, finge
         <p className="muted text-sm mt-2">保存済みデータの診断です。現在のサイト取得・ブラウザ入力・送信は行いません。候補経路の表示は送信対応済みや承認済みを意味しません。</p>
       </section>}
       <h3 className="mt-4">選択・同意・入力先の確認</h3>
+      {material.adapter_prerequisites && <CompanyFormAdapterPrerequisites report={material.adapter_prerequisites} />}
       <p className="muted text-sm mt-2">確認対象の一覧です。記録済みの項目も表示します。件数は未確認件数や送信可能件数ではありません。</p>
       {material.profile_fingerprint === fingerprint && !material.items.some(item => reviewStates.has(item.review_state)) && <p className="muted mt-3">個別の選択確認対象はありません。窓口・本文・送信経路の確認は引き続き必要です。</p>}
       {material.profile_fingerprint === fingerprint && material.items.some(item => item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED') && <CompanyFormChoiceGroups profileId={profileId} readOnly={readOnly} onSaved={async () => { await onRefresh(); await load() }} />}
