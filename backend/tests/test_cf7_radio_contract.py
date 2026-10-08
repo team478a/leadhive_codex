@@ -1,4 +1,5 @@
 import copy
+import hashlib
 from email import policy
 from email.parser import BytesParser
 from uuid import UUID
@@ -44,6 +45,14 @@ def bound(p, saved):
         company_id=p.base.company_id,
         source_draft_id=p.base.source_draft_id,
         form_profile_id=p.base.form_profile_id,
+    )
+
+
+def test_inert_multipart_refactor_preserves_previous_wire():
+    # Fixed test fixture output at 5220bce, before extracting append_parts.
+    assert (
+        hashlib.sha256(wire(plan())[1]).hexdigest()
+        == "630a2f4e83f702bd26e324057a50837a251b2527c958dd4dbfa55e46c08859ac"
     )
 
 

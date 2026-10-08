@@ -1,0 +1,118 @@
+{
+  "baseline_commit": "5220bce1191ae84394ab9b094f7b982f9dfe01da",
+  "working_tree_modified_at_execution": true,
+  "source_kind": "CONTROLLED_FIXTURE",
+  "versions": {
+    "wp_version": "6.8.3",
+    "cf7_version": "6.1.4",
+    "php_version": "8.3.28"
+  },
+  "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+  "cf7_archive_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+  "images": {
+    "wp": {
+      "tag": "wordpress:6.8.3-php8.3-apache",
+      "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+      "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+    },
+    "db": {
+      "tag": "mariadb:11.4",
+      "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+      "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+    }
+  },
+  "browser_version": "153.0.8010.12",
+  "started_at": "2026-10-08T11:02:04.138323+00:00",
+  "finished_at": "2026-10-08T11:04:23.351877+00:00",
+  "private_report_sha256": "10f6a32ea0e88386489d5d7b3b66f9dfe241141a27e9f7adf517996985d474b7",
+  "source_hashes": {
+    "backend/app/services/cf7_extra_hidden_contract.py": "daf7ecba9cf72ef93dee0a1bf56172375633a2e5cef546bf96e8d56ccf3bcf19",
+    "backend/app/services/cf7_inert_multipart.py": "ca67321c294ca85adf479c1d4ee256f90e534fe869a11c0b28d67341ae57f842",
+    "backend/app/services/cf7_radio_contract.py": "ea15381fa71e80e8e6009ec67d78668b0a38e7ff6dcc3bec075cefcc43a57153",
+    "scripts/cf7_lab/hidden_probe.py": "4cb7b9e3f03c0d40e49a4cd2d4a4c409a98baf104bae732cf3b53ed68f655c91",
+    "scripts/cf7_lab/cases.py": "bf1c553634ea97ab095f62795cfc21ec9a314c5915dd8e4f4df75be604153724",
+    "scripts/cf7_lab/fixture.php": "c6c0f4d9ba4f9ec159b63639b3203cc920e2b93e4b5918c45c37efd93a8ee8b5",
+    "scripts/cf7_lab/safeguard.php": "c2e88beaa7cc623302a0ee647c6c40a1bd5ae1b6189e63dda2bc1247c9e217e8",
+    "scripts/cf7_lab/browser_probe.cjs": "db2c3beef9c5a01d04f52520eb1673dae17e401c7fd95a86e2e7a5f7f9203ee9",
+    "scripts/cf7_lab/run.py": "e9935f54fc87e128cd0f42509d1822a439b8cb680d85560beb914cd49a09b9c4"
+  },
+  "checks_passed": 63,
+  "feedback_post_count": 37,
+  "lab_attempts_this_task": 3,
+  "successful_lab_runs": 2,
+  "total_local_posts_this_task": 74,
+  "total_hidden_posts_this_task": 12,
+  "initialization_failures": [
+    {
+      "error_type": "JSONDecodeError",
+      "feedback_post_count": 0,
+      "cleanup_failures": []
+    }
+  ],
+  "extra_hidden_contract": {
+    "contract_version": "cf7-extra-hidden-lab-v1",
+    "cases": [
+      {
+        "case": "fixed value",
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_capture_delta": 1,
+        "posted_value_hashes": [
+          "bc9b5a9ea1a06a84a3010b66b13e0637bcc8a36ce2bb684e4141bcc89a0f3682"
+        ]
+      },
+      {
+        "case": "omitted negative",
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_capture_delta": 1,
+        "posted_value_hashes": [
+          "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        ]
+      },
+      {
+        "case": "changed negative",
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_capture_delta": 1,
+        "posted_value_hashes": [
+          "d082bdb18c71ca31439215241d1bf398368750c98c01739a99209065abef77d4"
+        ]
+      },
+      {
+        "case": "duplicate negative",
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_capture_delta": 1,
+        "posted_value_hashes": [
+          "d082bdb18c71ca31439215241d1bf398368750c98c01739a99209065abef77d4"
+        ]
+      },
+      {
+        "case": "mail failure unknown",
+        "status": "mail_failed",
+        "classification": "UNKNOWN",
+        "mail_capture_delta": 1,
+        "posted_value_hashes": [
+          "bc9b5a9ea1a06a84a3010b66b13e0637bcc8a36ce2bb684e4141bcc89a0f3682"
+        ]
+      }
+    ],
+    "wire_sha256": "71680d8a9b76ac8e7f5f670790abbc56762fee1f91e3a7826145198213ab39d8",
+    "wire_size": 1455,
+    "browser_grouped_fields_equal": true,
+    "browser_full_part_order_equal": false,
+    "feedback_post_count": 6,
+    "submission_delta": 6,
+    "mail_capture_delta": 6,
+    "execution_allowed": false,
+    "eligible_for_approval": false
+  },
+  "cleanup_failures": [],
+  "real_companies_accessed": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "approvals": 0,
+  "outbound": false,
+  "dispatch_connected": false
+}

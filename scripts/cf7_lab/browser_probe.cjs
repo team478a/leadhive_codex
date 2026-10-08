@@ -8,7 +8,7 @@ const { chromium } = require('../../frontend/node_modules/playwright');
   if (process.env.CF7_PROTOCOL_LAB !== '1' || url.hostname !== '127.0.0.1'
       || url.protocol !== 'http:' || !url.port || url.username || url.password
       || !['operator@example.invalid', 'operator@example.com'].includes(email)
-      || !['', 'groups_required', 'radio'].includes(groupMode)) {
+      || !['', 'groups_required', 'radio', 'extra_hidden'].includes(groupMode)) {
     throw new Error('Explicit loopback lab required');
   }
   const browser = await chromium.launch({ headless: true });
@@ -31,7 +31,7 @@ const { chromium } = require('../../frontend/node_modules/playwright');
       }
     });
     await page.goto(url.href);
-    const form = page.locator('form.wpcf7-form').nth(groupMode === 'radio' ? 6 : groupMode ? 4 : 0);
+    const form = page.locator('form.wpcf7-form').nth(groupMode === 'extra_hidden' ? 7 : groupMode === 'radio' ? 6 : groupMode ? 4 : 0);
     await form.locator('[name="your-name"]').fill('Lab operator');
     await form.locator('[name="your-email"]').fill(email);
     await form.locator('[name="your-message"]').fill('Lab fixture only 日本語\n第二行');

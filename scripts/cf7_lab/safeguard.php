@@ -48,5 +48,12 @@ add_action('wpcf7_submit', static function ($form, $result) {
         }, (array) $radio);
     }
     $records[] = $record;
+    $extra = $submission ? $submission->get_posted_data('leadhive_lab_context') : null;
+    if ($extra !== null) {
+        $record['extra_hidden_value_hashes'] = array_map(static function ($value) {
+            return hash('sha256', (string) $value);
+        }, (array) $extra);
+        $records[count($records) - 1] = $record;
+    }
     update_option('leadhive_lab_submissions', $records, false);
 }, 10, 2);

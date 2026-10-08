@@ -10,6 +10,7 @@ from pydantic import Field, model_validator
 from app.services.cf7_candidate_contract import CF7Candidate, digest
 from app.services.cf7_candidate_contract import wire as base_wire
 from app.services.cf7_checkbox_group_contract import CheckboxGroup
+from app.services.cf7_inert_multipart import append_parts
 from app.services.form_execution_plan import FrozenContract, PlanError
 
 
@@ -69,28 +70,14 @@ def canonical(candidate: RadioCandidate) -> dict[str, Any]:
 def wire(candidate: RadioCandidate) -> tuple[str, bytes]:
     data = canonical(candidate)
     plan = RadioCandidate.model_validate_json(json.dumps(data))
-    content_type, body = base_wire(plan.base)
-    old = content_type.split("boundary=", 1)[1].encode("ascii")
-    boundary = ("----LeadHiveCF7Radio" + digest(data)[:32]).encode("ascii")
-    trailer = b"--" + old + b"--\r\n"
-    if not body.endswith(trailer) or boundary in body:
-        raise PlanError("Unexpected framing or boundary collision")
     option = next(
         o for o, c in zip(plan.group.options, plan.group.choices, strict=True) if c.checked
     )
-    value = option.value.encode()
-    if boundary in value:
-        raise PlanError("Multipart boundary collision")
-    result = body[: -len(trailer)].replace(old, boundary) + b"--" + boundary
-    result += (
-        b'\r\nContent-Disposition: form-data; name="'
-        + plan.group.name.encode("ascii")
-        + b'"\r\n\r\n'
+    return append_parts(
+        *base_wire(plan.base),
+        [(plan.group.name, option.value)],
+        "----LeadHiveCF7Radio" + digest(data)[:32],
     )
-    result += value + b"\r\n--" + boundary + b"--\r\n"
-    if len(result) > 65536:
-        raise PlanError("Multipart too large")
-    return "multipart/form-data; boundary=" + boundary.decode("ascii"), result
 
 
 def snapshot(candidate: RadioCandidate) -> dict[str, Any]:
