@@ -1,5 +1,6 @@
-"""One fixed extra hidden fixture, never an arbitrary token copying path."""
+"""Controlled nine-form fixture only. Never executes candidate URLs."""
 
+import copy
 import hashlib
 import json
 import os
@@ -7,70 +8,82 @@ from dataclasses import replace
 
 import httpx
 from app.services.cf7_candidate_contract import digest
-from app.services.cf7_extra_hidden_contract import (
-    ExtraHidden,
-    ExtraHiddenCandidate,
+from app.services.cf7_mixed_contract import (
+    MixedCandidate,
     snapshot,
     validate_snapshot,
     wire,
 )
 from bs4 import BeautifulSoup
-from contract_probe import EMAIL, local_post, make_candidate
-from group_probe import decode_parts, grouped
-from protocol import classify, observe
+from contract_probe import EMAIL, local_post
+from group_probe import decode_parts, grouped, make_group_candidate
+from hidden_probe import make_hidden_candidate
+from protocol import classify
+from radio_probe import make_radio_candidate
 
-NAME = "leadhive_lab_context"
-VALUE = "fixture-business-context"
 
-
-def make_hidden_candidate(html, origin):
+def make_mixed_candidate(html, origin):
     if os.environ.get("CF7_PROTOCOL_LAB") != "1":
         raise ValueError("Explicit lab opt-in required")
     soup = BeautifulSoup(html, "html.parser")
     forms = soup.select("form.wpcf7-form")
-    if len(forms) not in (8, 9):
-        raise ValueError("Fixed eight-form fixture required")
-    form = forms[7]
-    extras = form.select('[name="leadhive_lab_context"]')
-    if len(extras) != 1:
-        raise ValueError("Exactly one fixed extra hidden required")
-    extra = extras[0]
-    if (
-        extra.name != "input"
-        or extra.get("type") != "hidden"
-        or extra.get("value") != VALUE
-        or extra.has_attr("disabled")
-        or extra.has_attr("onclick")
-    ):
-        raise ValueError("Unknown extra hidden meaning/value")
-    fingerprint = hashlib.sha256(str(form).encode()).hexdigest()
-    extra.decompose()
-    for other in forms:
-        if other is not form:
-            other.decompose()
-    cleaned = str(soup)
-    base = make_candidate(cleaned, origin).model_copy(
+    if len(forms) != 9:
+        raise ValueError("Fixed nine-form fixture required")
+    original = forms[8]
+    fingerprint = hashlib.sha256(str(original).encode()).hexdigest()
+
+    def subset(keep, count):
+        page = copy.deepcopy(soup)
+        for form in page.select("form.wpcf7-form"):
+            form.decompose()
+        target = copy.deepcopy(original)
+        for selector in (
+            ".wpcf7-checkbox",
+            ".wpcf7-radio",
+            '[name="leadhive_lab_context"]',
+        ):
+            if selector != keep:
+                for field in target.select(selector):
+                    field.decompose()
+        # Existing fixed mappers select their fixture index; all clones share one ID.
+        for _ in range(count):
+            page.append(copy.deepcopy(target))
+        return str(page)
+
+    groups, observed = make_group_candidate(
+        subset(".wpcf7-checkbox", 5),
+        origin,
+        4,
+        required=True,
+        selected=("SNS運用", "OEM"),
+    )
+    radio, _ = make_radio_candidate(subset(".wpcf7-radio", 7), origin, "OEM")
+    hidden, _ = make_hidden_candidate(
+        subset('[name="leadhive_lab_context"]', 8), origin
+    )
+    base = groups.base.model_copy(update={"dom_fingerprint": fingerprint})
+    if groups.base.model_copy(
         update={"dom_fingerprint": fingerprint}
-    )
-    plan = ExtraHiddenCandidate(
+    ) != radio.base.model_copy(
+        update={"dom_fingerprint": fingerprint}
+    ) or base != hidden.base.model_copy(update={"dom_fingerprint": fingerprint}):
+        raise ValueError("Mixed fixture components disagree")
+    plan = MixedCandidate(
         source_kind="CONTROLLED_FIXTURE",
-        base=base,
-        extra=ExtraHidden(
-            name="leadhive_lab_context",
-            value="fixture-business-context",
-            purpose="FIXED_LAB_ROUTING_CONTEXT",
-        ),
+        groups=groups.model_copy(update={"base": base}),
+        radio=radio.model_copy(update={"base": base}),
+        hidden=hidden.model_copy(update={"base": base}),
     )
-    return plan, replace(observe(cleaned, origin), fingerprint=fingerprint)
+    return plan, replace(observed, fingerprint=fingerprint)
 
 
 def verified_wire(saved, plan):
-    base = plan.base
+    base = plan.groups.base
     validate_snapshot(
         saved,
         plan,
         expected_hash=digest(saved),
-        expected_version=1,
+        expected_version=base.payload_version,
         project_id=base.project_id,
         company_id=base.company_id,
         source_draft_id=base.source_draft_id,
@@ -79,12 +92,12 @@ def verified_wire(saved, plan):
     return wire(plan)
 
 
-def verify_hidden(
+def verify_mixed(
     client, html, origin, output, report, fixture, check, command, assets, page_url
 ):
     initial = json.loads(fixture("evidence"))
     start = report["feedback_post_count"]
-    plan, observed = make_hidden_candidate(html, origin)
+    plan, observed = make_mixed_candidate(html, origin)
     saved = snapshot(plan)
     kind, body = verified_wire(saved, plan)
     parts = decode_parts(kind, body)
@@ -104,51 +117,36 @@ def verify_hidden(
             response.content,
             observed,
         )
-        detail = {
-            "case": name,
-            "status": status,
-            "classification": receipt,
-            "mail_capture_delta": delta,
-            "posted_value_hashes": after["submissions"][-1].get(
-                "extra_hidden_value_hashes", []
-            ),
-        }
-        records.append(detail)
+        records.append(
+            {
+                "case": name,
+                "status": status,
+                "classification": receipt,
+                "mail_capture_delta": delta,
+            }
+        )
         check(
-            "extra hidden " + name,
+            "mixed " + name,
             response.status_code == 200
-            and status in expected
+            and status == expected
             and delta == int(status in {"mail_sent", "mail_failed"})
             and len(after["submissions"]) == len(before["submissions"]) + 1
             and receipt == ("RECEIPT_REPORTED" if status == "mail_sent" else "UNKNOWN"),
-            detail,
         )
         return after["mail_calls"][-1] if delta else None
 
-    captured = submit("fixed value", kind, body, {"mail_sent"})
-    check(
-        "extra hidden fixed value preserved",
-        records[-1]["posted_value_hashes"]
-        == [hashlib.sha256(VALUE.encode()).hexdigest()],
-    )
-    for name, values in (
-        ("omitted negative", ()),
-        ("changed negative", ("OTHER_FIXTURE_CONTEXT",)),
-        ("duplicate negative", (VALUE, "OTHER_FIXTURE_CONTEXT")),
-    ):
+    captured = submit("explicit combined values", kind, body, "mail_sent")
+    for name in ("services[]", "topic"):
         request = httpx.Request(
-            "POST",
-            origin,
-            files=[(n, (None, v)) for n, v in parts if n != NAME]
-            + [(NAME, (None, v)) for v in values],
+            "POST", origin, files=[(n, (None, v)) for n, v in parts if n != name]
         )
         submit(
-            name,
+            "missing " + name,
             request.headers["content-type"],
             request.read(),
-            {"mail_sent", "validation_failed"},
+            "validation_failed",
         )
-    submit("mail failure unknown", kind, body, {"mail_failed"}, "fail")
+    submit("mail failure unknown", kind, body, "mail_failed", "fail")
     fixture("mode", "capture")
     before = json.loads(fixture("evidence"))
     browser = json.loads(
@@ -157,30 +155,32 @@ def verify_hidden(
             str(assets / "browser_probe.cjs"),
             page_url,
             EMAIL,
-            "extra_hidden",
+            "mixed",
             env=os.environ.copy(),
             timeout=90,
         )
     )
     report["feedback_post_count"] += len(browser["posts"])
     after = json.loads(fixture("evidence"))
-    equivalent = grouped(browser["posts"][0]["fields"]) == grouped(parts)
+    equivalent = len(browser["posts"]) == 1 and grouped(
+        browser["posts"][0]["fields"]
+    ) == grouped(parts)
     check(
-        "extra hidden browser equivalence",
-        len(browser["posts"]) == 1
-        and equivalent
+        "mixed actual browser equivalence",
+        equivalent
         and browser["posts"][0]["url"] == observed.endpoint
         and len(after["submissions"]) == len(before["submissions"]) + 1
         and len(after["mail_calls"]) == len(before["mail_calls"]) + 1
         and after["mail_calls"][-1] == captured,
     )
-    (output / "hidden-snapshot.json").write_text(
-        json.dumps(saved, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    (output / "hidden-browser-wire.json").write_text(
-        json.dumps(browser, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
-    report["extra_hidden_contract"] = {
+    for filename, data in (
+        ("mixed-snapshot.json", saved),
+        ("mixed-browser-wire.json", browser),
+    ):
+        (output / filename).write_text(
+            json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    report["mixed_contract"] = {
         "contract_version": plan.contract_version,
         "cases": records,
         "wire_sha256": saved["wire_sha256"],

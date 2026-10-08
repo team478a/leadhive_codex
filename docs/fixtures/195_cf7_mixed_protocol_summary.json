@@ -1,0 +1,92 @@
+{
+  "baseline_commit": "ee676f995f81cd3eb35502987841b35998f0eac3",
+  "working_tree_modified_at_execution": true,
+  "source_kind": "CONTROLLED_FIXTURE",
+  "versions": {
+    "wp_version": "6.8.3",
+    "cf7_version": "6.1.4",
+    "php_version": "8.3.28"
+  },
+  "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+  "cf7_archive_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+  "images": {
+    "wp": {
+      "tag": "wordpress:6.8.3-php8.3-apache",
+      "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+      "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+    },
+    "db": {
+      "tag": "mariadb:11.4",
+      "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+      "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+    }
+  },
+  "browser_version": "153.0.8010.12",
+  "started_at": "2026-10-08T11:09:08.083016+00:00",
+  "finished_at": "2026-10-08T11:11:21.734603+00:00",
+  "private_report_sha256": "a2d508e7f8180a8139ba59d3c4a2e65fe458cabfcef2e694c1541c9f1563f2bc",
+  "source_hashes": {
+    "backend/app/services/cf7_mixed_contract.py": "8bf2be4db475006c39eefeaa46b89a8e5ecb3c1e8dc9516d21c9460abfc0c878",
+    "scripts/cf7_lab/mixed_probe.py": "850a485bf6f4cb20bb3c4f59cc6fb42afc63e50494202ed347637a449db36795",
+    "scripts/cf7_lab/hidden_probe.py": "914ac5aaac36713df35ea8d92879c4597a01140c815401374b2dc00c980d1ae1",
+    "scripts/cf7_lab/cases.py": "375d29945d6babf625ddae781b1074770982e79898940ed6b3c94462a075b225",
+    "scripts/cf7_lab/fixture.php": "8346da7869168d3ec627e6c3536ecc28996093b3d95df9368fc6696d62ac54b3",
+    "scripts/cf7_lab/safeguard.php": "c2e88beaa7cc623302a0ee647c6c40a1bd5ae1b6189e63dda2bc1247c9e217e8",
+    "scripts/cf7_lab/browser_probe.cjs": "9c2760b6c7a0965dec31adbd996c3dd2e06e95882323ad26c9ad7962146297fc",
+    "scripts/cf7_lab/run.py": "e9935f54fc87e128cd0f42509d1822a439b8cb680d85560beb914cd49a09b9c4",
+    "backend/app/services/cf7_checkbox_group_contract.py": "67f9295030ea1132a6f0af157258e50c98b252dcd06147098ac7008a48a15993",
+    "backend/app/services/cf7_radio_contract.py": "ea15381fa71e80e8e6009ec67d78668b0a38e7ff6dcc3bec075cefcc43a57153",
+    "backend/app/services/cf7_extra_hidden_contract.py": "daf7ecba9cf72ef93dee0a1bf56172375633a2e5cef546bf96e8d56ccf3bcf19",
+    "backend/app/services/cf7_inert_multipart.py": "ca67321c294ca85adf479c1d4ee256f90e534fe869a11c0b28d67341ae57f842"
+  },
+  "checks_passed": 68,
+  "feedback_post_count": 42,
+  "lab_runs_this_task": 2,
+  "total_local_posts_this_task": 84,
+  "total_mixed_posts_this_task": 10,
+  "mixed_contract": {
+    "contract_version": "cf7-mixed-lab-v1",
+    "cases": [
+      {
+        "case": "explicit combined values",
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_capture_delta": 1
+      },
+      {
+        "case": "missing services[]",
+        "status": "validation_failed",
+        "classification": "UNKNOWN",
+        "mail_capture_delta": 0
+      },
+      {
+        "case": "missing topic",
+        "status": "validation_failed",
+        "classification": "UNKNOWN",
+        "mail_capture_delta": 0
+      },
+      {
+        "case": "mail failure unknown",
+        "status": "mail_failed",
+        "classification": "UNKNOWN",
+        "mail_capture_delta": 1
+      }
+    ],
+    "wire_sha256": "41de7112054144c543cdaef5a667f24db4f88d967d6682b86ab5926e5ad2174f",
+    "wire_size": 1786,
+    "browser_grouped_fields_equal": true,
+    "browser_full_part_order_equal": false,
+    "feedback_post_count": 5,
+    "submission_delta": 5,
+    "mail_capture_delta": 3,
+    "execution_allowed": false,
+    "eligible_for_approval": false
+  },
+  "cleanup_failures": [],
+  "real_companies_accessed": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "approvals": 0,
+  "outbound": false,
+  "dispatch_connected": false
+}

@@ -33,30 +33,30 @@ if (!defined('WPCF7_VERSION') || WPCF7_VERSION !== '6.1.4') {
 }
 if ($lab_action === 'create') {
     $forms = array();
-    foreach (array('standard', 'optional', 'invert', 'demo', 'groups_required', 'groups_optional', 'radio', 'extra_hidden') as $kind) {
+    foreach (array('standard', 'optional', 'invert', 'demo', 'groups_required', 'groups_optional', 'radio', 'extra_hidden', 'mixed') as $kind) {
         $form = WPCF7_ContactForm::get_template(array('title' => 'Lab ' . $kind));
         $options = $kind === 'optional' ? ' optional' : ($kind === 'invert' ? ' invert' : '');
         $props = $form->get_properties();
         $props['form'] = '<label>Name [text* your-name]</label>' . "\n"
             . '<label>Email [email* your-email]</label>' . "\n"
             . '<label>Message [textarea* your-message]</label>' . "\n"
-            . (strpos($kind, 'groups_') === 0
-                ? '[checkbox' . ($kind === 'groups_required' ? '*' : '')
+            . (strpos($kind, 'groups_') === 0 || $kind === 'mixed'
+                ? '[checkbox' . ($kind === 'groups_required' || $kind === 'mixed' ? '*' : '')
                     . ' services use_label_element "SNS運用" "Website" "OEM"]' . "\n"
                 : '')
-            . ($kind === 'radio' ? '[radio topic use_label_element "SNS運用" "OEM"]' . "\n" : '')
-            . ($kind === 'extra_hidden' ? '[hidden leadhive_lab_context "fixture-business-context"]' . "\n" : '')
+            . ($kind === 'radio' || $kind === 'mixed' ? '[radio topic use_label_element "SNS運用" "OEM"]' . "\n" : '')
+            . ($kind === 'extra_hidden' || $kind === 'mixed' ? '[hidden leadhive_lab_context "fixture-business-context"]' . "\n" : '')
             . '[acceptance consent' . $options . ']Lab-only privacy terms[/acceptance]' . "\n"
             . '[submit "Send lab fixture"]';
         $props['mail']['recipient'] = 'sink@example.invalid';
         $props['mail']['sender'] = 'Lab <sender@example.invalid>';
         $props['mail']['subject'] = 'LeadHive isolated fixture';
         $props['mail']['body'] = '[your-name]' . "\n" . '[your-email]' . "\n" . '[your-message]';
-        if (strpos($kind, 'groups_') === 0) {
+        if (strpos($kind, 'groups_') === 0 || $kind === 'mixed') {
             $props['mail']['body'] .= "\n" . '[services]';
         }
-        if ($kind === 'radio') { $props['mail']['body'] .= "\n" . '[topic]'; }
-        if ($kind === 'extra_hidden') { $props['mail']['body'] .= "\n" . '[leadhive_lab_context]'; }
+        if ($kind === 'radio' || $kind === 'mixed') { $props['mail']['body'] .= "\n" . '[topic]'; }
+        if ($kind === 'extra_hidden' || $kind === 'mixed') { $props['mail']['body'] .= "\n" . '[leadhive_lab_context]'; }
         $props['mail_2']['active'] = false;
         $props['additional_settings'] = $kind === 'demo' ? 'demo_mode: on' : '';
         $form->set_properties($props);

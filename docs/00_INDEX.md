@@ -320,3 +320,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [181_SAVED_FORM_TECHNICAL_DIAGNOSTICS.md](181_SAVED_FORM_TECHNICAL_DIAGNOSTICS.md): 保存情報でCF7・非POST・項目名不足・CAPTCHA・禁止を切り分ける技術診断・外部取得なし
 
 - [194_CF7_EXTRA_HIDDEN_PROTOCOL_LAB.md](194_CF7_EXTRA_HIDDEN_PROTOCOL_LAB.md): 固定非秘密hiddenの非実行契約・隔離CF7受付・変更/重複の拒否境界
+
+- [195_CF7_MIXED_PROTOCOL_LAB.md](195_CF7_MIXED_PROTOCOL_LAB.md): checkbox・radio・固定hiddenの混在契約・scope一致・合計上限・隔離受付検証
