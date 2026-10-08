@@ -96,7 +96,7 @@ def test_crlf_expansion_over_wire_limit_is_rejected_even_below_input_budget():
     report["snapshot"]["rows"].append(
         {
             "name": "extra",
-            "field_type": "text",
+            "field_type": "textarea",
             "required": True,
             "state": "UNAPPROVED_DRAFT_VALUE",
             "values": ["b" + "\n" * 19900],
@@ -104,7 +104,7 @@ def test_crlf_expansion_over_wire_limit_is_rejected_even_below_input_budget():
     )
     evidence = observation["cf7_static"]["contract_evidence"]
     evidence["controls"].append(
-        {"name": "extra", "kind": "text", "required": True, "checkbox_value": ""}
+        {"name": "extra", "kind": "textarea", "required": True, "checkbox_value": ""}
     )
     evidence["dom_order"].append("extra")
     report["snapshot"]["observation_hash"] = digest(observation)

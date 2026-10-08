@@ -79,6 +79,27 @@ if ($lab_action === 'create') {
         'page_url' => get_permalink($page),
         'wp_version' => get_bloginfo('version'), 'cf7_version' => WPCF7_VERSION,
         'php_version' => PHP_VERSION)) . "\n";
+} elseif ($lab_action === 'create-encoding') {
+    // Separate page: do not change the existing fixed nine-form regression cohort.
+    update_option('permalink_structure', '/%postname%/');
+    flush_rewrite_rules(true);
+    $form = WPCF7_ContactForm::get_template(array('title' => 'Lab encoding integration'));
+    $props = $form->get_properties();
+    $props['form'] = '<label>Name [text* your-name]</label>' . "\n"
+        . '<label>Email [email* your-email]</label>' . "\n"
+        . '<label>Message [textarea* your-message]</label>' . "\n"
+        . '[submit "Capture encoding fixture"]';
+    $props['mail']['recipient'] = 'sink@example.invalid';
+    $props['mail']['sender'] = 'Lab <sender@example.invalid>';
+    $props['mail']['subject'] = 'Offline encoding integration';
+    $props['mail']['body'] = '[your-name]' . "\n" . '[your-email]' . "\n" . '[your-message]';
+    $props['mail_2']['active'] = false;
+    $form->set_properties($props);
+    $form->save();
+    $page = wp_insert_post(array('post_type' => 'page', 'post_status' => 'publish',
+        'post_title' => 'Encoding fixture', 'post_content' => '[contact-form-7 id="' . $form->id() . '"]'));
+    flush_rewrite_rules(true);
+    echo json_encode(array('page_url' => get_option('home') . '/?page_id=' . $page, 'form_id' => $form->id())) . "\n";
 } elseif ($lab_action === 'mode') {
     $mode = $argv[2] ?? '';
     if (!in_array($mode, array('capture', 'fail', 'skip', 'abort', 'spam'), true)) {

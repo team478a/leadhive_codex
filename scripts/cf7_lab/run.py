@@ -329,7 +329,10 @@ def run():
         report["setup_mail_calls_captured"] = initial_mail_calls + 1
         page_url = report["versions"]["page_url"]
         check("canonical fixture URL is local", page_url.startswith(origin + "/"))
-        if profile.version == "6.2":
+        if os.environ.get("CF7_ENCODING_ONLY") == "1":
+            report["feedback_post_count"] = 0
+            report["regression_suite_skipped"] = True
+        elif profile.version == "6.2":
             from version_probe import verify_version
 
             verify_version(
@@ -337,6 +340,9 @@ def run():
             )
         else:
             verify(origin, output, report, fixture, check, command, ASSETS, page_url)
+        from real_encoding_probe import verify_real_encoding
+
+        verify_real_encoding(origin, report, fixture, check, profile.version)
         report["passed"] = True
         print("Real CF7 lab checks passed", flush=True)
     except Exception as error:

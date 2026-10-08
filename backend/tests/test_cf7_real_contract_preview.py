@@ -68,7 +68,7 @@ def test_real_preview_is_versioned_bound_ordered_and_inert(version):
         ('name="email"', 'name="body"'),
         ('name="email"', 'name="email" form="other"'),
         ('name="email"', 'name="email" disabled'),
-        ('name="email"', 'name="email" maxlength="20"'),
+        ('name="email"', 'name="email" maxlength="20001"'),
         ('name="email"', 'name="email" onclick="evil()"'),
         ("<textarea", '<span class="wpcf7-acceptance"></span><textarea'),
         ('"namespace":"contact-form-7/v1"', '"namespace":"evil"'),
@@ -96,6 +96,23 @@ def test_config_is_literal_unique_same_origin_and_never_evaluated():
             inspect_isolated(html, "https://example.com/contact", 0).get("contract_evidence")
             is None
         )
+
+
+@pytest.mark.parametrize(
+    "limit,value,allowed",
+    [(2, "😀", True), (1, "😀", False), (3, "a\r\nb", True), (2, "a\r\nb", False), (0, "a", False)],
+)
+def test_maxlength_is_preserved_and_uses_browser_utf16_and_lf(limit, value, allowed):
+    report, observation = fixture()
+    html = page().replace('<textarea name="body"', f'<textarea maxlength="{limit}" name="body"')
+    observation["cf7_static"] = inspect_isolated(html, "https://example.com/contact", 0)
+    evidence = observation["cf7_static"]["contract_evidence"]
+    assert evidence["controls"][0]["maxlength"] == limit
+    assert evidence["definition_version"] == "real-cf7-static-evidence-v2"
+    report["snapshot"]["rows"][0]["values"] = [value]
+    report["snapshot"]["observation_hash"] = digest(observation)
+    report["snapshot_hash"] = digest(report["snapshot"])
+    assert (preview(report, observation)["status"] == "PREVIEW_ONLY") is allowed
 
 
 @pytest.mark.parametrize(

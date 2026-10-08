@@ -16,6 +16,7 @@ class EvidenceControl(BaseModel):
     kind: Literal["text", "email", "tel", "textarea", "checkbox"]
     required: bool
     checkbox_value: str = Field(pattern=r"^[A-Za-z0-9_-]{0,200}$")
+    maxlength: int | None = Field(default=None, ge=0, le=20000)
 
     @model_validator(mode="after")
     def option(self):
@@ -26,7 +27,7 @@ class EvidenceControl(BaseModel):
 
 class RealContractEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True, frozen=True)
-    definition_version: Literal["real-cf7-static-evidence-v1"]
+    definition_version: Literal["real-cf7-static-evidence-v1", "real-cf7-static-evidence-v2"]
     source_kind: Literal["REAL_SITE_STATIC_HTML"]
     form_url: str = Field(max_length=2000)
     plugin_version: Literal["6.1.4", "6.2"]
@@ -140,6 +141,15 @@ def preview(report: dict, observation: dict | None) -> dict:
                 raise ValueError("Requiredness/value mismatch")
             if control["required"] and (not values or not values[0].strip()):
                 raise ValueError("Missing required input")
+            input_value = values[0] if values else ""
+            if control["kind"] in {"text", "email", "tel"} and re.search(r"[\r\n]", input_value):
+                raise ValueError("Single-line browser sanitization would change input")
+            normalized = re.sub(r"\r\n|\r", "\n", input_value)
+            if (
+                control["maxlength"] is not None
+                and len(normalized.encode("utf-16-le")) // 2 > control["maxlength"]
+            ):
+                raise ValueError("Browser UTF-16 maxlength exceeded")
             if control["kind"] == "checkbox":
                 if row["state"] != "HUMAN_SELECTION_RECORDED" or values not in (
                     [],

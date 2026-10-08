@@ -33,6 +33,11 @@ scriptは取得済みimageのdigestを解決してそのdigestで起動する。
 
 ## 隔離と停止
 
+202の変換経路受付だけを測定する場合は`CF7_ENCODING_ONLY=1`を明示する。
+この場合、既存回帰suiteを省略したことをreportの`regression_suite_skipped`に記録する。
+全回帰suite成功の代替にはならない。新しい固定fixtureへ各版2回だけlocal POSTし、実SMTPはcaptureする。
+通常のdefaultでは既存回帰suiteの後にこの受付検証を行う。詳細はdocs/203を参照。
+
 - UUID付き専用container/network/volumeだけを作成する。既存DB/envを読まない。
 - 内部networkにだけ接続し、containerのportは公開しない。
 - ホスト側の `127.0.0.1` 一時portの検証用gatewayからDocker exec/stdinで中継する。

@@ -336,3 +336,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [201_CF7_REAL_CONTRACT_PREVIEW.md](201_CF7_REAL_CONTRACT_PREVIEW.md): 実サイト限定証拠と入力確認の照合・版別非実行プレビュー・変更/不足拒否・送信接続なし
 
 - [202_CF7_OFFLINE_ENCODING_VERIFICATION.md](202_CF7_OFFLINE_ENCODING_VERIFICATION.md): 非実行契約のmultipart変換・ブラウザFormDataとの順序/値比較・変更/サイズ拒否・送信なし
+
+- [203_CF7_ENCODING_RECEPTION_LAB.md](203_CF7_ENCODING_RECEPTION_LAB.md): 固定CF7両版の変換経路受付・受信順序/値hash一致・maxlength保持・UNKNOWN/変更拒否・実送信なし

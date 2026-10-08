@@ -105,11 +105,15 @@ class Inspector(HTMLParser):
                 "min",
                 "max",
                 "minlength",
-                "maxlength",
                 "multiple",
             }
             for k in attrs
         )
+        maximum = attrs.get("maxlength")
+        if maximum is not None and (
+            not re.fullmatch(r"0|[1-9][0-9]{0,4}", maximum) or int(maximum) > 20000
+        ):
+            self.current["custom"] = True
         name = attrs.get("name") or ""
         if len(name) > 100:
             raise ValueError("name limit")
@@ -134,6 +138,9 @@ class Inspector(HTMLParser):
                     or attrs.get("aria-required") == "true"
                     or "wpcf7-validates-as-required" in (attrs.get("class") or "").split(),
                     "checkbox_value": (attrs.get("value") or "on") if kind == "checkbox" else "",
+                    "maxlength": int(maximum)
+                    if maximum is not None and maximum.isdigit() and len(maximum) <= 5
+                    else None,
                 }
             )
         self.current["radios"] += kind == "radio"
@@ -322,7 +329,7 @@ def contract_evidence(parser: Inspector, form: dict | None) -> dict | None:
         if source.scheme != "https" or api["root"] != root:
             return None
         return {
-            "definition_version": "real-cf7-static-evidence-v1",
+            "definition_version": "real-cf7-static-evidence-v2",
             "source_kind": "REAL_SITE_STATIC_HTML",
             "form_url": parser.url,
             "plugin_version": form["version"],

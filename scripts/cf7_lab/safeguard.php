@@ -3,6 +3,10 @@
 if (getenv('LEADHIVE_CF7_LAB') !== '1') {
     throw new RuntimeException('Explicit lab opt-in required');
 }
+// Numeric URL for only the new fixture, independent of previous permalink probes.
+add_filter('redirect_canonical', static function ($redirect) {
+    return get_the_title(get_queried_object_id()) === 'Encoding fixture' ? false : $redirect;
+});
 add_filter('pre_http_request', static function () {
     return new WP_Error('lab_network_blocked', 'External WordPress HTTP is disabled');
 }, PHP_INT_MAX);
@@ -34,6 +38,14 @@ add_action('wpcf7_before_send_mail', static function ($form, &$abort) {
 add_action('wpcf7_submit', static function ($form, $result) {
     $records = get_option('leadhive_lab_submissions', array());
     $record = array('form_id' => $form->id(), 'status' => $result['status']);
+    if ($form->title() === 'Lab encoding integration') {
+        $record['raw_post_order'] = array_keys($_POST);
+        $record['raw_value_hashes'] = array();
+        foreach ($_POST as $name => $value) {
+            if (!is_string($value)) { throw new RuntimeException('Scalar fixture input required'); }
+            $record['raw_value_hashes'][$name] = hash('sha256', wp_unslash($value));
+        }
+    }
     $submission = WPCF7_Submission::get_instance();
     $values = $submission ? $submission->get_posted_data('services') : null;
     if (is_array($values)) {
