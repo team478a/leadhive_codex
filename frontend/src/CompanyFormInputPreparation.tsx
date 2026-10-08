@@ -6,8 +6,9 @@ type Report = {
   reviewed_at?: string; review_expires_at?: string
   snapshot: { form_url: string; plugin_version: string | null; rows: { position: number; name: string; label: string; required: boolean; values: string[]; state: string }[] }
 }
-type ContractPreview = { status: string; reasons: string[]; contract_hash: string | null; contract: { endpoint: string; contract_family: string; parts: { name: string }[] } | null }
+type ContractPreview = { status: string; reasons: string[]; contract_hash: string | null; encoding_preview?: { wire_size: number; wire_sha256: string } | null; contract: { endpoint: string; contract_family: string; parts: { name: string }[] } | null }
 const contractReasons: Record<string, string> = {
+  WIRE_ENCODING_UNSUPPORTED: '送信データの変換条件・サイズ上限を満たしていません。送信せず確認してください。',
   INPUT_CONFIRMATION_REQUIRED: '現在の入力内容を人が確認・記録してください。', CONFIRMATION_EXPIRED: '確認記録またはフォーム観測が期限切れです。',
   OBSERVATION_UNVERIFIED: '現在のフォーム構造が未確認です。', OBSERVATION_CHANGED: 'フォーム観測が変わりました。入力内容を確認し直してください。',
   INPUT_SNAPSHOT_CHANGED: '入力内容の確認票が変更されています。', CONTRACT_EVIDENCE_UNVERIFIED: '送信先設定・項目順序・hiddenの証拠が不足、変更、または未対応です。「現在のフォームを確認」後に入力内容を確認し直してください。',
@@ -74,6 +75,7 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
         <p>これは送信承認ではありません。実行時の安全確認と承認・送信接続は別工程です。</p>
         {contract.reasons.map(code => <p key={code}>{contractReasons[code] ?? '追加確認が必要です。'}</p>)}
         {contract.contract && <><p>版別契約：{contract.contract.contract_family} / 項目数：{contract.contract.parts.length}</p><p className="break-all">確認したREST送信先：{contract.contract.endpoint}</p><p className="text-xs break-all">契約hash：{contract.contract_hash}</p></>}
+        {contract.encoding_preview && <p>送信データの変換確認：{contract.encoding_preview.wire_size.toLocaleString('ja-JP')} bytes（送信は実行しません）</p>}
       </div>}
     </div>}
   </section>

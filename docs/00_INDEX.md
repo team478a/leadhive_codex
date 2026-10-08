@@ -334,3 +334,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [200_FORM_INPUT_PREPARATION_REVIEW.md](200_FORM_INPUT_PREPARATION_REVIEW.md): 保存済み入力確認票・Human記録・変更/期限失効・承認と送信には未接続
 
 - [201_CF7_REAL_CONTRACT_PREVIEW.md](201_CF7_REAL_CONTRACT_PREVIEW.md): 実サイト限定証拠と入力確認の照合・版別非実行プレビュー・変更/不足拒否・送信接続なし
+
+- [202_CF7_OFFLINE_ENCODING_VERIFICATION.md](202_CF7_OFFLINE_ENCODING_VERIFICATION.md): 非実行契約のmultipart変換・ブラウザFormDataとの順序/値比較・変更/サイズ拒否・送信なし

@@ -31,9 +31,12 @@ from app.schemas import (
 from app.security import current_user
 from app.services.cf7_candidate_preparation import profile_source_hash
 from app.services.cf7_real_contract_preview import preview as preview_real_contract
+from app.services.cf7_real_encoding import encode as encode_real_preview
+from app.services.cf7_real_encoding import summarize as summarize_real_encoding
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_adapter_prerequisites import assess as assess_adapter_prerequisites
 from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
+from app.services.form_execution_plan import PlanError
 from app.services.form_input_preparation import prepare as prepare_form_inputs
 from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
@@ -377,9 +380,25 @@ def get_contract_preview(
     profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     profile = _owned_profile(profile_id, db, user, write=False)
-    return preview_real_contract(
-        _input_preparation(profile, db, user), latest_live_check(db, profile)
-    )
+    report = _input_preparation(profile, db, user)
+    observation = latest_live_check(db, profile)
+    result = preview_real_contract(report, observation)
+    result["encoding_preview"] = None
+    if result["status"] == "PREVIEW_ONLY":
+        try:
+            result["encoding_preview"] = summarize_real_encoding(
+                encode_real_preview(
+                    report, observation, expected_contract_hash=result["contract_hash"]
+                )
+            )
+        except PlanError:
+            result.update(
+                status="HOLD",
+                reasons=["WIRE_ENCODING_UNSUPPORTED"],
+                contract=None,
+                contract_hash=None,
+            )
+    return result
 
 
 @router.get("/form-profiles/{profile_id}/choice-groups", response_model=list[dict])

@@ -5,6 +5,7 @@ from app import form_intelligence_routes as routes
 from app.models import FormAnalysisLog, OutreachDraft, ProjectMember
 from app.services import form_live_check as live
 from app.services.cf7_static_inspection import inspect_isolated
+from app.services.form_execution_plan import PlanError
 from app.services.form_intelligence.fields import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from tests.test_cf7_real_contract_preview import page
@@ -31,6 +32,20 @@ def test_preview_rebuilds_server_payload_without_writes_or_send(auth, db, users,
     assert result.status_code == 200 and result.json()["status"] == "PREVIEW_ONLY", result.text
     assert result.json()["contract"]["company_id"] == str(company.id)
     assert not result.json()["execution_allowed"]
+    assert result.json()["encoding_preview"]["wire_size"] > 0
+    assert not result.json()["encoding_preview"]["execution_allowed"]
+    assert "body" not in result.json()["encoding_preview"]
+    original_encoder = routes.encode_real_preview
+
+    def fail_encoding(*args, **kwargs):
+        raise PlanError("PRIVATE diagnostic")
+
+    monkeypatch.setattr(routes, "encode_real_preview", fail_encoding)
+    unsupported = auth.get(path + "/contract-preview")
+    assert unsupported.status_code == 200 and unsupported.json()["status"] == "HOLD"
+    assert unsupported.json()["reasons"] == ["WIRE_ENCODING_UNSUPPORTED"]
+    assert unsupported.json()["encoding_preview"] is None and "PRIVATE" not in unsupported.text
+    monkeypatch.setattr(routes, "encode_real_preview", original_encoder)
     assert db.scalar(select(func.count()).select_from(FormAnalysisLog)) == before
     # Query/body fields cannot replace the server snapshot or enable execution.
     assert (
