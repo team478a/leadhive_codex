@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { api } from './api'
+import type { FormMappedKey, FormProfileField } from './types'
 
 type Material = {
   draft_id: string | null
@@ -9,6 +10,7 @@ type Material = {
   profile_review_reason: string
   human_review_count: number
   missing_required_values: number
+  profile_fingerprint: string
   items: { position: number; name: string; label: string; required: boolean; review_state: string; proposed_value: string | null; options: { label?: string; value?: string }[] }[]
 }
 const states: Record<string, string> = {
@@ -20,7 +22,40 @@ const states: Record<string, string> = {
   OPTIONAL_LEAVE_BLANK: '任意・空欄の候補',
 }
 
-export function CompanyFormReviewMaterial({ profileId }: { profileId: string }) {
+type Props = {
+  profileId: string
+  fingerprint: string
+  fields: FormProfileField[]
+  readOnly: boolean
+  saving: boolean
+  onCorrect: (field: FormProfileField, key: FormMappedKey, value: string) => Promise<boolean>
+}
+
+function ChoiceReview({ field, readOnly, saving, onSave }: { field: FormProfileField; readOnly: boolean; saving: boolean; onSave: (value: string) => Promise<boolean> }) {
+  const [value, setValue] = useState('')
+  const [confirmed, setConfirmed] = useState(false)
+  const [error, setError] = useState('')
+  const valid = field.options.some(option => option.value === value && value !== '') || (!field.required && value === '')
+  async function save() {
+    setError('')
+    if (await onSave(value)) { setConfirmed(false); setValue('') }
+    else { setError('保存できませんでした。表示されたエラーを確認して再度お試しください。') }
+  }
+  return <div className="mt-3">
+    {field.decision_source === 'MANUAL' && <p className="muted text-sm">保存済みの選択：{field.options.find(option => option.value === field.recommended_value)?.label || field.recommended_value || '選択しない'}（送信承認ではありません）</p>}
+    {readOnly ? <p className="muted text-sm">選択の保存は所有者または編集者が行います。</p> : <>
+      <label>{field.label}の確認選択<select aria-label={`${field.label}の確認選択`} value={value} disabled={saving} onChange={event => { setValue(event.target.value); setConfirmed(false) }}>
+        <option value="">{field.required ? '内容を確認して選んでください' : '選択しない（任意）'}</option>
+        {field.options.filter(option => option.value).map((option, index) => <option key={index} value={option.value}>{option.label || option.value}</option>)}
+      </select></label>
+      <label className="mt-3 flex items-start gap-2"><input type="checkbox" checked={confirmed} disabled={saving} onChange={event => setConfirmed(event.target.checked)} />この項目の内容と選択値を確認しました</label>
+      <button className="secondary mt-3" disabled={saving || !confirmed || !valid} onClick={save}>確認した選択を保存</button>
+      {error && <p className="error mt-3" role="alert">{error}</p>}
+    </>}
+  </div>
+}
+
+export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, readOnly, saving, onCorrect }: Props) {
   const [material, setMaterial] = useState<Material | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -29,6 +64,11 @@ export function CompanyFormReviewMaterial({ profileId }: { profileId: string }) 
     try { setMaterial(await api<Material>(`/form-profiles/${profileId}/review-material`)) }
     catch (err) { setError(err instanceof Error ? err.message : '確認資料を取得できませんでした。') }
     finally { setBusy(false) }
+  }
+  async function saveChoice(field: FormProfileField, value: string) {
+    const saved = await onCorrect(field, field.mapped_key, value)
+    if (saved) await load()
+    return saved
   }
   return <section className="mt-4" aria-label="フォーム入力確認">
     <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : material ? '入力候補を更新' : '入力候補と確認事項を見る'}</button>
@@ -42,13 +82,24 @@ export function CompanyFormReviewMaterial({ profileId }: { profileId: string }) 
       {!material.draft_id && <p className="notice mt-3">フォーム用の下書きがありません。DM文面の候補は表示できません。</p>}
       {!material.sender_settings_visible && <p className="muted mt-3">送信者設定は管理者のみ確認できます。</p>}
       <p className="muted text-xs mt-3">元の観測日時：{material.source_observed_at ? new Date(material.source_observed_at).toLocaleString('ja-JP') : '未記録'}</p>
+      {material.profile_fingerprint !== fingerprint && <p className="notice mt-3">保存されたフォーム構造が変わりました。「入力候補を更新」で読み直してください。</p>}
       {material.items.length === 0 && <p className="muted mt-3">保存済みの入力項目はありません。</p>}
-      {material.items.filter(item => item.review_state !== 'DO_NOT_FILL').map(item => <article className="panel mt-3" key={`${item.position}:${item.name}`}>
+      {material.profile_fingerprint === fingerprint && material.items.filter(item => item.review_state !== 'DO_NOT_FILL').map(item => {
+        const field = fields.find(candidate => candidate.position === item.position && candidate.name === item.name)
+        const editableChoice = field && ['CHOICE_REVIEW_REQUIRED', 'HUMAN_CONSENT_REQUIRED'].includes(item.review_state)
+          && ['contact_category', 'contact_method', 'privacy_consent', 'newsletter_consent'].includes(field.mapped_key)
+          && (['radio', 'select'].includes(field.field_type) || (field.field_type === 'checkbox' && field.options.length === 1))
+          && field.options.length > 0
+          && new Set(field.options.map(option => option.value)).size === field.options.length
+          && field.options.every(option => typeof option.value === 'string' && option.value !== '')
+        return <article className="panel mt-3" key={`${item.position}:${item.name}`}>
         <strong className="break-all">{item.label || item.name || '名称不明'}{item.required ? '（必須）' : ''}</strong>
         <p className="muted text-sm mt-2">{states[item.review_state] ?? '要確認'}</p>
         {item.proposed_value !== null && <p className="mt-2 break-all whitespace-pre-wrap">{item.proposed_value}</p>}
         {item.options.length > 0 && <p className="muted text-sm mt-2 break-all">選択肢：{item.options.map(option => option.label || option.value || '名称不明').join(' ／ ')}</p>}
-      </article>)}
+        {editableChoice && <ChoiceReview key={`${field.id}:${field.updated_at}`} field={field} readOnly={readOnly} saving={saving || busy} onSave={value => saveChoice(field, value)} />}
+        {item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED' && <p className="notice mt-3">複数項目にまたがる必須条件は、この画面では確定できません。元フォームで選択範囲を確認してください。</p>}
+      </article>})}
       <p className="muted text-xs mt-3">隠し欄・スパム対策欄・送信ボタン・ファイル欄には入力候補を作りません。</p>
     </div>}
   </section>

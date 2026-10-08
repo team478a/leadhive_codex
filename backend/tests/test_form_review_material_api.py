@@ -1,3 +1,4 @@
+import pytest
 from sqlalchemy import text
 
 from app.models import (
@@ -138,3 +139,44 @@ def test_other_project_and_viewer_sender_privacy(auth, db, users):
     assert response.json()["items"][0]["proposed_value"] == "Project draft"
     auth.cookies.clear()
     assert auth.get(path).status_code == 401
+
+
+@pytest.mark.parametrize(
+    "sales,expected", [("UNCERTAIN", "REVIEW_REQUIRED"), ("PROHIBITED", "BLOCKED")]
+)
+def test_human_choice_does_not_authorize_sending(auth, db, sales, expected):
+    _, _, profile = seed(auth, db)
+    profile.sales_contact_status = sales
+    profile.delivery_supported = False
+    consent = FormProfileField(
+        form_profile_id=profile.id,
+        position=2,
+        name="consent",
+        label="プライバシー同意",
+        field_type="checkbox",
+        mapped_key="privacy_consent",
+        required=True,
+        options=[{"value": "yes", "label": "同意"}],
+    )
+    db.add(consent)
+    db.commit()
+    tables = ("approval_requests", "human_approval_proofs", "email_deliveries", "form_deliveries")
+    before = {
+        table: db.execute(text("SELECT count(*) FROM " + table)).scalar_one() for table in tables
+    }
+    payload = {
+        "mapped_key": "privacy_consent",
+        "recommended_value": "yes",
+        "reason": "Human reviewed",
+    }
+    path = f"/api/form-profile-fields/{consent.id}"
+    assert auth.patch(
+        path, json=payload, headers={"Authorization": "Bearer agent-not-human"}
+    ).status_code in (401, 403)
+    result = auth.patch(path, json=payload)
+    assert result.status_code == 200 and result.json()["decision_source"] == "MANUAL"
+    db.refresh(profile)
+    assert profile.form_status == expected and not profile.delivery_supported
+    assert before == {
+        table: db.execute(text("SELECT count(*) FROM " + table)).scalar_one() for table in tables
+    }

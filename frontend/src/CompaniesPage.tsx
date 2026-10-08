@@ -336,13 +336,14 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function correctFormField(field: FormProfileField, mappedKey: FormMappedKey, recommendedValue: string) {
-    if (!selected) return
+    if (!selected) return false
     setBusy(true); setError(''); setNotice('')
     try {
       await api<FormProfileField>(`/form-profile-fields/${field.id}`, 'PATCH', { mapped_key: mappedKey, recommended_value: recommendedValue, reason: '管理画面で修正' })
       await loadSelectedFormProfiles(selected)
       setNotice('フォーム項目の判定を修正しました。')
-    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+      return true
+    } catch (e) { setError(errorMessage(e)); return false } finally { setBusy(false) }
   }
   async function addActivity() {
     if (!selected || !activityNote.trim()) return
@@ -956,7 +957,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       readOnly={readOnly}
       onAnalyze={() => void analyzeSelectedForm()}
       onSelectPrimary={profile => void selectPrimaryForm(profile)}
-      onCorrect={(field, mappedKey, recommendedValue) => void correctFormField(field, mappedKey, recommendedValue)}
+      onCorrect={correctFormField}
     />}
     {selected && <CompanyFormObservationsPanel key={selected.id} companyId={selected.id} />}
     {selected && <CompanyContactsPanel

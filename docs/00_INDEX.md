@@ -300,3 +300,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [171_OFFLINE_FORM_REVIEW_MATERIAL.md](171_OFFLINE_FORM_REVIEW_MATERIAL.md): 保存フォームの入力候補とHuman確認項目を分離・実行経路へ接続しない
 
 - [172_FORM_REVIEW_MATERIAL_UI.md](172_FORM_REVIEW_MATERIAL_UI.md): 管理画面の入力候補・Human確認事項・読み取り専用API
+
+- [173_FORM_CHOICE_REVIEW_UI.md](173_FORM_CHOICE_REVIEW_UI.md): 入力確認資料から選択・任意同意をHumanが保存・承認や送信と分離
