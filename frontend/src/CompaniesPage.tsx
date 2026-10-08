@@ -958,6 +958,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onAnalyze={() => void analyzeSelectedForm()}
       onSelectPrimary={profile => void selectPrimaryForm(profile)}
       onCorrect={correctFormField}
+      onRefresh={() => selected ? loadSelectedFormProfiles(selected) : Promise.resolve()}
     />}
     {selected && <CompanyFormObservationsPanel key={selected.id} companyId={selected.id} />}
     {selected && <CompanyContactsPanel

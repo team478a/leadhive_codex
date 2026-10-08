@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { api } from './api'
 import type { FormMappedKey, FormProfileField } from './types'
+import { CompanyFormChoiceGroups } from './CompanyFormChoiceGroups'
 
 type Material = {
   draft_id: string | null
@@ -29,6 +30,7 @@ type Props = {
   readOnly: boolean
   saving: boolean
   onCorrect: (field: FormProfileField, key: FormMappedKey, value: string) => Promise<boolean>
+  onRefresh: () => Promise<void>
 }
 
 function ChoiceReview({ field, readOnly, saving, onSave }: { field: FormProfileField; readOnly: boolean; saving: boolean; onSave: (value: string) => Promise<boolean> }) {
@@ -55,7 +57,7 @@ function ChoiceReview({ field, readOnly, saving, onSave }: { field: FormProfileF
   </div>
 }
 
-export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, readOnly, saving, onCorrect }: Props) {
+export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, readOnly, saving, onCorrect, onRefresh }: Props) {
   const [material, setMaterial] = useState<Material | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -98,9 +100,10 @@ export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, read
         {item.proposed_value !== null && <p className="mt-2 break-all whitespace-pre-wrap">{item.proposed_value}</p>}
         {item.options.length > 0 && <p className="muted text-sm mt-2 break-all">選択肢：{item.options.map(option => option.label || option.value || '名称不明').join(' ／ ')}</p>}
         {editableChoice && <ChoiceReview key={`${field.id}:${field.updated_at}`} field={field} readOnly={readOnly} saving={saving || busy} onSave={value => saveChoice(field, value)} />}
-        {item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED' && <p className="notice mt-3">複数項目にまたがる必須条件は、この画面では確定できません。元フォームで選択範囲を確認してください。</p>}
+        {item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED' && <p className="notice mt-3">この項目は下の「複数項目の必須条件」で対象範囲と条件を確認します。</p>}
       </article>})}
       <p className="muted text-xs mt-3">隠し欄・スパム対策欄・送信ボタン・ファイル欄には入力候補を作りません。</p>
+      {material.profile_fingerprint === fingerprint && material.items.some(item => item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED') && <CompanyFormChoiceGroups profileId={profileId} readOnly={readOnly} onSaved={async () => { await onRefresh(); await load() }} />}
     </div>}
   </section>
 }

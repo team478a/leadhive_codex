@@ -302,3 +302,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [172_FORM_REVIEW_MATERIAL_UI.md](172_FORM_REVIEW_MATERIAL_UI.md): 管理画面の入力候補・Human確認事項・読み取り専用API
 
 - [173_FORM_CHOICE_REVIEW_UI.md](173_FORM_CHOICE_REVIEW_UI.md): 入力確認資料から選択・任意同意をHumanが保存・承認や送信と分離
+
+- [174_REQUIRED_FORM_GROUP_REVIEW.md](174_REQUIRED_FORM_GROUP_REVIEW.md): 必須グループの条件・選択をHumanが記録・構造変更/期限で失効・自動送信不可を維持

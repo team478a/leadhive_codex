@@ -23,6 +23,7 @@ from app.models import (  # noqa: E402
     Project,
     User,
 )
+from app.services.form_intelligence.fields import GROUP_REVIEW_MARKER  # noqa: E402
 
 if len(sys.argv) != 3 or sys.argv[1] != "seed":
     raise RuntimeError("Expected: seed <company-id>")
@@ -88,6 +89,24 @@ with SessionLocal() as db:
     db.flush()
     db.add_all(
         [
+            FormProfileField(
+                form_profile_id=secondary.id,
+                position=3,
+                name="web[]",
+                label="お問い合わせ項目 必須" + GROUP_REVIEW_MARKER,
+                field_type="checkbox",
+                mapped_key="other",
+                options=[{"value": "WEB", "label": "WEB支援"}],
+            ),
+            FormProfileField(
+                form_profile_id=secondary.id,
+                position=4,
+                name="other[]",
+                label="お問い合わせ項目 必須" + GROUP_REVIEW_MARKER,
+                field_type="checkbox",
+                mapped_key="other",
+                options=[{"value": "OTHER", "label": "その他"}],
+            ),
             FormProfileField(
                 form_profile_id=primary.id,
                 position=1,

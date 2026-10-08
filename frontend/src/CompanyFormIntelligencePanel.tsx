@@ -29,6 +29,7 @@ type Props = {
   onAnalyze: () => void
   onSelectPrimary: (profile: FormProfile) => void
   onCorrect: (field: FormProfileField, mappedKey: FormMappedKey, recommendedValue: string) => Promise<boolean>
+  onRefresh: () => Promise<void>
 }
 
 function isReviewedChoice(key: FormMappedKey) {
@@ -39,7 +40,7 @@ function reviewedValue(field: FormProfileField) {
   return isReviewedChoice(field.mapped_key) && field.decision_source !== 'MANUAL' ? '' : field.recommended_value
 }
 
-export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, readOnly, onAnalyze, onSelectPrimary, onCorrect }: Props) {
+export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, readOnly, onAnalyze, onSelectPrimary, onCorrect, onRefresh }: Props) {
   const [drafts, setDrafts] = useState<Record<string, { mappedKey: FormMappedKey; value: string }>>({})
   useEffect(() => {
     setDrafts(Object.fromEntries(profiles.flatMap(profile => profile.fields.map(field => [
@@ -61,7 +62,7 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
       </div>
       {profile.review_reason && <p className="notice mt-3">要確認の理由：{profile.review_reason}</p>}
       {profile.error_message && <p className="error mt-3">{profile.error_message}</p>}
-      <CompanyFormReviewMaterial key={profile.id} profileId={profile.id} fingerprint={profile.fingerprint} fields={profile.fields} readOnly={readOnly} saving={busy} onCorrect={onCorrect} />
+      <CompanyFormReviewMaterial key={profile.id} profileId={profile.id} fingerprint={profile.fingerprint} fields={profile.fields} readOnly={readOnly} saving={busy} onCorrect={onCorrect} onRefresh={onRefresh} />
       {profile.fields.length > 0 && <div className="company-table-wrap mt-4"><table className="company-table form-field-table"><thead><tr><th>元の項目</th><th>種類</th><th>標準マッピング</th><th>確度・根拠</th><th>推奨値</th><th></th></tr></thead><tbody>
         {profile.fields.map(field => {
           const draft = drafts[field.id] ?? { mappedKey: field.mapped_key, value: reviewedValue(field) }

@@ -29,6 +29,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
+from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
 from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
 from app.services.form_profile_delivery import sender_values
@@ -155,6 +156,28 @@ def get_form_review_material(
         "profile_review_reason": profile.review_reason,
         "live_form_checked": False,
     }
+
+
+@router.get("/form-profiles/{profile_id}/choice-groups", response_model=list[dict])
+def get_choice_groups(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    return inventory(db, _owned_profile(profile_id, db, user, write=False))
+
+
+@router.post(
+    "/form-profiles/{profile_id}/choice-groups/{group_id}/review", response_model=list[dict]
+)
+def review_choice_group(
+    profile_id: UUID,
+    group_id: str,
+    body: GroupReviewInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    profile = _owned_profile(profile_id, db, user)
+    record_review(db, profile, group_id, body, user)
+    return inventory(db, profile)
 
 
 @router.post(

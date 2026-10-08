@@ -117,6 +117,18 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(newsletter).toHaveValue('')
   await formPanel.getByText(/解析ログ/).click()
   await expect(formPanel.getByText('manual_corrected', { exact: true })).toHaveCount(3)
+  const groupReview = choiceMaterial.getByRole('region', { name: '必須グループ確認' })
+  await expect(groupReview.getByRole('button', { name: 'グループの確認を記録' })).toBeDisabled()
+  await groupReview.getByLabel('確認した必須条件', { exact: true }).selectOption('EXACTLY_ONE')
+  await groupReview.getByLabel('other[]のグループ選択', { exact: true }).selectOption('OTHER')
+  await expect(groupReview.getByRole('button', { name: 'グループの確認を記録' })).toBeDisabled()
+  await groupReview.getByLabel('対象項目・必須条件・選択値を元フォームで確認しました').check()
+  await groupReview.getByRole('button', { name: 'グループの確認を記録' }).click()
+  await expect(groupReview.getByText('条件・選択を記録済み', { exact: true })).toBeVisible()
+  await expect(groupReview.getByText('前回の選択：その他', { exact: true })).toBeVisible()
+  await expect(captchaCard.getByText('要確認', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('manual_corrected', { exact: true })).toHaveCount(4)
+  await groupReview.screenshot({ path: testInfo.outputPath('group-review.png') })
 
   const memberResponse = await page.request.post(`/api/projects/${project.id}/members`, {
     data: { email: process.env.E2E_MEMBER_EMAIL, role: 'viewer' },
@@ -142,6 +154,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await viewerReview.getByRole('button', { name: '入力候補と確認事項を見る' }).click()
   await expect(viewerReview.getByText('送信者設定は管理者のみ確認できます。')).toBeVisible()
   await expect(viewerReview.getByRole('button', { name: '確認した選択を保存' })).toHaveCount(0)
+  await expect(viewerReview.getByRole('button', { name: 'グループの確認を記録' })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
   await login(page, process.env.E2E_EMAIL!, process.env.E2E_PASSWORD!)
