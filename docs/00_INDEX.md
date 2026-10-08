@@ -342,3 +342,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [204_CF7_HUMAN_APPROVAL_HANDOFF_PREVIEW.md](204_CF7_HUMAN_APPROVAL_HANDOFF_PREVIEW.md): 入力確認・契約・wireの承認引き継ぎsnapshot照合・変更/期限拒否・承認と送信は未接続
 
 - [205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md](205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md): 実サイト候補のHuman再認証承認・変更/期限失効・DB不変性/予約拒否・送信未接続
+
+- [206_CF7_REAL_RESERVATION_REAPPROVAL.md](206_CF7_REAL_RESERVATION_REAPPROVAL.md): 実サイト候補とは別のHuman再承認・予約のみの保存・worker/DB実行拒否・送信未接続
