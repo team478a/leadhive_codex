@@ -79,7 +79,7 @@ def inspect_isolated(html: str, url: str, index: int) -> dict:
             timeout=5,
             check=True,
             env={key: os.environ[key] for key in ("SystemRoot", "WINDIR") if key in os.environ},
-            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         if len(result.stdout) > 32000:
             return failed

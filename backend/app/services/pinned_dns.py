@@ -106,7 +106,7 @@ def isolated_resolve(host: str, timeout: float = 5) -> tuple[str, ...]:
                 close_fds=True,
                 env=child_env,
                 cwd=Path(__file__).parent,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
             )
             remaining = deadline - time.monotonic()
             if remaining <= 0:
