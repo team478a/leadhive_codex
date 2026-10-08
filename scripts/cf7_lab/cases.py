@@ -7,6 +7,7 @@ import httpx
 from contract_probe import verify_path, verify_query
 from group_probe import verify_groups
 from protocol import browser_multipart_value, classify, observe
+from radio_probe import verify_radio
 
 
 def verify(origin, output, report, fixture, check, command, assets, page_url):
@@ -252,6 +253,18 @@ def verify(origin, output, report, fixture, check, command, assets, page_url):
             assets,
             page_url,
         )
+        verify_radio(
+            client,
+            page.text,
+            origin,
+            output,
+            report,
+            fixture,
+            check,
+            command,
+            assets,
+            page_url,
+        )
         fixture("query-root")
         query_page = client.get(
             origin + "/?page_id=" + str(report["versions"]["page_id"])
@@ -269,11 +282,14 @@ def verify(origin, output, report, fixture, check, command, assets, page_url):
             "fixed explicit cases have no extra submission",
             report["feedback_post_count"]
             - report["group_contract"]["feedback_post_count"]
+            - report["radio_contract"]["feedback_post_count"]
             == 19
             and len(report["mail_evidence"]["submissions"])
             - report["group_contract"]["submission_delta"]
+            - report["radio_contract"]["submission_delta"]
             == 17
             and len(report["mail_evidence"]["mail_calls"])
             - report["group_contract"]["mail_capture_delta"]
+            - report["radio_contract"]["mail_capture_delta"]
             == report["setup_mail_calls_captured"] + 10,
         )

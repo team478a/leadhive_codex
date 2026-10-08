@@ -33,7 +33,7 @@ if (!defined('WPCF7_VERSION') || WPCF7_VERSION !== '6.1.4') {
 }
 if ($lab_action === 'create') {
     $forms = array();
-    foreach (array('standard', 'optional', 'invert', 'demo', 'groups_required', 'groups_optional') as $kind) {
+    foreach (array('standard', 'optional', 'invert', 'demo', 'groups_required', 'groups_optional', 'radio') as $kind) {
         $form = WPCF7_ContactForm::get_template(array('title' => 'Lab ' . $kind));
         $options = $kind === 'optional' ? ' optional' : ($kind === 'invert' ? ' invert' : '');
         $props = $form->get_properties();
@@ -44,6 +44,7 @@ if ($lab_action === 'create') {
                 ? '[checkbox' . ($kind === 'groups_required' ? '*' : '')
                     . ' services use_label_element "SNS運用" "Website" "OEM"]' . "\n"
                 : '')
+            . ($kind === 'radio' ? '[radio topic use_label_element "SNS運用" "OEM"]' . "\n" : '')
             . '[acceptance consent' . $options . ']Lab-only privacy terms[/acceptance]' . "\n"
             . '[submit "Send lab fixture"]';
         $props['mail']['recipient'] = 'sink@example.invalid';
@@ -53,6 +54,7 @@ if ($lab_action === 'create') {
         if (strpos($kind, 'groups_') === 0) {
             $props['mail']['body'] .= "\n" . '[services]';
         }
+        if ($kind === 'radio') { $props['mail']['body'] .= "\n" . '[topic]'; }
         $props['mail_2']['active'] = false;
         $props['additional_settings'] = $kind === 'demo' ? 'demo_mode: on' : '';
         $form->set_properties($props);

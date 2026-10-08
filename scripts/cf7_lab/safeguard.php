@@ -41,6 +41,12 @@ add_action('wpcf7_submit', static function ($form, $result) {
             return hash('sha256', (string) $value);
         }, $values);
     }
+    $radio = $submission ? $submission->get_posted_data('topic') : null;
+    if ($radio !== null) {
+        $record['radio_value_hashes'] = array_map(static function ($value) {
+            return hash('sha256', (string) $value);
+        }, (array) $radio);
+    }
     $records[] = $record;
     update_option('leadhive_lab_submissions', $records, false);
 }, 10, 2);
