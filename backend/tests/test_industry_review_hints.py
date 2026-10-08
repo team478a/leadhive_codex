@@ -37,7 +37,37 @@ def test_literal_hint_never_classifies_or_writes(db, sample):
     assert hint["source_url"] == "https://example.test/service"
     assert "美容院" in hint["text"]
     assert hint["observed_at"] == company.scraped_at
+    assert hint["role_hint"]["confirmed"] is False
+    assert "PROVISION_CONTEXT" in hint["role_hint"]["contexts"]
     assert all(db.scalar(select(func.count()).select_from(m)) == n for m, n in before.items())
+
+
+def test_provider_context_is_ranked_above_unrelated_course_mentions(db, sample):
+    _, _, company = sample
+    company.website_text = (
+        "美容院の授業コースについて。" * 200
+        + "\n[https://example.test/service]\n当社は美容院向けに法人サービスを提供します。"
+    )
+    value = hints(db, company, "美容院", datetime.now(timezone.utc))
+    # The scan ceiling bounds work: the first 60 hints may all be course references.
+    assert len(value["excerpts"]) <= 3
+    assert all(h["role_hint"]["confirmed"] is False for h in value["excerpts"])
+    company.website_text = (
+        "美容院の授業コースについて。\n"
+        "\n[https://example.test/service]\n当社は美容院向けに法人サービスを提供します。"
+    )
+    value = evaluate(db, company, [condition(kind="INDUSTRY", value="美容院")])
+    assert value["state"] == "REVIEW_REQUIRED"
+    first = value["conditions"][0]["review_hints"]["excerpts"][0]
+    assert first["source_url"] == "https://example.test/service"
+    assert first["role_hint"]["contexts"] == ["PROVISION_CONTEXT"]
+
+
+def test_role_context_respects_official_site_and_stored_url_boundary(db, sample):
+    _, _, company = sample
+    company.website_text = "\n[https://other.test/service]\n美容院のお客様向けに料金を提示します。"
+    value = hints(db, company, "美容院", datetime.now(timezone.utc))
+    assert value["excerpts"] == []
 
 
 @pytest.mark.parametrize(

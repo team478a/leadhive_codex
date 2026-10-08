@@ -5,6 +5,7 @@ import unicodedata
 from datetime import timedelta
 
 from app.services.industry_aliases import terms_for
+from app.services.industry_role_hints import context_hint, hint_order
 from app.services.official_site_condition import evaluate_site
 from app.services.site_identity_review import official_evidence_url
 
@@ -53,12 +54,14 @@ def hints(db, company, value, now):
                     source_url=safe_source,
                     observed_at=company.scraped_at,
                     matched_term=match[0],
+                    role_hint=context_hint(excerpt, safe_source, match[0]),
                 )
             )
-            if len(excerpts) == 3:
+            if len(excerpts) == 60:
                 break
-        if len(excerpts) == 3:
+        if len(excerpts) == 60:
             break
+    excerpts = sorted(excerpts, key=hint_order)[:3]
     return dict(
         status="AVAILABLE" if excerpts else "NO_LITERAL_MATCH",
         reason="INDUSTRY_TEXT_CANDIDATES" if excerpts else "INDUSTRY_TEXT_NOT_FOUND",

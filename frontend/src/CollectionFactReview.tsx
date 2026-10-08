@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { api, errorMessage } from './api'
 
-export type FactCondition = { type: string; value: string; review_version?: number; company_fact_hash?: string; evidence_excerpt?: string; observed_value?: string; review_hints?: { status: string; reason: string; terms?: string[]; excerpts: { text: string; source_url: string; observed_at: string; matched_term?: string }[] } }
+export type FactCondition = { type: string; value: string; review_version?: number; company_fact_hash?: string; evidence_excerpt?: string; observed_value?: string; review_hints?: { status: string; reason: string; terms?: string[]; excerpts: { text: string; source_url: string; observed_at: string; matched_term?: string; role_hint?: { status: string; contexts: string[]; confirmed: false } }[] } }
+const roleLabels: Record<string, string> = {
+  PROVISION_CONTEXT: '提供・受託に関する表現あり', SELF_USE_CONTEXT: '自社利用・運用規約の可能性',
+  EDUCATION_CONTEXT: '授業・講座の可能性', MEDIA_CONTEXT: '記事・紹介文の可能性',
+  PUBLIC_ORGANIZATION_CONTEXT: '行政・自治体のページ', COMPANY_NAME_CONTEXT: '社名に含まれる表記の可能性',
+}
 export function CollectionFactReview({ companyId, condition, onSaved }: { companyId: string; condition: FactCondition; onSaved: () => void }) {
   const [outcome, setOutcome] = useState('MATCH')
   const [source, setSource] = useState('')
@@ -30,6 +35,7 @@ export function CollectionFactReview({ companyId, condition, onSaved }: { compan
       {condition.review_hints?.terms && <p>確認候補の表記：{condition.review_hints.terms.join('・')}（条件の変更ではありません）</p>}
       {condition.review_hints?.excerpts.map((hint, i) => <div key={`${hint.source_url}-${i}`}>
         {hint.matched_term && <p>見つかった表記：{hint.matched_term}</p>}
+        {hint.role_hint && <p>文脈の注意点：{hint.role_hint.contexts.length ? hint.role_hint.contexts.map(c => roleLabels[c] ?? '文脈の確認が必要').join('・') : 'サービス提供者かは未確認'}。自動判定ではありません。外部のお客様向けの事業か確認してください。</p>}
         <blockquote>{hint.text}</blockquote>
         <p>取得日時：{new Date(hint.observed_at).toLocaleString('ja-JP')} <a href={hint.source_url} target="_blank" rel="noopener noreferrer">候補の公開ページ ↗</a></p>
         <button type="button" disabled={busy} onClick={() => { setSource(hint.source_url); setExcerpt(hint.text); setHintUsed(true); setHintChecked('') }}>この文章を確認欄に入れる</button>

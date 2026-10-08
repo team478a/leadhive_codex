@@ -53,6 +53,8 @@ test('Industry excerpts require human confirmation and never establish a match a
     await expect(review.getByRole('region', { name: '業種の確認を助ける文章' })).toContainText('当社は美容室')
     await expect(review).toContainText('確認候補の表記：美容院・美容室・ヘアサロン')
     await expect(review).toContainText('見つかった表記：美容室')
+    await expect(review).toContainText('提供・受託に関する表現あり')
+    await expect(review).toContainText('自動判定ではありません')
     await review.getByRole('button', { name: 'この文章を確認欄に入れる' }).click()
     const save = review.getByRole('button', { name: '人の確認結果を保存' })
     await expect(save).toBeDisabled()
