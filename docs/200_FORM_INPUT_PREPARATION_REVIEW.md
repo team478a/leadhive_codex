@@ -34,6 +34,8 @@ Viewerは確認票を読むだけ。送信者情報の表示権限は既存の�
 確認票はProject/Company/Profile ID、対象URL、保存構造fingerprint、既存source hash、
 Draft ID/hash、HTML版マーカー、観測hash/期限、項目順序・値・確認状態をSHA-256へbindする。
 表現versionは`saved-form-input-review-v1`。
+後続201工程で項目型をhashへ追加し、`saved-form-input-review-v2`へ更新。
+v1の確認は現在のv2確認として流用しない。再確認が必要。
 送信者・文面・対象・項目・観測が変われば確認票hashも変わり、旧確認はINVALIDATEDになる。
 画面でも入力資料の内容が更新された場合は旧確認票とcheckboxをリセットする。
 

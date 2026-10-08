@@ -98,6 +98,16 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await inputPreparation.getByRole('checkbox').check()
   await inputPreparation.getByRole('button', { name: '入力内容の確認を記録' }).click()
   await expect(inputPreparation).toContainText('入力確認を記録済み（送信承認ではありません）')
+  let contractChanged = false
+  await page.route('**/api/form-profiles/*/contract-preview', route => route.fulfill({ json: contractChanged ? { status: 'HOLD', reasons: ['INPUT_CONFIRMATION_REQUIRED'], contract: null, contract_hash: null } : { status: 'PREVIEW_ONLY', reasons: [], contract_hash: 'b'.repeat(64), contract: { endpoint: `https://${domain}/wp-json/contact-form-7/v1/contact-forms/7/feedback`, contract_family: 'cf7-6.2', parts: [{ name: 'body' }] } } }))
+  await inputPreparation.getByRole('button', { name: 'フォーム証拠と入力を照合' }).click()
+  await expect(inputPreparation.getByText('照合済み・送信不可の契約プレビュー', { exact: true })).toBeVisible()
+  await expect(inputPreparation.getByText(/確認したREST送信先/)).toBeVisible()
+  contractChanged = true
+  await inputPreparation.getByRole('button', { name: 'フォーム証拠と入力を照合' }).click()
+  await expect(inputPreparation.getByText('証拠照合は保留です。', { exact: true })).toBeVisible()
+  await expect(inputPreparation.getByText(/確認したREST送信先/)).toHaveCount(0)
+  await page.unroute('**/api/form-profiles/*/contract-preview')
   changedPreparation = true
   await inputPreparation.getByRole('button', { name: '入力内容をまとめて確認' }).click()
   await inputPreparation.getByRole('checkbox').check()

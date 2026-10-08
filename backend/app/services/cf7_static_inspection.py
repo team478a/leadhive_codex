@@ -10,6 +10,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.services.cf7_real_contract_preview import RealContractEvidence
+
 
 class ContractShape(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
@@ -42,6 +44,7 @@ class StaticInspection(BaseModel):
     rest_link_same_origin: bool
     base_override: bool
     contract_shape: ContractShape | None = None
+    contract_evidence: RealContractEvidence | None = None
     execution_allowed: Literal[False]
     eligible_for_approval: Literal[False]
 
@@ -78,7 +81,7 @@ def inspect_isolated(html: str, url: str, index: int) -> dict:
             env={key: os.environ[key] for key in ("SystemRoot", "WINDIR") if key in os.environ},
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
-        if len(result.stdout) > 2048:
+        if len(result.stdout) > 32000:
             return failed
         return validate_saved(json.loads(result.stdout)) or failed
     except (subprocess.SubprocessError, OSError, ValueError):

@@ -28,6 +28,9 @@ class Inspector(HTMLParser):
         self.tags = 0
         self.rest_same_origin = False
         self.base_override = False
+        self.scripts: list[str] = []
+        self.script: str | None = None
+        self.external_control = False
 
     def handle_starttag(self, tag, attributes):
         self.tags += 1
@@ -36,6 +39,10 @@ class Inspector(HTMLParser):
         attrs = dict(attributes)
         if len(attrs) != len(attributes):
             raise ValueError("duplicate attribute")
+        if tag == "script":
+            self.script = ""
+        if "form" in attrs:
+            self.external_control = True
         if tag == "base":
             self.base_override = True
         if tag == "link" and "https://api.w.org/" in (attrs.get("rel") or "").split():
@@ -72,13 +79,37 @@ class Inspector(HTMLParser):
                 "missing": 0,
                 "files": 0,
                 "unsupported": 0,
+                "controls": [],
+                "order": [],
+                "custom": any(k.startswith("on") for k in attrs),
             }
             self.forms.append(self.current)
             if len(self.forms) > 20:
                 raise ValueError("form limit")
+        if self.current is not None:
+            self.current["custom"] |= (
+                any(k.startswith("on") for k in attrs) or tag == "fieldset" and "disabled" in attrs
+            )
+            # Acceptance has wrapper-dependent/inverted semantics; defer rather than infer.
+            self.current["custom"] |= "wpcf7-acceptance" in (attrs.get("class") or "").split()
         if self.current is None or tag not in {"input", "textarea", "select", "button"}:
             return
         kind = (attrs.get("type") or "text").lower() if tag == "input" else tag
+        self.current["custom"] |= any(
+            k.startswith("on")
+            or k
+            in {
+                "formaction",
+                "formmethod",
+                "pattern",
+                "min",
+                "max",
+                "minlength",
+                "maxlength",
+                "multiple",
+            }
+            for k in attrs
+        )
         name = attrs.get("name") or ""
         if len(name) > 100:
             raise ValueError("name limit")
@@ -90,9 +121,21 @@ class Inspector(HTMLParser):
             if name in self.current["hidden"]:
                 raise ValueError("duplicate hidden")
             self.current["hidden"][name] = attrs.get("value") or ""
+            self.current["order"].append(name)
         elif kind not in {"submit", "button", "reset", "image"}:
             self.current["visible_names"].append(name)
             self.current["disabled"] += "disabled" in attrs
+            self.current["order"].append(name)
+            self.current["controls"].append(
+                {
+                    "name": name,
+                    "kind": kind,
+                    "required": "required" in attrs
+                    or attrs.get("aria-required") == "true"
+                    or "wpcf7-validates-as-required" in (attrs.get("class") or "").split(),
+                    "checkbox_value": (attrs.get("value") or "on") if kind == "checkbox" else "",
+                }
+            )
         self.current["radios"] += kind == "radio"
         self.current["selects"] += kind == "select"
         self.current["checkboxes"] += kind == "checkbox"
@@ -127,8 +170,15 @@ class Inspector(HTMLParser):
             raise ValueError("control limit")
 
     def handle_endtag(self, tag):
+        if tag == "script" and self.script is not None:
+            self.scripts.append(self.script)
+            self.script = None
         if tag == "form":
             self.current = None
+
+    def handle_data(self, data):
+        if self.script is not None:
+            self.script += data
 
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
@@ -204,9 +254,91 @@ def inspect_html(html: str, url: str, index: int) -> dict:
         "rest_link_same_origin": parser.rest_same_origin and not parser.base_override,
         "base_override": parser.base_override,
         "contract_shape": contract_shape(form),
+        "contract_evidence": contract_evidence(parser, form),
         "execution_allowed": False,
         "eligible_for_approval": False,
     }
+
+
+def unique_object(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON key")
+        result[key] = value
+    return result
+
+
+def contract_evidence(parser: Inspector, form: dict | None) -> dict | None:
+    """Allowlist metadata only. Never execute JS or retain raw HTML/visible defaults."""
+    shape = contract_shape(form)
+    if not form or not shape or not shape["review_hidden_shape_valid"]:
+        return None
+    if (
+        parser.base_override
+        or parser.external_control
+        or form["custom"]
+        or not parser.rest_same_origin
+        or not form["post"]
+        or not form["enctype"]
+        or any(
+            shape[k]
+            for k in (
+                "extra_hidden",
+                "invalid_names",
+                "repeated_names",
+                "radio_controls",
+                "select_controls",
+                "disabled_controls",
+            )
+        )
+        or form["files"]
+        or form["missing"]
+        or form["unsupported"]
+        or not 1 <= len(form["controls"]) <= 50
+        or any(
+            not re.fullmatch(r"[A-Za-z0-9_-]{1,200}", c["checkbox_value"])
+            for c in form["controls"]
+            if c["kind"] == "checkbox"
+        )
+    ):
+        return None
+    configs = []
+    try:
+        decoder = json.JSONDecoder(object_pairs_hook=unique_object)
+        for script in parser.scripts:
+            for match in re.finditer(r"\bvar\s+wpcf7\s*=\s*", script):
+                value, end = decoder.raw_decode(script[match.end() :])
+                if not script[match.end() + end :].lstrip().startswith(";"):
+                    return None
+                configs.append(value)
+        if len(configs) != 1 or set(configs[0]) != {"api"}:
+            return None
+        api = configs[0]["api"]
+        if set(api) != {"root", "namespace"} or api["namespace"] != "contact-form-7/v1":
+            return None
+        source = urlsplit(parser.url)
+        root = source.scheme + "://" + source.netloc + "/wp-json/"
+        if source.scheme != "https" or api["root"] != root:
+            return None
+        return {
+            "definition_version": "real-cf7-static-evidence-v1",
+            "source_kind": "REAL_SITE_STATIC_HTML",
+            "form_url": parser.url,
+            "plugin_version": form["version"],
+            "rest_root": root,
+            "endpoint": root
+            + "contact-form-7/v1/contact-forms/"
+            + form["hidden"]["_wpcf7"]
+            + "/feedback",
+            "hidden": form["hidden"],
+            "controls": form["controls"],
+            "dom_order": form["order"],
+            "execution_allowed": False,
+            "eligible_for_approval": False,
+        }
+    except (ValueError, TypeError, KeyError):
+        return None
 
 
 if __name__ == "__main__":

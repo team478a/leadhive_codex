@@ -30,6 +30,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.cf7_candidate_preparation import profile_source_hash
+from app.services.cf7_real_contract_preview import preview as preview_real_contract
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_adapter_prerequisites import assess as assess_adapter_prerequisites
 from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
@@ -360,7 +361,7 @@ def record_input_preparation(
                 details={
                     "operation": "input_preparation_review",
                     "snapshot_hash": report["snapshot_hash"],
-                    "definition_version": "saved-form-input-review-v1",
+                    "definition_version": report["snapshot"]["definition_version"],
                     "expires_at": expiry.isoformat(),
                     "execution_allowed": False,
                     "eligible_for_approval": False,
@@ -369,6 +370,16 @@ def record_input_preparation(
         )
         db.commit()
     return _input_preparation(profile, db, user)
+
+
+@router.get("/form-profiles/{profile_id}/contract-preview")
+def get_contract_preview(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    profile = _owned_profile(profile_id, db, user, write=False)
+    return preview_real_contract(
+        _input_preparation(profile, db, user), latest_live_check(db, profile)
+    )
 
 
 @router.get("/form-profiles/{profile_id}/choice-groups", response_model=list[dict])

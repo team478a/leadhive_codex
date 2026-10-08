@@ -101,6 +101,7 @@ def prepare(
                 "name": item["name"],
                 "label": item["label"],
                 "required": item["required"],
+                "field_type": field["field_type"] if field else None,
                 "values": values,
                 "state": state,
             }
@@ -113,7 +114,7 @@ def prepare(
     ):
         reasons.append("UNSUPPORTED_STRUCTURE")
     snapshot = {
-        "definition_version": "saved-form-input-review-v1",
+        "definition_version": "saved-form-input-review-v2",
         "profile_id": str(material["profile_id"]),
         "project_id": str(material["project_id"]),
         "company_id": str(material["company_id"]),
