@@ -36,11 +36,69 @@ from app.services.form_intelligence.fields import mapping_review_reason
 from app.services.form_live_check import check as check_live_form
 from app.services.form_live_check import latest as latest_live_check
 from app.services.form_live_check import record as record_live_check
+from app.services.form_live_check import source_binding
 from app.services.form_profile_delivery import sender_values
 from app.services.form_review_material import build_review_material
+from app.services.form_target_refresh import refresh as refresh_target_form
 from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
+
+
+@router.post("/form-profiles/{profile_id}/refresh-target")
+def refresh_target_profile(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    profile = _owned_profile(profile_id, db, user)
+    db.scalar(
+        select(FormProfile)
+        .where(FormProfile.id == profile.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    recent = db.scalar(
+        select(FormAnalysisLog.id)
+        .where(
+            FormAnalysisLog.form_profile_id == profile.id,
+            FormAnalysisLog.provider == "rule-target-refresh",
+            FormAnalysisLog.created_at > datetime.now(timezone.utc) - timedelta(seconds=60),
+        )
+        .limit(1)
+    )
+    if recent:
+        raise HTTPException(429, "直前に再解析済みです。1分待ってからお試しください。")
+    try:
+        result = refresh_target_form(db, profile, user)
+    except HTTPException as error:
+        if error.status_code not in {409, 422}:
+            raise
+        failure = dict(
+            checked_at=datetime.now(timezone.utc).isoformat(),
+            source_binding=source_binding(profile),
+            saved_fingerprint=profile.fingerprint,
+            observed_fingerprint=None,
+            structure_status="FETCH_FAILED",
+            sales_prohibition_detected=False,
+            captcha_state="UNVERIFIED",
+            execution_allowed=False,
+            message=str(error.detail),
+        )
+        record_live_check(db, profile, user, failure)
+        db.add(
+            FormAnalysisLog(
+                company_id=profile.company_id,
+                form_profile_id=profile.id,
+                actor_user_id=user.id,
+                event_type="analysis_failed",
+                provider="rule-target-refresh",
+                created_at=datetime.now(timezone.utc),
+                details={"operation": "target_form_refresh", "refresh_applied": False},
+            )
+        )
+        db.commit()
+        raise
+    db.commit()
+    return result
 
 
 @router.get("/form-profiles/{profile_id}/live-check")

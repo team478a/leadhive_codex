@@ -94,15 +94,27 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     else await route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ detail: '直前に確認済みです。1分待ってから再確認してください。' }) })
   })
   const liveReview = inputReview.getByRole('region', { name: '現在のフォーム確認' })
+  let targetRefreshes = 0
+  await page.route('**/api/form-profiles/*/refresh-target', async route => {
+    targetRefreshes += 1
+    const key = route.request().url().replace('/refresh-target', '/live-check')
+    const old = savedChecks.get(key) as Record<string, unknown>
+    savedChecks.set(key, { ...old, freshness: 'SOURCE_CHANGED' })
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ refresh_applied: true, execution_allowed: false, human_approved: false }) })
+  })
   await liveReview.getByRole('button', { name: '現在のフォームを確認', exact: true }).click()
   await expect(liveReview.getByText('保存済みの比較情報が不足・再解析が必要', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('入力項目：保存済みと一致', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('送信先：比較元が未保存', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('保存済みの確認結果（24時間以内の観測）', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('静的HTMLでは未検出・画面確認が必要', { exact: false })).toBeVisible()
-  await liveReview.screenshot({ path: testInfo.outputPath('live-check.png') })
+  await liveReview.getByText('保存済みの比較情報が不足・再解析が必要', { exact: true }).scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath('live-check-viewport.png') })
   await liveReview.getByRole('button', { name: '現在のフォームを確認', exact: true }).click()
   await expect(liveReview.getByRole('alert')).toContainText('1分待って')
+  await liveReview.getByRole('button', { name: 'このフォームだけ再解析', exact: true }).click()
+  await expect(liveReview.getByText('保存されたフォーム情報が変わりました。この確認結果は以前の情報です。', { exact: true })).toBeVisible()
+  expect(targetRefreshes).toBe(1)
   await inputReview.getByRole('button', { name: '入力候補と確認事項を見る' }).click()
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toBeVisible()
   await expect(inputReview.getByText('E2E review draft body', { exact: true })).toBeVisible()
@@ -188,7 +200,8 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(viewerReview.getByRole('button', { name: '確認した選択を保存' })).toHaveCount(0)
   await expect(viewerReview.getByRole('button', { name: 'グループの確認を記録' })).toHaveCount(0)
   await expect(viewerReview.getByRole('button', { name: '現在のフォームを確認', exact: true })).toHaveCount(0)
-  await expect(viewerPanel.getByText('保存済みの確認結果（24時間以内の観測）', { exact: true })).toBeVisible()
+  await expect(viewerPanel.getByText('保存されたフォーム情報が変わりました。この確認結果は以前の情報です。', { exact: true })).toBeVisible()
+  await expect(viewerPanel.getByRole('button', { name: 'このフォームだけ再解析', exact: true })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
   await login(page, process.env.E2E_EMAIL!, process.env.E2E_PASSWORD!)

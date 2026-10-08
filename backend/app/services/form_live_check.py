@@ -140,6 +140,8 @@ def check(profile: FormProfile) -> dict:
             result["method_is_post"] = str(form.get("method") or "get").lower() == "post"
             if not profile.fingerprint or not profile.action_url:
                 result["structure_status"] = "SAVED_BASELINE_INCOMPLETE"
+            elif not result["method_is_post"]:
+                result["structure_status"] = "UNSUPPORTED_METHOD"
             else:
                 result["structure_status"] = (
                     "SAME_STRUCTURE"
@@ -159,7 +161,7 @@ def check(profile: FormProfile) -> dict:
     return result
 
 
-def record(db: Session, profile: FormProfile, user: User, result: dict) -> None:
+def record(db: Session, profile: FormProfile, user: User | None, result: dict) -> None:
     # Keep saved fields, fingerprints and Human corrections intact. Any inability
     # to confirm the saved structure disables its legacy delivery eligibility.
     if result["sales_prohibition_detected"]:
@@ -171,7 +173,11 @@ def record(db: Session, profile: FormProfile, user: User, result: dict) -> None:
         profile.form_status = "BLOCKED"
         profile.delivery_supported = False
     else:
-        if result["structure_status"] != "SAME_STRUCTURE":
+        if result["structure_status"] == "UNSUPPORTED_METHOD":
+            profile.form_status = "REVIEW_REQUIRED"
+            profile.delivery_supported = False
+            profile.review_reason = "通常のPOST送信経路に未対応です。Humanによる確認が必要です。"
+        elif result["structure_status"] != "SAME_STRUCTURE":
             profile.form_status = "STALE"
             profile.delivery_supported = False
             profile.review_reason = (
@@ -185,12 +191,16 @@ def record(db: Session, profile: FormProfile, user: User, result: dict) -> None:
         FormAnalysisLog(
             company_id=profile.company_id,
             form_profile_id=profile.id,
-            actor_user_id=user.id,
+            actor_user_id=user.id if user else None,
             event_type="analysis_failed"
             if result["structure_status"] == "FETCH_FAILED"
             else "analysis_completed",
             provider="rule-target-get",
             created_at=datetime.now(timezone.utc),
-            details={"operation": "target_live_check", **result},
+            details={
+                "operation": "target_live_check",
+                "principal_type": "HUMAN" if user else "SYSTEM",
+                **result,
+            },
         )
     )

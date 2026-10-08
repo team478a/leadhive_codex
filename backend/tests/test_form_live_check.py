@@ -89,7 +89,12 @@ def mock_page(monkeypatch, profile, html=HTML, url=None, failure=False):
             "NOT_DETECTED_STATIC",
             False,
         ),
-        (HTML.replace('method="post"', 'method="get"'), "CHANGED", "NOT_DETECTED_STATIC", False),
+        (
+            HTML.replace('method="post"', 'method="get"'),
+            "UNSUPPORTED_METHOD",
+            "NOT_DETECTED_STATIC",
+            False,
+        ),
         ("<p>フォームなし</p>", "FORM_NOT_FOUND", "NOT_DETECTED_STATIC", False),
         (HTML + '<script src="recaptcha.js"></script>', "SAME_STRUCTURE", "DETECTED", False),
         (HTML + "営業メールはご遠慮ください", "SAME_STRUCTURE", "NOT_DETECTED_STATIC", True),
@@ -306,3 +311,110 @@ def test_action_fragment_is_ignored_but_query_and_path_are_not(
     result = auth.post(f"/api/form-profiles/{profile.id}/live-check").json()
     assert result["structure_status"] == expected
     assert result["fingerprint_match"] is True
+
+
+def refresh_mock(monkeypatch, profile, html=HTML, **kwargs):
+    from app.services import form_target_refresh
+
+    calls = mock_page(monkeypatch, profile, html, **kwargs)
+    monkeypatch.setattr(form_target_refresh, "TargetFetcher", live.TargetFetcher)
+    return calls
+
+
+@pytest.mark.parametrize("missing_hash", [True, False])
+def test_target_refresh_fills_baseline_without_authorizing(auth, db, monkeypatch, missing_hash):
+    _, _, profile = prepare(auth, db)
+    profile.action_url = ""
+    if missing_hash:
+        profile.fingerprint = ""
+    db.commit()
+    old_ids = list(
+        db.scalars(
+            select(FormProfileField.id).where(FormProfileField.form_profile_id == profile.id)
+        )
+    )
+    calls = refresh_mock(monkeypatch, profile)
+    result = auth.post(f"/api/form-profiles/{profile.id}/refresh-target")
+    assert result.status_code == 200 and result.json()["refresh_applied"]
+    assert result.json()["preserved_field_ids"] is (not missing_hash)
+    db.refresh(profile)
+    assert profile.action_url == profile.form_url and profile.fingerprint
+    assert profile.form_status == "REVIEW_REQUIRED" and profile.sales_contact_status == "UNCERTAIN"
+    assert not profile.delivery_supported
+    new_ids = list(
+        db.scalars(
+            select(FormProfileField.id).where(FormProfileField.form_profile_id == profile.id)
+        )
+    )
+    assert (old_ids == new_ids) is (not missing_hash)
+    assert calls == [profile.form_url, "closed"]
+    assert auth.post(f"/api/form-profiles/{profile.id}/refresh-target").status_code == 429
+    for table in ("approval_requests", "email_deliveries", "form_deliveries", "operation_jobs"):
+        assert db.execute(text("SELECT count(*) FROM " + table)).scalar_one() == 0
+
+
+@pytest.mark.parametrize("changed,prohibited", [(False, False), (True, False), (True, True)])
+def test_refresh_protects_manual_values_and_blocks_changed_form(
+    auth, db, monkeypatch, changed, prohibited
+):
+    _, _, profile = prepare(auth, db)
+    field = db.scalar(
+        select(FormProfileField).where(FormProfileField.form_profile_id == profile.id)
+    )
+    field.decision_source = "MANUAL"
+    field.recommended_value = "Human value"
+    db.commit()
+    html = HTML.replace('name="body"', 'name="changed"') if changed else HTML
+    if prohibited:
+        html += "営業メールはご遠慮ください"
+    refresh_mock(monkeypatch, profile, html)
+    old_hash = profile.fingerprint
+    result = auth.post(f"/api/form-profiles/{profile.id}/refresh-target").json()
+    assert result["refresh_applied"] is (not changed)
+    db.refresh(field)
+    db.refresh(profile)
+    assert field.recommended_value == "Human value" and field.decision_source == "MANUAL"
+    assert profile.fingerprint == old_hash and not profile.delivery_supported
+    assert profile.form_status == (
+        "BLOCKED" if prohibited else "STALE" if changed else "REVIEW_REQUIRED"
+    )
+
+
+@pytest.mark.parametrize("failure", ["network", "redirect", "missing"])
+def test_failed_refresh_preserves_saved_fields(auth, db, monkeypatch, failure):
+    _, _, profile = prepare(auth, db)
+    refresh_mock(
+        monkeypatch,
+        profile,
+        "" if failure == "missing" else HTML,
+        failure=failure == "network",
+        url=profile.form_url + "/moved" if failure == "redirect" else None,
+    )
+    before = (
+        db.execute(text("SELECT row_to_json(t)::text FROM form_profile_fields t")).scalars().all()
+    )
+    result = auth.post(f"/api/form-profiles/{profile.id}/refresh-target")
+    assert result.status_code == (422 if failure == "network" else 409)
+    db.refresh(profile)
+    assert profile.form_status == "STALE" and not profile.delivery_supported
+    assert auth.post(f"/api/form-profiles/{profile.id}/refresh-target").status_code == 429
+    assert (
+        before
+        == db.execute(text("SELECT row_to_json(t)::text FROM form_profile_fields t"))
+        .scalars()
+        .all()
+    )
+
+
+def test_refresh_roles_denied_before_network(auth, db, monkeypatch, users):
+    project, _, profile = prepare(auth, db)
+    calls = refresh_mock(monkeypatch, profile)
+    path = f"/api/form-profiles/{profile.id}/refresh-target"
+    assert auth.post(path, headers={"Authorization": "Bearer agent"}).status_code in (401, 403)
+    auth.post(
+        "/api/auth/login", json={"email": users[1].email, "password": "test-only-long-password"}
+    )
+    assert auth.post(path).status_code == 404
+    db.add(ProjectMember(project_id=project["id"], user_id=users[1].id, role="viewer"))
+    db.commit()
+    assert auth.post(path).status_code == 404 and calls == []
