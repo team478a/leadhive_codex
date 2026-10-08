@@ -15,7 +15,8 @@ from app.services.form_intelligence.analyzer import _captcha_type
 from app.services.form_intelligence.fields import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.rules import sales_contact_status
-from app.services.scraper import SafeFetcher, ScrapeError
+from app.services.form_pinned_get import TargetFetcher
+from app.services.scraper import ScrapeError
 
 
 def source_binding(profile: FormProfile) -> str:
@@ -81,15 +82,6 @@ def latest(db: Session, profile: FormProfile) -> dict | None:
         "execution_allowed": False,
         "cf7_static": validate_saved(data.get("cf7_static")),
     }
-
-
-class TargetFetcher(SafeFetcher):
-    def _request(self, url, max_bytes, redirects=0, robots_request=False):
-        # The base fetcher validates every destination. Check robots on redirected
-        # HTML destinations too, without adding links or common-path discovery.
-        if not robots_request and not self.robots_allowed(url):
-            raise ScrapeError("robots.txtにより解析が許可されていません。")
-        return super()._request(url, max_bytes, redirects, robots_request)
 
 
 def check(profile: FormProfile) -> dict:

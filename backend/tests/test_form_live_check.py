@@ -173,14 +173,16 @@ def test_existing_prohibition_never_cleared(auth, db, monkeypatch):
     assert profile.sales_contact_status == "PROHIBITED" and profile.form_status == "BLOCKED"
 
 
-def test_redirect_robots_guard(monkeypatch):
+def test_unapproved_target_stops_before_dns(monkeypatch):
+    from app.services import form_pinned_get as pinned
+
+    calls = []
+    monkeypatch.setattr(pinned.transport, "resolve", lambda *args: calls.append(args))
     fetcher = live.TargetFetcher()
-    try:
-        monkeypatch.setattr(fetcher, "robots_allowed", lambda url: False)
-        with pytest.raises(ScrapeError, match="robots"):
-            fetcher._request("https://public.example/redirect-target", 100, redirects=1)
-    finally:
-        fetcher.close()
+    with pytest.raises(ScrapeError, match="OBSERVATION_TARGET_REJECTED"):
+        fetcher.fetch_html("https://public.example/contact?token=private")
+    assert calls == []
+    fetcher.close()
 
 
 def test_cf7_static_inspection_reuses_one_get_and_preserves_no_send(auth, db, monkeypatch):
