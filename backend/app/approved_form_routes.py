@@ -143,7 +143,7 @@ def output(row):
     return {
         **{c.name: getattr(row, c.name) for c in ApprovedFormDispatch.__table__.columns},
         "delivery_method": method,
-        "reservation_only": method == "form_adapter",
+        "reservation_only": method in {"form_adapter", "cf7_real_reservation"},
         "execution_enabled": method == "form_direct"
         and settings.outbound_enabled
         and settings.human_approved_form_enabled,

@@ -40,6 +40,12 @@ class ApprovedFormDispatch(Base):
             name="ck_approved_form_status",
         ),
         CheckConstraint(
+            "payload_snapshot->>'delivery_method' <> 'cf7_real_reservation' OR "
+            "(status IN ('queued','blocked','cancelled') AND started_at IS NULL "
+            "AND delivery_id IS NULL AND worker_id IS NULL AND lease_expires_at IS NULL)",
+            name="ck_cf7_reservation_not_started",
+        ),
+        CheckConstraint(
             "payload_snapshot->>'delivery_method' <> 'form_adapter' OR "
             "(status IN ('queued','blocked','cancelled') AND started_at IS NULL "
             "AND delivery_id IS NULL AND worker_id IS NULL) OR "

@@ -59,6 +59,10 @@ def duplicate(db, company_id, form_url, exclude=None):
 def validate(db, item, *, allow_adapter=False):
     if not approval.valid_approved_payload(db, item):
         raise HTTPException(409, "有効なHuman承認が必要です。")
+    if item.delivery_method == "cf7_real_reservation" and allow_adapter:
+        from app.services.cf7_real_reservation import validate_reservation
+
+        return validate_reservation(db, item)
     methods = {"form_direct", "form_adapter"} if allow_adapter else {"form_direct"}
     if item.channel != "form" or item.delivery_method not in methods or not item.source_draft_id:
         raise HTTPException(409, "保存済みフォームDraftから再準備・再承認してください。")
@@ -150,7 +154,7 @@ def reserve(db, item, body, user):
             raise HTTPException(409, "予約キーが異なる内容で使用されています。")
         return existing
     item = db.scalar(select(ApprovalRequest).where(ApprovalRequest.id == item.id).with_for_update())
-    if item.delivery_method == "form_adapter":
+    if item.delivery_method in {"form_adapter", "cf7_real_reservation"}:
         from app.models import Project, ProjectMember
 
         db.scalar(select(Project).where(Project.id == item.project_id).with_for_update())
@@ -164,6 +168,12 @@ def reserve(db, item, body, user):
             .execution_options(populate_existing=True)
         ).all()
         project_access(item.project_id, db, user)
+    if item.delivery_method == "cf7_real_reservation":
+        from app.approval_routes import lock_preparation_sources
+
+        source_id = item.payload_snapshot["cf7_reservation_plan"]["source_approval_id"]
+        db.scalar(select(ApprovalRequest).where(ApprovalRequest.id == source_id).with_for_update())
+        lock_preparation_sources(db, db.get(Company, item.company_id), user)
     approval.expected(item, body)
     try:
         validate(db, item, allow_adapter=True)

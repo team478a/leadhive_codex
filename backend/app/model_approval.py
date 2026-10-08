@@ -66,6 +66,10 @@ class ApprovalRequest(Base):
             name="ck_cf7_candidate_not_consumed",
         ),
         CheckConstraint(
+            "delivery_method <> 'cf7_real_reservation' OR status <> 'CONSUMED'",
+            name="ck_cf7_reservation_not_consumed",
+        ),
+        CheckConstraint(
             "delivery_method <> 'cf7_real_candidate_only' OR status <> 'CONSUMED'",
             name="ck_cf7_real_candidate_not_consumed",
         ),

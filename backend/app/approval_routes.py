@@ -70,7 +70,11 @@ def human_item(db, request_id, user, write=True, owner=False):
     )
     project_access(item.project_id, db, user, write=write, owner=owner)
     item = request_item(db, request_id)
-    if item.delivery_method in {"cf7_candidate_only", "cf7_real_candidate_only"} and write:
+    if (
+        item.delivery_method
+        in {"cf7_candidate_only", "cf7_real_candidate_only", "cf7_real_reservation"}
+        and write
+    ):
         lock_preparation_sources(db, db.get(Company, item.company_id), user)
     return item
 
@@ -85,6 +89,7 @@ def serialize(db, item):
     result["execution_plan_hash"] = item.payload_snapshot.get("execution_plan_hash")
     result["adapter_plan"] = item.payload_snapshot.get("adapter_plan")
     result["adapter_plan_hash"] = item.payload_snapshot.get("adapter_plan_hash")
+    result["cf7_reservation_plan"] = item.payload_snapshot.get("cf7_reservation_plan")
     result["cf7_real_handoff"] = item.payload_snapshot.get("cf7_real_handoff")
     if item.delivery_method == "cf7_candidate_only":
         result["cf7_candidate_snapshot"] = item.payload_snapshot.get("cf7_candidate_snapshot")
@@ -484,3 +489,38 @@ def revise_agent(
     service.expected(previous, body)
     service.invalidate_if_needed(db, previous)
     return serialize(db, service.create_proposal(db, project_id, body, "AGENT", agent.id, previous))
+
+
+@router.get("/approval-requests/{request_id}/cf7-reservation-preview")
+def cf7_reservation_preview(
+    request_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    from app.services import cf7_real_reservation
+
+    item = human_item(db, request_id, user, write=False)
+    try:
+        result = cf7_real_reservation.preview(db, item)
+    except HTTPException:
+        db.commit()
+        raise
+    db.commit()
+    return result
+
+
+@router.post("/approval-requests/{request_id}/cf7-reservation-request", status_code=201)
+def cf7_reservation_request(
+    request_id: UUID,
+    body: FormPreparation,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.services import cf7_real_reservation
+
+    item = human_item(db, request_id, user)
+    try:
+        return serialize(
+            db, cf7_real_reservation.create_request(db, item, user, body.expected_preparation_hash)
+        )
+    except HTTPException:
+        db.commit()
+        raise

@@ -36,7 +36,11 @@ def locked_items(db, project_id, selections, user):
     ).all()
     if len(items) != len(selections) or any(i.project_id != project_id for i in items):
         raise HTTPException(404, "提案が見つかりません。")
-    if any(i.delivery_method in {"cf7_candidate_only", "cf7_real_candidate_only"} for i in items):
+    if any(
+        i.delivery_method
+        in {"cf7_candidate_only", "cf7_real_candidate_only", "cf7_real_reservation"}
+        for i in items
+    ):
         raise HTTPException(409, "CF7候補は個別のHuman確認が必要です。送信はできません。")
     expected = {s.request_id: s for s in selections}
     for item in items:

@@ -48,7 +48,7 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
         expected_hash: item.payload_hash, expected_version: item.payload_version,
         idempotency_key: keys.current[item.id],
       })
-      setNotice(result.reservation_only ? '管理下フォームの予約を保存しました。実行器は未接続のため送信されません。' : result.execution_enabled ? '承認した内容で予約しました。ワーカーが送信前に再確認します。' : '予約を保存しました。フォーム実行はOFFのため送信されません。')
+      setNotice(result.reservation_only ? '予約のみを保存しました。この予約から送信は始まりません。' : result.execution_enabled ? '承認した内容で予約しました。ワーカーが送信前に再確認します。' : '予約を保存しました。フォーム実行はOFFのため送信されません。')
     })
   }
   return <><FormOperationsPanel key={`operations-${projectId}`} projectId={projectId} canWrite={canWrite} refresh={refresh} /><FormDispatchGovernancePanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} /><section className="panel" aria-label="承認済みフォーム予約">
@@ -58,8 +58,9 @@ export function ApprovedFormPanel({ projectId, items, canWrite, refresh }: {
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <fieldset disabled={busy}>
-      {canWrite && items.filter(item => item.channel === 'form' && ['form_direct', 'form_adapter'].includes(item.delivery_method ?? '') && item.status === 'APPROVED').map(item => <div key={item.id} className="my-3">
+      {canWrite && items.filter(item => item.channel === 'form' && ['form_direct', 'form_adapter', 'cf7_real_reservation'].includes(item.delivery_method ?? '') && item.status === 'APPROVED').map(item => <div key={item.id} className="my-3">
         <p>{item.company_name} / v{item.payload_version} / {item.subject}</p>
+        {item.delivery_method === 'cf7_real_reservation' && <p>CF7予約のみ。Human再承認済みですが、送信には使用できません。</p>}
         {item.adapter_plan && <p>管理下フォーム・予約のみ。実行器は未接続です。</p>}
         <details><summary>承認内容を確認</summary><p className="break-all">{item.form_url}</p><p className="break-all">POST先: {item.form_action_url || '未確定・再解析が必要'}</p><p className="whitespace-pre-wrap break-words">{item.body}</p>{Object.entries(item.field_values).map(([name, value]) => <p className="break-words" key={name}>{name}: {value}</p>)}</details>
         <button type="button" disabled={rows.some(row => row.approval_id === item.id) || !item.form_action_url} onClick={() => reserve(item)}>{item.company_name} の承認済みフォームを予約</button>

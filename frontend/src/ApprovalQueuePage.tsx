@@ -5,6 +5,7 @@ import { ApprovedEmailPanel, type ApprovalProposal as Proposal } from './Approve
 import { FormApprovalPreparationPanel } from './FormApprovalPreparationPanel'
 import { FormAdapterPlanDetails } from './FormAdapterPlanDetails'
 import { CF7CandidatePreparationPanel } from './CF7CandidatePreparationPanel'
+import { CF7ReservationPreparationPanel } from './CF7ReservationPreparationPanel'
 import { CF7CandidateDetails } from './CF7CandidateDetails'
 import { ApprovedFormPanel } from './ApprovedFormPanel'
 import type { Company, Project, ProjectMember } from './types'
@@ -21,6 +22,7 @@ const reasonNames: Record<string, string> = {
   'CF7 candidate evidence or payload changed': '保存済み証拠・文面・送信者・連絡可否のいずれかが変更または無効になりました。確認して再準備してください。',
   'CF7 real candidate evidence or payload changed': '実サイトの入力確認・フォーム証拠・文面・送信者・連絡可否が変更または失効しました。企業詳細から再準備してください。',
   'superseded by CF7 revision': '改訂候補を作成したため、旧候補を無効にしました。',
+  'CF7 reservation source or payload changed': '元の候補承認・証拠・入力内容が変更または失効しました。再準備してください。',
   'request expired': '候補の有効期限が切れました。新しい有効な証拠で再準備してください。',
 }
 
@@ -142,7 +144,7 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
       </form>}
       <div className="panel mt-4"><h2>Human Approval Queue</h2>
         {!items.length && <p>このページに承認提案はありません。</p>}
-        <ul>{items.map(item => <li key={item.id}><button type="button" className="secondary my-2" onClick={() => { setSelected(item); setPassword(''); setReason('') }}>{item.company_name} · {item.channel} · v{item.payload_version} · {names[item.status] ?? item.status}</button></li>)}</ul>
+        <ul>{items.map(item => <li key={item.id}><button type="button" className="secondary my-2" onClick={() => { setSelected(item); setPassword(''); setReason('') }}>{item.company_name} · {item.channel}{item.delivery_method === 'cf7_real_reservation' ? '（予約のみ）' : item.delivery_method === 'cf7_real_candidate_only' ? '（候補内容）' : ''} · v{item.payload_version} · {names[item.status] ?? item.status}</button></li>)}</ul>
         <button type="button" className="secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>前の50件</button>{' '}
         <button type="button" className="secondary" disabled={items.length < 50} onClick={() => setOffset(offset + 50)}>次の50件</button>
       </div>
@@ -157,6 +159,11 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
             <p className="break-all">引き継ぎhash：{selected.cf7_real_handoff.snapshot_hash}</p>
           </> : <p role="alert">確認資料を表示できません。最新状態を取得してください。</p>}
         </section>}
+        {selected.delivery_method === 'cf7_real_reservation' && <section aria-label="CF7予約承認資料">
+          <p role="status">予約のみの再承認です。実送信には使用できません。</p>
+          {selected.cf7_reservation_plan ? <p className="break-all">元の承認：{selected.cf7_reservation_plan.source_approval_id} / v{selected.cf7_reservation_plan.source_approval_version} / 証拠期限：{date(selected.cf7_reservation_plan.expires_at)}</p> : <p role="alert">予約資料を表示できません。</p>}
+        </section>}
+        {canWrite && selected.delivery_method === 'cf7_real_candidate_only' && selected.status === 'APPROVED' && <CF7ReservationPreparationPanel key={selected.id} requestId={selected.id} refresh={refresh} />}
         {selected.delivery_method === 'cf7_candidate_only' && <>
           {selected.cf7_candidate_snapshot ? <CF7CandidateDetails snapshot={selected.cf7_candidate_snapshot} hash={selected.cf7_candidate_snapshot_hash} observation={selected.cf7_observation} />
             : <p role="alert">候補証拠を表示できません。最新の状態を取得してください。</p>}
@@ -181,7 +188,8 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
           <Field label="承認用パスワード（再認証）"><input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></Field>
           {selected.delivery_method === 'cf7_candidate_only' && <label><input type="checkbox" checked={cf7Reviewed} onChange={e => setCf7Reviewed(e.target.checked)} /> CF7の入力値・同意・証拠期限を確認しました</label>}
           {selected.delivery_method === 'cf7_real_candidate_only' && <label><input type="checkbox" checked={cf7Reviewed} onChange={e => setCf7Reviewed(e.target.checked)} /> 実サイトの宛先・入力内容・証拠期限を確認しました（送信不可）</label>}
-          <button type="submit" disabled={selected.delivery_method === 'cf7_candidate_only' && (!cf7Reviewed || !selected.cf7_candidate_snapshot || !selected.cf7_observation) || selected.delivery_method === 'cf7_real_candidate_only' && (!cf7Reviewed || !selected.cf7_real_handoff)}>{['cf7_candidate_only', 'cf7_real_candidate_only'].includes(selected.delivery_method ?? '') ? 'CF7候補内容を承認（送信不可）' : '内容を確認して承認'}</button>
+          {selected.delivery_method === 'cf7_real_reservation' && <label><input type="checkbox" checked={cf7Reviewed} onChange={e => setCf7Reviewed(e.target.checked)} /> 宛先・入力内容・期限を確認しました（予約のみ・送信不可）</label>}
+          <button type="submit" disabled={selected.delivery_method === 'cf7_real_reservation' && (!cf7Reviewed || !selected.cf7_reservation_plan) || selected.delivery_method === 'cf7_candidate_only' && (!cf7Reviewed || !selected.cf7_candidate_snapshot || !selected.cf7_observation) || selected.delivery_method === 'cf7_real_candidate_only' && (!cf7Reviewed || !selected.cf7_real_handoff)}>{['cf7_candidate_only', 'cf7_real_candidate_only'].includes(selected.delivery_method ?? '') ? 'CF7候補内容を承認（送信不可）' : selected.delivery_method === 'cf7_real_reservation' ? '予約内容を再承認（送信不可）' : '内容を確認して承認'}</button>
         </form>}
         {canWrite && ['PENDING', 'APPROVED'].includes(selected.status) && <div className="mt-4">
           <Field label="却下・取消の理由"><input maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></Field>
