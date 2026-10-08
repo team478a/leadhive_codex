@@ -80,7 +80,7 @@
 
 Backend関連113件PASS（元の安全テスト、欠けた比較元3ケース、fragment/path/query、scraper回帰）。Ruff・format・mypy、Frontend typecheck・lint・build PASS。専用テストDBのMigration upgrade/Model diff確認PASS。Migration追加なし。
 
-PC/スマートフォンの既存4 E2Eで保存情報不足と内訳表示を検証し、4件すべてPASS。Mobileの表示もスクリーンショットで確認。E2Eはfixture応答のみで実企業GETなし。ローカルAPI再起動・healthを確認し、再起動前後の候補・Raw・Approval・Delivery件数は不変。GitHub Actionsはpush前のため今回の成功を未確認。
+PC/スマートフォンの既存4 E2Eで保存情報不足と内訳表示を検証し、4件すべてPASS。PCの表示もスクリーンショットで確認。Mobileの保存PNGは白い画像だったため目視確認の証跡として使用せず、今回のMobile検証はE2Eの表示・操作assert結果による。E2Eはfixture応答のみで実企業GETなし。ローカルAPI再起動・healthを確認し、再起動前後の候補・Raw・Approval・Delivery件数は不変。GitHub Actionsはpush前のため今回の成功を未確認。
 
 ## 判定・次に必要な作業
 
