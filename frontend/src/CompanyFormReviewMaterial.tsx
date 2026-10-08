@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
+import { openDestinationReview } from './formReviewNavigation'
 import type { FormMappedKey, FormProfileField } from './types'
 import { CompanyFormChoiceGroups } from './CompanyFormChoiceGroups'
 import { CompanyFormLiveCheck } from './CompanyFormLiveCheck'
@@ -26,6 +27,7 @@ const states: Record<string, string> = {
 
 type Props = {
   profileId: string
+  companyId: string
   formUrl: string
   fingerprint: string
   fields: FormProfileField[]
@@ -59,7 +61,7 @@ function ChoiceReview({ field, readOnly, saving, onSave }: { field: FormProfileF
   </div>
 }
 
-export function CompanyFormReviewMaterial({ profileId, formUrl, fingerprint, fields, readOnly, saving, onCorrect, onRefresh }: Props) {
+export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, fingerprint, fields, readOnly, saving, onCorrect, onRefresh }: Props) {
   const [material, setMaterial] = useState<Material | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -81,13 +83,14 @@ export function CompanyFormReviewMaterial({ profileId, formUrl, fingerprint, fie
   }, [profileId, fingerprint, fieldVersion])
   const reviewStates = new Set(['HUMAN_CONSENT_REQUIRED', 'GROUP_SELECTION_REVIEW_REQUIRED', 'FIELD_IDENTITY_REVIEW_REQUIRED', 'CHOICE_REVIEW_REQUIRED', 'FIELD_REVIEW_REQUIRED', 'SENDER_VALUE_MISSING', 'DRAFT_VALUE_MISSING'])
   const [showCandidates, setShowCandidates] = useState(false)
+  const [navigationMessage, setNavigationMessage] = useState('')
   const sourceLink = /^https?:\/\//i.test(formUrl) ? formUrl : null
   async function saveChoice(field: FormProfileField, value: string) {
     const saved = await onCorrect(field, field.mapped_key, value)
     if (saved) await load()
     return saved
   }
-  return <section className="mt-4" aria-label="フォーム入力確認">
+  return <section className="mt-4" aria-label="フォーム入力確認" data-review-form-url={formUrl} tabIndex={-1}>
     <CompanyFormLiveCheck profileId={profileId} fingerprint={fingerprint} readOnly={readOnly} onRefresh={onRefresh} />
     <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : '入力候補を更新'}</button>
     {error && <p className="error mt-3" role="alert">{error}</p>}
@@ -97,6 +100,8 @@ export function CompanyFormReviewMaterial({ profileId, formUrl, fingerprint, fie
       <section className="notice mt-3" aria-label="確認の進め方">
         <strong>人が確認すること</strong>
         <p className="mt-2">1. 元フォームで窓口の用途と営業可否を確認</p>
+        <button className="secondary mt-2" onClick={() => setNavigationMessage(openDestinationReview(companyId, formUrl) ? '' : '一致する窓口候補を1つに特定できません。「リスト完成の根拠」で窓口候補を確認・整理してください。')}>このフォームの窓口用途を確認</button>
+        {navigationMessage && <p className="notice mt-2" role="status">{navigationMessage}</p>}
         <p>2. 下の選択肢・同意・必須条件を確認して記録</p>
         <p>3. 送信者情報と本文候補を確認</p>
         {sourceLink && <a className="secondary inline-block mt-3" href={sourceLink} target="_blank" rel="noopener noreferrer">元フォームを開く ↗</a>}

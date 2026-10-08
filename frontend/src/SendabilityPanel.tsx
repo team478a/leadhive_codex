@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
+import { openFormReview } from './formReviewNavigation'
 import { DestinationChoice, type HumanDestinationChoice } from './DestinationChoice'
 
 type Reason = { code: string; message: string; next_action: string }
@@ -25,7 +26,7 @@ export function SendabilityPanel({ companyId, updatedAt, inventoryRevision, onAs
     }).catch(e => { if (active) { setData(null); setError(errorMessage(e)) } })
     return () => { active = false }
   }, [companyId, updatedAt, inventoryRevision, revision])
-  return <section className="mt-5" aria-label="窓口の利用可否と理由">
+  return <section className="mt-5" aria-label="窓口の利用可否と理由" id={`destination-review-${companyId}`} tabIndex={-1}>
     <h3>窓口の利用可否と理由</h3>
     <p className="muted">保存済み情報からの準備診断です。現在のサイトへの接続、送信承認、送信は行いません。READYは窓口の準備候補です。用途確認は送信承認とは別で、7日で失効し、対象情報の変更でも再確認が必要になります。</p>
     {error && <p role="alert">判定を取得できません：{error}</p>}
@@ -37,7 +38,7 @@ export function SendabilityPanel({ companyId, updatedAt, inventoryRevision, onAs
       {data.destination_selection_required && <p>同条件のREADY窓口が複数あります。Humanが対象範囲・用途を確認して選択する必要があります。自動選択しません。</p>}
       <ul>{data.reasons.map(reason => <li key={reason.code}><strong>{reason.message}</strong>：{reason.next_action} <small>({reason.code})</small></li>)}</ul>
       <DestinationChoice companyId={companyId} choice={data.human_choice} candidates={data.destinations} canReview={data.can_review} onSaved={() => { setRevision(v => v + 1); onAssessmentChanged?.() }} />
-      {data.destinations.map(item => <details key={`${item.type}:${item.destination}`} className="mt-3 break-all">
+      {data.destinations.map(item => <details key={`${item.type}:${item.destination}`} className="mt-3 break-all" data-form-destination={item.type === 'form' ? item.destination : undefined}>
         <summary>{item.type}：{item.destination} / {states[item.status] ?? '未判定'}（{item.status}）</summary>
         <p>既存連絡可否：{item.core_permission} / 用途登録：{item.purpose}。ALLOWEDだけでは準備完了になりません。</p>
         <ul>{item.reasons.map(reason => <li key={reason.code}>{reason.message}：{reason.next_action} <small>({reason.code})</small></li>)}</ul>
@@ -52,6 +53,7 @@ function DestinationReview({ companyId, item, canReview, onSaved }: { companyId:
   const [scope, setScope] = useState('unknown')
   const [source, setSource] = useState('')
   const [excerpt, setExcerpt] = useState('')
+  const [navigationMessage, setNavigationMessage] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   async function save(revoke: boolean) {
@@ -63,6 +65,11 @@ function DestinationReview({ companyId, item, canReview, onSaved }: { companyId:
   }
   return <div className="mt-3" aria-label={`用途確認 ${item.destination}`}>
     <p>用途確認：{item.review.state} / 記録版 {item.review.version}</p>
+    {item.type === 'form' && <>
+      <button className="secondary mt-2" onClick={() => setNavigationMessage(openFormReview(companyId, item.destination) ? '' : '一致する解析済みフォームを1つに特定できません。フォーム事前解析で対象URLを確認してください。')}>このフォームの選択・同意を確認</button>
+      {navigationMessage && <p className="notice mt-2" role="status">{navigationMessage}</p>}
+      <p className="muted text-sm mt-2">用途の記録、選択・同意の記録、送信承認は別の操作です。画面移動だけでは確認済みになりません。</p>
+    </>}
     {item.review.created_at && <p>確認者ID：{item.review.reviewed_by_user_id} / {new Date(item.review.created_at).toLocaleString('ja-JP')} / 期限：{item.review.expires_at ? new Date(item.review.expires_at).toLocaleString('ja-JP') : '—'}</p>}
     {item.review.evidence_excerpt && <p>記録した根拠：{item.review.evidence_excerpt} / {item.review.source_url}</p>}
     {canReview && item.id && <>

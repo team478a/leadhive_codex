@@ -47,7 +47,7 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
       field.id, { mappedKey: field.mapped_key, value: reviewedValue(field) },
     ]))))
   }, [profiles])
-  return <section className="panel mt-6">
+  return <section className="panel mt-6" id={`form-review-${company.id}`}>
     <div className="section-heading"><div><h2>フォーム事前解析</h2><p className="muted text-sm">問い合わせフォームの構造と営業可否を送信前に確認します。</p></div><button disabled={busy || readOnly || !company.website_url} onClick={onAnalyze}>{busy ? '解析中…' : profiles.length ? '再解析' : 'フォーム解析'}</button></div>
     {readOnly && <p className="muted mt-3">閲覧者は解析結果を確認できます。再解析と修正は編集者または所有者が行います。</p>}
     {!company.website_url && <p className="muted mt-4">公式サイトURLを登録すると解析できます。</p>}
@@ -62,7 +62,7 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
       </div>
       {profile.review_reason && <p className="notice mt-3">要確認の理由：{profile.review_reason}</p>}
       {profile.error_message && <p className="error mt-3">{profile.error_message}</p>}
-      <CompanyFormReviewMaterial key={profile.id} profileId={profile.id} formUrl={profile.form_url} fingerprint={profile.fingerprint} fields={profile.fields} readOnly={readOnly} saving={busy} onCorrect={onCorrect} onRefresh={onRefresh} />
+      <CompanyFormReviewMaterial key={profile.id} profileId={profile.id} companyId={company.id} formUrl={profile.form_url} fingerprint={profile.fingerprint} fields={profile.fields} readOnly={readOnly} saving={busy} onCorrect={onCorrect} onRefresh={onRefresh} />
       {profile.fields.length > 0 && <div className="company-table-wrap mt-4"><table className="company-table form-field-table"><thead><tr><th>元の項目</th><th>種類</th><th>標準マッピング</th><th>確度・根拠</th><th>推奨値</th><th></th></tr></thead><tbody>
         {profile.fields.map(field => {
           const draft = drafts[field.id] ?? { mappedKey: field.mapped_key, value: reviewedValue(field) }

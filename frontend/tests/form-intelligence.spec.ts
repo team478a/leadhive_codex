@@ -71,6 +71,51 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   const profileCards = formPanel.locator('.form-profile-card')
   await expect(profileCards).toHaveCount(2)
   const inputReview = profileCards.first().getByRole('region', { name: 'フォーム入力確認' })
+  await page.getByRole('button', { name: 'プロジェクトの窓口候補を整理', exact: true }).click()
+  const assessment = page.getByRole('region', { name: '窓口の利用可否と理由' })
+  await expect(assessment.locator('details[data-form-destination]')).toHaveCount(2)
+  await expect(inputReview.getByRole('button', { name: 'このフォームの窓口用途を確認', exact: true })).toBeVisible()
+  // UI navigation must never submit a review, choice, approval or execution request.
+  const navigationWrites: string[] = []
+  const trackNavigation = (request: import('@playwright/test').Request) => {
+    if (request.method() !== 'GET') navigationWrites.push(request.url())
+  }
+  page.on('request', trackNavigation)
+  await inputReview.getByRole('button', { name: 'このフォームの窓口用途を確認', exact: true }).click()
+  const contactDetails = assessment.locator('details[data-form-destination]').filter({ has: page.locator('summary').filter({ hasText: `/contact` }) }).first()
+  await expect(contactDetails).toHaveAttribute('open', '')
+  await expect(contactDetails.getByRole('combobox', { name: '窓口用途', exact: true })).toHaveValue('unknown')
+  await expect(contactDetails.getByLabel('用途の根拠URL', { exact: true })).toHaveValue('')
+  await expect(contactDetails.getByRole('button', { name: '用途確認を記録', exact: true })).toBeDisabled()
+  await contactDetails.getByRole('button', { name: 'このフォームの選択・同意を確認', exact: true }).click()
+  await expect(inputReview).toBeFocused()
+  await contactDetails.locator('summary').click()
+  await contactDetails.evaluate(element => { element.dataset.formDestination += '?different=1' })
+  await inputReview.getByRole('button', { name: 'このフォームの窓口用途を確認', exact: true }).click()
+  await expect(inputReview.getByText(/一致する窓口候補を1つに特定できません/)).toBeVisible()
+  await expect(contactDetails).not.toHaveAttribute('open', '')
+  await contactDetails.evaluate(element => { element.dataset.formDestination = element.dataset.formDestination!.split('?')[0] + '/#contact' })
+  await inputReview.getByRole('button', { name: 'このフォームの窓口用途を確認', exact: true }).click()
+  await expect(contactDetails).toHaveAttribute('open', '')
+  await expect(inputReview.getByText(/一致する窓口候補を1つに特定できません/)).toHaveCount(0)
+  await contactDetails.evaluate(element => { element.dataset.formDestination = element.dataset.formDestination!.split('#')[0] })
+  await contactDetails.getByRole('button', { name: 'このフォームの選択・同意を確認', exact: true }).click()
+  await expect(inputReview).toBeFocused()
+  await formPanel.evaluate(element => {
+    const duplicate = document.createElement('section')
+    duplicate.dataset.reviewFormUrl = element.querySelector<HTMLElement>('[data-review-form-url]')!.dataset.reviewFormUrl
+    duplicate.dataset.navigationFixture = 'duplicate'
+    element.appendChild(duplicate)
+  })
+  await contactDetails.getByRole('button', { name: 'このフォームの選択・同意を確認', exact: true }).click()
+  await expect(contactDetails.getByText(/一致する解析済みフォームを1つに特定できません/)).toBeVisible()
+  await formPanel.locator('[data-navigation-fixture]').evaluate(element => element.remove())
+  await contactDetails.getByRole('button', { name: 'このフォームの選択・同意を確認', exact: true }).click()
+  await expect(inputReview).toBeFocused()
+  expect(navigationWrites).toEqual([])
+  page.off('request', trackNavigation)
+  await page.screenshot({ path: testInfo.outputPath('destination-form-handoff.png') })
+
   // Fixture-only network response: no real website GET or send in this UI test.
   let liveChecks = 0
   const savedChecks = new Map<string, unknown>()

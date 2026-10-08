@@ -1,0 +1,19 @@
+{
+  "baseline_commit": "c74adc683fe80e7b62f321e5dd2ee599aae98ba1",
+  "profiles_checked": 3,
+  "profiles_with_matching_linked_destination": 3,
+  "missing_linked_destination": 0,
+  "read_only": true,
+  "database_unchanged": true,
+  "permission_statuses": {
+    "UNCERTAIN": 3
+  },
+  "external_requests": 0,
+  "review_writes": 0,
+  "choice_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound": false,
+  "navigation_normalization": "Exact origin and query; inventory-compatible trailing path slash and fragment handling; unique match only. Does not change dispatch URL validation."
+}
