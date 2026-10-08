@@ -43,7 +43,9 @@ class Observation:
     fingerprint: str
 
 
-def observe(html: str, origin: str, index: int = 0) -> Observation:
+def observe(
+    html: str, origin: str, index: int = 0, *, plugin_version: str = "6.1.4"
+) -> Observation:
     # Explicit local lab boundary, not a production URL validator or SSRF exception.
     parsed = urlsplit(origin)
     if (
@@ -94,7 +96,11 @@ def observe(html: str, origin: str, index: int = 0) -> Observation:
     }
     if set(hidden) != HIDDEN or hidden["_wpcf7_posted_data_hash"]:
         raise ValueError("Unknown hidden field, token, or previous submission")
-    if hidden["_wpcf7_version"] != "6.1.4" or not hidden["_wpcf7"].isdigit():
+    if (
+        plugin_version not in {"6.1.4", "6.2"}
+        or hidden["_wpcf7_version"] != plugin_version
+        or not hidden["_wpcf7"].isdigit()
+    ):
         raise ValueError("Unverified plugin version or form ID")
     if not re.fullmatch(r"wpcf7-f\d+(?:-p\d+)?-o\d+", hidden["_wpcf7_unit_tag"]):
         raise ValueError("Unverified lab unit tag")

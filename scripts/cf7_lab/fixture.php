@@ -28,8 +28,14 @@ if ($lab_action === 'install') {
     echo "installed\n";
     exit;
 }
-if (!defined('WPCF7_VERSION') || WPCF7_VERSION !== '6.1.4') {
+$expected_version = getenv('LEADHIVE_CF7_VERSION') ?: '6.1.4';
+if (!in_array($expected_version, array('6.1.4', '6.2'), true)
+    || !defined('WPCF7_VERSION') || WPCF7_VERSION !== $expected_version) {
     throw new RuntimeException('Unexpected CF7 source version');
+}
+if ($expected_version === '6.2' && (version_compare(get_bloginfo('version'), '7.1', '<')
+    || version_compare(PHP_VERSION, '8.3', '<'))) {
+    throw new RuntimeException('Unsupported CF7 6.2 runtime');
 }
 if ($lab_action === 'create') {
     $forms = array();

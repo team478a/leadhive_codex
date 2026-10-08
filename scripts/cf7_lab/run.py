@@ -15,12 +15,11 @@ from pathlib import Path
 
 from cases import verify
 from gateway import gateway
+from profiles import Profile, get_profile
+from readiness import wait_for_database
 
 ROOT = Path(__file__).resolve().parents[2]
 ASSETS = Path(__file__).resolve().parent
-CF7_COMMIT = "165278e868387ec393569ecd2dbfda37e8b5b950"
-SOURCE_SHA = "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1"
-IMAGES = {"wp": "wordpress:6.8.3-php8.3-apache", "db": "mariadb:11.4"}
 SECRET_VALUES = []
 
 
@@ -50,13 +49,13 @@ def docker(*args, **kwargs):
     return command("docker", *args, **kwargs)
 
 
-def source():
-    cache = ROOT / "dist" / "cf7-source-165278e"
+def source(profile: Profile):
+    cache = ROOT / "dist" / ("cf7-source-" + profile.commit[:7])
     archive = cache / "source.zip"
     cache.mkdir(parents=True, exist_ok=True)
     if not archive.exists():
         request = urllib.request.Request(
-            f"https://codeload.github.com/rocklobster-in/contact-form-7/zip/{CF7_COMMIT}"
+            f"https://codeload.github.com/rocklobster-in/contact-form-7/zip/{profile.commit}"
         )
         with urllib.request.urlopen(request, timeout=45) as response:
             data = response.read(20_000_001)
@@ -64,14 +63,14 @@ def source():
             raise RuntimeError("Source archive oversized")
         archive.write_bytes(data)
     data = archive.read_bytes()
-    if hashlib.sha256(data).hexdigest() != SOURCE_SHA:
+    if hashlib.sha256(data).hexdigest() != profile.archive_sha256:
         raise RuntimeError("Pinned source archive checksum mismatch")
     destination = cache / ("verified-source-" + uuid.uuid4().hex)
     destination.mkdir(exist_ok=True)
     with zipfile.ZipFile(io.BytesIO(data)) as package:
         for item in package.infolist():
             parts = Path(item.filename).parts
-            if not parts or parts[0] != "contact-form-7-" + CF7_COMMIT:
+            if not parts or parts[0] != "contact-form-7-" + profile.commit:
                 raise RuntimeError("Unexpected archive root")
             target = (destination / Path(*parts[1:])).resolve()
             if not target.is_relative_to(destination.resolve()):
@@ -87,9 +86,10 @@ def source():
 def run():
     if os.environ.get("CF7_PROTOCOL_LAB") != "1":
         raise RuntimeError("Set CF7_PROTOCOL_LAB=1 explicitly")
-    plugin = source()  # Acquisition before starting isolated runtime.
+    profile = get_profile(os.environ.get("CF7_LAB_PROFILE", "6.1.4"))
+    plugin = source(profile)  # Acquisition before starting isolated runtime.
     image_records = {}
-    for key, tag in IMAGES.items():
+    for key, tag in {"wp": profile.wp_image, "db": "mariadb:11.4"}.items():
         inspected = json.loads(docker("image", "inspect", tag))[0]
         if not inspected["RepoDigests"]:
             raise RuntimeError(
@@ -105,8 +105,9 @@ def run():
     output.mkdir(parents=True, exist_ok=False)
     report = {
         "started_at": datetime.now(timezone.utc).isoformat(),
-        "cf7_commit": CF7_COMMIT,
-        "source_sha256": SOURCE_SHA,
+        "profile": profile.version,
+        "cf7_commit": profile.commit,
+        "source_sha256": profile.archive_sha256,
         "images": image_records,
         "checks": [],
         "live_changes": False,
@@ -125,6 +126,7 @@ def run():
             "WORDPRESS_DB_NAME": "cf7_lab",
             "WORDPRESS_DB_USER": "cf7_lab",
             "LEADHIVE_CF7_LAB": "1",
+            "LEADHIVE_CF7_VERSION": profile.version,
         }
     )
     env["WORDPRESS_DB_PASSWORD"] = env["MARIADB_PASSWORD"]
@@ -237,6 +239,7 @@ def run():
             "WORDPRESS_DB_PASSWORD",
             "WORDPRESS_CONFIG_EXTRA",
             "LEADHIVE_CF7_LAB",
+            "LEADHIVE_CF7_VERSION",
         ):
             wp_args += ["--env", name]
         docker(*wp_args, image_records["wp"]["digest"], env=env)
@@ -266,6 +269,8 @@ def run():
             time.sleep(1)
         else:
             raise RuntimeError("Lab WordPress startup timed out")
+        wait_for_database(docker, wp)
+        check("database ready before fixture install", True)
         docker("exec", wp, "mkdir", "-p", "/var/www/html/wp-content/mu-plugins")
         docker(
             "cp",
@@ -324,7 +329,14 @@ def run():
         report["setup_mail_calls_captured"] = initial_mail_calls + 1
         page_url = report["versions"]["page_url"]
         check("canonical fixture URL is local", page_url.startswith(origin + "/"))
-        verify(origin, output, report, fixture, check, command, ASSETS, page_url)
+        if profile.version == "6.2":
+            from version_probe import verify_version
+
+            verify_version(
+                origin, output, report, fixture, check, command, ASSETS, page_url
+            )
+        else:
+            verify(origin, output, report, fixture, check, command, ASSETS, page_url)
         report["passed"] = True
         print("Real CF7 lab checks passed", flush=True)
     except Exception as error:

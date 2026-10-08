@@ -1,0 +1,441 @@
+{
+  "baseline_commit": "5e3092b7f725ac466c298795d7a51507ff3b3496",
+  "source_kind": "CONTROLLED_FIXTURE_VERSION_COMPARISON",
+  "working_tree_modified_at_execution": true,
+  "source_hashes": {
+    "scripts/cf7_lab/profiles.py": "be5088f7e1cff8e6dc8282f26d603976d2390d3c7c36184695abf78eafbe9ee7",
+    "scripts/cf7_lab/run.py": "00badf52a90b83af644389d92842b8bb15d38a1a51108a244a5a9ed92ce7adeb",
+    "scripts/cf7_lab/readiness.py": "432919bdb1c123bc7503a85474d63a12b073a921edfc0e35bd73873bc1ef15b3",
+    "scripts/cf7_lab/fixture.php": "e19cb2cbd2bb3b6a39a41a0665d19f8927778a7556275aeca4e514c9cd07bc4a",
+    "scripts/cf7_lab/protocol.py": "6ec1310f6862a9d72858e8f5cfc3599d48202d99edb8df09a164d1d88dac2062",
+    "scripts/cf7_lab/version_probe.py": "b0e365426c8ed4e0418454e4dd881c1ba18ed4351fa92b2106f55a462d93527e",
+    "scripts/cf7_lab/safeguard.php": "c2e88beaa7cc623302a0ee647c6c40a1bd5ae1b6189e63dda2bc1247c9e217e8",
+    "scripts/cf7_lab/browser_probe.cjs": "9c2760b6c7a0965dec31adbd996c3dd2e06e95882323ad26c9ad7962146297fc"
+  },
+  "source_comparison": [
+    {
+      "path": "includes/contact-form.php",
+      "changed": true,
+      "old_sha256": "d2d6e52ed3ca1159996cf7aa35084c3039a095c5bc7ca6b6f504978826008648",
+      "new_sha256": "76c3068cae2e8bf5085f6345e185ad4e295132820d877c690f1b9a0bc1df0027"
+    },
+    {
+      "path": "includes/rest-api.php",
+      "changed": true,
+      "old_sha256": "2d81da45438281ae83646e121cfdd93643c845ce10ee18b82c9aebca5b468f34",
+      "new_sha256": "3ccacc5b5d27ff9f8ccb47e19a27569bd85adc1e9f52910fdb876efc40fcdecb"
+    },
+    {
+      "path": "includes/submission.php",
+      "changed": true,
+      "old_sha256": "4f4ebde541ed604ea48ad9db0123244d8f5ad46d76132a77c84da835d6fe84db",
+      "new_sha256": "1ea6e102c0efb8d2d8569a3579f334c8b6b335e003be19b2ba2386944e472dfd"
+    },
+    {
+      "path": "modules/checkbox.php",
+      "changed": true,
+      "old_sha256": "771b2767e86281c5d8aff5afdde4b762d679c7edf9fbe0cdf52bcc83696b899e",
+      "new_sha256": "575622be37597532aa5287099ab7ce93bcbf58c4606895c45e4365d13ea5635c"
+    },
+    {
+      "path": "modules/hidden.php",
+      "changed": true,
+      "old_sha256": "62c7877767bf7d266f228b48b49913c254198a3a3011ac306fa1e1ee13da3126",
+      "new_sha256": "3e20853c40e9a17aa0e291c0d82386bbdaf4157ecb94c483e772a9ecebc33969"
+    },
+    {
+      "path": "includes/js/index.js",
+      "changed": true,
+      "old_sha256": "ddcce687729cb358abf9d0d8e1217a097859be2b0d18c23d7c851b38c87bc9c0",
+      "new_sha256": "2449bcdb76bb77ecd953f38a63ed4bc38906758048eb24581013b24f023bdc97"
+    }
+  ],
+  "profiles": {
+    "6.1.4": {
+      "versions": {
+        "wp_version": "6.8.3",
+        "cf7_version": "6.1.4",
+        "php_version": "8.3.28"
+      },
+      "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+      "archive_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+      "images": {
+        "wp": {
+          "tag": "wordpress:6.8.3-php8.3-apache",
+          "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+          "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+        },
+        "db": {
+          "tag": "mariadb:11.4",
+          "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+          "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+        }
+      },
+      "checks_passed": 73,
+      "feedback_post_count": 45,
+      "started_at": "2026-10-08T11:24:50.841705+00:00",
+      "finished_at": "2026-10-08T11:27:52.135699+00:00",
+      "private_report_sha256": "b834fdff4826ae2889593bf15559894b5883b8708ffcac498090d5eb1072559e",
+      "cleanup_failures": []
+    },
+    "6.2": {
+      "versions": {
+        "wp_version": "7.1.2",
+        "cf7_version": "6.2",
+        "php_version": "8.3.35"
+      },
+      "cf7_commit": "34acb3a6995b403274820c5ea42abd01b754c03b",
+      "archive_sha256": "be61bf5bd0f99187e7f15b285b1bf1590038105e2b267501b81003066c93d1cb",
+      "images": {
+        "wp": {
+          "tag": "wordpress:7.1.2-php8.3-apache",
+          "digest": "wordpress@sha256:e04cf657f24889e96b5544828cdd5a92a0b51819f3e1899183f9be6ea0485edf",
+          "id": "sha256:e04cf657f24889e96b5544828cdd5a92a0b51819f3e1899183f9be6ea0485edf"
+        },
+        "db": {
+          "tag": "mariadb:11.4",
+          "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+          "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+        }
+      },
+      "checks_passed": 29,
+      "feedback_post_count": 17,
+      "started_at": "2026-10-08T11:28:53.308197+00:00",
+      "finished_at": "2026-10-08T11:29:40.776671+00:00",
+      "private_report_sha256": "9aba4a6b5228def3d18ead9eb253faee9e84ea878b44b7c33fa1e61976aec417",
+      "cleanup_failures": [],
+      "comparison": {
+        "plugin_version": "6.2",
+        "hidden_names": [
+          "_wpcf7",
+          "_wpcf7_container_post",
+          "_wpcf7_locale",
+          "_wpcf7_posted_data_hash",
+          "_wpcf7_unit_tag",
+          "_wpcf7_version"
+        ],
+        "old_candidate_rejected": true,
+        "cases": [
+          {
+            "case": "standard",
+            "http": 200,
+            "status": "mail_sent",
+            "classification": "RECEIPT_REPORTED",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 1,
+            "submission_delta": 1
+          },
+          {
+            "case": "urlencoded",
+            "http": 415,
+            "status": "wpcf7_unsupported_media_type",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "code",
+              "data",
+              "message"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 0
+          },
+          {
+            "case": "missing unit",
+            "http": 400,
+            "status": "wpcf7_unit_tag_not_found",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "code",
+              "data",
+              "message"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 0
+          },
+          {
+            "case": "missing your-name",
+            "http": 200,
+            "status": "validation_failed",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 1
+          },
+          {
+            "case": "missing consent",
+            "http": 200,
+            "status": "acceptance_missing",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 1
+          },
+          {
+            "case": "fail",
+            "http": 200,
+            "status": "mail_failed",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 1,
+            "submission_delta": 1
+          },
+          {
+            "case": "spam",
+            "http": 200,
+            "status": "spam",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 1
+          },
+          {
+            "case": "abort",
+            "http": 200,
+            "status": "aborted",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 1
+          },
+          {
+            "case": "skip",
+            "http": 200,
+            "status": "mail_sent",
+            "classification": "RECEIPT_REPORTED",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 1
+          },
+          {
+            "case": "mixed",
+            "http": 200,
+            "status": "mail_sent",
+            "classification": "RECEIPT_REPORTED",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 1,
+            "submission_delta": 1
+          },
+          {
+            "case": "mixed fail",
+            "http": 200,
+            "status": "mail_failed",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 1,
+            "submission_delta": 1
+          },
+          {
+            "case": "missing services[]",
+            "http": 200,
+            "status": "validation_failed",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 1
+          },
+          {
+            "case": "missing topic",
+            "http": 200,
+            "status": "validation_failed",
+            "classification": "UNKNOWN",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 0,
+            "submission_delta": 1
+          },
+          {
+            "case": "changed hidden negative",
+            "http": 200,
+            "status": "mail_sent",
+            "classification": "RECEIPT_REPORTED",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 1,
+            "submission_delta": 1
+          },
+          {
+            "case": "duplicate radio negative",
+            "http": 200,
+            "status": "mail_sent",
+            "classification": "RECEIPT_REPORTED",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 1,
+            "submission_delta": 1
+          },
+          {
+            "case": "query root",
+            "http": 200,
+            "status": "mail_sent",
+            "classification": "RECEIPT_REPORTED",
+            "response_keys": [
+              "contact_form_id",
+              "into",
+              "invalid_fields",
+              "message",
+              "posted_data_hash",
+              "status"
+            ],
+            "mail_capture_delta": 1,
+            "submission_delta": 1
+          }
+        ],
+        "browser_full_part_order_equal": true,
+        "part_count": 14,
+        "feedback_post_count": 17,
+        "candidate_contract_added": false,
+        "execution_allowed": false,
+        "eligible_for_approval": false
+      }
+    }
+  },
+  "attempts": [
+    {
+      "profile": "6.1.4",
+      "passed": false,
+      "checks_passed": 2,
+      "feedback_post_count": 0,
+      "error_type": "JSONDecodeError",
+      "failed_check": null,
+      "cleanup_failures": []
+    },
+    {
+      "profile": "6.1.4",
+      "passed": true,
+      "checks_passed": 73,
+      "feedback_post_count": 45,
+      "error_type": null,
+      "failed_check": null,
+      "cleanup_failures": []
+    },
+    {
+      "profile": "6.2",
+      "passed": false,
+      "checks_passed": 15,
+      "feedback_post_count": 5,
+      "error_type": "RuntimeError",
+      "failed_check": "6.2 missing consent",
+      "cleanup_failures": []
+    },
+    {
+      "profile": "6.2",
+      "passed": true,
+      "checks_passed": 29,
+      "feedback_post_count": 17,
+      "error_type": null,
+      "failed_check": null,
+      "cleanup_failures": []
+    }
+  ],
+  "total_local_posts_this_task": 67,
+  "real_companies_accessed": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "approvals": 0,
+  "outbound": false,
+  "dispatch_connected": false,
+  "candidate_contract_62_added": false,
+  "initial_acceptance_difference": {
+    "case": "missing consent",
+    "http": 200,
+    "status": "acceptance_missing",
+    "classification": "UNKNOWN",
+    "response_keys": [
+      "contact_form_id",
+      "into",
+      "invalid_fields",
+      "message",
+      "posted_data_hash",
+      "status"
+    ],
+    "mail_capture_delta": 0,
+    "submission_delta": 1
+  }
+}
