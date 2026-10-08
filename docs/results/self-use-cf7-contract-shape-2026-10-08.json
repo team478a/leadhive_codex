@@ -1,0 +1,115 @@
+{
+  "baseline_commit": "abff223120063bd4ecc1e6f9b6193a9c6d255dfe",
+  "working_tree_modified_at_start": false,
+  "service_sha256": "e5bf9930a50cefc20f8caa1d0101ca8f8e6504f5a168dc6b819540ac55b9088a",
+  "profiles": 2,
+  "max_get_attempts": 4,
+  "get_attempts": 4,
+  "robots_get_attempts": 2,
+  "contact_get_attempts": 2,
+  "structure_statuses": {
+    "SAME_STRUCTURE": 2
+  },
+  "cf7_static_statuses": {
+    "CF7_CANDIDATE": 2
+  },
+  "failure_codes": {},
+  "read_only": true,
+  "database_unchanged": true,
+  "outbound": false,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "review_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "estimated_cost": null,
+  "measurement_type": "READ_ONLY_CONTRACT_SHAPE",
+  "version_counts": {
+    "6.2": 1,
+    "6.1.4": 1
+  },
+  "contract_shape_observed": 2,
+  "contract_shape_unknown": 0,
+  "shape_boolean_counts": {
+    "reviewed_lab_version": {
+      "true": 1,
+      "false": 1
+    },
+    "hidden_complete": {
+      "true": 2,
+      "false": 0
+    },
+    "hidden_shape_valid": {
+      "true": 1,
+      "false": 1
+    }
+  },
+  "shape_control_totals": {
+    "extra_hidden": 1,
+    "invalid_names": 19,
+    "repeated_names": 17,
+    "radio_controls": 1,
+    "select_controls": 0,
+    "checkbox_controls": 22,
+    "checked_checkboxes": 0,
+    "disabled_controls": 0
+  },
+  "shape_affected_profiles": {
+    "extra_hidden": 1,
+    "invalid_names": 2,
+    "repeated_names": 2,
+    "radio_controls": 1,
+    "select_controls": 0,
+    "checkbox_controls": 2,
+    "checked_checkboxes": 0,
+    "disabled_controls": 0
+  },
+  "static_unsupported_controls": 1,
+  "sales_prohibition_detected": 0,
+  "captcha_states": {
+    "NOT_DETECTED_STATIC": 2
+  },
+  "execution_allowed_profiles": 0,
+  "eligible_for_approval_profiles": 0,
+  "parser_sha256": "9e01fc57494e0daa2c77e92a790112fd518b8058e29fef8e2ad7b1d01657aae4",
+  "inspector_sha256": "a86c25eefa85c5cef2e3db62d3e35f5f5eefffc1b64773781d1bcd261f592674",
+  "measured_at": "2026-10-08T09:21:52.074046+00:00",
+  "worker_started": false,
+  "version_shape_summaries": [
+    {
+      "version": "6.2",
+      "profiles": 1,
+      "shape": {
+        "reviewed_lab_version": false,
+        "hidden_complete": true,
+        "hidden_shape_valid": false,
+        "extra_hidden": 0,
+        "invalid_names": 18,
+        "repeated_names": 14,
+        "radio_controls": 0,
+        "select_controls": 0,
+        "checkbox_controls": 18,
+        "checked_checkboxes": 0,
+        "disabled_controls": 0
+      }
+    },
+    {
+      "version": "6.1.4",
+      "profiles": 1,
+      "shape": {
+        "reviewed_lab_version": true,
+        "hidden_complete": true,
+        "hidden_shape_valid": true,
+        "extra_hidden": 1,
+        "invalid_names": 1,
+        "repeated_names": 3,
+        "radio_controls": 1,
+        "select_controls": 0,
+        "checkbox_controls": 4,
+        "checked_checkboxes": 0,
+        "disabled_controls": 0
+      }
+    }
+  ]
+}

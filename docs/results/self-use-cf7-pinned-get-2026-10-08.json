@@ -1,0 +1,40 @@
+{
+  "baseline_commit": "32a6718e69b5d6b0a4d28cda7796ad93e3b91934",
+  "working_tree_modified": true,
+  "service_sha256": "0dc648e1e1d02042a65c7dfecdc337850e30913b832067091adc77eb218e3f11",
+  "profiles": 2,
+  "max_get_attempts": 4,
+  "get_attempts": 4,
+  "robots_get_attempts": 2,
+  "contact_get_attempts": 2,
+  "structure_statuses": {
+    "SAME_STRUCTURE": 2
+  },
+  "cf7_static_statuses": {
+    "CF7_CANDIDATE": 2
+  },
+  "failure_codes": {},
+  "read_only": true,
+  "database_unchanged": true,
+  "outbound": false,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "review_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "estimated_cost": null,
+  "versions": {
+    "6.2": 1,
+    "6.1.4": 1
+  },
+  "markers_complete": 2,
+  "rest_link_same_origin": 2,
+  "missing_field_names": 0,
+  "file_inputs": 0,
+  "unsupported_controls": 0,
+  "sales_prohibition_detected": 0,
+  "captcha_states": {
+    "NOT_DETECTED_STATIC": 2
+  }
+}

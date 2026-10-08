@@ -1,0 +1,10 @@
+{
+  "postgresql": {
+    "version": "16.15",
+    "url": "https://get.enterprisedb.com/postgresql/postgresql-16.15-1-windows-x64-binaries.zip",
+    "sha256": "25e6fcdfb8caec38691bf461125e7564508760666f7b8e5dc6a5f0818f58f81e",
+    "bytes": 332441502
+  },
+  "architecture": "Windows x64",
+  "pyinstaller": "6.22.3"
+}

@@ -1,0 +1,101 @@
+{
+  "baseline_commit": "bce950df0da47c7013b3536406cc8fb3dfa4d26c",
+  "source_kind": "CONTROLLED_FIXTURE",
+  "working_tree_modified_at_execution": true,
+  "source_hashes": {
+    "backend/app/services/cf7_candidate_contract.py": "4fac44e6deb4049b69e115791a1bc13b4de9a785c1952f733173d35c86af68bd",
+    "backend/app/services/cf7_ordered_contract.py": "a364cf581fe33a2235c6fa0b6deb86ed9043c3af9b50fc3595dd1dee53306de8",
+    "backend/app/services/cf7_62_contract.py": "2346caf65bf68f43c430ce76385e548e3e437b69fe943c203669912b5528a30e",
+    "scripts/cf7_lab/contract_62_probe.py": "1315193510e0c6721d2c70d90efa5ba7c0bb19e075ef26fff50dc96ebe3d30a3",
+    "scripts/cf7_lab/version_probe.py": "f5a8d6ef47f10afa6570ff8ce843c4a5ffdfd4eff72e14bb7f1a7e27d5295f31",
+    "scripts/cf7_lab/run.py": "00badf52a90b83af644389d92842b8bb15d38a1a51108a244a5a9ed92ce7adeb",
+    "scripts/cf7_lab/fixture.php": "e19cb2cbd2bb3b6a39a41a0665d19f8927778a7556275aeca4e514c9cd07bc4a",
+    "scripts/cf7_lab/safeguard.php": "c2e88beaa7cc623302a0ee647c6c40a1bd5ae1b6189e63dda2bc1247c9e217e8",
+    "scripts/cf7_lab/protocol.py": "6ec1310f6862a9d72858e8f5cfc3599d48202d99edb8df09a164d1d88dac2062",
+    "scripts/cf7_lab/browser_probe.cjs": "9c2760b6c7a0965dec31adbd996c3dd2e06e95882323ad26c9ad7962146297fc"
+  },
+  "profiles": {
+    "6.2": {
+      "checks_passed": 35,
+      "feedback_post_count": 19,
+      "versions": {
+        "cf7_version": "6.2",
+        "wp_version": "7.1.2",
+        "php_version": "8.3.35"
+      },
+      "cf7_commit": "34acb3a6995b403274820c5ea42abd01b754c03b",
+      "source_sha256": "be61bf5bd0f99187e7f15b285b1bf1590038105e2b267501b81003066c93d1cb",
+      "images": {
+        "wp": {
+          "tag": "wordpress:7.1.2-php8.3-apache",
+          "digest": "wordpress@sha256:e04cf657f24889e96b5544828cdd5a92a0b51819f3e1899183f9be6ea0485edf",
+          "id": "sha256:e04cf657f24889e96b5544828cdd5a92a0b51819f3e1899183f9be6ea0485edf"
+        },
+        "db": {
+          "tag": "mariadb:11.4",
+          "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+          "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+        }
+      },
+      "started_at": "2026-10-08T11:39:10.512144+00:00",
+      "finished_at": "2026-10-08T11:40:26.688745+00:00",
+      "private_report_sha256": "c175b0156937762820cc5c75c0dc782c02d5b35952e8e264e5b2f3a9ab4fbdfe",
+      "cleanup_failures": [],
+      "contract": {
+        "contract_hash": "7b9c98441161986a860bedd622a961802d25d481e043a7c53bc8e422ed7a6f06",
+        "wire_sha256": "a839c3c80b724ac5dfd50f29d3738648f2fa203916769af527249718b7e3eb51",
+        "part_count": 14,
+        "statuses": [
+          "mail_sent",
+          "mail_failed"
+        ],
+        "execution_allowed": false,
+        "eligible_for_approval": false,
+        "feedback_post_count": 2
+      },
+      "browser_full_order_equal": true
+    },
+    "6.1.4": {
+      "checks_passed": 73,
+      "feedback_post_count": 45,
+      "versions": {
+        "cf7_version": "6.1.4",
+        "wp_version": "6.8.3",
+        "php_version": "8.3.28"
+      },
+      "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+      "source_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+      "images": {
+        "wp": {
+          "tag": "wordpress:6.8.3-php8.3-apache",
+          "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+          "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+        },
+        "db": {
+          "tag": "mariadb:11.4",
+          "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+          "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+        }
+      },
+      "started_at": "2026-10-08T11:39:27.989086+00:00",
+      "finished_at": "2026-10-08T11:41:36.866839+00:00",
+      "private_report_sha256": "70a7d3b32a21249ac24c3a3cd6e5c228b8c6de74207e889de2356de27ef9aae6",
+      "cleanup_failures": []
+    }
+  },
+  "real_companies_accessed": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "approvals": 0,
+  "dispatch_connected": false,
+  "safety": {
+    "outbound": "false",
+    "database_counts": {
+      "companies": 26,
+      "approval_requests": 0,
+      "email_deliveries": 0,
+      "form_deliveries": 0
+    }
+  },
+  "total_local_posts_this_task": 64
+}

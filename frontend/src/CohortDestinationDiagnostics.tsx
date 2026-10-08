@@ -1,0 +1,123 @@
+import { useEffect, useRef, useState } from 'react'
+import { api, ApiError, errorMessage } from './api'
+import { CompletionBenchmark } from './CompletionBenchmark'
+import { validBenchmark } from './completionBenchmarkTypes'
+import type { BenchmarkMeta } from './completionBenchmarkTypes'
+import { CompletionWorkQueue } from './CompletionWorkQueue'
+import type { CompletionWorkRow, CompletionQueueFilters } from './completionWorkQueueTypes'
+
+type Reason = { code: string; message: string; next_action: string }
+type DeliveryFunnel = { prepared_ever: boolean; human_approved: boolean; sent: boolean; attempt_count: number; results: Record<string, number>; queued: number; blocked: number; cancelled: number; preflight_failed: number; unverified_records: number }
+type History = { prepared: number; approved: number; sent: number; attempts: number; results: Record<string, number>; queued: number; blocked: number; cancelled: number; preflightFailed: number; unverified: number }
+const resultNames: Record<string, string> = { ACCEPTED: '受付確認（到達未確認）', DELIVERED: 'メール到達証跡あり', UNKNOWN: '結果不明・Human確認', FAILED: '失敗・不達', IN_PROGRESS: '実行開始・結果待ち' }
+const emptyHistory = (): History => ({ prepared: 0, approved: 0, sent: 0, attempts: 0, results: Object.fromEntries(Object.keys(resultNames).map(key => [key, 0])), queued: 0, blocked: 0, cancelled: 0, preflightFailed: 0, unverified: 0 })
+function validHistory(value: DeliveryFunnel): boolean {
+  return !!value && [value.prepared_ever, value.human_approved, value.sent].every(v => typeof v === 'boolean') && !!value.results && Object.keys(resultNames).every(key => Number.isSafeInteger(value.results[key]) && value.results[key] >= 0) && [value.attempt_count, value.queued, value.blocked, value.cancelled, value.preflight_failed, value.unverified_records].every(v => Number.isSafeInteger(v) && v >= 0) && Object.values(value.results).reduce((sum, n) => sum + n, 0) === value.attempt_count && value.sent === (value.attempt_count > 0) && (!value.sent || value.human_approved) && (!value.human_approved || value.prepared_ever)
+}
+type Row = CompletionWorkRow & { delivery_funnel: DeliveryFunnel; dm_ready: boolean; dm_ready_reason: string | null; company_id: string; status: string; reasons: Reason[]; destinations: { key: string; type: string; status: string; shared: boolean }[] }
+type Page = { benchmark_meta: BenchmarkMeta; cohort_id: string; cohort_hash: string; context_hash: string; definition_version: string; aggregation_definition: string; discovered: number; offset: number; inspected: number; next_offset: number | null; started_at: string; measured_at: string; rows: Row[] }
+type Summary = { benchmarkMeta?: BenchmarkMeta; rows: Row[]; history: History; dmReady: number; dmReasons: Record<string, number>; processed: number; states: Record<string, number>; destinations: Record<string, { leads: number; ready: boolean; shared: boolean }>; reasons: Record<string, { reason: Reason; count: number; states: Set<string> }>; first: string; last: string; complete: boolean }
+const empty = (): Summary => ({ rows: [], history: emptyHistory(), dmReady: 0, dmReasons: {}, processed: 0, states: { READY: 0, REVIEW: 0, HOLD: 0, BLOCKED: 0 }, destinations: {}, reasons: {}, first: '', last: '', complete: false })
+
+export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered, onOpenCompany, initialFilters }: { cohortId: string; cohortHash: string; discovered: number; onOpenCompany: (id: string, filters: CompletionQueueFilters) => void; initialFilters?: CompletionQueueFilters }) {
+  const [filters, setFilters] = useState<CompletionQueueFilters>(initialFilters ?? { state: 'ALL', reason: 'ALL', page: 0 })
+  const [data, setData] = useState<Summary>(empty)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const generation = useRef(0)
+  useEffect(() => () => { generation.current++ }, [])
+  function cancel() { generation.current++; setBusy(false) }
+  async function collect() {
+    const current = ++generation.current
+    setBusy(true); setError(''); setData(empty())
+    let result = empty()
+    let offset = 0
+    let context = ''
+    let definition = ''
+    const seen = new Set<string>()
+    try {
+      while (true) {
+        const batch = await api<Page>(`/completion-cohorts/${cohortId}/destination-diagnostics?benchmark=true&offset=${offset}&limit=25${context ? `&expected_context_hash=${context}` : ''}`)
+        if (current !== generation.current) return
+        if (batch.cohort_id !== cohortId || batch.cohort_hash !== cohortHash || batch.discovered !== discovered || batch.offset !== offset || batch.inspected !== batch.rows.length || (!batch.inspected && discovered > 0) || (context && context !== batch.context_hash)) throw new ApiError(409, '集計対象または営業条件が変わりました。再集計してください。')
+        if (definition && definition !== `${batch.definition_version}:${batch.aggregation_definition}`) throw new ApiError(409, '診断方式が変わりました。再集計してください。')
+        definition = `${batch.definition_version}:${batch.aggregation_definition}`
+        if (batch.benchmark_meta?.definition !== 'completion-benchmark-v1' || !batch.benchmark_meta.cost || batch.rows.some(row => !validBenchmark(row))) throw new ApiError(409, 'Benchmarkの証跡を確認できません。再集計してください。')
+        context = batch.context_hash
+        const next = offset + batch.inspected
+        if (next > discovered || batch.next_offset !== (next < discovered ? next : null)) throw new ApiError(409, '集計範囲を確認できません。再集計してください。')
+        // Pages are observations over an interval; only confirmed received pages are counted.
+        result = { ...result, history: { ...result.history, results: { ...result.history.results } }, states: { ...result.states }, destinations: { ...result.destinations }, reasons: { ...result.reasons }, dmReasons: { ...result.dmReasons } }
+        if (batch.rows.some(row => seen.has(row.company_id) || !['READY', 'REVIEW', 'HOLD', 'BLOCKED'].includes(row.status) || typeof row.dm_ready !== 'boolean' || !(row.company_name === null || typeof row.company_name === 'string') || !validHistory(row.delivery_funnel)) || new Set(batch.rows.map(row => row.company_id)).size !== batch.rows.length) throw new ApiError(409, '診断対象の重複または状態を確認できません。再集計してください。')
+        for (const row of batch.rows) {
+          seen.add(row.company_id)
+          const history = row.delivery_funnel
+          result.history.prepared += Number(history.prepared_ever)
+          result.history.approved += Number(history.human_approved)
+          result.history.sent += Number(history.sent)
+          result.history.attempts += history.attempt_count
+          result.history.queued += history.queued
+          result.history.blocked += history.blocked
+          result.history.cancelled += history.cancelled
+          result.history.preflightFailed += history.preflight_failed
+          result.history.unverified += history.unverified_records
+          for (const key of Object.keys(resultNames)) result.history.results[key] += history.results[key]
+          if (row.dm_ready) result.dmReady++
+          else if (row.dm_ready_reason) result.dmReasons[row.dm_ready_reason] = (result.dmReasons[row.dm_ready_reason] ?? 0) + 1
+          result.states[row.status] = (result.states[row.status] ?? 0) + 1
+          for (const item of row.destinations) {
+            const previous = result.destinations[item.key]
+            result.destinations[item.key] = { leads: (previous?.leads ?? 0) + 1, ready: (previous?.ready ?? false) || item.status === 'READY', shared: (previous?.shared ?? false) || item.shared }
+          }
+          if (row.status !== 'READY') for (const reason of row.reasons) {
+            const previous = result.reasons[reason.code]
+            result.reasons[reason.code] = { reason, count: (previous?.count ?? 0) + 1, states: new Set([...(previous?.states ?? []), row.status]) }
+          }
+        }
+        result.rows = [...result.rows, ...batch.rows]
+        result.benchmarkMeta = batch.benchmark_meta
+        result.processed = next
+        result.first ||= batch.started_at
+        result.last = batch.measured_at
+        result.complete = batch.next_offset === null
+        result = { ...result, history: { ...result.history, results: { ...result.history.results } }, states: { ...result.states }, destinations: { ...result.destinations }, reasons: { ...result.reasons }, dmReasons: { ...result.dmReasons } }
+        setData(result)
+        if (result.complete) break
+        offset = next
+      }
+    } catch (e) { if (current === generation.current) setError(errorMessage(e)) }
+    finally { if (current === generation.current) setBusy(false) }
+  }
+  const destinations = Object.values(data.destinations)
+  const independentReady = destinations.filter(d => d.ready && d.leads === 1 && !d.shared).length
+  return <section className="mt-5" aria-label="固定リストの窓口診断">
+    <h3>固定リストの窓口診断</h3>
+    <p className="muted">25件ずつ保存済み情報を診断します。全件終了までは部分集計です。ページごとの取得時点の診断です。集計中の変更を含むことがあるため、一時点の固定結果ではありません。窓口READYとDM READYを分けて確認します。送信許可は別操作です。</p>
+    <button className="secondary" disabled={busy} onClick={() => void collect()}>窓口診断を集計</button>
+    {busy && <button className="secondary" onClick={cancel}>窓口集計を中断</button>}
+    <p role="status">診断済み {data.processed} / {discovered}件 — {data.complete ? '全件集計済み' : '部分集計・未診断分あり'}</p>
+    {error && <p role="alert">{error} 完了扱いにはしません。最初から再集計してください。</p>}
+    {(data.processed > 0 || data.complete) && <>
+      <p>窓口準備の分類：READY {data.states.READY} / REVIEW {data.states.REVIEW} / HOLD {data.states.HOLD} / BLOCKED {data.states.BLOCKED}</p>
+      <div className="grid gap-3 sm:grid-cols-3"><article className="metric"><span>診断範囲の窓口候補（重複除外）</span><strong>{destinations.length}</strong></article><article className="metric"><span>診断範囲の共通窓口</span><strong>{destinations.filter(d => d.leads > 1 || d.shared).length}</strong></article><article className="metric"><span>READYの独立窓口</span><strong>{independentReady}</strong></article></div>
+      <p className="muted">独立窓口は、診断範囲内で一つのLeadにだけ結び付き、共有判定のないREADY候補です。未診断・範囲外のLeadの窓口数を推定しません。DM READYは有効な根拠付き下書き・送信者・入力値を固定した承認待ち／承認済み提案があるLeadです。</p>
+      <p>診断範囲のDM READY：{data.dmReady}件 / DM READY率：{data.complete && discovered > 0 ? `${(100 * data.dmReady / discovered).toFixed(1)}%` : '未判定（部分集計）'}</p>
+      <ul>{Object.entries(data.dmReasons).sort((a, b) => b[1] - a[1]).map(([reason, count]) => <li key={reason}>{reason}：{count}件</li>)}</ul>
+      <section className="mt-4" aria-label="Human承認と送信結果のFunnel">
+        <h4>Human承認と送信結果の履歴</h4>
+        <p>{data.complete ? '全件の観察集計' : '部分集計'}：提案準備済み {data.history.prepared} Lead → Human承認記録 {data.history.approved} Lead → 送信実行 {data.history.sent} Lead</p>
+        <p>提案から承認への率：{data.complete && data.history.prepared ? `${(100 * data.history.approved / data.history.prepared).toFixed(1)}%` : '未判定'} / 承認から実行への率：{data.complete && data.history.approved ? `${(100 * data.history.sent / data.history.approved).toFixed(1)}%` : '未判定'}</p>
+        <p>送信試行 {data.history.attempts}件（複数試行があるLeadは複数件）</p>
+        <ul>{Object.entries(resultNames).map(([key, label]) => <li key={key}>{label}：{data.history.results[key]}件</li>)}</ul>
+        <p>予約・実行前 {data.history.queued}件 / 安全停止 {data.history.blocked}件 / 取消 {data.history.cancelled}件 / 実行前失敗 {data.history.preflightFailed}件 / 証跡不一致 {data.history.unverified}件</p>
+        <p className="muted">根拠付きDMの承認提案に紐付く履歴のみです。旧経路の履歴を推定して混ぜません。過去の承認記録は取消・期限切れ後も残り、現在の送信許可とは異なります。予約だけでは送信実行に数えません。フォーム受付・SMTP受付は相手の閲覧や返信を意味しません。UNKNOWNの自動再送は行いません。</p>
+      </section>
+      {data.benchmarkMeta && <CompletionBenchmark rows={data.rows} discovered={discovered} complete={data.complete} metadata={data.benchmarkMeta} onReason={code => { setFilters({ state: 'ALL', reason: code, page: 0 }); document.querySelector('[aria-label="Lead Completion作業キュー"]')?.scrollIntoView({ block: 'start' }) }} />}
+      <CompletionWorkQueue rows={data.rows} complete={data.complete} filters={filters} onFiltersChange={setFilters} onOpenCompany={onOpenCompany} />
+      <h4 className="mt-4">不足・停止理由と次の作業</h4>
+      <p className="muted">READY以外のLeadを理由ごとに一度だけ数えます。一つのLeadに複数理由があるため合計は候補数と一致しません。別窓口の理由も含むので、企業詳細で窓口別に確認してください。</p>
+      <ul>{Object.values(data.reasons).sort((a, b) => b.count - a.count || a.reason.code.localeCompare(b.reason.code)).map(item => <li key={item.reason.code}><strong>{item.reason.message}：{item.count}件</strong>（{[...item.states].join(' / ')}）— {item.reason.next_action} <small>({item.reason.code})</small></li>)}</ul>
+      <p className="muted text-xs">診断期間：{new Date(data.first).toLocaleString('ja-JP')}〜{new Date(data.last).toLocaleString('ja-JP')}。条件変更時は再集計。承認・送信時の再確認を代替しません。</p>
+    </>}
+  </section>
+}

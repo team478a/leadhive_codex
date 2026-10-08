@@ -1,0 +1,218 @@
+{
+  "definition": "fixed-cf7-real-preview-encoding-reception-v1",
+  "baseline_commit": "0b89baf",
+  "source_file_sha256": {
+    "backend/app/services/cf7_real_contract_preview.py": "817dba9950764ff46c3ad8ced2ce8cb2b0d41ac4b910849b0ce46ed951bee3fb",
+    "backend/app/services/cf7_static_parser.py": "f43f89d86e9ee6ad8f9c663ae1bbf1f3f51301eda54ad40d01f5a7d1ccbec955",
+    "backend/app/services/cf7_real_encoding.py": "ac5a93dba1fe1805143ba762b7c36dc2b210a95cdeecbe50357b21660a78ef6c",
+    "scripts/cf7_lab/real_encoding_probe.py": "40a5b45227495e79fc15de2a09234212beb9c2f8d917e9cb71e51afd2cb75397",
+    "scripts/cf7_lab/run.py": "b4786bcd61a8df185c573637f4f85c7b45d1cb8989f84ae4c914aa12da0893c2",
+    "scripts/cf7_lab/fixture.php": "03bddef39ff4f38704e5c7e710787e4e914205ea59d1bbc20b65d8c14171674d",
+    "scripts/cf7_lab/safeguard.php": "e38e338991a6e06284ca154602edba438ffbe42b5fdb034f2cf5bf387ba02571"
+  },
+  "runs": [
+    {
+      "profile": "6.2",
+      "cf7_commit": "34acb3a6995b403274820c5ea42abd01b754c03b",
+      "source_sha256": "be61bf5bd0f99187e7f15b285b1bf1590038105e2b267501b81003066c93d1cb",
+      "images": {
+        "wp": {
+          "tag": "wordpress:7.1.2-php8.3-apache",
+          "digest": "wordpress@sha256:e04cf657f24889e96b5544828cdd5a92a0b51819f3e1899183f9be6ea0485edf",
+          "id": "sha256:e04cf657f24889e96b5544828cdd5a92a0b51819f3e1899183f9be6ea0485edf"
+        },
+        "db": {
+          "tag": "mariadb:11.4",
+          "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+          "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+        }
+      },
+      "versions": {
+        "forms": {
+          "standard": 5,
+          "optional": 6,
+          "invert": 7,
+          "demo": 8,
+          "groups_required": 9,
+          "groups_optional": 10,
+          "radio": 11,
+          "extra_hidden": 12,
+          "mixed": 13
+        },
+        "page_id": 14,
+        "wp_version": "7.1.2",
+        "cf7_version": "6.2",
+        "php_version": "8.3.35"
+      },
+      "passed": true,
+      "cleanup_failures": [],
+      "real_preview_encoding": {
+        "plugin_version": "6.2",
+        "synthetic_input_confirmation": true,
+        "actual_dom_constraints_preserved": true,
+        "candidate_urls_executed": false,
+        "logical_origin_is_placeholder": true,
+        "encoding": {
+          "encoding_version": "real-cf7-offline-multipart-v1",
+          "contract_hash": "d3e7da90120d117ac67d7123477b48cf53b0249eacc3048a96d0ca979bdb9702",
+          "content_type": "multipart/form-data; boundary=----LeadHiveCF7Orderedc73b437baf198429668d7ff3f5d4e029",
+          "wire_size": 1208,
+          "wire_sha256": "b23b5b419b05cdf56ffc824da3045523c26a0ee2364491e96f561423edee09a5",
+          "execution_allowed": false,
+          "eligible_for_approval": false
+        },
+        "cases": [
+          {
+            "mode": "capture",
+            "classification": "RECEIPT_REPORTED",
+            "ordered_names_match": true,
+            "value_hashes_match": true
+          },
+          {
+            "mode": "fail",
+            "classification": "UNKNOWN",
+            "ordered_names_match": true,
+            "value_hashes_match": true
+          }
+        ],
+        "negative_cases_rejected": [
+          "draft",
+          "target",
+          "order",
+          "expired",
+          "wire_hash",
+          "maxlength"
+        ],
+        "local_feedback_posts": 2,
+        "real_email_sent": 0,
+        "real_form_sent": 0,
+        "approvals_created": 0
+      },
+      "regression_suite_skipped": true,
+      "checks_passed": 14
+    },
+    {
+      "profile": "6.1.4",
+      "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+      "source_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+      "images": {
+        "wp": {
+          "tag": "wordpress:6.8.3-php8.3-apache",
+          "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+          "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+        },
+        "db": {
+          "tag": "mariadb:11.4",
+          "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+          "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+        }
+      },
+      "versions": {
+        "forms": {
+          "standard": 5,
+          "optional": 6,
+          "invert": 7,
+          "demo": 8,
+          "groups_required": 9,
+          "groups_optional": 10,
+          "radio": 11,
+          "extra_hidden": 12,
+          "mixed": 13
+        },
+        "page_id": 14,
+        "wp_version": "6.8.3",
+        "cf7_version": "6.1.4",
+        "php_version": "8.3.28"
+      },
+      "passed": true,
+      "cleanup_failures": [],
+      "real_preview_encoding": {
+        "plugin_version": "6.1.4",
+        "synthetic_input_confirmation": true,
+        "actual_dom_constraints_preserved": true,
+        "candidate_urls_executed": false,
+        "logical_origin_is_placeholder": true,
+        "encoding": {
+          "encoding_version": "real-cf7-offline-multipart-v1",
+          "contract_hash": "e93406852006a4f9ac529854ab8277349fb45271d2b451408fa1a816af528aa4",
+          "content_type": "multipart/form-data; boundary=----LeadHiveCF7Ordered1347bb9b199d9be3458d57926448f09d",
+          "wire_size": 1210,
+          "wire_sha256": "3f61acc0101c01fd710af3f9c309561cd1fef6c1b1b93bf22baf0320adc19f37",
+          "execution_allowed": false,
+          "eligible_for_approval": false
+        },
+        "cases": [
+          {
+            "mode": "capture",
+            "classification": "RECEIPT_REPORTED",
+            "ordered_names_match": true,
+            "value_hashes_match": true
+          },
+          {
+            "mode": "fail",
+            "classification": "UNKNOWN",
+            "ordered_names_match": true,
+            "value_hashes_match": true
+          }
+        ],
+        "negative_cases_rejected": [
+          "draft",
+          "target",
+          "order",
+          "expired",
+          "wire_hash",
+          "maxlength"
+        ],
+        "local_feedback_posts": 2,
+        "real_email_sent": 0,
+        "real_form_sent": 0,
+        "approvals_created": 0
+      },
+      "regression_suite_skipped": true,
+      "checks_passed": 14
+    }
+  ],
+  "unsuccessful_attempts": [
+    {
+      "profile": "6.2",
+      "passed": false,
+      "checks_passed": 35,
+      "failed_check": "encoding fixture local rendered page",
+      "cleanup_failures": []
+    },
+    {
+      "profile": "6.1.4",
+      "passed": false,
+      "checks_passed": 73,
+      "failed_check": "encoding fixture local rendered page",
+      "cleanup_failures": []
+    },
+    {
+      "profile": "6.2",
+      "passed": false,
+      "checks_passed": 10,
+      "failed_check": null,
+      "cleanup_failures": []
+    },
+    {
+      "profile": "6.1.4",
+      "passed": false,
+      "checks_passed": 10,
+      "failed_check": null,
+      "cleanup_failures": []
+    },
+    {
+      "profile": "6.2",
+      "passed": false,
+      "checks_passed": 10,
+      "failed_check": null,
+      "cleanup_failures": []
+    }
+  ],
+  "new_path_local_feedback_posts": 4,
+  "external_company_requests": 0,
+  "real_email_sent": 0,
+  "real_form_sent": 0,
+  "approvals_created": 0,
+  "unknown_auto_retries": 0
+}

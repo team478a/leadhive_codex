@@ -1,0 +1,44 @@
+{
+  "2f425b9a4c3fc2c48aca84441c7b65f1049c0980db1245a5ba715966b50f0e34": {
+    "baseline_commit": "6a8a213878e416484f7a2b7fba6515b571bcc0d1",
+    "recorded_at": "2026-10-06T17:47:00.666671+09:00",
+    "read_only": true,
+    "cohort": "Existing Himeji 100 locations",
+    "discovered": 100,
+    "website_url_present": 43,
+    "website_url_missing": 57,
+    "official_site_confirmed_automatic": null,
+    "identity_confirmed_automatic": null,
+    "destination_found": 24,
+    "destination_confirmed": null,
+    "unique_destinations": 19,
+    "shared_destinations": 8,
+    "legacy_contact_allowed": 0,
+    "statuses": {
+      "READY": 0,
+      "REVIEW": 23,
+      "HOLD": 76,
+      "BLOCKED": 1
+    },
+    "dm_ready": 0,
+    "dm_ready_rate": 0,
+    "reason_counts": {
+      "OFFICIAL_SITE_NOT_FOUND": 57,
+      "CONTACT_NOT_FOUND": 19,
+      "IDENTITY_UNCERTAIN": 9,
+      "SHARED_DESTINATION": 14,
+      "CORE_PERMISSION_BLOCKED": 1
+    },
+    "qualification": "Inventory baseline, not automatic enrichment accuracy. Legacy registered URLs include one-time manual review. Identity/official confidence evidence is not structured; unknown is null, never confirmed. READY conservatively requires this evidence; ALLOWED does not imply DM_READY.",
+    "costs": {
+      "search_calls": null,
+      "places_calls": null,
+      "ai_calls": null,
+      "ai_tokens": null,
+      "estimated_cost": null,
+      "human_review_seconds": null
+    },
+    "email_deliveries": 0,
+    "form_deliveries": 0
+  }
+}

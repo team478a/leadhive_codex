@@ -1,0 +1,184 @@
+{
+  "analysis_version": "1.7",
+  "flags": {
+    "outbound_enabled": false,
+    "human_approved_form_enabled": false,
+    "legacy_form_delivery_enabled": false,
+    "agent_features_enabled": false
+  },
+  "method": "GET_ONLY",
+  "database_mutations": false,
+  "form_post": false,
+  "ai_calls": false,
+  "active_jobs": 0,
+  "send_counts": {
+    "approved_form_dispatches": 0,
+    "form_deliveries": 0,
+    "email_deliveries": 0
+  },
+  "baseline_commit": "a39fd3764947e7852b340d713c76306b9875258a",
+  "checked_date": "2026-10-06",
+  "real_site_get": true,
+  "results": [
+    {
+      "url": "https://cecil-hair.com/contact/",
+      "final_url": "https://cecil-hair.com/contact/",
+      "permission_rule": "ALLOWED",
+      "permission_rule_is_authorization": false,
+      "saved_profiles": [
+        {
+          "status": "REVIEW_REQUIRED",
+          "delivery_supported": false,
+          "review_reason": "実フォーム確認で問い合わせ種別の本文への誤マッピング、連絡方法の誤分類を確認。Contact Form 7の入力・同意・送信経路の検証が未完了のため通常自動処理を保留。"
+        }
+      ],
+      "forms": [
+        {
+          "static_compatibility": {
+            "supported": false,
+            "reason": "Contact Form 7の送信経路は未対応です。ブラウザで確認してください。"
+          },
+          "static_profile_status": "REVIEW_REQUIRED",
+          "mapping_review_reason": "連絡方法の選択値を人が確認・保存してください。",
+          "captcha": "CAPTCHA_NONE",
+          "confirmation": false,
+          "matches_saved_fingerprint": [
+            false
+          ],
+          "contact_form_7": true,
+          "visible_fields": [
+            {
+              "label": "お問い合わせ項⽬ 必須",
+              "field_type": "select",
+              "required": true,
+              "mapped_key": "contact_category",
+              "confidence": 0.9
+            },
+            {
+              "label": "お名前 必須",
+              "field_type": "text",
+              "required": true,
+              "mapped_key": "contact_name",
+              "confidence": 0.9
+            },
+            {
+              "label": "ご住所 必須",
+              "field_type": "text",
+              "required": true,
+              "mapped_key": "address",
+              "confidence": 0.9
+            },
+            {
+              "label": "ご連絡⽅法 必須",
+              "field_type": "radio",
+              "required": true,
+              "mapped_key": "contact_method",
+              "confidence": 0.9
+            },
+            {
+              "label": "電話番号 必須",
+              "field_type": "text",
+              "required": true,
+              "mapped_key": "phone",
+              "confidence": 0.9
+            },
+            {
+              "label": "メールアドレス 必須",
+              "field_type": "email",
+              "required": true,
+              "mapped_key": "email",
+              "confidence": 1.0
+            },
+            {
+              "label": "お問い合わせ内容 必須",
+              "field_type": "textarea",
+              "required": true,
+              "mapped_key": "message",
+              "confidence": 0.9
+            },
+            {
+              "label": "プライバシーポリシーに同意（必須性未確認）",
+              "field_type": "checkbox",
+              "required": false,
+              "mapped_key": "privacy_consent",
+              "confidence": 0.9
+            },
+            {
+              "label": "入力項目",
+              "field_type": "submit",
+              "required": false,
+              "mapped_key": "other",
+              "confidence": 1.0
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "https://www.palio8866.com/contact",
+      "final_url": "https://www.palio8866.com/contact",
+      "permission_rule": "ALLOWED",
+      "permission_rule_is_authorization": false,
+      "saved_profiles": [
+        {
+          "status": "REVIEW_REQUIRED",
+          "delivery_supported": false,
+          "review_reason": "実フォーム確認で画面上の必須の氏名・メール・電話がrequiredとして取得されず未マッピング。JavaScriptの確認画面と必須入力の検証が未完了のため通常自動処理を保留。"
+        }
+      ],
+      "forms": [
+        {
+          "static_compatibility": {
+            "supported": false,
+            "reason": "確認・送信ボタンがJavaScript操作を必要とします。確認経路は未検証です。"
+          },
+          "static_profile_status": "REVIEW_REQUIRED",
+          "mapping_review_reason": "",
+          "captcha": "CAPTCHA_NONE",
+          "confirmation": true,
+          "matches_saved_fingerprint": [
+            false
+          ],
+          "contact_form_7": false,
+          "visible_fields": [
+            {
+              "label": "お名前 ※",
+              "field_type": "text",
+              "required": true,
+              "mapped_key": "contact_name",
+              "confidence": 0.9
+            },
+            {
+              "label": "メールアドレス ※",
+              "field_type": "text",
+              "required": true,
+              "mapped_key": "email",
+              "confidence": 0.9
+            },
+            {
+              "label": "電話番号 ※",
+              "field_type": "text",
+              "required": true,
+              "mapped_key": "phone",
+              "confidence": 0.9
+            },
+            {
+              "label": "お問合せ内容 ※",
+              "field_type": "textarea",
+              "required": true,
+              "mapped_key": "message",
+              "confidence": 0.9
+            },
+            {
+              "label": "入力項目",
+              "field_type": "button",
+              "required": false,
+              "mapped_key": "other",
+              "confidence": 1.0
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

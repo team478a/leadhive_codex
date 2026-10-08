@@ -1,0 +1,72 @@
+# 既存100店舗のフォーム解析・実データ測定
+
+## 対象と実施条件
+
+2026-10-05、ローカルpreviewの「姫路市の美容院100店舗（確認用）」を測定した。基準ソースは `codex/integration@3b5e1dd`。新規企業収集や公式サイトURLの推測補完は行わず、既存データを対象とした。WebサイトURL登録15社、未登録85社。登録済みURLは7ドメインに集中しているため、独立した100サイトの試験ではない。
+
+既存 `analyze_company_forms(..., allow_ai=False)` と `SafeFetcher` を利用した。DOM・ルールのみ、通常のrobots.txt・安全URL・サイズ・timeout制御を維持。逐次処理し、サイト登録企業の処理後に2秒待機。AI、Serper、Google Places等のAPI呼出なし。メール・フォームPOST・承認・配送予約・Codex送信タスクは実行していない。
+
+既存workerを一時停止し、DBをバックアップしてから、既存OperationJob・claim・lease・進捗保存を利用する一回限りの測定runnerで実施した。runnerは配布コードへ追加していない。通常workerのAI動作・環境設定を変更せず、明示的にAIを禁止した解析Serviceを呼んだ。
+
+## 結果
+
+| 分類 | 店舗数 | 意味 |
+|---|---:|---|
+| 公式サイトURL未登録 | 85 | Web取得前の入力不足。フォーム未発見率へ混ぜない |
+| robots制御で取得停止 | 6 | 1つのドメインの6店舗。取得失敗を含む既存の保守的判定 |
+| フォーム未発見 | 5 | 取得・探索したHTMLにフォームを確認できず |
+| CAPTCHA・人の操作が必要 | 1 | 通常自動経路では処理しない |
+| POST以外のフォーム・要確認 | 1 | GET形式等。営業問い合わせフォームかも要確認 |
+| 構造上の候補・共通宛先で禁止 | 2 | 同じ問い合わせURLを利用する別店舗。二重営業を防ぐ既存guardで停止 |
+| 合計 | 100 | 同じ店舗を複数分類へ重複計上しない |
+
+- 実測時間約50.13秒。85社は通信なしで入力不足を記録しており、100サイトの解析速度・大量送信の性能へ外挿できない。
+- HTMLの`form`を検出した店舗は4社（15社中4社、約26.7%）。実際の営業問い合わせフォームとしての確認完了率ではない。検索などGETフォームも含む。
+- 構造上の候補は2社（全100社の2%、URL登録15社の約13.3%）。両方が店舗共通宛先のため、現在の連絡制御で制限未検出となる店舗は0社。送信準備・Human承認・実送信の成功率は測定していない。
+- 入力不足85社＋取得停止6社で、既存解析プロフィールのERRORは91社。非ERRORは9社。OperationJobはprocessed=100 / success=9 / failed=91 / status=failed。これは途中停止ではなく、既存workerと同じ部分失敗集計による状態である。
+- 画面の分類は解析条件の候補2、CAPTCHA1、解析エラー91、フォーム未発見5、項目確認1。解析エラー91のうち85はURL未登録である。
+- 営業禁止の検出件数0は、このリスト全体で営業可能という意味ではない。85社はサイト未取得、6社は取得停止で、未取得先の禁止文言は評価できない。
+
+## 発見した問題と限定修正
+
+サイト・問い合わせURLがない場合、既存解析Serviceは `about:blank` をプロフィールURLへ保存する。同じ仮値を持つ別店舗を、既存の共有宛先guardが実在する共通フォームと誤判定していた。修正前は共有宛先89社と表示されたが、そのうち85社はこの仮値だった。
+
+`contact_permission._shared_location_destination`で`about:blank`を共有宛先比較から除外した。フォーム解析状態・営業可否・Suppression・結果不明のguardは維持する。未登録先を送信許可に変える修正ではない。実在する共通フォームは引き続き禁止する。Model・Migration・API・UIの変更なし。
+
+修正後の連絡制御はUNCERTAIN 96社 / PROHIBITED 4社 / ALLOWED 0社。共有宛先4社は構造上の候補2社と、別の共通問い合わせページを持つ2社。仮値85社を除外しても送信可能数は増えない。
+
+## 成果物とプライバシー
+
+店舗別の詳細CSV・JSONはローカル `dist/form-readiness-measurement.csv` / `dist/form-readiness-measurement.json` に保存する。入力URL、分類、解析時間、取得エラー、連絡制御理由を記録する。利用中DBも更新され、既存企業詳細・候補集計で確認できる。
+
+GitHubには本書と、店舗名・URL・個別IDを含まない集計JSONのみを保存する。元HTML、フォームhidden値、APIキー、認証情報は成果物へ保存しない。バックアップは `dist/form-readiness-before-real-analysis.dump`、詳細・バックアップともGit管理対象外。
+
+集計結果: [results/form-readiness-real-data-2026-10-05.json](results/form-readiness-real-data-2026-10-05.json)。詳細CSVのSHA-256も記録する。
+
+## 品質確認と稼働状態
+
+- 仮URLの誤共有判定・実在する共通フォームの禁止維持、候補集計、Form Intelligence、承認準備、UNKNOWN、店舗取込の関連Backendテスト63件成功。
+- Ruff / format / compileall、Frontend typecheck / lint / build、Backend Docker image build成功。UI変更なし。
+- 解析テストの専用DBでMigration upgrade / model差分確認を実施。新Migrationなし、実DB head `fae47ac5e861` を維持。
+- このPCのAPIへ限定修正を反映し、health / DB疎通 / 集計を確認。企業100件、プロフィール104件。メール送信・フォーム送信・承認済みフォーム予約はすべて0件。
+- APIの外部送信・承認済みフォーム実行・旧フォーム送信・Agent flagはOFF。workerにも修正ソースをコピー済み。
+- 最終ファイル回収・集計更新・worker再開をまとめたコマンドが操作ツールの実行ポリシーで拒否された。具体的理由は示されていない。より限定した集計とファイル回収は完了したが、worker再開は行わず停止を保持した。Web UI/APIは起動中で、バックグラウンド収集・解析の再開は残作業。
+- 実メール・フォーム送信、送信flag有効化、Production deployment、配布zip更新なし。
+
+### 実行拒否の追加調査・説明訂正
+
+拒否記録は2026-10-05 21:02:14 JSTの `CreateProcess ... rejected: blocked by policy`。PowerShellプロセス作成前に、複数操作を含むコマンド全体が拒否されている。どの部分が対象だったか、規則IDや具体的理由は返されていない。「worker再開そのものが拒否対象だった」とも断定できない。
+
+当該turnの保存済み設定はapproval_policy=never / danger-full-access。現在の設定もneverで、approvals_reviewer=user。通常のCodex Auto-reviewはneverでは動作しないと[公式説明](https://learn.chatgpt.com/docs/sandboxing/auto-review)にあるため、当初の「自動承認レビュー」という説明は根拠がなく訂正する。
+
+ローカルdefault.rulesの697規則を解析し、forbidden規則0、docker prefixはallowだった。ただしローカル規則だけで全実行ポリシーは確定できない。当該会話記録、時間を限定したCodexログDB、当日のdesktopログを確認したが、具体的な拒否理由は見つからなかった。
+
+workerは20:55:40 JSTに測定準備の明示的なdocker stopで停止し、拒否より約6分34秒前の出来事。OOMKilled=false、Docker State.Errorは空。実行拒否がworkerを停止したという因果関係はない。根本の拒否規則は未特定であり、侵入・情報漏えいを検出したとする証拠もない。調査では再開、規則緩和、送信有効化を行わない。
+
+秘密情報と会話全文を含めない診断JSONをローカル `dist/exec-policy-denial-diagnostics-2026-10-05.json` に保存した。原因を確定するには実行サービス側の拒否理由の照会が必要。日時とtool call IDを添えて問い合わせるための資料であり、調査用に拒否された操作を再実行しない。
+
+## 次の優先工程
+
+URL未登録85社の公式サイト補完と、URL・店舗同一性の確認を優先する。名称だけで公式URLを自動確定しない。店舗別ページと企業共通問い合わせを分離し、共通フォームの重複防止を解除しない。GETフォームの単純検出を営業可能と扱わない。取得停止の原因は別途確認し、robots等の制御を迂回しない。
+
+その後、補完した対象を再解析して対応率を測り直す。月10,000送信の負荷試験や送信有効化へ進む前に、入力不足と実際の利用可能フォーム数を改善する。

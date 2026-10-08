@@ -1,0 +1,52 @@
+{
+  "definition": "synthetic-offline-browser-encoding-v1",
+  "cases": [
+    {
+      "version": "6.1.4",
+      "choice": "no_checkbox",
+      "parts": 8,
+      "matched": true,
+      "wire_size": 1052
+    },
+    {
+      "version": "6.1.4",
+      "choice": "checked",
+      "parts": 9,
+      "matched": true,
+      "wire_size": 1165
+    },
+    {
+      "version": "6.1.4",
+      "choice": "unchecked",
+      "parts": 8,
+      "matched": true,
+      "wire_size": 1052
+    },
+    {
+      "version": "6.2",
+      "choice": "no_checkbox",
+      "parts": 8,
+      "matched": true,
+      "wire_size": 1050
+    },
+    {
+      "version": "6.2",
+      "choice": "checked",
+      "parts": 9,
+      "matched": true,
+      "wire_size": 1163
+    },
+    {
+      "version": "6.2",
+      "choice": "unchecked",
+      "parts": 8,
+      "matched": true,
+      "wire_size": 1050
+    }
+  ],
+  "external_requests": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "approvals": 0,
+  "scope": "Browser serialization only; not CF7 server acceptance"
+}

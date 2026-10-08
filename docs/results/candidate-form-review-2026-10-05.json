@@ -1,0 +1,57 @@
+{
+  "at": "2026-10-05T22:15:49.671176+09:00",
+  "counts": {
+    "candidate": 2,
+    "captcha": 9,
+    "confirmation": 4,
+    "error": 66,
+    "missing_form": 12,
+    "prohibited": 1,
+    "review": 6
+  },
+  "permissions": {
+    "PROHIBITED": 17,
+    "UNCERTAIN": 83
+  },
+  "permission_reasons": {
+    "shared_location_destination": 16,
+    "form_sales_uncertain": 74,
+    "form_review_required": 6,
+    "form_captcha_review": 3,
+    "form_sales_prohibited": 1
+  },
+  "send_counts": {
+    "approved_form_dispatches": 0,
+    "form_deliveries": 0,
+    "email_deliveries": 0
+  },
+  "flags": {
+    "outbound_enabled": false,
+    "human_approved_form_enabled": false,
+    "legacy_form_delivery_enabled": false,
+    "agent_features_enabled": false
+  },
+  "worker_state": "stopped",
+  "ai": false,
+  "post_performed": false,
+  "baseline": "5916c98",
+  "reviewed": 3,
+  "review_outcomes": {
+    "blocked": 1,
+    "technical_hold": 2,
+    "validated_automatic_send": 0
+  },
+  "tests": {
+    "backend_related_passed": 66,
+    "ruff": "passed",
+    "compileall": "passed",
+    "frontend_typecheck": "passed",
+    "frontend_lint": "passed",
+    "frontend_build": "passed",
+    "e2e": "not_run"
+  },
+  "company_count": 100,
+  "form_profile_count": 139,
+  "active_jobs": 0,
+  "migration_head": "fae47ac5e861"
+}

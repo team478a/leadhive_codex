@@ -1,0 +1,52 @@
+{
+  "baseline": "1e03dbe52c722b8c7bf9bf3b7268c669f074479b",
+  "scope": "controlled-loopback-http-and-worker-processes",
+  "lab": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "seconds": 62.223,
+    "timestamp": "2026-10-05T17:21:34.697773+09:00"
+  },
+  "regression": {
+    "tests": 101,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 15,
+    "seconds": 49.203,
+    "timestamp": "2026-10-05T17:22:00.596389+09:00"
+  },
+  "cases": [
+    "test_real_http_success_immutable_unicode_and_hidden_token[success]",
+    "test_real_http_success_immutable_unicode_and_hidden_token[redirect_success]",
+    "test_accepted_but_unknown_never_reposts[disconnect]",
+    "test_accepted_but_unknown_never_reposts[truncated]",
+    "test_accepted_but_unknown_never_reposts[ambiguous]",
+    "test_accepted_but_unknown_never_reposts[repost_redirect]",
+    "test_accepted_but_unknown_never_reposts[timeout]",
+    "test_real_preflight_and_second_fetch_changes_do_not_post[changed]",
+    "test_real_preflight_and_second_fetch_changes_do_not_post[captcha]",
+    "test_real_preflight_and_second_fetch_changes_do_not_post[prohibited]",
+    "test_real_preflight_and_second_fetch_changes_do_not_post[changed_after_inspect]",
+    "test_two_real_claim_processes_only_one_wins",
+    "test_killed_worker_restart_preserves_no_retry[hold_preflight]",
+    "test_killed_worker_restart_preserves_no_retry[hold_accepted]",
+    "test_production_private_url_guard_remains_closed"
+  ],
+  "real_tcp_http": true,
+  "production_private_url_guard_changed": false,
+  "test_only_dns_transport_seams": true,
+  "rate_clock_virtual": true,
+  "internet_requests": 0,
+  "real_company_sends": 0,
+  "smtp_sends": 0,
+  "live_preview_send_flags_changed": false,
+  "not_validated": [
+    "public DNS/TLS",
+    "PC/Docker power loss",
+    "database server crash",
+    "real company compatibility rate",
+    "10000 monthly sends"
+  ]
+}

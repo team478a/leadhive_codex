@@ -1,0 +1,39 @@
+{
+  "baseline_commit": "25a261509df5bfffcd51293c7e7cc09166b40610",
+  "profiles_refreshed": 3,
+  "baseline_complete": 3,
+  "preserved_field_sets": 2,
+  "replaced_unreviewed_field_sets": 1,
+  "field_counts": [
+    16,
+    17,
+    7
+  ],
+  "live_structure": {
+    "SAME_STRUCTURE": 2,
+    "UNSUPPORTED_METHOD": 1
+  },
+  "principal_type": "SYSTEM",
+  "new_logs": 6,
+  "other_profiles_unchanged": true,
+  "protected_tables_unchanged": true,
+  "human_approvals_created": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "jobs_created": 0,
+  "dm_ready": 0,
+  "outbound": false,
+  "sales_permission": {
+    "UNCERTAIN": 3
+  },
+  "profile_status": {
+    "REVIEW_REQUIRED": 3
+  },
+  "native_delivery_supported": 0,
+  "http_get_attempts": null,
+  "request_count_note": "Request trace was not persisted because initial JSON export failed; no repeat GET during recovery. Three target pages were successfully fetched.",
+  "search_calls": 0,
+  "ai_calls": 0,
+  "estimated_cost": null,
+  "recovered_read_only": true
+}

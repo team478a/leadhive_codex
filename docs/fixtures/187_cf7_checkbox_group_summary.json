@@ -1,0 +1,22 @@
+{
+  "baseline_commit": "544fe41355487b79137b6872ff2c9a69ea84a89c",
+  "source_kind": "CONTROLLED_FIXTURE",
+  "contract_version": "cf7-checkbox-groups-lab-v1",
+  "source_sha256": "67f9295030ea1132a6f0af157258e50c98b252dcd06147098ac7008a48a15993",
+  "groups": 1,
+  "options": 3,
+  "explicit_choices": 3,
+  "selected_options": 2,
+  "unchecked_options": 1,
+  "multipart_parts": 12,
+  "repeated_name_parts": 2,
+  "wire_sha256": "d5e8b9bc1d7707877b7a465c83f6c4f8cb7cbf93d1c1bac5ba7637aeedd705e6",
+  "wire_size": 1530,
+  "execution_allowed": false,
+  "eligible_for_approval": false,
+  "external_requests": 0,
+  "form_posts": 0,
+  "real_approvals": 0,
+  "real_email_sent": 0,
+  "real_form_sent": 0
+}

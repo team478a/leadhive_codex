@@ -1,0 +1,61 @@
+﻿company_label,check_id,check_item,result,tested_at,tester,evidence_reference,issue_id,notes
+A,PRE-01,専用OS/VM・専用DB・担当者の確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,PRE-02,Docker要件/利用条件/権限/導入パスの確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,REL-01,同一の検証済み配布commit/ZIP hash/manifestを確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,INS-01,新規Windowsの初回導入/再起動後再実行,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,ISO-01,他社のID/設定/volume/backupを利用しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,SEC-01,送信停止表示/Agent OFF/旧worker停止,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,AUTH-01,個別管理者ログイン/ログアウト/閲覧者権限,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,DATA-01,受入CSV2社取込/再取込重複0追加,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,CRM-01,企業詳細/担当/活動/連絡禁止/追客の保存・再読込,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,APR-01,ダミー提案/step-up承認/取消（送信なし）,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,OUT-01,テスト環境の送信503/Codex引渡し停止/外向き送信制限,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,JOB-01,送信待ちを保持して収集・解析workerのみ動作,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,BKP-01,3点bundle/別媒体保管/秘密を露出しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,RST-01,隔離復元内容/履歴/復号/再ログイン/再承認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,UPD-01,検証環境の旧版更新/途中失敗で安全停止,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,MOVE-01,元PC停止/空の新PCImport/キー保持,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,OPS-01,起動/停止/送信停止/Resumeの利用者実演,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,SUP-01,診断情報を共有前に確認/窓口・復旧責任者確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,PILOT-01,1社pilot結果/問題解決前に次社を開始しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+A,SIGN-01,利用範囲・残課題・実機証跡・担当者承認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,PRE-01,専用OS/VM・専用DB・担当者の確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,PRE-02,Docker要件/利用条件/権限/導入パスの確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,REL-01,同一の検証済み配布commit/ZIP hash/manifestを確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,INS-01,新規Windowsの初回導入/再起動後再実行,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,ISO-01,他社のID/設定/volume/backupを利用しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,SEC-01,送信停止表示/Agent OFF/旧worker停止,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,AUTH-01,個別管理者ログイン/ログアウト/閲覧者権限,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,DATA-01,受入CSV2社取込/再取込重複0追加,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,CRM-01,企業詳細/担当/活動/連絡禁止/追客の保存・再読込,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,APR-01,ダミー提案/step-up承認/取消（送信なし）,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,OUT-01,テスト環境の送信503/Codex引渡し停止/外向き送信制限,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,JOB-01,送信待ちを保持して収集・解析workerのみ動作,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,BKP-01,3点bundle/別媒体保管/秘密を露出しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,RST-01,隔離復元内容/履歴/復号/再ログイン/再承認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,UPD-01,検証環境の旧版更新/途中失敗で安全停止,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,MOVE-01,元PC停止/空の新PCImport/キー保持,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,OPS-01,起動/停止/送信停止/Resumeの利用者実演,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,SUP-01,診断情報を共有前に確認/窓口・復旧責任者確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,PILOT-01,1社pilot結果/問題解決前に次社を開始しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+B,SIGN-01,利用範囲・残課題・実機証跡・担当者承認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,PRE-01,専用OS/VM・専用DB・担当者の確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,PRE-02,Docker要件/利用条件/権限/導入パスの確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,REL-01,同一の検証済み配布commit/ZIP hash/manifestを確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,INS-01,新規Windowsの初回導入/再起動後再実行,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,ISO-01,他社のID/設定/volume/backupを利用しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,SEC-01,送信停止表示/Agent OFF/旧worker停止,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,AUTH-01,個別管理者ログイン/ログアウト/閲覧者権限,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,DATA-01,受入CSV2社取込/再取込重複0追加,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,CRM-01,企業詳細/担当/活動/連絡禁止/追客の保存・再読込,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,APR-01,ダミー提案/step-up承認/取消（送信なし）,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,OUT-01,テスト環境の送信503/Codex引渡し停止/外向き送信制限,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,JOB-01,送信待ちを保持して収集・解析workerのみ動作,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,BKP-01,3点bundle/別媒体保管/秘密を露出しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,RST-01,隔離復元内容/履歴/復号/再ログイン/再承認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,UPD-01,検証環境の旧版更新/途中失敗で安全停止,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,MOVE-01,元PC停止/空の新PCImport/キー保持,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,OPS-01,起動/停止/送信停止/Resumeの利用者実演,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,SUP-01,診断情報を共有前に確認/窓口・復旧責任者確認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,PILOT-01,1社pilot結果/問題解決前に次社を開始しない,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。
+C,SIGN-01,利用範囲・残課題・実機証跡・担当者承認,NOT_RUN,,,,,実機未確認。mock/以前の試験成功だけでPASSへ変更しない。

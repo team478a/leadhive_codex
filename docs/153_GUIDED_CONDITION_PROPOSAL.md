@@ -1,0 +1,56 @@
+# 文章からの条件提案と収集操作の整理
+
+## ゴール・基準
+
+基準 codex/integration@2675a23。まとめて進められる条件提案と収集操作の整理を一工程にする。Human Truthの代行、求人現在性の自動検証、地域/業種の自動判定、新しいSource、DM・承認・送信は対象外。
+
+## 対応する入力
+
+外部AI/APIを使わない、上限付きのテンプレート解析。例:
+
+```text
+姫路市の美容院でInstagramあり
+希望:公式サイトあり
+除外:Indeed掲載あり
+```
+
+または地域/業種を明示して入力する。
+
+```text
+地域:兵庫県姫路市
+業種:美容院
+必須:Instagramあり
+```
+
+対応媒体の名前と「あり/ある/掲載あり」、必須/希望/除外（MUST/WANT/EXCLUDE）を解釈する。必須の「なし」は存在条件をEXCLUDEへ変換して表示する。希望・除外に「なし」を組み合わせた二重否定、OR/AND複合条件、件数指定、現在募集中、命令、未知媒体などはUNRESOLVEDに残す。求人掲載の存在と現在募集中を同一視しない。
+
+これは任意の日本語を理解するAIではない。市区町村名の正式性や企業業種の真偽は解析では検証しない。地域・業種は前工程の根拠確認が必要。対応範囲を超える文を黙って捨てたり、条件を緩めたりしない。
+
+## API・権限
+
+POST `/api/projects/{project_id}/collection-conditions/propose`。textは最大2000文字、解析後20条件以内、各条件300文字以内。Human owner/editorのみ。Viewer・Agent・他Projectを拒否。条件案、警告、元文、parser version、検索欄の提案を返すだけで、条件確定版・OperationJob・企業・Approvalを保存しない。外部検索や外部AIを呼ばない。
+
+## 操作フロー
+
+文章入力 → 条件案を作る → 種類/内容/優先度を確認・修正 → 確定 → 収集欄の内容を確認 → 「収集を開始」。未解釈・空の条件が残る間はUIの確定を無効化する。既存APIのUNRESOLVED保存は互換性を維持するが、その判定はUNKNOWNのままである。
+
+確定操作で今回の収集への条件適用を選択する。必須の地域・業種が各1つなら、確認後の値を地域/keyword欄へ反映する。複数の場合は勝手に1つ選んだりQuery展開しない。件数・調査上限・Sourceは変更しない。CSV/URL経路には検索欄の反映や条件適用を追加しない。
+
+条件案作成/条件編集/追加/削除後は、再確定または「未確定の変更を取り消す」まで検索開始を拒否する。既存の確定条件と未確定入力を混同しない。取り消しは保存済み確定版に戻す。Project変更では選択・未確定状態を解除する。
+
+## 互換性・検証・制限
+
+新しいDB項目・Model・Migration・dependencyは不要。確定時のoriginal_requestに元文を保存し、既存条件snapshot/hash/versionを再利用する。収集worker、媒体追加調査予算、公式API利用方針、Human承認、Suppression、UNKNOWN再送禁止は変更しない。
+
+Backend: テンプレート、優先度、否定、矛盾、未知条件保持、上限、Project/Viewer/Agent、解析の非保存を検証する。Frontend: PC/Mobileで提案、解釈待ち、確定、検索欄反映、編集後開始拒否、取り消し、合成ジョブenqueue/cancelを検証する。E2Eでworkerは起動せず、外部収集・AI・送信は行わない。
+
+一次収集のPrecisionを実測した成果ではない。PilotのHumanレビュー・正解ラベルと実データ評価は引き続き必要。本工程で停止する。
+
+## 実行結果（2026-10-07）
+
+- Backend `9ed7ab7` / UI `e54969b`。検証対象HEAD `b0453b981b6263df928e523c9240884030535fcc`。
+- Backend関連回帰97件PASS。PC/Mobile関連E2E8件PASS。最初のE2Eで未確定による停止理由が汎用エラーに隠れる問題を検出し、具体的な案内に修正して再実行で成功した。
+- Ruff / format / mypy、Frontend typecheck / lint / build、Alembic check成功。新Migrationなし。既存bundle size警告は残る。
+- [GitHub Actions 37568873607](https://github.com/team478a/leadhive_codex/actions/runs/37568873607): 全7ジョブ成功。Backend全テスト・全E2E・Migration往復/model差分・Windows packageを含む。
+- ローカルAPI 127.0.0.1:18986のhealthとproposal endpointを確認。既存Raw Snapshot40件を保持。Companies / Raw Human Review / ApprovalRequest / EmailDelivery / FormDeliveryは0件で変更なし。outbound OFF・worker未起動。
+- 実検索・外部AI・実企業GET・Human Approval・メール/Form送信は未実行。任意自然文の完全解析、地域/業種の自動検証、求人現在性、DM根拠引渡し、PilotのHuman Truth測定は残課題。

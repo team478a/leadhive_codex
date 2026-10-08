@@ -1,0 +1,97 @@
+{
+  "started_at": "2026-10-05T22:02:23.100462+09:00",
+  "finished_at": "2026-10-05T22:04:11.490231+09:00",
+  "reviewed": 75,
+  "registered": 21,
+  "unresolved": 54,
+  "job_status": "failed",
+  "processed": 21,
+  "success": 18,
+  "failed": 3,
+  "website_before": 22,
+  "website_after": 43,
+  "website_missing_after": 57,
+  "before": {
+    "counts": {
+      "candidate": 2,
+      "captcha": 6,
+      "error": 84,
+      "missing_form": 6,
+      "review": 2
+    },
+    "permissions": {
+      "PROHIBITED": 9,
+      "UNCERTAIN": 91
+    },
+    "permission_reasons": {
+      "shared_location_destination": 9,
+      "form_sales_uncertain": 88,
+      "form_review_required": 2,
+      "form_captcha_review": 1
+    }
+  },
+  "after": {
+    "counts": {
+      "candidate": 3,
+      "captcha": 9,
+      "confirmation": 6,
+      "error": 66,
+      "missing_form": 12,
+      "review": 4
+    },
+    "permissions": {
+      "PROHIBITED": 16,
+      "UNCERTAIN": 81,
+      "ALLOWED": 3
+    },
+    "permission_reasons": {
+      "shared_location_destination": 16,
+      "form_sales_uncertain": 74,
+      "form_review_required": 4,
+      "allowed": 3,
+      "form_captcha_review": 3
+    }
+  },
+  "send_counts": {
+    "approved_form_dispatches": 0,
+    "form_deliveries": 0,
+    "email_deliveries": 0
+  },
+  "flags": {
+    "outbound_enabled": false,
+    "human_approved_form_enabled": false,
+    "legacy_form_delivery_enabled": false,
+    "agent_features_enabled": false
+  },
+  "worker_state": "stopped",
+  "ai": false,
+  "review_statuses": {
+    "no_verified_website": 47,
+    "candidate_unverified": 4,
+    "verified": 21,
+    "portal_candidate_unverified": 1,
+    "address_conflict": 1,
+    "social_blog_only": 1
+  },
+  "registered_domains": 16,
+  "elapsed_seconds": 108.39,
+  "baseline": "cbc64c2",
+  "company_count": 100,
+  "form_profile_count": 139,
+  "active_jobs": 0,
+  "migration_head": "fae47ac5e861",
+  "detailed_report_sha256": "C6013B757742E917BB051EECD492E5F45B06FC9173E2D5110F0EDC70B5D355A1",
+  "selected_readiness": {
+    "missing_form": 6,
+    "candidate": 1,
+    "confirmation": 6,
+    "captcha": 3,
+    "review": 2,
+    "error": 3
+  },
+  "selected_permissions": {
+    "ALLOWED": 3,
+    "UNCERTAIN": 11,
+    "PROHIBITED": 7
+  }
+}

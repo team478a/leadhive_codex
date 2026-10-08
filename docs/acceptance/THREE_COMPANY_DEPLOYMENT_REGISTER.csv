@@ -1,0 +1,4 @@
+﻿company_label,organization_name,business_owner,local_admin,support_contact,planned_date,dedicated_pc_or_vm,os_and_docker_verified,installation_path,instance_id,project_name,data_volume,schema_revision,release_commit,zip_sha256,local_url,user_count,backup_custodian,backup_storage_reference,source_pc_stopped,outbound_enabled,agent_enabled,status,accepted_by,accepted_at,evidence_reference,notes
+A,,,,,,,,,,,,,,,,,,,,,,NOT_STARTED,,,,計画: 1社1専用PC/VM。送信停止・Agent OFF。設定値と受入は未確認。
+B,,,,,,,,,,,,,,,,,,,,,,NOT_STARTED,,,,計画: 1社1専用PC/VM。送信停止・Agent OFF。設定値と受入は未確認。
+C,,,,,,,,,,,,,,,,,,,,,,NOT_STARTED,,,,計画: 1社1専用PC/VM。送信停止・Agent OFF。設定値と受入は未確認。

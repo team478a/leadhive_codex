@@ -1,0 +1,143 @@
+from datetime import datetime, timezone
+from uuid import UUID
+
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models import (
+    Activity,
+    Company,
+    FormDelivery,
+    FormDeliveryBatchItem,
+    OutreachDraft,
+    OutreachDraftApproval,
+)
+from app.services.contact_permission import evaluate_contact_permission
+from app.services.form_delivery import FormDeliveryError, FormPreview, submit_form
+from app.services.form_profile_delivery import (
+    inspect_delivery_profile,
+    mark_profile_changed,
+    required_missing,
+)
+from app.services.form_submission_guard import UNKNOWN_MESSAGE, reserve_form_submission
+from app.services.outbound_guard import require_legacy_form_enabled
+
+
+def body_values(preview: FormPreview, body: str) -> tuple[dict[str, str], list[str]]:
+    values = {field.name: field.value for field in preview.fields if field.value}
+    markers = ("message", "comment", "inquiry", "detail", "content", "本文", "内容", "問い合わせ")
+    for field in preview.fields:
+        if any(marker in f"{field.name} {field.label}".lower() for marker in markers):
+            values[field.name] = body
+    missing = [
+        field.label
+        for field in preview.fields
+        if field.required and not values.get(field.name, "").strip()
+    ]
+    return values, missing
+
+
+def process_form_batch_item(db: Session, item: FormDeliveryBatchItem, user_id: UUID | None) -> bool:
+    require_legacy_form_enabled()
+    company = db.get(Company, item.company_id)
+    draft = db.get(OutreachDraft, item.draft_id) if item.draft_id else None
+    if company is None or draft is None:
+        item.status, item.reason = "skipped", "送信対象ではありません。"
+        return True
+    permission = evaluate_contact_permission(
+        db, company.project_id, company.id, "form", company.contact_url
+    )
+    if permission.status == "PROHIBITED":
+        item.status, item.reason = "skipped", permission.message
+        return True
+    if permission.requires_review:
+        item.status, item.reason = "manual_required", permission.message
+        return True
+    if db.scalar(
+        select(FormDelivery.id).where(
+            FormDelivery.company_id == company.id, FormDelivery.status == "submitted"
+        )
+    ):
+        item.status, item.reason = "skipped", "この企業にはフォーム送信済みです。"
+        return True
+    context = None
+    delivery = None
+    try:
+        context = inspect_delivery_profile(db, company, draft)
+        preview = context.preview
+        values = context.values
+        missing = required_missing(preview, values)
+        if missing:
+            item.status = "manual_required"
+            item.reason = f"手動入力が必要です: {', '.join(missing[:3])}"
+            return True
+        delivery = reserve_form_submission(db, company, draft, context, user_id, item=item)
+        preview, submission = submit_form(
+            context.profile.form_url,
+            values,
+            form_index=context.profile.form_index,
+            profile_fields=context.fields,
+            form_profile_id=context.profile.id,
+            expected_fingerprint=context.profile.fingerprint,
+            confirmation_expected=context.profile.confirmation_page is True,
+        )
+    except FormDeliveryError as exc:
+        if delivery is not None:
+            delivery.status = "unknown" if exc.submission_unknown else "failed"
+            delivery.error_message = (
+                UNKNOWN_MESSAGE if exc.submission_unknown else exc.public_message
+            )
+        if exc.submission_unknown:
+            item.status, item.reason = "unknown", UNKNOWN_MESSAGE
+            db.commit()
+            return False
+        if context is not None:
+            mark_profile_changed(db, context.profile, exc)
+        item.status, item.reason = "manual_required", exc.public_message
+        return True
+    except Exception:
+        item.status = "unknown" if delivery is not None else "failed"
+        item.reason = (
+            UNKNOWN_MESSAGE if delivery is not None else "フォーム送信処理に失敗しました。"
+        )
+        db.commit()
+        return False
+    delivery.status, delivery.error_message = "submitted", ""
+    delivery.response_status = submission.response_status
+    delivery.final_url = submission.final_url
+    delivery.confirmation_used = submission.confirmation_used
+    delivery.completion_evidence = submission.completion_evidence
+    delivery.submitted_at = datetime.now(timezone.utc)
+    db.flush()
+    item.form_delivery_id = delivery.id
+    item.status = "submitted"
+    item.submitted_at = delivery.submitted_at
+    db.add(
+        OutreachDraftApproval(
+            draft_id=draft.id,
+            approved_by_user_id=user_id,
+            approval_type="form_direct",
+            subject=draft.subject,
+            body=draft.body,
+            delivered_at=delivery.submitted_at,
+            experiment_id=draft.experiment_id,
+            experiment_variant=draft.experiment_variant,
+        )
+    )
+    db.add(
+        Activity(
+            company_id=company.id,
+            activity_type="form",
+            note=f"一括フォームDMを実行: {preview.form_url}",
+        )
+    )
+    if company.status in {"unreviewed", "target"}:
+        company.status = "approached"
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="status_change",
+                note="営業状況を更新: アプローチ済（一括フォームDM）",
+            )
+        )
+    return True

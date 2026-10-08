@@ -1,0 +1,633 @@
+import argparse
+import csv
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+from sqlalchemy import func, select
+
+from app.config import settings
+from app.database import SessionLocal
+from app.models import Company, Project, TargetProfile, User
+from app.services.ai import AiUsage
+from app.services.ai_analysis import analyze_company_ai
+from app.services.application_settings import apply_application_settings
+from app.services.collection import ExternalServiceError, search_serper
+from app.services.collection_jobs import fail_job, save_candidates, start_job
+from app.services.web_analysis import analyze
+
+
+@dataclass(frozen=True)
+class Cohort:
+    key: str
+    project_name: str
+    profile_name: str
+    sales_objective: str
+    keywords: tuple[str, ...]
+    regions: tuple[str, ...]
+    copy_from: str | None = None
+
+
+COHORTS = (
+    Cohort(
+        "sns",
+        "Phase 6 SNS運用事業者",
+        "SNS運用事業者",
+        "SNS運用支援会社への業務提携・OEMサービス提案",
+        ("SNS運用代行", "Instagram運用代行", "TikTok運用代行", "SNSマーケティング"),
+        ("東京", "大阪", "愛知", "福岡", "全国"),
+    ),
+    Cohort(
+        "transport_recruiting",
+        "Phase 6 運送事業者・採用支援",
+        "トラック・運送事業者",
+        "ドライバー採用支援の提案",
+        ("運送会社", "一般貨物自動車運送事業", "トラック運送", "物流会社"),
+        ("東京", "大阪", "愛知", "福岡", "北海道", "全国"),
+    ),
+    Cohort(
+        "transport_vehicle",
+        "Phase 6 運送事業者・車両販売",
+        "トラック・運送事業者",
+        "事業用トラック・車両販売の提案",
+        (),
+        (),
+        copy_from="transport_recruiting",
+    ),
+)
+
+
+def apply_phase6_settings(db) -> None:
+    """Load administrator-managed provider settings for this CLI process."""
+
+    apply_application_settings(db)
+
+
+def build_preflight(db, email: str, output: Path) -> dict:
+    normalized_email = email.strip().lower()
+    user_exists = bool(
+        normalized_email
+        and db.scalar(select(User.id).where(User.email == normalized_email)) is not None
+    )
+    required_profiles = {cohort.profile_name for cohort in COHORTS}
+    available_profiles = set(
+        db.scalars(
+            select(TargetProfile.profile_name).where(
+                TargetProfile.is_system.is_(True),
+                TargetProfile.profile_name.in_(required_profiles),
+            )
+        ).all()
+    )
+    output_writable = False
+    output_error = ""
+    try:
+        output.mkdir(parents=True, exist_ok=True)
+        probe = output / ".phase6-write-test"
+        probe.write_text("ok", encoding="utf-8")
+        probe.unlink()
+        output_writable = True
+    except OSError as exc:
+        output_error = type(exc).__name__
+    checks = [
+        {"key": "database", "ready": True, "message": "PostgreSQLへ接続できました。"},
+        {
+            "key": "serper_api_key",
+            "ready": bool(settings.serper_api_key),
+            "message": "設定済み" if settings.serper_api_key else "SERPER_API_KEYが未設定です。",
+        },
+        {
+            "key": "openai_api_key",
+            "ready": bool(settings.openai_api_key),
+            "message": "設定済み" if settings.openai_api_key else "OPENAI_API_KEYが未設定です。",
+        },
+        {
+            "key": "user",
+            "ready": user_exists,
+            "message": "検証ユーザーを確認しました。"
+            if user_exists
+            else "検証ユーザーが存在しません。",
+        },
+        {
+            "key": "system_profiles",
+            "ready": available_profiles == required_profiles,
+            "message": (
+                "必要な標準プロファイルを確認しました。"
+                if available_profiles == required_profiles
+                else "必要な標準プロファイルが不足しています。"
+            ),
+        },
+        {
+            "key": "output",
+            "ready": output_writable,
+            "message": "出力先へ書き込めます。"
+            if output_writable
+            else f"出力先へ書き込めません: {output_error}",
+        },
+    ]
+    return {"ready": all(check["ready"] for check in checks), "checks": checks}
+
+
+def get_user(db, email: str) -> User:
+    user = db.scalar(select(User).where(User.email == email.lower()))
+    if user is None:
+        raise ValueError("User not found. Create it with python -m app.cli first.")
+    return user
+
+
+def ensure_projects(db, user: User) -> dict[str, tuple[Project, TargetProfile]]:
+    result = {}
+    for cohort in COHORTS:
+        profile = db.scalar(
+            select(TargetProfile).where(
+                TargetProfile.profile_name == cohort.profile_name,
+                TargetProfile.is_system.is_(True),
+            )
+        )
+        if profile is None:
+            raise ValueError(f"System profile not found: {cohort.profile_name}")
+        project = db.scalar(
+            select(Project).where(
+                Project.user_id == user.id, Project.project_name == cohort.project_name
+            )
+        )
+        if project is None:
+            project = Project(
+                user_id=user.id,
+                project_name=cohort.project_name,
+                target_profile_id=profile.id,
+                sales_objective=cohort.sales_objective,
+                region="全国",
+                status="active",
+            )
+            db.add(project)
+            db.commit()
+            db.refresh(project)
+        result[cohort.key] = project, profile
+    return result
+
+
+def collect_cohort(db, cohort: Cohort, project: Project, limit: int) -> None:
+    existing = db.scalar(
+        select(func.count()).select_from(Company).where(Company.project_id == project.id)
+    )
+    if existing and existing >= limit:
+        return
+    for region in cohort.regions:
+        for keyword in cohort.keywords:
+            count = db.scalar(
+                select(func.count()).select_from(Company).where(Company.project_id == project.id)
+            )
+            if count >= limit:
+                return
+            per_query = min(20, limit - count)
+            job = start_job(db, project.id, "serper", keyword, region)
+            try:
+                candidates = search_serper(keyword, region, per_query)
+                save_candidates(db, job, candidates, keyword)
+            except ExternalServiceError as exc:
+                fail_job(db, job, exc.public_message)
+
+
+def copy_cohort(db, source: Project, destination: Project, limit: int) -> None:
+    existing_domains = set(
+        db.scalars(select(Company.domain).where(Company.project_id == destination.id)).all()
+    )
+    source_companies = db.scalars(
+        select(Company)
+        .where(Company.project_id == source.id)
+        .order_by(Company.created_at)
+        .limit(limit)
+    ).all()
+    for source_company in source_companies:
+        if source_company.domain in existing_domains:
+            continue
+        fields = {
+            column.name: getattr(source_company, column.name)
+            for column in Company.__table__.columns
+            if column.name
+            not in {
+                "id",
+                "project_id",
+                "created_at",
+                "updated_at",
+                "score",
+                "rank",
+                "is_target",
+                "business_type",
+                "ai_summary",
+                "ai_reason",
+                "ai_strengths",
+                "ai_concerns",
+                "ai_recommended_approach",
+                "ai_status",
+                "ai_error",
+                "ai_provider",
+                "ai_model",
+                "ai_analyzed_at",
+                "status",
+                "notes",
+                "duplicate_of_id",
+            }
+        }
+        db.add(Company(project_id=destination.id, **fields))
+        existing_domains.add(source_company.domain)
+    db.commit()
+
+
+def run_web(db, project: Project, limit: int) -> None:
+    companies = db.scalars(
+        select(Company)
+        .where(Company.project_id == project.id, Company.analysis_status.in_(("pending", "failed")))
+        .order_by(Company.created_at)
+        .limit(limit)
+    ).all()
+    for company in companies:
+        analyze(db, company)
+
+
+AI_USAGE_FIELDS = (
+    "company_id",
+    "provider",
+    "model",
+    "status",
+    "input_tokens",
+    "output_tokens",
+    "total_tokens",
+)
+
+
+def append_ai_usage(
+    path: Path,
+    company_id,
+    provider: str,
+    model: str,
+    status: str,
+    usage: AiUsage,
+) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not path.exists() or path.stat().st_size == 0
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=AI_USAGE_FIELDS)
+        if write_header:
+            writer.writeheader()
+        writer.writerow(
+            {
+                "company_id": company_id,
+                "provider": provider,
+                "model": model,
+                "status": status,
+                "input_tokens": usage.input_tokens,
+                "output_tokens": usage.output_tokens,
+                "total_tokens": usage.total_tokens,
+            }
+        )
+
+
+def run_ai(db, project: Project, profile: TargetProfile, limit: int, usage_path: Path) -> None:
+    companies = db.scalars(
+        select(Company)
+        .where(
+            Company.project_id == project.id,
+            Company.analysis_status == "completed",
+            Company.ai_status.in_(("pending", "failed", "skipped")),
+        )
+        .order_by(Company.created_at)
+        .limit(limit)
+    ).all()
+    for company in companies:
+        analyze_company_ai(
+            db,
+            company,
+            project,
+            profile,
+            usage_callback=lambda company_id, provider, model, status, usage: append_ai_usage(
+                usage_path, company_id, provider, model, status, usage
+            ),
+        )
+
+
+EXPORT_FIELDS = (
+    "cohort",
+    "company_id",
+    "domain",
+    "company_name",
+    "rank",
+    "score",
+    "is_target",
+    "business_type",
+    "contact_available",
+    "sns_available",
+    "analysis_status",
+    "ai_status",
+    "ai_reason",
+    "review_is_target",
+    "review_rank_correct",
+    "review_notes",
+)
+REVIEW_FIELDS = ("review_is_target", "review_rank_correct", "review_notes")
+
+
+def load_manual_reviews(path: Path) -> dict[tuple[str, str], dict[str, str]]:
+    if not path.exists():
+        return {}
+    with path.open(encoding="utf-8-sig", newline="") as handle:
+        rows = csv.DictReader(handle)
+        return {
+            (row.get("cohort", ""), row.get("company_id", "")): {
+                field: row.get(field, "") for field in REVIEW_FIELDS
+            }
+            for row in rows
+            if row.get("cohort") and row.get("company_id")
+        }
+
+
+def export_review(db, projects, output: Path, limit: int) -> Path:
+    output.mkdir(parents=True, exist_ok=True)
+    path = output / "phase6-review.csv"
+    manual_reviews = load_manual_reviews(path)
+    with path.open("w", encoding="utf-8-sig", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=EXPORT_FIELDS)
+        writer.writeheader()
+        for cohort in COHORTS:
+            project, _ = projects[cohort.key]
+            companies = db.scalars(
+                select(Company)
+                .where(Company.project_id == project.id)
+                .order_by(Company.created_at)
+                .limit(limit)
+            ).all()
+            for company in companies:
+                manual_review = manual_reviews.get((cohort.key, str(company.id)), {})
+                writer.writerow(
+                    {
+                        "cohort": cohort.key,
+                        "company_id": company.id,
+                        "domain": company.domain or "",
+                        "company_name": company.company_name,
+                        "rank": company.rank or "",
+                        "score": company.score if company.score is not None else "",
+                        "is_target": company.is_target if company.is_target is not None else "",
+                        "business_type": company.business_type,
+                        "contact_available": bool(
+                            company.contact_url or company.email or company.phone
+                        ),
+                        "sns_available": bool(
+                            company.instagram_url
+                            or company.x_url
+                            or company.tiktok_url
+                            or company.facebook_url
+                            or company.youtube_url
+                            or company.line_url
+                        ),
+                        "analysis_status": company.analysis_status,
+                        "ai_status": company.ai_status,
+                        "ai_reason": company.ai_reason,
+                        "review_is_target": manual_review.get("review_is_target", ""),
+                        "review_rank_correct": manual_review.get("review_rank_correct", ""),
+                        "review_notes": manual_review.get("review_notes", ""),
+                    }
+                )
+    return path
+
+
+def truth(value: str) -> bool | None:
+    normalized = value.strip().lower()
+    if normalized in {"true", "1", "yes", "y", "対象"}:
+        return True
+    if normalized in {"false", "0", "no", "n", "対象外"}:
+        return False
+    return None
+
+
+def rate(numerator: int, denominator: int) -> float | None:
+    return round(numerator / denominator * 100, 1) if denominator else None
+
+
+def build_usage_report(
+    usage_path: Path,
+    input_cost_per_million_usd: float | None,
+    output_cost_per_million_usd: float | None,
+) -> dict:
+    rows = []
+    if usage_path.exists():
+        with usage_path.open(encoding="utf-8", newline="") as handle:
+            rows = list(csv.DictReader(handle))
+    input_tokens = sum(int(row["input_tokens"]) for row in rows)
+    output_tokens = sum(int(row["output_tokens"]) for row in rows)
+    estimated_cost = None
+    if input_cost_per_million_usd is not None and output_cost_per_million_usd is not None:
+        estimated_cost = round(
+            input_tokens / 1_000_000 * input_cost_per_million_usd
+            + output_tokens / 1_000_000 * output_cost_per_million_usd,
+            6,
+        )
+    return {
+        "requests": len(rows),
+        "completed_requests": sum(row["status"] == "completed" for row in rows),
+        "failed_requests": sum(row["status"] == "failed" for row in rows),
+        "models": sorted({row["model"] for row in rows if row["model"]}),
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": sum(int(row["total_tokens"]) for row in rows),
+        "estimated_cost_usd": estimated_cost,
+        "input_cost_per_million_usd": input_cost_per_million_usd,
+        "output_cost_per_million_usd": output_cost_per_million_usd,
+    }
+
+
+def build_report(
+    review_path: Path,
+    usage_path: Path | None = None,
+    input_cost_per_million_usd: float | None = None,
+    output_cost_per_million_usd: float | None = None,
+) -> dict:
+    with review_path.open(encoding="utf-8-sig", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    report = {"cohorts": {}}
+    for cohort in COHORTS:
+        items = [row for row in rows if row["cohort"] == cohort.key]
+        reviewed = [(row, truth(row["review_is_target"])) for row in items]
+        reviewed = [(row, label) for row, label in reviewed if label is not None]
+        a_reviewed = [(row, label) for row, label in reviewed if row["rank"] == "A"]
+        excluded_reviewed = [(row, label) for row, label in reviewed if row["rank"] == "対象外"]
+        rank_reviewed = [truth(row["review_rank_correct"]) for row in items]
+        rank_reviewed = [value for value in rank_reviewed if value is not None]
+        domains = [row["domain"] for row in items if row["domain"]]
+        report["cohorts"][cohort.key] = {
+            "companies": len(items),
+            "unique_domains": len(set(domains)),
+            "duplicate_rate": rate(len(domains) - len(set(domains)), len(domains)),
+            "web_completed_rate": rate(
+                sum(r["analysis_status"] == "completed" for r in items), len(items)
+            ),
+            "web_failure_rate": rate(
+                sum(r["analysis_status"] in {"failed", "skipped"} for r in items), len(items)
+            ),
+            "ai_completed_rate": rate(
+                sum(r["ai_status"] == "completed" for r in items), len(items)
+            ),
+            "ai_failure_rate": rate(
+                sum(r["ai_status"] in {"failed", "skipped"} for r in items), len(items)
+            ),
+            "pipeline_success_rate": rate(
+                sum(
+                    r["analysis_status"] == "completed" and r["ai_status"] == "completed"
+                    for r in items
+                ),
+                len(items),
+            ),
+            "predicted_target_rate": rate(sum(r["is_target"] == "True" for r in items), len(items)),
+            "predicted_exclusion_rate": rate(sum(r["rank"] == "対象外" for r in items), len(items)),
+            "contact_rate": rate(sum(r["contact_available"] == "True" for r in items), len(items)),
+            "sns_rate": rate(sum(r["sns_available"] == "True" for r in items), len(items)),
+            "human_reviewed": len(reviewed),
+            "actual_target_rate": rate(sum(label for _, label in reviewed), len(reviewed)),
+            "reviewed_rank_accuracy": rate(sum(rank_reviewed), len(rank_reviewed)),
+            "a_rank_precision": rate(sum(label for _, label in a_reviewed), len(a_reviewed)),
+            "false_exclusion_rate": rate(
+                sum(label for _, label in excluded_reviewed), len(excluded_reviewed)
+            ),
+        }
+    recruiting = {
+        r["domain"]: r for r in rows if r["cohort"] == "transport_recruiting" and r["domain"]
+    }
+    vehicle = {r["domain"]: r for r in rows if r["cohort"] == "transport_vehicle" and r["domain"]}
+    shared = recruiting.keys() & vehicle.keys()
+    changed = sum(
+        recruiting[domain]["rank"] != vehicle[domain]["rank"]
+        or recruiting[domain]["score"] != vehicle[domain]["score"]
+        for domain in shared
+    )
+    report["transport_objective_comparison"] = {
+        "shared_companies": len(shared),
+        "different_decisions": changed,
+        "difference_rate": rate(changed, len(shared)),
+    }
+    report["ai_usage"] = build_usage_report(
+        usage_path or review_path.with_name("phase6-ai-usage.csv"),
+        input_cost_per_million_usd,
+        output_cost_per_million_usd,
+    )
+    return report
+
+
+def write_sanitized_summary(report: dict, path: Path) -> Path:
+    def percent(value) -> str:
+        return "n/a" if value is None else f"{value}%"
+
+    lines = [
+        "# Phase 6 sanitized summary",
+        "",
+        "This file contains aggregate metrics only. Company names, domains, contacts, "
+        "and page text are omitted.",
+        "",
+        "| Cohort | Companies | Pipeline success | Duplicates | AI failures | Human reviewed |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for cohort in COHORTS:
+        metrics = report["cohorts"][cohort.key]
+        lines.append(
+            f"| {cohort.key} | {metrics['companies']} | "
+            f"{percent(metrics['pipeline_success_rate'])} | {percent(metrics['duplicate_rate'])} | "
+            f"{percent(metrics['ai_failure_rate'])} | {metrics['human_reviewed']} |"
+        )
+    usage = report["ai_usage"]
+    lines.extend(
+        [
+            "",
+            "## AI usage",
+            "",
+            f"- Requests: {usage['requests']}",
+            f"- Input tokens: {usage['input_tokens']}",
+            f"- Output tokens: {usage['output_tokens']}",
+            f"- Estimated cost (USD): {usage['estimated_cost_usd']}",
+            "",
+        ]
+    )
+    path.write_text("\n".join(lines), encoding="utf-8")
+    return path
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Run resumable LeadHive Phase 6 validation")
+    parser.add_argument("--user", default="", help="Existing LeadHive user email")
+    parser.add_argument(
+        "--stage",
+        choices=("preflight", "all", "collect", "web", "ai", "export", "report"),
+        default="all",
+    )
+    parser.add_argument("--limit", type=int, default=100, choices=range(1, 101))
+    parser.add_argument("--output", type=Path, default=Path("phase6-results"))
+    parser.add_argument("--ai-input-cost-per-million-usd", type=float)
+    parser.add_argument("--ai-output-cost-per-million-usd", type=float)
+    args = parser.parse_args()
+    rates = (args.ai_input_cost_per_million_usd, args.ai_output_cost_per_million_usd)
+    if sum(rate is not None for rate in rates) == 1:
+        parser.error("Specify both AI input and output costs, or omit both")
+    if any(rate is not None and rate < 0 for rate in rates):
+        parser.error("AI token costs must be zero or greater")
+    if args.stage == "preflight":
+        with SessionLocal() as db:
+            apply_phase6_settings(db)
+            result = build_preflight(db, args.user, args.output)
+        print(json.dumps(result, ensure_ascii=False, indent=2))
+        raise SystemExit(0 if result["ready"] else 2)
+    if not args.user:
+        parser.error("--user is required unless --stage preflight is used")
+    review = args.output / "phase6-review.csv"
+    usage = args.output / "phase6-ai-usage.csv"
+    if args.stage == "report":
+        if not review.exists():
+            parser.error(f"Review CSV not found: {review}")
+        report = build_report(
+            review,
+            usage,
+            args.ai_input_cost_per_million_usd,
+            args.ai_output_cost_per_million_usd,
+        )
+        report_path = args.output / "phase6-report.json"
+        report_path.write_text(
+            json.dumps(report, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        write_sanitized_summary(report, args.output / "phase6-summary.md")
+        print(report_path)
+        return
+    with SessionLocal() as db:
+        apply_phase6_settings(db)
+        if args.stage in {"all", "collect"} and not settings.serper_api_key:
+            parser.error("SERPER_API_KEY is required for collection")
+        if args.stage in {"all", "ai"} and not settings.openai_api_key:
+            parser.error("OPENAI_API_KEY is required for AI analysis")
+        projects = ensure_projects(db, get_user(db, args.user))
+        if args.stage in {"all", "collect"}:
+            for cohort in COHORTS:
+                project, _ = projects[cohort.key]
+                if cohort.copy_from:
+                    copy_cohort(db, projects[cohort.copy_from][0], project, args.limit)
+                else:
+                    collect_cohort(db, cohort, project, args.limit)
+        if args.stage in {"all", "web"}:
+            for project, _ in projects.values():
+                run_web(db, project, args.limit)
+        if args.stage in {"all", "ai"}:
+            for project, profile in projects.values():
+                run_ai(db, project, profile, args.limit, usage)
+        review = export_review(db, projects, args.output, args.limit)
+    if args.stage == "all":
+        report = build_report(
+            review,
+            usage,
+            args.ai_input_cost_per_million_usd,
+            args.ai_output_cost_per_million_usd,
+        )
+        report_path = args.output / "phase6-report.json"
+        report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
+        write_sanitized_summary(report, args.output / "phase6-summary.md")
+        print(report_path)
+    else:
+        print(review)
+
+
+if __name__ == "__main__":
+    main()

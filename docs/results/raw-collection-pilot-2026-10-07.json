@@ -1,0 +1,487 @@
+{
+  "schema_version": "raw-repeat-v2",
+  "date": "2026-10-07",
+  "status": "COLLECTED_AWAITING_HUMAN_REVIEW",
+  "measurement_complete": false,
+  "baseline_commit": "203a6eff31ec2cb93cc26e2d74a24b56afa1fe61",
+  "branch": "codex/integration",
+  "blockers": [
+    "HUMAN_TRUTH_NOT_AVAILABLE"
+  ],
+  "planned_condition": {
+    "region": "兵庫県姫路市",
+    "industry": "美容院・美容室",
+    "sources": [
+      "serper"
+    ],
+    "queries": [
+      {
+        "keyword": "美容院",
+        "requested_count_per_run": 10,
+        "maximum_runs": 3
+      },
+      {
+        "keyword": "美容室",
+        "requested_count_per_run": 10,
+        "maximum_runs": 1
+      }
+    ],
+    "initial_requested_allocation": 20,
+    "maximum_raw_hits": 40,
+    "unique_candidate_target": "20–30; not guaranteed",
+    "google_places": "DEFERRED_STORAGE_AND_TERMS_REVIEW",
+    "gbizinfo": "CORPORATE_IDENTITY_ROLE_NOT_STORE_TRUTH"
+  },
+  "pilot": {
+    "region": "兵庫県姫路市",
+    "industry": "美容院・美容室",
+    "sources": [
+      "serper"
+    ],
+    "queries": [
+      "美容院",
+      "美容室"
+    ],
+    "runs": 4,
+    "raw_hits": 40,
+    "unique_candidates": 11,
+    "human_reviewed": 0
+  },
+  "quality": {
+    "correct": 0,
+    "strict_precision": null,
+    "resolved_precision": null,
+    "duplicate_rate": null,
+    "uncertain_rate": null,
+    "coverage": null
+  },
+  "stability": {
+    "scope": "serper / 美容院 / 3 short-interval runs; raw observations only",
+    "raw": {
+      "union": 10,
+      "intersection": 10,
+      "intersection_rate": 1.0,
+      "repeat_discovery_rate": 1.0,
+      "single_run_rate": 0.0,
+      "run_count": 3
+    },
+    "human_entity_stability": null,
+    "provider_cache_effect": "UNKNOWN"
+  },
+  "errors": {
+    "WRONG_INDUSTRY": {
+      "count": 0,
+      "rate": null
+    },
+    "WRONG_AREA": {
+      "count": 0,
+      "rate": null
+    },
+    "DUPLICATE": {
+      "count": 0,
+      "rate": null
+    },
+    "WRONG_ENTITY": {
+      "count": 0,
+      "rate": null
+    },
+    "PORTAL_OR_AGGREGATOR": {
+      "count": 0,
+      "rate": null
+    },
+    "CLOSED_OR_INACTIVE": {
+      "count": 0,
+      "rate": null
+    },
+    "UNCERTAIN": {
+      "count": 0,
+      "rate": null
+    },
+    "OTHER": {
+      "count": 0,
+      "rate": null
+    }
+  },
+  "source_comparison": [
+    {
+      "source": "serper",
+      "found": 40,
+      "reviewed": 0,
+      "unreviewed": 40,
+      "correct": 0,
+      "unique_correct": 0,
+      "strict_precision": null,
+      "resolved_precision": null,
+      "duplicate_rate": null,
+      "uncertain_rate": null,
+      "unreviewed_rate": 1.0,
+      "error_breakdown": {
+        "WRONG_INDUSTRY": {
+          "count": 0,
+          "rate": null
+        },
+        "WRONG_AREA": {
+          "count": 0,
+          "rate": null
+        },
+        "DUPLICATE": {
+          "count": 0,
+          "rate": null
+        },
+        "WRONG_ENTITY": {
+          "count": 0,
+          "rate": null
+        },
+        "PORTAL_OR_AGGREGATOR": {
+          "count": 0,
+          "rate": null
+        },
+        "CLOSED_OR_INACTIVE": {
+          "count": 0,
+          "rate": null
+        },
+        "UNCERTAIN": {
+          "count": 0,
+          "rate": null
+        },
+        "OTHER": {
+          "count": 0,
+          "rate": null
+        }
+      },
+      "field_completeness": {
+        "company_name": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "address": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "phone": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "website": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "email": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "reference_url": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        }
+      },
+      "human_review_seconds": null,
+      "coverage": null,
+      "unique_gain": null
+    }
+  ],
+  "query_comparison": [
+    {
+      "source": "serper",
+      "keyword": "美容院",
+      "runs": 3,
+      "found": 30,
+      "reviewed": 0,
+      "unreviewed": 30,
+      "correct": 0,
+      "unique_correct": 0,
+      "strict_precision": null,
+      "resolved_precision": null,
+      "duplicate_rate": null,
+      "uncertain_rate": null,
+      "unreviewed_rate": 1.0,
+      "error_breakdown": {
+        "WRONG_INDUSTRY": {
+          "count": 0,
+          "rate": null
+        },
+        "WRONG_AREA": {
+          "count": 0,
+          "rate": null
+        },
+        "DUPLICATE": {
+          "count": 0,
+          "rate": null
+        },
+        "WRONG_ENTITY": {
+          "count": 0,
+          "rate": null
+        },
+        "PORTAL_OR_AGGREGATOR": {
+          "count": 0,
+          "rate": null
+        },
+        "CLOSED_OR_INACTIVE": {
+          "count": 0,
+          "rate": null
+        },
+        "UNCERTAIN": {
+          "count": 0,
+          "rate": null
+        },
+        "OTHER": {
+          "count": 0,
+          "rate": null
+        }
+      },
+      "field_completeness": {
+        "company_name": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "address": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "phone": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "website": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "email": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "reference_url": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        }
+      },
+      "human_review_seconds": null,
+      "coverage": null,
+      "unique_candidates": 10,
+      "marginal_gain": null,
+      "comparable": true,
+      "raw_stability": {
+        "union": 10,
+        "intersection": 10,
+        "intersection_rate": 1.0,
+        "repeat_discovery_rate": 1.0,
+        "single_run_rate": 0.0,
+        "run_count": 3
+      },
+      "human_entity_stability": null
+    },
+    {
+      "source": "serper",
+      "keyword": "美容室",
+      "runs": 1,
+      "found": 10,
+      "reviewed": 0,
+      "unreviewed": 10,
+      "correct": 0,
+      "unique_correct": 0,
+      "strict_precision": null,
+      "resolved_precision": null,
+      "duplicate_rate": null,
+      "uncertain_rate": null,
+      "unreviewed_rate": 1.0,
+      "error_breakdown": {
+        "WRONG_INDUSTRY": {
+          "count": 0,
+          "rate": null
+        },
+        "WRONG_AREA": {
+          "count": 0,
+          "rate": null
+        },
+        "DUPLICATE": {
+          "count": 0,
+          "rate": null
+        },
+        "WRONG_ENTITY": {
+          "count": 0,
+          "rate": null
+        },
+        "PORTAL_OR_AGGREGATOR": {
+          "count": 0,
+          "rate": null
+        },
+        "CLOSED_OR_INACTIVE": {
+          "count": 0,
+          "rate": null
+        },
+        "UNCERTAIN": {
+          "count": 0,
+          "rate": null
+        },
+        "OTHER": {
+          "count": 0,
+          "rate": null
+        }
+      },
+      "field_completeness": {
+        "company_name": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "address": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "phone": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "website": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "email": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        },
+        "reference_url": {
+          "available": 0,
+          "denominator": 0,
+          "rate": null
+        }
+      },
+      "human_review_seconds": null,
+      "coverage": null,
+      "unique_candidates": 10,
+      "marginal_gain": null,
+      "comparable": true,
+      "raw_stability": {
+        "union": 10,
+        "intersection": null,
+        "intersection_rate": null,
+        "repeat_discovery_rate": null,
+        "single_run_rate": null,
+        "run_count": 1
+      },
+      "human_entity_stability": null
+    }
+  ],
+  "field_completeness": {
+    "company_name": null,
+    "address": null,
+    "phone": null,
+    "website": null,
+    "email": null,
+    "reference_url": null
+  },
+  "identity_pair": {
+    "SAME": 0,
+    "DIFFERENT": 0,
+    "UNSURE": 0
+  },
+  "cost": {
+    "collection_api_calls": 4,
+    "estimated_api_cost": null,
+    "human_review_seconds": null
+  },
+  "safety": {
+    "collection_external_requests": 4,
+    "ai_calls": 0,
+    "completion_jobs": 0,
+    "email_sent": 0,
+    "form_sent": 0,
+    "approvals": 0,
+    "outbound_enabled": false,
+    "delivery_worker_started": false,
+    "isolated_pilot_db_created": true,
+    "operational_business_data_modified": false,
+    "operational_schema_modified": false,
+    "operational_auth_session_created_for_saved_setting_check": true
+  },
+  "synthetic_tests_are_measurement": false,
+  "oss_network_access_excluded_from_collection_calls": true,
+  "next_action": "Human review in the isolated Pilot UI. No more collection, Full Benchmark, completion, or sending before Human confirmation.",
+  "implementation_commits": {
+    "backend": "39268d8",
+    "frontend": "6827f89"
+  },
+  "collected_code_commit": "d06dc784a2a214c9bdeb3c5303efeb47c787e3b6",
+  "collected_at": "2026-10-07T00:29:52.423642+00:00",
+  "run_summary": [
+    {
+      "ordinal": 1,
+      "source": "serper",
+      "keyword": "美容院",
+      "query": "美容院 兵庫県姫路市",
+      "repeat_index": 1,
+      "requested_count": 10,
+      "code_commit": "d06dc784a2a214c9bdeb3c5303efeb47c787e3b6",
+      "created_at": "2026-10-07T00:28:12.866203+00:00",
+      "finished_at": "2026-10-07T00:28:15.673254+00:00",
+      "status": "COMPLETED",
+      "found": 10,
+      "reviewed": 0
+    },
+    {
+      "ordinal": 2,
+      "source": "serper",
+      "keyword": "美容院",
+      "query": "美容院 兵庫県姫路市",
+      "repeat_index": 2,
+      "requested_count": 10,
+      "code_commit": "d06dc784a2a214c9bdeb3c5303efeb47c787e3b6",
+      "created_at": "2026-10-07T00:28:15.968470+00:00",
+      "finished_at": "2026-10-07T00:28:19.516465+00:00",
+      "status": "COMPLETED",
+      "found": 10,
+      "reviewed": 0
+    },
+    {
+      "ordinal": 3,
+      "source": "serper",
+      "keyword": "美容院",
+      "query": "美容院 兵庫県姫路市",
+      "repeat_index": 3,
+      "requested_count": 10,
+      "code_commit": "d06dc784a2a214c9bdeb3c5303efeb47c787e3b6",
+      "created_at": "2026-10-07T00:28:19.671573+00:00",
+      "finished_at": "2026-10-07T00:28:22.834157+00:00",
+      "status": "COMPLETED",
+      "found": 10,
+      "reviewed": 0
+    },
+    {
+      "ordinal": 4,
+      "source": "serper",
+      "keyword": "美容室",
+      "query": "美容室 兵庫県姫路市",
+      "repeat_index": 1,
+      "requested_count": 10,
+      "code_commit": "d06dc784a2a214c9bdeb3c5303efeb47c787e3b6",
+      "created_at": "2026-10-07T00:28:23.028547+00:00",
+      "finished_at": "2026-10-07T00:28:25.492534+00:00",
+      "status": "COMPLETED",
+      "found": 10,
+      "reviewed": 0
+    }
+  ],
+  "interpretation": [
+    "Raw Unique Candidate is an observation fingerprint, not a confirmed store entity.",
+    "All 40 snapshots are immutable; only 11 distinct raw fingerprints were observed.",
+    "Error counts of zero are zero Human labels, not evidence of no errors.",
+    "Raw repeated sets were identical in a short time window; this does not prove population coverage or daily stability.",
+    "Field completeness is restricted to CORRECT Human labels and remains null."
+  ]
+}

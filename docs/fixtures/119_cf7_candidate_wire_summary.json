@@ -1,0 +1,263 @@
+{
+  "lab_run": "leadhive-cf7-lab-b377fd97a8fe",
+  "started_at": "2026-10-06T03:41:22.838079+00:00",
+  "finished_at": "2026-10-06T03:42:16.657468+00:00",
+  "duration_seconds": 53.819389,
+  "passed": true,
+  "cleanup_failures": [],
+  "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+  "source_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+  "images": {
+    "wp": {
+      "tag": "wordpress:6.8.3-php8.3-apache",
+      "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+      "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+    },
+    "db": {
+      "tag": "mariadb:11.4",
+      "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+      "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+    }
+  },
+  "versions": {
+    "wp_version": "6.8.3",
+    "cf7_version": "6.1.4",
+    "php_version": "8.3.28"
+  },
+  "browser_version": "153.0.8010.12",
+  "httpx_version": "0.28.1",
+  "candidate_contract": {
+    "version": "cf7-candidate-v1",
+    "encoding": "browser-crlf-utf8-v1",
+    "logical_origin_is_placeholder": true,
+    "candidate_urls_executed": false,
+    "snapshot_sha256": "dc762bb912f3cefdba64f4b805c77a147df6c2705387a3b1f1e4c66e376d5e9f",
+    "wire_sha256": "73ad8b3b6849674ae70df1eae9701a3249eb3c24967ebcf8d5c2cd20b63ab44f",
+    "wire_size": 1239,
+    "form_id": 5
+  },
+  "candidate_mail_evidence": {
+    "subject_sha256": "2c49ca1a72a5efb33c5d5163bdefc190fa6dff7af7f52b96aa85b6e05fa35d40",
+    "body_sha256": "908cbb45cc6bd99a7142e8256b56f3ab484c58a6897c0039f1065affa92dca0e",
+    "recipient_count": 1
+  },
+  "checks": [
+    {
+      "name": "container publishes no ports",
+      "passed": true
+    },
+    {
+      "name": "no requested port publication",
+      "passed": true
+    },
+    {
+      "name": "internal runtime network",
+      "passed": true
+    },
+    {
+      "name": "wp isolated network only",
+      "passed": true
+    },
+    {
+      "name": "db isolated network only",
+      "passed": true
+    },
+    {
+      "name": "WP HTTP and numeric external sockets blocked",
+      "passed": true
+    },
+    {
+      "name": "mail capture active before feedback",
+      "passed": true
+    },
+    {
+      "name": "canonical fixture URL is local",
+      "passed": true
+    },
+    {
+      "name": "real rendered DOM",
+      "passed": true
+    },
+    {
+      "name": "path REST root observed",
+      "passed": true
+    },
+    {
+      "name": "multipart standard",
+      "passed": true
+    },
+    {
+      "name": "urlencoded rejected",
+      "passed": true
+    },
+    {
+      "name": "unit tag missing",
+      "passed": true
+    },
+    {
+      "name": "required field missing",
+      "passed": true
+    },
+    {
+      "name": "required acceptance missing",
+      "passed": true
+    },
+    {
+      "name": "optional acceptance omitted",
+      "passed": true
+    },
+    {
+      "name": "invert acceptance omitted",
+      "passed": true
+    },
+    {
+      "name": "invert acceptance checked rejected",
+      "passed": true
+    },
+    {
+      "name": "mail capture failure",
+      "passed": true
+    },
+    {
+      "name": "before-mail abort",
+      "passed": true
+    },
+    {
+      "name": "spam decision",
+      "passed": true
+    },
+    {
+      "name": "skip-mail reports receipt without mail call",
+      "passed": true
+    },
+    {
+      "name": "demo-mode not receipt evidence",
+      "passed": true
+    },
+    {
+      "name": "browser standard uses matching multipart endpoint",
+      "passed": true
+    },
+    {
+      "name": "candidate wire hash and decoded fields",
+      "passed": true
+    },
+    {
+      "name": "candidate actual CF7 capture",
+      "passed": true
+    },
+    {
+      "name": "candidate actual CF7 fail",
+      "passed": true
+    },
+    {
+      "name": "candidate wire matches actual browser fields and captured mail",
+      "passed": true
+    },
+    {
+      "name": "candidate consent revision stopped before HTTP",
+      "passed": true
+    },
+    {
+      "name": "candidate unit tag revision stopped before HTTP",
+      "passed": true
+    },
+    {
+      "name": "candidate revision performs no extra submission",
+      "passed": true
+    },
+    {
+      "name": "different form ID remains UNKNOWN",
+      "passed": true
+    },
+    {
+      "name": "different unit tag remains UNKNOWN",
+      "passed": true
+    },
+    {
+      "name": "demo receipt remains UNKNOWN",
+      "passed": true
+    },
+    {
+      "name": "custom status remains UNKNOWN",
+      "passed": true
+    },
+    {
+      "name": "contradictory validation remains UNKNOWN",
+      "passed": true
+    },
+    {
+      "name": "consent text changes structure evidence",
+      "passed": true
+    },
+    {
+      "name": "unit tag changes structure evidence",
+      "passed": true
+    },
+    {
+      "name": "query-root rendered DOM",
+      "passed": true
+    },
+    {
+      "name": "query REST root observed",
+      "passed": true
+    },
+    {
+      "name": "query-root multipart receipt",
+      "passed": true
+    },
+    {
+      "name": "candidate actual CF7 index query route",
+      "passed": true
+    },
+    {
+      "name": "fixed explicit cases have no extra submission",
+      "passed": true
+    }
+  ],
+  "candidate_details": [
+    {
+      "name": "candidate actual CF7 capture",
+      "detail": {
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "expected_classification": "RECEIPT_REPORTED",
+        "mail_delta": 1
+      }
+    },
+    {
+      "name": "candidate actual CF7 fail",
+      "detail": {
+        "http": 200,
+        "status": "mail_failed",
+        "classification": "UNKNOWN",
+        "expected_classification": "UNKNOWN",
+        "mail_delta": 1
+      }
+    },
+    {
+      "name": "candidate wire matches actual browser fields and captured mail",
+      "detail": {
+        "fields_equal": true,
+        "mail_hashes_equal": true
+      }
+    }
+  ],
+  "counts": {
+    "checks": 43,
+    "feedback_post": 19,
+    "cf7_submission": 17,
+    "protocol_mail_captured": 10,
+    "setup_mail_captured": 2,
+    "offline_tests": 20,
+    "backend_selected_tests": 139,
+    "backend_subtests_not_added": 50
+  },
+  "actual_smtp_or_phpmailer": false,
+  "real_companies_accessed": false,
+  "live_changes": false,
+  "leadhive_dispatch_connected": false,
+  "human_approval_connected": false,
+  "candidate_urls_executed": false
+}

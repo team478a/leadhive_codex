@@ -1,0 +1,20 @@
+[Unit]
+Description=LeadHive background worker
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=leadhive
+Group=leadhive
+WorkingDirectory=/opt/leadhive/backend
+EnvironmentFile=/etc/leadhive/leadhive.env
+ExecStart=/opt/leadhive/backend/.venv/bin/python -m app.worker
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

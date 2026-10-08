@@ -1,0 +1,121 @@
+@import "tailwindcss";
+
+@theme { --font-sans: "Segoe UI", "Yu Gothic UI", "Meiryo", sans-serif; }
+@layer base {
+  body { @apply m-0 bg-[#f6f7f4] text-[#263a35] antialiased; }
+  h1 { @apply text-3xl font-semibold tracking-tight; }
+  h2 { @apply text-lg font-semibold; }
+  button { @apply cursor-pointer rounded-lg bg-[#235c4c] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#194535] disabled:cursor-wait disabled:opacity-50; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { @apply outline-2 outline-offset-2 outline-[#43846b]; }
+  input:not([type="checkbox"]), textarea, select { @apply w-full rounded-lg border border-[#d7dfd9] bg-white px-3 py-2.5 text-base text-[#263a35]; }
+  textarea { @apply resize-y; }
+  fieldset { @apply min-w-0; }
+}
+@layer components {
+  .brand { @apply text-2xl font-bold tracking-tight; }
+  .eyebrow { @apply mb-3 text-xs font-semibold tracking-[0.16em] text-[#688579]; }
+  .muted { @apply text-[#65776f] leading-relaxed; }
+  .panel { @apply rounded-xl border border-[#e0e6df] bg-white p-6 shadow-xs break-words; }
+  .badge { @apply inline-block h-fit shrink-0 rounded-full bg-[#edf2eb] px-3 py-1 text-xs font-medium text-[#45644e]; }
+  .keyword { @apply rounded-md bg-[#f2f4f0] px-2.5 py-1.5 text-xs text-[#58705f]; }
+  .secondary { @apply border border-[#dce3dc] bg-white text-[#315e4a] hover:bg-[#f1f5ee]; }
+  .danger { @apply bg-transparent px-3 text-[#a65047] hover:bg-red-50; }
+  .error { @apply mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800; }
+  .notice { @apply mb-5 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800; }
+  .field { @apply mb-5 flex flex-col gap-2 text-sm font-medium; }
+  .actions { @apply mt-7 flex justify-end gap-3 border-t border-[#e6eae4] pt-5; }
+  .form-panel { @apply max-w-3xl; }
+  .form-panel > .muted { @apply mb-6 mt-2; }
+  .app-layout { @apply min-h-screen lg:flex; }
+  .sidebar { @apply flex flex-col bg-[#173c35] p-6 text-white lg:fixed lg:inset-y-0 lg:w-64; }
+  .nav-label { @apply mb-3 mt-10 text-xs text-[#a5bcb1]; }
+  .nav-item { @apply block w-full rounded-lg bg-transparent px-3 py-3 text-left text-sm text-[#c8d9d0] hover:bg-[#284e43]; }
+  .nav-item.selected { @apply bg-[#335b4d] text-white; }
+  .sidebar-footer { @apply mt-6 border-t border-white/15 pt-5 text-xs text-[#aac0b5] lg:mt-auto; }
+  .workspace { @apply w-full min-w-0 p-5 sm:p-10 lg:ml-64 lg:p-12; }
+  .page-heading { @apply mb-10 flex flex-wrap items-center justify-between gap-5; }
+  .page-heading .muted { @apply mt-3 text-sm; }
+  .section-heading { @apply mb-5 flex items-center gap-3; }
+  .card-footer { @apply flex flex-wrap items-center justify-between gap-4 border-t border-[#e8ece6] pt-4; }
+  .empty { @apply px-5 py-16 text-center; }
+  .empty-icon { @apply mx-auto mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-[#edf2e8] text-3xl text-[#7f956b]; }
+  .empty .muted { @apply mt-3 text-sm; }
+  .job-row { @apply mt-4 flex items-start justify-between gap-4 border-t border-[#e8ece6] pt-4; }
+  .job-stats { @apply flex flex-wrap gap-x-4 gap-y-1 text-xs text-[#65776f]; }
+  .metric { @apply rounded-xl border border-[#e0e6df] bg-white p-5 shadow-xs; }
+  .metric span { @apply block text-sm text-[#65776f]; }
+  .metric strong { @apply mt-2 block text-3xl text-[#235c4c]; }
+  .filter-grid { @apply grid gap-x-4 sm:grid-cols-2 xl:grid-cols-4; }
+  .filter-grid .field { @apply mb-4; }
+  .company-table-wrap { @apply overflow-x-auto rounded-xl border border-[#e0e6df] bg-white; }
+  .company-table { @apply w-full min-w-[820px] border-collapse text-left text-sm; }
+  .company-table th { @apply bg-[#f2f5f1] px-4 py-3 text-xs font-semibold text-[#58705f]; }
+  .company-table td { @apply border-t border-[#e8ece6] px-4 py-4 align-top; }
+  .detail-grid { @apply mt-6 grid gap-6 border-t border-[#e8ece6] pt-6 lg:grid-cols-2; }
+  .detail-grid h3 { @apply mb-3 text-sm font-semibold text-[#45644e]; }
+  .detail-grid p { @apply mb-2 leading-relaxed; }
+  .form-profile-card { @apply mt-5 rounded-xl border border-[#e0e6df] p-4; }
+  .form-profile-summary { @apply mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-[#58705f]; }
+  .form-status { @apply inline-flex rounded-full px-2.5 py-1 text-xs font-semibold; }
+  .form-status.ready { @apply bg-emerald-50 text-emerald-700; }
+  .form-status.review_required, .form-status.stale { @apply bg-amber-50 text-amber-800; }
+  .form-status.blocked, .form-status.error { @apply bg-red-50 text-red-700; }
+  .form-status.unanalyzed { @apply bg-slate-100 text-slate-600; }
+  .form-field-table { @apply min-w-[980px]; }
+  .form-field-table select, .form-field-table input { @apply min-w-40; }
+  .required-mark { @apply mt-1 inline-block text-xs font-semibold text-red-700; }
+  .form-analysis-log { @apply max-h-64 overflow-y-auto rounded-lg bg-[#f7f9f6] p-3; }
+  .form-analysis-log p { @apply grid gap-2 border-b border-[#e0e6df] py-2 text-xs last:border-0 md:grid-cols-[11rem_1fr_8rem_6rem]; }
+  .login-layout { @apply min-h-screen md:grid md:grid-cols-2; }
+  .login-intro { @apply flex flex-col justify-between gap-12 bg-[#173c35] p-9 text-white lg:p-16; }
+  .login-intro h1 { @apply mb-6 text-3xl leading-relaxed lg:text-4xl; }
+  .login-intro p { @apply leading-relaxed text-[#b8cec1]; }
+  .login-form { @apply flex items-center justify-center px-6 py-16 sm:px-12; }
+  .login-form h2 { @apply mb-3 text-2xl; }
+  .guide-backdrop { @apply fixed inset-0 z-50 flex items-end justify-center bg-[#102b25]/55 p-0 backdrop-blur-[2px] sm:items-center sm:p-6; }
+  .guide-dialog { @apply max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-[#f9faf7] p-5 shadow-2xl sm:max-w-2xl sm:rounded-2xl sm:p-8; }
+  .guide-header { @apply flex items-start justify-between gap-5; }
+  .guide-header h2 { @apply text-2xl; }
+  .guide-close { @apply -mr-2 -mt-2 bg-transparent px-3 py-2 text-2xl text-[#65776f] hover:bg-[#edf2eb] hover:text-[#263a35]; }
+  .guide-steps { @apply my-6 grid list-none gap-3 p-0; }
+  .guide-step { @apply flex gap-4 rounded-xl border border-[#e0e6df] bg-white p-4; }
+  .guide-step.current { @apply border-[#77a391] bg-[#f5faf7]; }
+  .guide-step.completed { @apply bg-[#f3f6f1]; }
+  .guide-step-number { @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#dfe9df] text-sm font-bold text-[#315e4a]; }
+  .guide-step.current .guide-step-number { @apply bg-[#235c4c] text-white; }
+  .guide-step-title { @apply mb-1 flex flex-wrap items-center gap-2; }
+  .guide-step .muted { @apply text-sm; }
+  .guide-tip { @apply rounded-xl bg-[#eaf2e8] p-4 text-sm text-[#315e4a]; }
+  .guide-tip p { @apply mt-1 leading-relaxed; }
+  .guide-link { @apply mt-2 bg-transparent p-0 text-[#235c4c] underline underline-offset-4 hover:bg-transparent hover:text-[#173c35]; }
+  .guide-actions { @apply mt-6 flex flex-col-reverse gap-3 border-t border-[#e0e6df] pt-5 sm:flex-row sm:justify-end; }
+  .region-selector { @apply mb-5 rounded-xl border border-[#e0e6df] bg-[#f8faf7] p-4; }
+  .region-fields { @apply grid gap-x-5 sm:grid-cols-2; }
+  .region-selector .field { @apply mb-3; }
+  .region-helper { @apply flex flex-wrap items-center justify-between gap-2 text-xs text-[#65776f]; }
+  .api-setup-guide { @apply mt-6 rounded-xl border border-[#dbe5dc] bg-[#f8faf7] p-4 sm:p-5; }
+  .api-guide-heading { @apply mb-4 flex flex-wrap items-start justify-between gap-3; }
+  .api-guide-list { @apply grid gap-2; }
+  .api-guide-item { @apply rounded-lg border border-[#dfe6df] bg-white; }
+  .api-guide-item summary { @apply flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3; }
+  .api-guide-item summary::-webkit-details-marker { @apply hidden; }
+  .api-guide-item summary small { @apply mt-1 block text-xs font-normal text-[#65776f]; }
+  .api-status { @apply shrink-0 rounded-full bg-[#f2f4f0] px-2.5 py-1 text-xs font-medium text-[#65776f]; }
+  .api-status.configured { @apply bg-emerald-50 text-emerald-700; }
+  .api-guide-content { @apply border-t border-[#e7ebe6] px-4 py-4 text-sm; }
+  .api-guide-content ol { @apply list-decimal space-y-2 pl-5 leading-relaxed; }
+  .api-guide-note { @apply mt-4 rounded-lg bg-amber-50 p-3 text-xs leading-relaxed text-amber-900; }
+  .api-guide-links { @apply mt-4 flex flex-wrap gap-x-5 gap-y-2; }
+  .api-guide-links a { @apply text-sm font-semibold text-[#235c4c] underline underline-offset-4 hover:text-[#173c35]; }
+  .api-security-note { @apply mt-4 text-xs leading-relaxed text-[#65776f]; }
+  .settings-save-status { @apply mt-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4 text-sm; }
+  .settings-save-status p { @apply mt-1 text-xs; }
+  .settings-save-status span { @apply text-xs; }
+  .settings-save-status.ready { @apply border-emerald-200 bg-emerald-50 text-emerald-800; }
+  .settings-save-status.blocked { @apply border-red-200 bg-red-50 text-red-800; }
+  .api-test-row { @apply mt-4 flex flex-wrap items-center gap-3 border-t border-[#e7ebe6] pt-4; }
+  .api-test-result { @apply mt-3 rounded-lg p-3 text-sm; }
+  .api-test-result small { @apply mt-1 block text-xs opacity-75; }
+  .api-test-result.success { @apply bg-emerald-50 text-emerald-800; }
+  .api-test-result.failure { @apply bg-red-50 text-red-800; }
+}

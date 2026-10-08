@@ -1,0 +1,878 @@
+import argparse
+import logging
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timedelta, timezone
+
+from sqlalchemy import func, or_, select
+
+from app.config import settings
+from app.database import SessionLocal
+from app.models import (
+    Activity,
+    AnalysisRefreshSchedule,
+    Company,
+    EmailCampaign,
+    EmailDelivery,
+    FormDeliveryBatch,
+    FormDeliveryBatchItem,
+    Notification,
+    OperationJob,
+    OutreachDraftApproval,
+    Project,
+    SearchSchedule,
+    TargetProfile,
+)
+from app.services.ai_analysis import analyze_company_ai
+from app.services.application_settings import apply_application_settings
+from app.services.bulk_form_delivery import process_form_batch_item
+from app.services.collection import (
+    ExternalServiceError,
+    search_gbizinfo,
+    search_google_places,
+    search_serper,
+)
+from app.services.collection_jobs import fail_job, save_candidates, start_job
+from app.services.contact_permission import evaluate_contact_permission
+from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
+from app.services.form_intelligence import analyze_company_forms
+from app.services.inbound_email import sync_inbound_mail
+from app.services.operations import add_operation_job, refresh_company_ids
+from app.services.outbound_guard import require_legacy_form_enabled, require_outbound_enabled
+from app.services.processing_usage import capture_usage, measured_search, persist_usage
+from app.services.web_analysis import analyze
+
+logger = logging.getLogger("leadhive")
+EMAIL_CLAIM_LOCK_ID = 4_781_001
+
+
+def lease_deadline() -> datetime:
+    return datetime.now(timezone.utc) + timedelta(seconds=settings.worker_lease_seconds)
+
+
+def notify_email_delivery_failure(db, delivery: EmailDelivery) -> None:
+    """Create one actionable in-app notification for each failed send attempt."""
+    if delivery.created_by_user_id is None:
+        return
+    company = db.get(Company, delivery.company_id)
+    if company is None:
+        return
+    dedupe_key = f"email-delivery:{delivery.id}:{delivery.attempt_count}"
+    if db.scalar(select(Notification.id).where(Notification.dedupe_key == dedupe_key)):
+        return
+    db.add(
+        Notification(
+            user_id=delivery.created_by_user_id,
+            project_id=company.project_id,
+            company_id=company.id,
+            email_delivery_id=delivery.id,
+            notification_type="email_delivery_failed",
+            title=f"メール送信に失敗しました: {company.company_name}",
+            message=(
+                f"{delivery.recipient_email} / "
+                f"{delivery.error_message or '企業詳細で内容を確認して再送してください。'}"
+            )[:1000],
+            dedupe_key=dedupe_key,
+        )
+    )
+
+
+def recover_stale_jobs(db) -> tuple[int, int]:
+    jobs = db.scalars(
+        select(OperationJob)
+        .where(
+            OperationJob.status == "running",
+            OperationJob.operation_type != "cf7_observation",
+            OperationJob.operation_type.in_(
+                (
+                    "collect_search",
+                    "web_analysis",
+                    "ai_analysis",
+                    "form_intelligence",
+                    "prepare_outreach",
+                )
+            )
+            if not settings.outbound_enabled
+            else True,
+            OperationJob.lease_expires_at < datetime.now(timezone.utc),
+        )
+        .with_for_update(skip_locked=True)
+        .limit(100)
+    ).all()
+    retried = failed = 0
+    for job in jobs:
+        job.worker_id = None
+        job.lease_expires_at = None
+        if job.cancel_requested:
+            job.status = "cancelled"
+            job.finished_at = datetime.now(timezone.utc)
+        elif job.attempt_count >= settings.worker_max_attempts:
+            job.status = "failed"
+            job.error_message = "ワーカー停止後の再試行回数が上限に達しました。"
+            job.finished_at = datetime.now(timezone.utc)
+            failed += 1
+        else:
+            job.status = "queued"
+            job.started_at = None
+            if job.operation_type != "prepare_outreach":
+                job.total_count = 0
+                job.processed_count = 0
+                job.success_count = 0
+                job.failed_count = 0
+            job.error_message = "ワーカー停止を検出したため再試行します。"
+            retried += 1
+    if jobs:
+        db.commit()
+        logger.warning("stale operations recovered: retried=%s failed=%s", retried, failed)
+    return retried, failed
+
+
+def recover_stale_email_deliveries(db) -> int:
+    from app.model_approved_email import ApprovedEmailReservation
+    from app.services.approved_email_worker import recover_stale
+
+    approved_count = recover_stale(db)
+
+    deliveries = db.scalars(
+        select(EmailDelivery)
+        .where(
+            EmailDelivery.status == "running",
+            ~EmailDelivery.id.in_(select(ApprovedEmailReservation.delivery_id)),
+            EmailDelivery.lease_expires_at < datetime.now(timezone.utc),
+        )
+        .with_for_update(skip_locked=True)
+        .limit(100)
+    ).all()
+    for delivery in deliveries:
+        delivery.status = "unknown"
+        delivery.worker_id = None
+        delivery.lease_expires_at = None
+        delivery.error_message = (
+            "送信中断を検出しました。結果不明のため再送せずSMTP履歴を確認してください。"
+        )
+        delivery.finished_at = datetime.now(timezone.utc)
+        notify_email_delivery_failure(db, delivery)
+    if deliveries:
+        db.commit()
+        logger.warning("stale email deliveries marked failed: count=%s", len(deliveries))
+    return len(deliveries) + approved_count
+
+
+def claim_email_delivery(db) -> EmailDelivery | None:
+    from app.model_approved_email import ApprovedEmailReservation
+    from app.model_email_feedback import EmailHealthState
+
+    if settings.human_approved_email_enabled:
+        from app.services.approved_email_worker import claim
+
+        return claim(db)
+    if not settings.outbound_enabled:
+        return None
+    from app.services.sending_window import allowed
+
+    if not allowed(db):
+        db.commit()
+        return None
+    now = datetime.now(timezone.utc)
+    db.execute(select(func.pg_advisory_xact_lock(EMAIL_CLAIM_LOCK_ID)))
+    limits = email_delivery_limits(db)
+    delivery_activity_at = func.coalesce(EmailDelivery.sent_at, EmailDelivery.started_at)
+    active_today = db.scalar(
+        select(func.count())
+        .select_from(EmailDelivery)
+        .where(
+            EmailDelivery.status.in_(("running", "sent")),
+            delivery_activity_at >= now - timedelta(days=1),
+        )
+    )
+    if active_today >= limits.max_emails_per_day:
+        db.commit()
+        return None
+    if limits.minimum_interval_seconds:
+        last_activity_at = db.scalar(
+            select(delivery_activity_at)
+            .where(
+                EmailDelivery.status.in_(("running", "sent")),
+                delivery_activity_at.is_not(None),
+            )
+            .order_by(delivery_activity_at.desc())
+            .limit(1)
+        )
+        if last_activity_at and last_activity_at > now - timedelta(
+            seconds=limits.minimum_interval_seconds
+        ):
+            db.commit()
+            return None
+    delivery = db.scalar(
+        select(EmailDelivery)
+        .outerjoin(EmailCampaign, EmailCampaign.id == EmailDelivery.campaign_id)
+        .where(
+            EmailDelivery.status == "queued",
+            ~EmailDelivery.id.in_(select(ApprovedEmailReservation.delivery_id)),
+            ~EmailDelivery.company_id.in_(
+                select(Company.id)
+                .join(EmailHealthState, EmailHealthState.project_id == Company.project_id)
+                .where(EmailHealthState.paused.is_(True))
+            ),
+            EmailDelivery.scheduled_for <= now,
+            or_(EmailDelivery.campaign_id.is_(None), EmailCampaign.status == "queued"),
+        )
+        .order_by(EmailDelivery.scheduled_for, EmailDelivery.created_at, EmailDelivery.id)
+        .with_for_update(of=EmailDelivery, skip_locked=True)
+        .limit(1)
+    )
+    if delivery:
+        delivery.status = "running"
+        delivery.attempt_count += 1
+        delivery.worker_id = uuid.uuid4()
+        delivery.lease_expires_at = lease_deadline()
+        delivery.started_at = datetime.now(timezone.utc)
+        delivery.finished_at = None
+        db.commit()
+        db.refresh(delivery)
+    else:
+        db.commit()
+    return delivery
+
+
+def sync_campaign_status(db, campaign_id) -> None:
+    if campaign_id is None:
+        return
+    campaign = db.get(EmailCampaign, campaign_id)
+    if campaign is None or campaign.status == "paused":
+        return
+    active = db.scalar(
+        select(EmailDelivery.id)
+        .where(
+            EmailDelivery.campaign_id == campaign_id,
+            EmailDelivery.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    )
+    if active is None:
+        campaign.status = "completed"
+
+
+def delivery_body_with_unsubscribe(delivery: EmailDelivery) -> str:
+    if not settings.public_app_url or not delivery.unsubscribe_token:
+        return delivery.body
+    url = (
+        f"{settings.public_app_url.rstrip('/')}/api/public/unsubscribe/{delivery.unsubscribe_token}"
+    )
+    return f"{delivery.body.rstrip()}\n\n---\n今後のご案内が不要な場合: {url}"
+
+
+def run_email_delivery(db, delivery: EmailDelivery) -> None:
+    require_outbound_enabled()
+    from app.services.sending_window import defer_email
+
+    if defer_email(db, delivery):
+        return
+    from app.services.approved_email import reservation
+
+    if reservation(db, delivery.id):
+        from app.services.approved_email_worker import run
+
+        run(db, delivery)
+        return
+    require_outbound_enabled()
+    worker_id = delivery.worker_id
+    smtp_started = False
+    logger.info("email delivery start: id=%s", delivery.id)
+    try:
+        company = db.get(Company, delivery.company_id)
+        if company is None:
+            raise EmailDeliveryError("送信対象の企業が見つかりません。")
+        from app.services.email_feedback import evaluate
+
+        health, _ = evaluate(db, company.project_id)
+        if health.paused:
+            raise EmailDeliveryError("配信異常による安全停止中です。")
+        permission = evaluate_contact_permission(
+            db,
+            company.project_id,
+            company.id,
+            "email",
+            delivery.recipient_email,
+        )
+        if not permission.allowed:
+            raise EmailDeliveryError(permission.message)
+        smtp_started = True
+        send_email(
+            db,
+            str(delivery.id),
+            delivery.recipient_email,
+            delivery.subject,
+            delivery_body_with_unsubscribe(delivery),
+        )
+        db.refresh(delivery)
+        if delivery.status != "running" or delivery.worker_id != worker_id:
+            return
+        delivery.status = "sent"
+        delivery.sent_at = datetime.now(timezone.utc)
+        delivery.finished_at = delivery.sent_at
+        delivery.worker_id = None
+        delivery.lease_expires_at = None
+        delivery.error_message = ""
+        approval = db.scalar(
+            select(OutreachDraftApproval).where(
+                OutreachDraftApproval.draft_id == delivery.draft_id,
+                OutreachDraftApproval.approval_type == "email",
+            )
+        )
+        if approval:
+            approval.delivered_at = delivery.sent_at
+        db.add(
+            Activity(
+                company_id=delivery.company_id,
+                activity_type="email",
+                note=f"メール送信: {delivery.recipient_email} / 件名: {delivery.subject}",
+            )
+        )
+        company = db.get(Company, delivery.company_id)
+        if company and company.status in {"unreviewed", "target"}:
+            company.status = "approached"
+            db.add(
+                Activity(
+                    company_id=company.id,
+                    activity_type="status_change",
+                    note="営業状況を更新: アプローチ済（メール送信）",
+                )
+            )
+        campaign = db.get(EmailCampaign, delivery.campaign_id) if delivery.campaign_id else None
+        if (
+            campaign
+            and campaign.followup_days
+            and company
+            and company.status in {"approached", "target", "unreviewed"}
+        ):
+            company.next_followup_at = delivery.sent_at + timedelta(days=campaign.followup_days)
+            db.add(
+                Activity(
+                    company_id=company.id,
+                    activity_type="note",
+                    note=f"メールキャンペーンの追客予定を登録: {campaign.followup_days}日後",
+                )
+            )
+        sync_campaign_status(db, delivery.campaign_id)
+        db.commit()
+        logger.info("email delivery end: id=%s status=sent", delivery.id)
+    except EmailDeliveryError as exc:
+        db.rollback()
+        delivery = db.get(EmailDelivery, delivery.id)
+        if delivery.status == "running" and delivery.worker_id == worker_id:
+            delivery.status = "unknown" if exc.unknown else "failed"
+            delivery.error_message = exc.public_message[:500]
+            delivery.worker_id = None
+            delivery.lease_expires_at = None
+            delivery.finished_at = datetime.now(timezone.utc)
+            notify_email_delivery_failure(db, delivery)
+            sync_campaign_status(db, delivery.campaign_id)
+            db.commit()
+        logger.warning("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
+    except Exception as exc:
+        db.rollback()
+        delivery = db.get(EmailDelivery, delivery.id)
+        if delivery.status == "running" and delivery.worker_id == worker_id:
+            delivery.status = "unknown" if smtp_started else "failed"
+            delivery.error_message = "メール送信処理に失敗しました。"
+            delivery.worker_id = None
+            delivery.lease_expires_at = None
+            delivery.finished_at = datetime.now(timezone.utc)
+            notify_email_delivery_failure(db, delivery)
+            sync_campaign_status(db, delivery.campaign_id)
+            db.commit()
+        logger.error("email delivery error: id=%s type=%s", delivery.id, type(exc).__name__)
+
+
+def enqueue_due_schedules(db) -> int:
+    now = datetime.now(timezone.utc)
+    schedules = db.scalars(
+        select(SearchSchedule)
+        .where(SearchSchedule.active.is_(True), SearchSchedule.next_run_at <= now)
+        .order_by(SearchSchedule.next_run_at)
+        .with_for_update(skip_locked=True)
+        .limit(100)
+    ).all()
+    enqueued = 0
+    for schedule in schedules:
+        schedule.next_run_at = now + timedelta(hours=schedule.interval_hours)
+        active = db.scalar(
+            select(OperationJob.id).where(
+                OperationJob.project_id == schedule.project_id,
+                OperationJob.operation_type == "collect_search",
+                OperationJob.status.in_(("queued", "running")),
+            )
+        )
+        company_count = (
+            db.scalar(
+                select(func.count())
+                .select_from(Company)
+                .where(Company.project_id == schedule.project_id)
+            )
+            or 0
+        )
+        if active:
+            schedule.last_error = "前回の検索収集が実行中のため、今回の定期実行を見送りました。"
+            continue
+        if company_count >= schedule.company_limit:
+            schedule.last_error = "企業保存上限に達したため、定期実行を見送りました。"
+            continue
+        job = OperationJob(
+            project_id=schedule.project_id,
+            operation_type="collect_search",
+            payload={
+                "source": schedule.source,
+                "keywords": schedule.keywords,
+                "region": schedule.region,
+                "max_results": schedule.max_results,
+                "company_limit": schedule.company_limit,
+                "schedule_id": str(schedule.id),
+            },
+        )
+        if not add_operation_job(db, job):
+            schedule.last_error = "前回の検索収集が実行中のため、今回の定期実行を見送りました。"
+            continue
+        schedule.last_enqueued_at = now
+        schedule.last_error = ""
+        enqueued += 1
+    if schedules:
+        db.commit()
+    return enqueued
+
+
+def enqueue_due_refresh_schedules(db) -> int:
+    now = datetime.now(timezone.utc)
+    schedules = db.scalars(
+        select(AnalysisRefreshSchedule)
+        .where(
+            AnalysisRefreshSchedule.active.is_(True),
+            AnalysisRefreshSchedule.next_run_at <= now,
+        )
+        .order_by(AnalysisRefreshSchedule.next_run_at)
+        .with_for_update(skip_locked=True)
+        .limit(100)
+    ).all()
+    enqueued = 0
+    for schedule in schedules:
+        schedule.next_run_at = now + timedelta(hours=schedule.interval_hours)
+        active = db.scalar(
+            select(OperationJob.id).where(
+                OperationJob.project_id == schedule.project_id,
+                OperationJob.operation_type.in_(("web_analysis", "prepare_outreach")),
+                OperationJob.status.in_(("queued", "running")),
+            )
+        )
+        if active:
+            schedule.last_error = "前回のWeb解析が実行中のため、今回の自動再解析を見送りました。"
+            continue
+        company_ids = refresh_company_ids(db, schedule)
+        if not company_ids:
+            schedule.last_error = ""
+            continue
+        job = OperationJob(
+            project_id=schedule.project_id,
+            operation_type="web_analysis",
+            payload={"company_ids": [str(item) for item in company_ids], "force": True},
+        )
+        if not add_operation_job(db, job):
+            schedule.last_error = "前回のWeb解析が実行中のため、今回の自動再解析を見送りました。"
+            continue
+        schedule.last_enqueued_at = now
+        schedule.last_error = ""
+        enqueued += 1
+    if schedules:
+        db.commit()
+    return enqueued
+
+
+def claim_job(db) -> OperationJob | None:
+    from app.services.sending_window import allowed
+
+    sending_allowed = allowed(db)
+    job = db.scalar(
+        select(OperationJob)
+        .where(
+            OperationJob.status == "queued",
+            OperationJob.operation_type != "cf7_observation",
+            OperationJob.operation_type != "form_delivery" if not sending_allowed else True,
+            OperationJob.operation_type.in_(
+                (
+                    "collect_search",
+                    "web_analysis",
+                    "ai_analysis",
+                    "form_intelligence",
+                    "prepare_outreach",
+                )
+            )
+            if not settings.outbound_enabled
+            else True,
+        )
+        .order_by(OperationJob.created_at, OperationJob.id)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if job:
+        job.status = "running"
+        job.attempt_count += 1
+        job.worker_id = uuid.uuid4()
+        job.lease_expires_at = lease_deadline()
+        job.started_at = datetime.now(timezone.utc)
+        job.finished_at = None
+        db.commit()
+        db.refresh(job)
+    return job
+
+
+def stop_requested(db, job: OperationJob, worker_id: uuid.UUID) -> bool:
+    db.refresh(job)
+    if job.status != "running" or job.worker_id != worker_id:
+        return True
+    if job.cancel_requested:
+        job.status = "cancelled"
+        job.worker_id = None
+        job.lease_expires_at = None
+        job.finished_at = datetime.now(timezone.utc)
+        db.commit()
+        return True
+    job.lease_expires_at = lease_deadline()
+    db.commit()
+    return False
+
+
+def progress(db, job: OperationJob, worker_id: uuid.UUID, success: bool) -> bool:
+    db.refresh(job)
+    if job.status != "running" or job.worker_id != worker_id:
+        return False
+    job.processed_count += 1
+    job.success_count += int(success)
+    job.failed_count += int(not success)
+    job.lease_expires_at = lease_deadline()
+    db.commit()
+    return True
+
+
+def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    from app.services.collection_conditions import evaluate
+    from app.services.condition_collection import execution_conditions, merged_plan
+
+    conditions = execution_conditions(db, job)
+    payload = job.payload
+    if conditions:
+        payload = {
+            **payload,
+            "presence_search": merged_plan(conditions, payload.get("presence_search")).model_dump(),
+        }
+    keywords = payload["keywords"]
+    if payload.get("target_count"):
+        from app.services.target_collection import run
+
+        job.total_count = payload["target_count"]
+        db.commit()
+        run(db, job, payload, conditions, lambda: stop_requested(db, job, worker_id))
+        return
+    job.total_count = len(keywords)
+    db.commit()
+    if not payload.get("company_limit") and not payload.get("presence_search"):
+        search = {
+            "serper": search_serper,
+            "google_places": search_google_places,
+            "gbizinfo": search_gbizinfo,
+        }[payload["source"]]
+        collections = [
+            start_job(
+                db,
+                job.project_id,
+                payload["source"],
+                keyword,
+                payload["region"],
+                operation_job_id=job.id,
+            )
+            for keyword in keywords
+        ]
+
+        def fetch(keyword):
+            with capture_usage() as usage:
+                try:
+                    return search(keyword, payload["region"], payload["max_results"]), None, usage
+                except ExternalServiceError as exc:
+                    return [], exc, usage
+
+        with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
+            results = list(executor.map(fetch, keywords))
+        for keyword, collection, (candidates, error, usage) in zip(
+            keywords, collections, results, strict=True
+        ):
+            persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
+            if stop_requested(db, job, worker_id):
+                return
+            if error:
+                fail_job(db, collection, error.public_message)
+                if not progress(db, job, worker_id, False):
+                    return
+            else:
+                save_candidates(db, collection, candidates, keyword)
+                if not progress(db, job, worker_id, True):
+                    return
+        return
+    for keyword in keywords:
+        if stop_requested(db, job, worker_id):
+            return
+        if conditions:
+            execution_conditions(db, job)
+        company_limit = payload.get("company_limit")
+        if company_limit:
+            company_count = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(Company)
+                    .where(Company.project_id == job.project_id)
+                )
+                or 0
+            )
+            if company_count >= company_limit:
+                job.total_count = job.processed_count
+                db.commit()
+                break
+            max_results = min(payload["max_results"], company_limit - company_count)
+        else:
+            max_results = payload["max_results"]
+        schedule_id = uuid.UUID(payload["schedule_id"]) if payload.get("schedule_id") else None
+        collection = start_job(
+            db,
+            job.project_id,
+            payload["source"],
+            keyword,
+            payload["region"],
+            operation_job_id=job.id,
+            search_schedule_id=schedule_id,
+        )
+        try:
+            search = {
+                "serper": search_serper,
+                "google_places": search_google_places,
+                "gbizinfo": search_gbizinfo,
+            }[payload["source"]]
+            candidates = measured_search(
+                db, collection, search, keyword, payload["region"], max_results
+            )
+            save_candidates(db, collection, candidates, keyword)
+            if payload.get("presence_search"):
+                from app.schema_external_presence import PresenceSearchPlan
+                from app.services.external_presence import extra_searches
+
+                collection.presence_search_plan = payload["presence_search"]
+                db.commit()
+                extra_searches(
+                    db,
+                    collection,
+                    PresenceSearchPlan.model_validate(payload["presence_search"]),
+                    stopped=lambda: stop_requested(db, job, worker_id),
+                    eligible=lambda company: (
+                        not conditions or evaluate(db, company, conditions)["state"] != "NO_MATCH"
+                    ),
+                )
+            if not progress(db, job, worker_id, True):
+                return
+        except ExternalServiceError as exc:
+            fail_job(db, collection, exc.public_message)
+            if not progress(db, job, worker_id, False):
+                return
+
+
+def selected_companies(db, job: OperationJob, ai: bool) -> list[Company]:
+    payload = job.payload
+    query = select(Company).where(Company.project_id == job.project_id)
+    if payload.get("company_ids"):
+        query = query.where(Company.id.in_(payload["company_ids"]))
+    elif ai:
+        query = query.where(Company.analysis_status == "completed")
+        if not payload.get("force"):
+            query = query.where(Company.ai_status.in_(("pending", "failed", "skipped")))
+    elif not payload.get("force"):
+        query = query.where(Company.analysis_status.in_(("pending", "failed")))
+    return list(db.scalars(query.order_by(Company.created_at).limit(100)).all())
+
+
+def run_web(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    companies = selected_companies(db, job, False)
+    job.total_count = len(companies)
+    db.commit()
+    for company in companies:
+        if stop_requested(db, job, worker_id):
+            return
+        result = analyze(db, company, job.payload.get("force", False))
+        if not progress(db, job, worker_id, result.analysis_status == "completed"):
+            return
+
+
+def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    project = db.get(Project, job.project_id)
+    profile = db.get(TargetProfile, project.target_profile_id)
+    companies = selected_companies(db, job, True)
+    job.total_count = len(companies)
+    db.commit()
+    for company in companies:
+        if stop_requested(db, job, worker_id):
+            return
+        result = analyze_company_ai(db, company, project, profile, job.payload.get("force", False))
+        if not progress(db, job, worker_id, result.ai_status == "completed"):
+            return
+
+
+def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    require_legacy_form_enabled()
+    batch_id = uuid.UUID(job.payload["batch_id"])
+    batch = db.get(FormDeliveryBatch, batch_id)
+    if batch is None or batch.status == "cancelled":
+        return
+    user_id = uuid.UUID(job.payload["created_by_user_id"])
+    items = db.scalars(
+        select(FormDeliveryBatchItem)
+        .where(
+            FormDeliveryBatchItem.batch_id == batch.id,
+            FormDeliveryBatchItem.status == "queued",
+        )
+        .order_by(FormDeliveryBatchItem.created_at, FormDeliveryBatchItem.id)
+        .limit(min(int(job.payload.get("limit", 20)), 20))
+    ).all()
+    job.total_count = len(items)
+    db.commit()
+    for item in items:
+        if stop_requested(db, job, worker_id):
+            return
+        from app.services.sending_window import allowed
+
+        if not allowed(db):
+            job.status, job.worker_id, job.lease_expires_at = "queued", None, None
+            db.commit()
+            return
+        success = process_form_batch_item(db, item, user_id)
+        if not progress(db, job, worker_id, success):
+            return
+    remaining = db.scalar(
+        select(FormDeliveryBatchItem.id)
+        .where(
+            FormDeliveryBatchItem.batch_id == batch.id,
+            FormDeliveryBatchItem.status == "queued",
+        )
+        .limit(1)
+    )
+    batch.status = "ready" if remaining else "completed"
+    db.commit()
+
+
+def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])][:100]
+    companies = db.scalars(
+        select(Company)
+        .where(Company.project_id == job.project_id, Company.id.in_(company_ids))
+        .order_by(Company.created_at, Company.id)
+    ).all()
+    job.total_count = len(companies)
+    db.commit()
+    for company in companies:
+        if stop_requested(db, job, worker_id):
+            return
+        profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
+        success = bool(profiles) and any(profile.form_status != "ERROR" for profile in profiles)
+        if not progress(db, job, worker_id, success):
+            return
+
+
+def run_once() -> bool:
+    if settings.worker_paused:
+        return False
+    with SessionLocal() as db:
+        apply_application_settings(db)
+        enqueue_due_schedules(db)
+        enqueue_due_refresh_schedules(db)
+        recover_stale_jobs(db)
+        if settings.outbound_enabled:
+            recover_stale_email_deliveries(db)
+        if sync_inbound_mail(db):
+            return True
+        from app.services import approved_form, approved_form_worker
+
+        form_dispatch = approved_form.claim(db)
+        if form_dispatch is not None:
+            form_dispatch_id = form_dispatch.id
+            try:
+                approved_form_worker.run(db, form_dispatch)
+            except Exception as exc:
+                db.rollback()
+                logger.error(
+                    "form dispatch persistence error: id=%s type=%s",
+                    form_dispatch_id,
+                    type(exc).__name__,
+                )
+            return True
+        delivery = claim_email_delivery(db)
+        if delivery is not None:
+            run_email_delivery(db, delivery)
+            return True
+        job = claim_job(db)
+        if job is None:
+            return False
+        worker_id = job.worker_id
+        logger.info("operation start: id=%s type=%s", job.id, job.operation_type)
+        try:
+            from app.services.sales_preparation import run_preparation
+
+            {
+                "collect_search": run_collection,
+                "web_analysis": run_web,
+                "ai_analysis": run_ai,
+                "form_delivery": run_form_delivery,
+                "form_intelligence": run_form_intelligence,
+                "prepare_outreach": lambda db, job, worker: run_preparation(
+                    db, job, worker, stop_requested
+                ),
+            }[job.operation_type](db, job, worker_id)
+            db.refresh(job)
+            if job.status == "running" and job.worker_id == worker_id:
+                job.status = "completed" if job.failed_count == 0 else "failed"
+                job.error_message = "" if job.failed_count == 0 else "一部の処理に失敗しました。"
+                job.worker_id = None
+                job.lease_expires_at = None
+                job.finished_at = datetime.now(timezone.utc)
+                db.commit()
+        except Exception as exc:
+            db.rollback()
+            job = db.get(OperationJob, job.id)
+            if job.status == "running" and job.worker_id == worker_id:
+                job.status = "failed"
+                job.worker_id = None
+                job.lease_expires_at = None
+                from app.services.condition_collection import ConditionCollectionError
+
+                job.error_message = (
+                    str(exc)
+                    if isinstance(exc, ConditionCollectionError)
+                    else "バックグラウンド処理に失敗しました。"
+                )
+                job.finished_at = datetime.now(timezone.utc)
+                db.commit()
+            logger.error("operation error: id=%s type=%s", job.id, type(exc).__name__)
+        logger.info("operation end: id=%s status=%s", job.id, job.status)
+        return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description="LeadHive background worker")
+    parser.add_argument("--once", action="store_true")
+    parser.add_argument("--poll-seconds", type=float, default=2.0)
+    args = parser.parse_args()
+    if settings.worker_paused:
+        raise SystemExit("Worker is paused for maintenance. Review recovery before resuming.")
+    while True:
+        worked = run_once()
+        if args.once:
+            return
+        if not worked:
+            time.sleep(max(0.5, min(args.poll_seconds, 30)))
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,133 @@
+# LeadHive Integration Status
+
+## Scope
+
+This document records the result of integration STEP 1 through STEP 8. No merge into `main`, branch deletion, duplicate Form Intelligence Phase 1, or Phase 6 real-data validation was performed.
+
+## Integration baseline
+
+| Item | Value |
+| --- | --- |
+| Integration branch | `codex/integration` |
+| Start time | 2026-09-26 19:27:18 JST |
+| Start SHA | `78ed40a3860da7aa2b61a3c5cf2a1a36bd32e53d` |
+| `origin/codex/smtp-settings-ui` HEAD at start | `78ed40a3860da7aa2b61a3c5cf2a1a36bd32e53d` |
+| `origin/main` HEAD at start | `b66ed40c533476d2adb7ad74940e6b9f86faa34b` |
+| Existing remote `codex/*` branches at start | 33 |
+| Existing branches contained by the baseline | `main` and all 33 remote `codex/*` branches |
+| STEP 5 verified implementation HEAD | `6cbd04fcb145d9eab0bb6545958512fb7fcf3da3` |
+| STEP 6 verified implementation HEAD | `824e80a016dd84486aa5351b6847b6ef5e433f77` |
+| STEP 7 preparation HEAD | `611d4c85064c5de3e9d85f7662de81b6b695d13e` |
+| STEP 8 verified implementation HEAD | `ea70234a1ac4f87acc5fee94fb22bda0773df84f` |
+| Release hardening verified HEAD | `accf075b7aa2ac73eac8e47d14c8ec5bf45d1aee` |
+
+## STEP 2 changes
+
+- Formatted the backend with Ruff and resolved all 79 lint errors.
+- Kept all existing Alembic migrations semantically unchanged; AST comparison against the start SHA found zero semantic changes across 49 migration files.
+- Split GitHub Actions into independent `backend-lint`, `backend-tests`, `migration-validation`, `frontend`, and `e2e` jobs so failures are isolated.
+- Added an explicit `alembic upgrade head` before the GitHub Actions E2E run.
+
+## STEP 3 changes
+
+- Added `evaluate_contact_permission` as the single contact decision service. It returns `ALLOWED`, `PROHIBITED`, or `UNCERTAIN` with a stable reason code and reads the existing Company, Suppression, contact quality, and Form Profile facts without storing a duplicate canonical result.
+- Applied the decision to individual email, email retry, email campaigns, email worker delivery, direct form delivery, Codex-assisted form delivery, bulk form creation and retry, and form worker delivery.
+- Added a final worker check so a destination added to the Suppression List after approval cannot be sent.
+- Routed uncertain forms to manual review and kept prohibited forms blocked. CAPTCHA, stale, unanalysed, and unsupported forms are never automatically submitted.
+- Added representative outsider, viewer, and editor write-access tests and enabled PATCH in CORS preflight handling.
+- Added no migration and changed no database model.
+
+## STEP 4 changes
+
+- Added `backend/scripts/verify_database_state.py` to compare the migrated PostgreSQL schema with SQLAlchemy metadata and detect foreign-key orphan rows.
+- Added the database-state verifier to the GitHub Actions migration validation job.
+- Verified a fresh isolated PostgreSQL 16 database through `upgrade head`, `downgrade base`, `upgrade head`, and `alembic check`.
+- Streamed a snapshot of the current local database into a separate isolated database, upgraded it to head, and verified schema, constraints, row counts, and referential integrity. The source database was already at Alembic head, so this was a no-op migration from the current revision.
+- Ran the representative Project and Company CRUD API tests against an isolated database.
+- Added no migration and changed no database model or existing local data.
+
+## STEP 5 changes
+
+- Added a partial unique index that permits only one `queued` or `running` operation for each project and operation type. The Migration stops with an explicit error if pre-existing active duplicates require manual resolution.
+- Added a shared race-safe enqueue function and applied it to manual operations, scheduled search, scheduled reanalysis, data-quality reanalysis, Form Intelligence, and form-delivery batches.
+- Kept `FOR UPDATE SKIP LOCKED` job claiming and verified all five operation types are claimed exactly once by two workers.
+- Serialized Email Delivery claiming with a PostgreSQL advisory transaction lock. Running deliveries now count toward the daily limit and minimum interval, preventing two workers from exceeding configured delivery limits.
+- Added real PostgreSQL concurrency tests for simultaneous enqueue, five operation types, expired operation leases, scheduled search, Email Delivery claiming, and expired Email Delivery recovery.
+- Added Migration `c1d9f6a2b4e8`; no existing Migration was modified.
+
+## STEP 6 changes
+
+- Ran the complete backend, frontend, migration, desktop E2E, and mobile E2E verification set against the integration candidate.
+- Strengthened the Windows distribution builder so it verifies the saved ZIP checksum, every manifest hash, missing files, unlisted files, PowerShell syntax, required files, and the packaged Compose configuration after extraction.
+- Added a `windows-package` GitHub Actions job on `windows-latest`, closing the Windows distribution validation gap recorded by the branch audit.
+- Generated `LeadHive-Windows-Local-824e80a.zip` locally. It contains 189 manifested files and has SHA-256 `41b4e7764b47b28ff8ccf3639c7f7688babca800e407b504a926e29b7a0deebc`.
+- Added no migration and changed no database model or existing local data.
+
+## STEP 7 progress
+
+- Updated the Phase 6 CLI to use API keys encrypted in administrator-managed application settings, with environment variables retained as fallback values.
+- Fixed collection limits so a `--limit` run cannot request more candidates than the remaining allowance, and verified that a resumed collection does not add companies after reaching the limit.
+- Preserved the three human-review fields when export is rerun after a partial or interrupted validation.
+- Added duplicate, exclusion, web failure, AI failure, pipeline success, reviewed-rank accuracy, token usage, and optional estimated-cost metrics.
+- Added `phase6-ai-usage.csv` for provider token usage and `phase6-summary.md` for an aggregate-only summary without company names, domains, contacts, or acquired page text.
+- Verified provider-error recovery and continued collection through automated PostgreSQL tests.
+- Rebuilt the local API and worker images. Both services and PostgreSQL are healthy.
+- Ran the installed local preflight on 2026-09-26. PostgreSQL, both required system profiles, and the output directory passed. The installed local environment currently has zero users and no saved Serper or OpenAI keys, so the preflight correctly returned `ready: false` without making collection requests.
+- The separate development `.env` OpenAI credential passed the safe provider connectivity check. It was not copied into the installed local environment or committed.
+- The 100+100 real-data run, human review, `phase6-review.csv`, `phase6-report.json`, and final sanitized summary have not yet been produced.
+
+## STEP 8 changes
+
+- Accepted the existing Form Intelligence implementation without adding a second Phase 1, database model, or Migration.
+- Verified page discovery, form detection, DOM/rule mapping, prohibition text, all supported CAPTCHA categories, multiple forms, primary selection, Fingerprint changes, `STALE`, manual-correction preservation, background processing, and project role isolation.
+- Restricted Decision Provider results to the ambiguous field positions that were actually sent for classification. A provider response can no longer overwrite a DOM/rule-confirmed field.
+- Recognized the common `h-captcha` class as hCaptcha instead of the generic CAPTCHA category.
+- Kept JEV as a non-network placeholder until its connection contract is defined.
+- Reused `FormProfileField` with `decision_source=MANUAL` and `FormAnalysisLog.manual_corrected`; a separate `FormManualCorrection` model is not currently needed.
+- Documented the acceptance decision, safety boundaries, test evidence, and remaining static-HTML limitations in `80_FORM_INTELLIGENCE_ACCEPTANCE.md`.
+
+## Release hardening
+
+- Added dedicated desktop and mobile Form Intelligence browser tests for multiple profiles, primary selection, manual correction, audit logs, and viewer read-only behavior.
+- Disabled Form Intelligence mutation controls for project viewers while preserving result visibility.
+- Updated GitHub Actions to the Node.js 24 compatible v7 action generation and pinned Linux jobs to Ubuntu 24.04.
+- Added `httpx2` and updated Starlette TestClient support, eliminating the two prior backend deprecation warnings.
+- Added Windows diagnostic and confirmation-gated database restore tools. Restore creates a safety backup before replacing the database.
+- Built and verified `LeadHive-Windows-Local-accf075.zip` with SHA-256 `8a9a915e751c3fae8f9bd136f6835185d5e2f546a35389de83010c4b80e3114d`.
+- Confirmed that `origin/main` still equals the original merge base, has zero unique commits, and produces no merge-tree conflict markers against the integration candidate.
+- Prepared the main PR description, merge checklist, backup/restore procedure, and rollback plan in `81_RELEASE_HARDENING_AND_MAIN_PR.md`. No merge was performed.
+
+## Verification
+
+| Check | Result |
+| --- | --- |
+| Ruff check | PASS: 0 errors |
+| Ruff format check | PASS |
+| Backend tests | PASS: 150 passed, 0 warnings |
+| Form Intelligence focused tests | PASS: 16 passed |
+| Representative CRUD tests | PASS: 30 passed |
+| Two-worker concurrency tests | PASS: 5 passed |
+| Frontend typecheck | PASS |
+| Frontend lint | PASS |
+| Frontend build | PASS |
+| Migration topology | PASS: 50 revisions, 1 root, 1 head, 0 missing `down_revision` references |
+| Alembic head | `c1d9f6a2b4e8` |
+| Migration downgrade / upgrade / model diff | PASS: downgrade to base, upgrade to head, and `alembic check` |
+| Fresh database schema verification | PASS: 35 tables, 73 foreign keys, 0 schema errors, 0 orphan rows |
+| Existing-data snapshot verification | PASS: restored `8e2c4a7f1b90` snapshot upgraded to `c1d9f6a2b4e8`; row count 2, 35 tables, 73 foreign keys, 0 schema errors, 0 orphan rows |
+| Existing migration semantics | PASS: 0 AST changes compared with the start SHA |
+| E2E Desktop | PASS: core workflow and Form Intelligence |
+| E2E Mobile | PASS: core workflow and Form Intelligence |
+| Windows distribution package | PASS: ZIP checksum, 193 manifest entries, required files, PowerShell syntax, and Compose configuration |
+| GitHub Actions | PASS: all 6 jobs on release hardening verified HEAD |
+| Phase 6 focused tests | PASS: 11 AI and Phase 6 tests |
+| Phase 6 installed-local preflight | BLOCKED: validation user, Serper key, and OpenAI key are unset |
+
+GitHub Actions result: <https://github.com/team478a/leadhive_codex/actions/runs/36281777389>
+
+## Unresolved items
+
+- STEP 7 real-data execution requires a local validation user and working Serper/OpenAI credentials. The run must remain marked incomplete until 100 SNS companies, 100 transport companies, and the human review are complete.
+- A clean secondary Windows PC still needs the final install, backup, and restore smoke test before release distribution.
+
+No code or automated-test blocker remains in STEP 1 through STEP 6, Form Intelligence acceptance, or release hardening. STEP 7 real-data execution and the clean-PC Windows smoke test remain before the final main merge decision.

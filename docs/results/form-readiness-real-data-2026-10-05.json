@@ -1,0 +1,70 @@
+{
+  "baseline": "3b5e1dd",
+  "started_at": "2026-10-05T20:56:30.919882+09:00",
+  "finished_at": "2026-10-05T20:57:21.045826+09:00",
+  "elapsed_seconds": 50.13,
+  "input": {
+    "companies": 100,
+    "website_registered": 15,
+    "website_missing": 85,
+    "unique_registered_domains": 7
+  },
+  "job_status": "failed",
+  "processed": 100,
+  "success": 9,
+  "failed": 91,
+  "website_outcomes": {
+    "form_found_companies": 4,
+    "errors": {
+      "robots.txtにより解析が許可されていません。": 6
+    }
+  },
+  "readiness_counts": {
+    "candidate": 2,
+    "captcha": 1,
+    "error": 91,
+    "missing_form": 5,
+    "review": 1
+  },
+  "permission_statuses": {
+    "UNCERTAIN": 96,
+    "PROHIBITED": 4
+  },
+  "permission_reasons": {
+    "form_sales_uncertain": 94,
+    "shared_location_destination": 4,
+    "form_captcha_review": 1,
+    "form_review_required": 1
+  },
+  "initial_permission_reasons": {
+    "shared_location_destination": 89,
+    "form_sales_uncertain": 9,
+    "form_captcha_review": 1,
+    "form_review_required": 1
+  },
+  "sentinel_shared_destination_fix": true,
+  "analysis_version": "1.2",
+  "allow_ai": false,
+  "sending_before": {
+    "approved_form_dispatches": 0,
+    "form_deliveries": 0,
+    "email_deliveries": 0
+  },
+  "sending_after": {
+    "approved_form_dispatches": 0,
+    "form_deliveries": 0,
+    "email_deliveries": 0
+  },
+  "migration_head": "fae47ac5e861",
+  "company_count_after": 100,
+  "profile_count_after": 104,
+  "flags": {
+    "outbound_enabled": false,
+    "human_approved_form_enabled": false,
+    "legacy_form_delivery_enabled": false,
+    "agent_features_enabled": false
+  },
+  "detail_csv_sha256": "91552F0F972C67929DDEFA19203C052910CB9848A45E0A5FF96736EEEDE1201F",
+  "limitations": "15 registered websites / 7 domains; GET/rules only; no approval/send; not a 100-site or 10000-send benchmark",
+  "worker_state": "stopped; execution policy rejected combined finalization and resume command; specific denied suboperation and rationale not identified"
+}

@@ -1,0 +1,71 @@
+<?php
+/** Lab-only MU plugin: capture mail, block WP HTTP; never deploy with LeadHive. */
+if (getenv('LEADHIVE_CF7_LAB') !== '1') {
+    throw new RuntimeException('Explicit lab opt-in required');
+}
+// Numeric URL for only the new fixture, independent of previous permalink probes.
+add_filter('redirect_canonical', static function ($redirect) {
+    return get_the_title(get_queried_object_id()) === 'Encoding fixture' ? false : $redirect;
+});
+add_filter('pre_http_request', static function () {
+    return new WP_Error('lab_network_blocked', 'External WordPress HTTP is disabled');
+}, PHP_INT_MAX);
+add_filter('pre_wp_mail', static function ($return, $atts) {
+    $records = get_option('leadhive_lab_mail', array());
+    $records[] = array(
+        'subject_sha256' => hash('sha256', $atts['subject']),
+        'body_sha256' => hash('sha256', $atts['message']),
+        'recipient_count' => count((array) $atts['to']),
+    );
+    update_option('leadhive_lab_mail', $records, false);
+    return get_option('leadhive_lab_mode', 'capture') !== 'fail';
+}, PHP_INT_MAX, 2);
+// Defense in depth: no PHPMailer/sendmail execution even if capture fails.
+add_action('phpmailer_init', static function () {
+    throw new RuntimeException('Actual mail transport forbidden in lab');
+}, PHP_INT_MAX);
+add_filter('wpcf7_skip_mail', static function ($skip) {
+    return $skip || get_option('leadhive_lab_mode') === 'skip';
+});
+add_filter('wpcf7_spam', static function ($spam) {
+    return $spam || get_option('leadhive_lab_mode') === 'spam';
+});
+add_action('wpcf7_before_send_mail', static function ($form, &$abort) {
+    if (get_option('leadhive_lab_mode') === 'abort') {
+        $abort = true;
+    }
+}, 10, 2);
+add_action('wpcf7_submit', static function ($form, $result) {
+    $records = get_option('leadhive_lab_submissions', array());
+    $record = array('form_id' => $form->id(), 'status' => $result['status']);
+    if ($form->title() === 'Lab encoding integration') {
+        $record['raw_post_order'] = array_keys($_POST);
+        $record['raw_value_hashes'] = array();
+        foreach ($_POST as $name => $value) {
+            if (!is_string($value)) { throw new RuntimeException('Scalar fixture input required'); }
+            $record['raw_value_hashes'][$name] = hash('sha256', wp_unslash($value));
+        }
+    }
+    $submission = WPCF7_Submission::get_instance();
+    $values = $submission ? $submission->get_posted_data('services') : null;
+    if (is_array($values)) {
+        $record['group_value_hashes'] = array_map(static function ($value) {
+            return hash('sha256', (string) $value);
+        }, $values);
+    }
+    $radio = $submission ? $submission->get_posted_data('topic') : null;
+    if ($radio !== null) {
+        $record['radio_value_hashes'] = array_map(static function ($value) {
+            return hash('sha256', (string) $value);
+        }, (array) $radio);
+    }
+    $records[] = $record;
+    $extra = $submission ? $submission->get_posted_data('leadhive_lab_context') : null;
+    if ($extra !== null) {
+        $record['extra_hidden_value_hashes'] = array_map(static function ($value) {
+            return hash('sha256', (string) $value);
+        }, (array) $extra);
+        $records[count($records) - 1] = $record;
+    }
+    update_option('leadhive_lab_submissions', $records, false);
+}, 10, 2);

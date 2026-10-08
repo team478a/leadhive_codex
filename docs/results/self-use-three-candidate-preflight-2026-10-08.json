@@ -1,0 +1,81 @@
+{
+  "definition": "three-candidate-target-get-preflight-v1",
+  "created_at": "2026-10-08T06:58:51.036866+00:00",
+  "code_commit": "83fc67b1063faffe02e8472eadea313b73397bf4",
+  "working_tree_modified": true,
+  "live_check_service_sha256": "0e22e893a32dff5561e03e4cdb2bc195791c48aed2ff65ca0c79df083ec65cc1",
+  "candidates": 3,
+  "captcha": {
+    "NOT_DETECTED_STATIC": 3
+  },
+  "sales_prohibition_detected": 0,
+  "native_supported": 0,
+  "human_review_fields": 11,
+  "missing_sender_or_draft_values": 0,
+  "cached_sendability": {
+    "HOLD": 3
+  },
+  "cached_reasons": {
+    "CONTACT_PERMISSION_UNCERTAIN": 3,
+    "DESTINATION_PURPOSE_UNCERTAIN": 3,
+    "FORM_NOT_READY": 3,
+    "FORM_TECHNICALLY_UNSUPPORTED": 3,
+    "IDENTITY_UNCERTAIN": 3,
+    "REQUIRED_FIELD_UNKNOWN": 2,
+    "SALES_PERMISSION_UNCERTAIN": 3,
+    "FORM_FINGERPRINT_MISSING": 1
+  },
+  "human_choice": {
+    "UNSELECTED": 3
+  },
+  "http_get_attempts": 6,
+  "search_api_calls": 0,
+  "ai_calls": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "approval_created": 0,
+  "completion_jobs": 0,
+  "human_reviews_created": 0,
+  "database_writes": 0,
+  "outbound_enabled": false,
+  "dm_ready": 0,
+  "preserved_table_counts": {
+    "companies": 26,
+    "form_profiles": 26,
+    "form_profile_fields": 151,
+    "outreach_drafts": 24,
+    "approval_requests": 0,
+    "human_approval_proofs": 0,
+    "email_deliveries": 0,
+    "form_deliveries": 0,
+    "operation_jobs": 0,
+    "form_analysis_logs": 2,
+    "destination_choice_events": 0,
+    "lead_dm_preparations": 0
+  },
+  "purpose": "Target-only live GET and unapproved draft preflight; not Human Truth or send authorization",
+  "http_get_attempts_all_runs": 12,
+  "runs": 2,
+  "first_run_structure": {
+    "CHANGED": 3
+  },
+  "current_run_structure": {
+    "SAVED_BASELINE_INCOMPLETE": 3
+  },
+  "fingerprint_match": {
+    "MATCHED": 2,
+    "MISMATCHED": 0,
+    "MISSING_BASELINE": 1
+  },
+  "saved_action_missing": 3,
+  "estimated_api_cost": null,
+  "human_review_seconds": null,
+  "review_material_source": "Current static HTML; saved unapproved drafts and sender contact settings",
+  "cached_sendability_source": "Existing DB, unchanged; not recomputed against mutated or enriched profiles",
+  "input_review_categories": {
+    "GROUP_SELECTION_REVIEW_REQUIRED": 4,
+    "CHOICE_REVIEW_REQUIRED": 1,
+    "HUMAN_CONSENT_REQUIRED": 1,
+    "FIELD_IDENTITY_REVIEW_REQUIRED": 5
+  }
+}

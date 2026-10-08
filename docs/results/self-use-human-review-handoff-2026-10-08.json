@@ -1,0 +1,33 @@
+{
+  "baseline_commit": "d9901ac4ad5488e754ad81eafbf509894006fbdc",
+  "profiles": 3,
+  "review_target_fields": 11,
+  "review_states": {
+    "DO_NOT_FILL": 18,
+    "GROUP_SELECTION_REVIEW_REQUIRED": 4,
+    "SENDER_VALUE_PROPOSED": 6,
+    "SENDER_VALUE_MISSING": 2,
+    "UNAPPROVED_DRAFT_VALUE": 2,
+    "CHOICE_REVIEW_REQUIRED": 1,
+    "OPTIONAL_LEAVE_BLANK": 1,
+    "HUMAN_CONSENT_REQUIRED": 1,
+    "FIELD_IDENTITY_REVIEW_REQUIRED": 5
+  },
+  "required_values_missing": 0,
+  "choice_groups": 1,
+  "group_statuses": {
+    "NOT_REVIEWED": 1
+  },
+  "supported_groups": 1,
+  "permission_statuses": {
+    "UNCERTAIN": 3
+  },
+  "read_only": true,
+  "database_unchanged": true,
+  "external_requests": 0,
+  "human_reviews_created": 0,
+  "approvals_created": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound": false
+}
