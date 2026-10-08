@@ -23,7 +23,7 @@ REQUEST_BUDGET = 50
 PAGE_SIZE = 10
 
 
-def collected_companies(db, job, conditions):
+def collection_inventory(db, job, conditions):
     scope = (job.payload.get("collection_progress") or {}).get("operation_ids", [])
     operation_ids = {UUID(value) for value in scope} | {job.id}
     rows = db.scalars(
@@ -39,9 +39,16 @@ def collected_companies(db, job, conditions):
         .distinct()
     ).all()
     return {
-        str(company.id)
+        str(company.id): evaluate(db, company, conditions)["state"] if conditions else "MATCH"
         for company in rows
-        if not conditions or evaluate(db, company, conditions)["state"] == "MATCH"
+    }
+
+
+def collected_companies(db, job, conditions):
+    return {
+        company_id
+        for company_id, state in collection_inventory(db, job, conditions).items()
+        if state == "MATCH"
     }
 
 
@@ -76,9 +83,14 @@ def run(db, job, payload, conditions, stopped):
 
     def record(reason=None):
         nonlocal state
+        inventory = collection_inventory(db, job, conditions)
         state = dict(
             target_count=target,
-            collected_count=len(collected_companies(db, job, conditions)),
+            collected_count=sum(value == "MATCH" for value in inventory.values()),
+            discovered_count=len(inventory),
+            review_required_count=sum(value == "REVIEW_REQUIRED" for value in inventory.values()),
+            no_match_count=sum(value == "NO_MATCH" for value in inventory.values()),
+            conditions_applied=bool(conditions),
             requests=requests,
             request_budget=REQUEST_BUDGET,
             keyword_index=index,
@@ -104,7 +116,8 @@ def run(db, job, payload, conditions, stopped):
         collection = start_job(
             db, job.project_id, "serper", keyword, payload["region"], operation_job_id=job.id
         )
-        before = collected_companies(db, job, conditions)
+        before_inventory = collection_inventory(db, job, conditions)
+        before = {key for key, value in before_inventory.items() if value == "MATCH"}
         # Reserve the attempt before HTTP, retaining the ceiling after a crash/retry.
         requests += 1
         record()
@@ -153,10 +166,12 @@ def run(db, job, payload, conditions, stopped):
             )
         if stopped():
             return
-        after = collected_companies(db, job, conditions)
+        after_inventory = collection_inventory(db, job, conditions)
         job.processed_count += 1
         job.success_count += 1
-        if not (after - before):
+        # A newly saved REVIEW_REQUIRED/NO_MATCH candidate is still discovery growth.
+        # Human review latency must not masquerade as an exhausted search page.
+        if not (after_inventory.keys() - before_inventory.keys()):
             query_stops.append(dict(keyword=keyword, page=page, reason="NO_NEW_TARGETS"))
             index, page = index + 1, 1
         else:

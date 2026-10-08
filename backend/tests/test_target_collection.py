@@ -185,6 +185,59 @@ def test_unknown_conditions_are_not_counted_as_matching(auth, db, monkeypatch):
     assert result(auth, job_id)["collection_progress"]["collected_count"] == 0
 
 
+@pytest.mark.parametrize("condition_state", ["REVIEW_REQUIRED", "NO_MATCH"])
+def test_unverified_growth_continues_until_duplicate_page(auth, db, monkeypatch, condition_state):
+    _, job_id = setup_job(auth, db, monkeypatch)
+    from app.services import condition_collection
+
+    monkeypatch.setattr(condition_collection, "execution_conditions", lambda *args: ["condition"])
+    monkeypatch.setattr(
+        condition_collection,
+        "merged_plan",
+        lambda *args: type("Plan", (), {"model_dump": lambda self: {}})(),
+    )
+    monkeypatch.setattr(target_collection, "evaluate", lambda *args: {"state": condition_state})
+    calls = []
+
+    def search(k, r, n, page):
+        calls.append(page)
+        return [candidate("first" if page == 1 else "second")]
+
+    monkeypatch.setattr(target_collection, "search_serper_page", search)
+    worker.run_once()
+    state = result(auth, job_id)["collection_progress"]
+    assert calls == [1, 2, 3]
+    assert state["collected_count"] == 0
+    assert state["discovered_count"] == 2
+    assert state["review_required_count"] == (2 if condition_state == "REVIEW_REQUIRED" else 0)
+    assert state["no_match_count"] == (2 if condition_state == "NO_MATCH" else 0)
+    assert state["conditions_applied"] is True
+    assert state["stop_reason"] == "QUERIES_EXHAUSTED"
+
+
+def test_unknown_growth_remains_request_bounded(auth, db, monkeypatch):
+    _, job_id = setup_job(auth, db, monkeypatch)
+    from app.services import condition_collection
+
+    monkeypatch.setattr(condition_collection, "execution_conditions", lambda *args: ["condition"])
+    monkeypatch.setattr(
+        condition_collection,
+        "merged_plan",
+        lambda *args: type("Plan", (), {"model_dump": lambda self: {}})(),
+    )
+    monkeypatch.setattr(target_collection, "evaluate", lambda *args: {"state": "REVIEW_REQUIRED"})
+    monkeypatch.setattr(target_collection, "REQUEST_BUDGET", 2)
+    monkeypatch.setattr(
+        target_collection, "search_serper_page", lambda k, r, n, p: [candidate(f"p{p}")]
+    )
+    worker.run_once()
+    state = result(auth, job_id)["collection_progress"]
+    assert state["requests"] == 2
+    assert state["collected_count"] == 0
+    assert state["discovered_count"] == state["review_required_count"] == 2
+    assert state["stop_reason"] == "REQUEST_BUDGET_REACHED"
+
+
 def test_cancelled_job_does_not_search(auth, db, monkeypatch):
     _, job_id = setup_job(auth, db, monkeypatch)
     assert auth.post(f"/api/operations/{job_id}/cancel").status_code == 200

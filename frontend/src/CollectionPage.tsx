@@ -6,6 +6,7 @@ import { PresenceEvidenceQueue } from './PresenceEvidenceQueue'
 import { PresenceRequirements } from './PresenceRequirements'
 import { CollectionConditions, type ConditionRevision } from './CollectionConditions'
 import { ConditionCollectionReport } from './ConditionCollectionReport'
+import { CollectionProgress } from './CollectionProgress'
 import { Field } from './forms'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
@@ -321,7 +322,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
         {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
             <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
-            {job.collection_progress ? <p className="muted my-2 text-sm">新規候補 {job.collection_progress.collected_count} / {job.collection_progress.target_count} 件・検索 {job.collection_progress.requests} / {job.collection_progress.request_budget} 回{job.collection_progress.stop_reason && `・${({ TARGET_REACHED: '目標件数に到達', QUERIES_EXHAUSTED: '新規対象が増えず検索を終了', REQUEST_BUDGET_REACHED: '検索上限に到達', SOURCE_ERROR: '検索サービスでエラー' } as Record<string, string>)[job.collection_progress.stop_reason] ?? job.collection_progress.stop_reason}`}</p> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
+            {job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
