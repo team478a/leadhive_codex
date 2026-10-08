@@ -39,6 +39,18 @@ jobs:
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_live_check.py backend/app/services/cf7_static_inspection.py backend/app/services/cf7_static_parser.py backend/app/services/form_pinned_get.py backend/app/services/pinned_read_transport.py backend/app/services/pinned_dns.py backend/app/services/pinned_dns_worker.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_target_refresh.py backend/app/services/form_route_diagnostics.py backend/app/services/form_observation_projection.py backend/app/services/form_observation_safety.py backend/app/services/contact_permission.py
 
+      - name: Verify offline Phase 2 evaluation preparation
+        env:
+          DATABASE_URL: postgresql+psycopg://offline:offline@127.0.0.1:9/offline
+          OPENAI_API_KEY: ''
+          OUTBOUND_ENABLED: 'false'
+          MYPYPATH: backend
+        run: |
+          backend/.venv/bin/python -m ruff check scripts/prepare_phase2_evaluation.py scripts/tests/test_phase2_evaluation.py
+          backend/.venv/bin/python -m ruff format --check scripts/prepare_phase2_evaluation.py scripts/tests/test_phase2_evaluation.py
+          backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent scripts/prepare_phase2_evaluation.py
+          backend/.venv/bin/python -m unittest discover -s scripts/tests -p test_phase2_evaluation.py -v
+
   backend-tests:
     runs-on: ubuntu-24.04
     services:
