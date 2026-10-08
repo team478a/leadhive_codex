@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CompanyFormReviewMaterial } from './CompanyFormReviewMaterial'
 import type { Company, FormAnalysisLog, FormMappedKey, FormProfile, FormProfileField } from './types'
 
 const mappedKeys: FormMappedKey[] = [
@@ -60,6 +61,7 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
       </div>
       {profile.review_reason && <p className="notice mt-3">要確認の理由：{profile.review_reason}</p>}
       {profile.error_message && <p className="error mt-3">{profile.error_message}</p>}
+      <CompanyFormReviewMaterial key={`${profile.id}:${profile.updated_at}`} profileId={profile.id} />
       {profile.fields.length > 0 && <div className="company-table-wrap mt-4"><table className="company-table form-field-table"><thead><tr><th>元の項目</th><th>種類</th><th>標準マッピング</th><th>確度・根拠</th><th>推奨値</th><th></th></tr></thead><tbody>
         {profile.fields.map(field => {
           const draft = drafts[field.id] ?? { mappedKey: field.mapped_key, value: reviewedValue(field) }

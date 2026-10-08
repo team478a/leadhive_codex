@@ -298,3 +298,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [170_SELF_USE_SAVED_FORM_REFRESH.md](170_SELF_USE_SAVED_FORM_REFRESH.md): 保存HTMLの2社限定再解析・確認理由更新・既存データ保護
 
 - [171_OFFLINE_FORM_REVIEW_MATERIAL.md](171_OFFLINE_FORM_REVIEW_MATERIAL.md): 保存フォームの入力候補とHuman確認項目を分離・実行経路へ接続しない
+
+- [172_FORM_REVIEW_MATERIAL_UI.md](172_FORM_REVIEW_MATERIAL_UI.md): 管理画面の入力候補・Human確認事項・読み取り専用API

@@ -19,6 +19,7 @@ from app.models import (  # noqa: E402
     FormAnalysisLog,
     FormProfile,
     FormProfileField,
+    OutreachDraft,
     Project,
     User,
 )
@@ -87,6 +88,18 @@ with SessionLocal() as db:
     db.flush()
     db.add_all(
         [
+            FormProfileField(
+                form_profile_id=primary.id,
+                position=1,
+                selector='textarea[name="message"]',
+                label="お問い合わせ内容",
+                name="message",
+                field_type="textarea",
+                required=True,
+                mapped_key="message",
+                confidence=1.0,
+                decision_source="DOM",
+            ),
             FormProfileField(
                 form_profile_id=primary.id,
                 position=0,
@@ -168,5 +181,13 @@ with SessionLocal() as db:
                 details={"form_status": "REVIEW_REQUIRED"},
             ),
         ]
+    )
+    db.add(
+        OutreachDraft(
+            company_id=company.id,
+            channel="form",
+            subject="E2E review subject",
+            body="E2E review draft body",
+        )
     )
     db.commit()

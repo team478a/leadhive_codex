@@ -1,3 +1,4 @@
+import hashlib
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,10 +11,13 @@ from app.models import (
     FormAnalysisLog,
     FormProfile,
     FormProfileField,
+    FormSenderSettings,
     OperationJob,
+    OutreachDraft,
     User,
 )
 from app.project_access import company_access, project_access
+from app.schema_form_review import FormReviewMaterialOut
 from app.schemas import (
     FormAnalysisLogOut,
     FormFieldCorrectionInput,
@@ -24,8 +28,11 @@ from app.schemas import (
     OperationJobOut,
 )
 from app.security import current_user
+from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
+from app.services.form_profile_delivery import sender_values
+from app.services.form_review_material import build_review_material
 from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
@@ -105,6 +112,49 @@ def get_form_profile(
     profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     return _profile_out(db, _owned_profile(profile_id, db, user, write=False))
+
+
+@router.get("/form-profiles/{profile_id}/review-material", response_model=FormReviewMaterialOut)
+def get_form_review_material(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    profile = _owned_profile(profile_id, db, user, write=False)
+    company = db.get(Company, profile.company_id)
+    assert company is not None
+    fields = _profile_out(db, profile).fields
+    draft = db.scalar(
+        select(OutreachDraft)
+        .where(OutreachDraft.company_id == company.id, OutreachDraft.channel == "form")
+        .order_by(OutreachDraft.updated_at.desc(), OutreachDraft.id.desc())
+        .limit(1)
+    )
+    # Global sender settings already require admin access. Do not expose them
+    # through project membership or a viewer's read-only material.
+    sender = sender_values(db.get(FormSenderSettings, 1)) if user.is_admin else {}
+    result = build_review_material(
+        [field.model_dump() for field in fields],
+        sender,
+        subject=draft.subject if draft else "",
+        body=draft.body if draft else "",
+    )
+    permission = evaluate_contact_permission(
+        db, company.project_id, company.id, "form", profile.form_url
+    )
+    return result | {
+        "profile_id": profile.id,
+        "company_id": company.id,
+        "profile_fingerprint": profile.fingerprint,
+        "source_observed_at": profile.last_analyzed_at,
+        "draft_id": draft.id if draft else None,
+        "draft_hash": hashlib.sha256((draft.subject + "\n" + draft.body).encode()).hexdigest()
+        if draft
+        else None,
+        "sender_settings_visible": user.is_admin,
+        "permission_status": permission.status,
+        "permission_reason": permission.reason_code,
+        "profile_review_reason": profile.review_reason,
+        "live_form_checked": False,
+    }
 
 
 @router.post(
