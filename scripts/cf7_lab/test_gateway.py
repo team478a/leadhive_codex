@@ -1,8 +1,10 @@
 """Gateway boundary tests use a fake Docker response; no container is started."""
 
+import http.client
 import subprocess
 import unittest
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 import httpx
 from gateway import gateway, permitted_target
@@ -80,9 +82,22 @@ class GatewayTests(unittest.TestCase):
                 self.assertEqual(
                     client.post(origin + "/wp-admin/", content=b"").status_code, 403
                 )
-                self.assertEqual(
-                    client.post(origin + ROUTE, content=b"x" * 64001).status_code, 413
-                )
+            # Header admission rejects before reading a body. Sending a full
+            # rejected body races socket close on Windows and can report RST
+            # instead of the already-written 413. No retry or limit relaxation.
+            parsed = urlsplit(origin)
+            connection = http.client.HTTPConnection(
+                parsed.hostname, parsed.port, timeout=5
+            )
+            try:
+                connection.putrequest("POST", ROUTE)
+                connection.putheader("Content-Length", "64001")
+                connection.endheaders()
+                response = connection.getresponse()
+                self.assertEqual(response.status, 413)
+                response.read()
+            finally:
+                connection.close()
             relay.assert_not_called()
 
     def test_relay_failure_has_no_automatic_retry_or_error_leak(self):

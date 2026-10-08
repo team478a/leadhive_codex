@@ -33,6 +33,14 @@ add_action('wpcf7_before_send_mail', static function ($form, &$abort) {
 }, 10, 2);
 add_action('wpcf7_submit', static function ($form, $result) {
     $records = get_option('leadhive_lab_submissions', array());
-    $records[] = array('form_id' => $form->id(), 'status' => $result['status']);
+    $record = array('form_id' => $form->id(), 'status' => $result['status']);
+    $submission = WPCF7_Submission::get_instance();
+    $values = $submission ? $submission->get_posted_data('services') : null;
+    if (is_array($values)) {
+        $record['group_value_hashes'] = array_map(static function ($value) {
+            return hash('sha256', (string) $value);
+        }, $values);
+    }
+    $records[] = $record;
     update_option('leadhive_lab_submissions', $records, false);
 }, 10, 2);

@@ -1,0 +1,123 @@
+{
+  "baseline_commit": "51e3f71992e88ef5b62a24f844c77380be798bbd",
+  "working_tree_modified_at_execution": true,
+  "source_kind": "CONTROLLED_FIXTURE",
+  "versions": {
+    "wp_version": "6.8.3",
+    "cf7_version": "6.1.4",
+    "php_version": "8.3.28"
+  },
+  "browser_version": "153.0.8010.12",
+  "cf7_commit": "165278e868387ec393569ecd2dbfda37e8b5b950",
+  "cf7_archive_sha256": "7cfdd76cfa25ffd7a2f3c1cb245dd5be1ede8989a5347ade2fa8a839d943b5f1",
+  "images": {
+    "wp": {
+      "tag": "wordpress:6.8.3-php8.3-apache",
+      "digest": "wordpress@sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4",
+      "id": "sha256:30bff39330d1693b0ce13d32fc9b7bb67193064f040b7d60d3494e136fa599d4"
+    },
+    "db": {
+      "tag": "mariadb:11.4",
+      "digest": "mariadb@sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6",
+      "id": "sha256:1292844148b311e4ed4300022a996d39083f415a963e970cf47cad1b3b18e3a6"
+    }
+  },
+  "started_at": "2026-10-08T09:37:35.127116+00:00",
+  "finished_at": "2026-10-08T09:38:43.608864+00:00",
+  "private_report_sha256": "fc75c25be5c6c96fb90d59b3f5738d8ccf1f04f2024c45668cd72e99afbaad95",
+  "lab_sources_sha256": {
+    "group_probe.py": "b223d6f138e71636b7e7307f57924a6dcf2068874cf37a3e04a5594a4cd1eef2",
+    "cases.py": "7c47d72cf2346478dc6d0e8f5c3c994db079bd464ccb77018d8a5225a247fd41",
+    "browser_probe.cjs": "73bf9336e7f543c1606a0f0f316bbe232e895cbc47a06a2baba6d00301150bb3",
+    "fixture.php": "b7c090a16f8a14097108984b9cb8221b70d56133956a2cc46cd2fcaf41484f4d",
+    "safeguard.php": "988ee041d3bc6141c8f889502d7e7c7bf1fd81547c854053e6a79b4ba9bfe159",
+    "run.py": "e9935f54fc87e128cd0f42509d1822a439b8cb680d85560beb914cd49a09b9c4",
+    "gateway.py": "7750373c5677505ce3697e6832816fb41f805865fd45bde8abdeaafa079336e1",
+    "relay.php": "1463c40469d595f3476a1a11adde30779a644880ef0eaf74b61f39781c394b0b"
+  },
+  "checks_passed": 49,
+  "lab_feedback_posts_total": 25,
+  "lab_submission_records": 23,
+  "lab_captured_mail_calls": 16,
+  "group_contract": {
+    "contract_version": "cf7-checkbox-groups-lab-v1",
+    "cases": [
+      {
+        "case": "required two values",
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_capture_delta": 1,
+        "posted_group_hashes": [
+          "dd57b170f05b4f3ff2418614790c3ae4c2c8916a66f4cfc909f1568cdc8e27d7",
+          "11897929e32e963f92724f5adaa1b4e29f9247fd7a4a763fad140b43fcade290"
+        ],
+        "invalid_field_count": 0
+      },
+      {
+        "case": "required empty negative probe",
+        "http": 200,
+        "status": "validation_failed",
+        "classification": "UNKNOWN",
+        "mail_capture_delta": 0,
+        "posted_group_hashes": [],
+        "invalid_field_count": 1
+      },
+      {
+        "case": "optional empty",
+        "http": 200,
+        "status": "mail_sent",
+        "classification": "RECEIPT_REPORTED",
+        "mail_capture_delta": 1,
+        "posted_group_hashes": [],
+        "invalid_field_count": 0
+      },
+      {
+        "case": "foreign value negative probe",
+        "http": 200,
+        "status": "validation_failed",
+        "classification": "UNKNOWN",
+        "mail_capture_delta": 0,
+        "posted_group_hashes": [
+          "b1e9b1fb4f1032c63f116c49d443627f908c5e14a7d2e86d9120364906c588a0"
+        ],
+        "invalid_field_count": 1
+      },
+      {
+        "case": "mail failure remains unknown",
+        "http": 200,
+        "status": "mail_failed",
+        "classification": "UNKNOWN",
+        "mail_capture_delta": 1,
+        "posted_group_hashes": [
+          "dd57b170f05b4f3ff2418614790c3ae4c2c8916a66f4cfc909f1568cdc8e27d7",
+          "11897929e32e963f92724f5adaa1b4e29f9247fd7a4a763fad140b43fcade290"
+        ],
+        "invalid_field_count": 0
+      }
+    ],
+    "contract_hash": "d5af8b7e29a674ed790848ef2ea241930cb39c8044649a324d3df383b3e24f7a",
+    "wire_sha256": "d8df486a829709eabc89dcd7b36acc1fbf538cb001ee7b2644e7b9658575fdb6",
+    "wire_size": 1543,
+    "browser_grouped_fields_equal": true,
+    "browser_full_part_order_equal": false,
+    "feedback_post_count": 6,
+    "mail_capture_delta": 4,
+    "submission_delta": 6,
+    "execution_allowed": false,
+    "eligible_for_approval": false
+  },
+  "outside_origin_browser_requests": 0,
+  "cleanup_failures": [],
+  "wp_external_http_block_probe": 1,
+  "external_numeric_socket_block_probes": 3,
+  "source_downloaded_this_run": false,
+  "real_companies_accessed": false,
+  "lead_hive_dispatch_connected": false,
+  "real_approvals": 0,
+  "real_email_sent": 0,
+  "real_form_sent": 0,
+  "outbound_flag_changed": false,
+  "normal_worker_started": false,
+  "scope": "local WordPress acceptance and captured mail only, not real delivery"
+}

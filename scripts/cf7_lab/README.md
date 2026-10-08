@@ -58,6 +58,7 @@ Dockerのlabel/nameを確認してそのlabだけを撤去する。`docker syste
 - `protocol.py`：I/Oなしのlab限定観測・保守的な受付分類。Production SSRF対策ではない。
 - `cases.py`：実CF7 HTTPとBrowserの比較。構造変更/応答変造はoffline判定として区別。
 - `contract_probe.py`：純粋なCF7候補契約のwireをlabだけで照合。契約内のHTTPS placeholder URLは実行せず、管理下loopback fixtureへbytesだけを渡す。DB/承認/dispatch未接続。
+- `group_probe.py`：固定fixtureの同名checkbox groupを検証。必須/任意、未定義値の拒否、複数値の順序、Browserと捕捉mailの比較。既存19 POSTにgroup6 POSTを追加。結果は [docs/188](../../docs/188_CF7_CHECKBOX_GROUP_PROTOCOL_LAB.md)。同意/radio/実サイト向けDOM mapperではない。
 - `run.py`：取得・隔離検査・起動・撤去。LeadHiveの承認・予約を変更しない。
 - `gateway.py` / `relay.php`：隔離を保ったままBrowser/HTTPを実Apacheへ中継。
   POSTは固定CF7 feedback routeだけ。credential/cookieを転送しない。

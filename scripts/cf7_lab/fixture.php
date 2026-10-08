@@ -33,19 +33,26 @@ if (!defined('WPCF7_VERSION') || WPCF7_VERSION !== '6.1.4') {
 }
 if ($lab_action === 'create') {
     $forms = array();
-    foreach (array('standard', 'optional', 'invert', 'demo') as $kind) {
+    foreach (array('standard', 'optional', 'invert', 'demo', 'groups_required', 'groups_optional') as $kind) {
         $form = WPCF7_ContactForm::get_template(array('title' => 'Lab ' . $kind));
         $options = $kind === 'optional' ? ' optional' : ($kind === 'invert' ? ' invert' : '');
         $props = $form->get_properties();
         $props['form'] = '<label>Name [text* your-name]</label>' . "\n"
             . '<label>Email [email* your-email]</label>' . "\n"
             . '<label>Message [textarea* your-message]</label>' . "\n"
+            . (strpos($kind, 'groups_') === 0
+                ? '[checkbox' . ($kind === 'groups_required' ? '*' : '')
+                    . ' services use_label_element "SNS運用" "Website" "OEM"]' . "\n"
+                : '')
             . '[acceptance consent' . $options . ']Lab-only privacy terms[/acceptance]' . "\n"
             . '[submit "Send lab fixture"]';
         $props['mail']['recipient'] = 'sink@example.invalid';
         $props['mail']['sender'] = 'Lab <sender@example.invalid>';
         $props['mail']['subject'] = 'LeadHive isolated fixture';
         $props['mail']['body'] = '[your-name]' . "\n" . '[your-email]' . "\n" . '[your-message]';
+        if (strpos($kind, 'groups_') === 0) {
+            $props['mail']['body'] .= "\n" . '[services]';
+        }
         $props['mail_2']['active'] = false;
         $props['additional_settings'] = $kind === 'demo' ? 'demo_mode: on' : '';
         $form->set_properties($props);
