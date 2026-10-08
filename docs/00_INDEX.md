@@ -340,3 +340,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [203_CF7_ENCODING_RECEPTION_LAB.md](203_CF7_ENCODING_RECEPTION_LAB.md): 固定CF7両版の変換経路受付・受信順序/値hash一致・maxlength保持・UNKNOWN/変更拒否・実送信なし
 
 - [204_CF7_HUMAN_APPROVAL_HANDOFF_PREVIEW.md](204_CF7_HUMAN_APPROVAL_HANDOFF_PREVIEW.md): 入力確認・契約・wireの承認引き継ぎsnapshot照合・変更/期限拒否・承認と送信は未接続
+
+- [205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md](205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md): 実サイト候補のHuman再認証承認・変更/期限失効・DB不変性/予約拒否・送信未接続
