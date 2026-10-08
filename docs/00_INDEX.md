@@ -312,3 +312,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [177_SELF_USE_THREE_CANDIDATE_PREFLIGHT.md](177_SELF_USE_THREE_CANDIDATE_PREFLIGHT.md): 候補3社の実GETと入力照合・保存比較元不足の切分け・未送信の停止理由
 
 - [178_TARGET_FORM_REFRESH.md](178_TARGET_FORM_REFRESH.md): 対象ページ限定再解析・手動値保護・自社3候補の比較元補完・送信なし
+
+- [179_HUMAN_FORM_REVIEW_HANDOFF.md](179_HUMAN_FORM_REVIEW_HANDOFF.md): 入力資料の自動読込・確認対象優先・候補折りたたみ・自社3候補のHuman確認引継ぎ

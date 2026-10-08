@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api } from './api'
 import type { FormMappedKey, FormProfileField } from './types'
 import { CompanyFormChoiceGroups } from './CompanyFormChoiceGroups'
@@ -26,6 +26,7 @@ const states: Record<string, string> = {
 
 type Props = {
   profileId: string
+  formUrl: string
   fingerprint: string
   fields: FormProfileField[]
   readOnly: boolean
@@ -58,16 +59,29 @@ function ChoiceReview({ field, readOnly, saving, onSave }: { field: FormProfileF
   </div>
 }
 
-export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, readOnly, saving, onCorrect, onRefresh }: Props) {
+export function CompanyFormReviewMaterial({ profileId, formUrl, fingerprint, fields, readOnly, saving, onCorrect, onRefresh }: Props) {
   const [material, setMaterial] = useState<Material | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  async function load() {
+  const load = useCallback(async () => {
     setBusy(true); setError(''); setMaterial(null)
     try { setMaterial(await api<Material>(`/form-profiles/${profileId}/review-material`)) }
     catch (err) { setError(err instanceof Error ? err.message : '確認資料を取得できませんでした。') }
     finally { setBusy(false) }
-  }
+  }, [profileId])
+  const fieldVersion = fields.map(field => `${field.id}:${field.updated_at}`).join('|')
+  useEffect(() => {
+    let active = true
+    setBusy(true); setError(''); setMaterial(null)
+    api<Material>(`/form-profiles/${profileId}/review-material`)
+      .then(value => { if (active) setMaterial(value) })
+      .catch(err => { if (active) setError(err instanceof Error ? err.message : '確認資料を取得できませんでした。') })
+      .finally(() => { if (active) setBusy(false) })
+    return () => { active = false }
+  }, [profileId, fingerprint, fieldVersion])
+  const reviewStates = new Set(['HUMAN_CONSENT_REQUIRED', 'GROUP_SELECTION_REVIEW_REQUIRED', 'FIELD_IDENTITY_REVIEW_REQUIRED', 'CHOICE_REVIEW_REQUIRED', 'FIELD_REVIEW_REQUIRED', 'SENDER_VALUE_MISSING', 'DRAFT_VALUE_MISSING'])
+  const [showCandidates, setShowCandidates] = useState(false)
+  const sourceLink = /^https?:\/\//i.test(formUrl) ? formUrl : null
   async function saveChoice(field: FormProfileField, value: string) {
     const saved = await onCorrect(field, field.mapped_key, value)
     if (saved) await load()
@@ -75,11 +89,19 @@ export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, read
   }
   return <section className="mt-4" aria-label="フォーム入力確認">
     <CompanyFormLiveCheck profileId={profileId} fingerprint={fingerprint} readOnly={readOnly} onRefresh={onRefresh} />
-    <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : material ? '入力候補を更新' : '入力候補と確認事項を見る'}</button>
+    <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : '入力候補を更新'}</button>
     {error && <p className="error mt-3" role="alert">{error}</p>}
     {material && <div className="mt-3">
       <h3>フォーム入力の確認資料</h3>
-      <p className="notice mt-3">保存済み情報から作った候補です。この表示では承認・送信されません。現在のフォームは未再確認です。</p>
+      <p className="notice mt-3">保存済み情報から作った候補です。この表示では承認・送信されません。現在のページの確認結果は上の欄で確認してください。</p>
+      <section className="notice mt-3" aria-label="確認の進め方">
+        <strong>人が確認すること</strong>
+        <p className="mt-2">1. 元フォームで窓口の用途と営業可否を確認</p>
+        <p>2. 下の選択肢・同意・必須条件を確認して記録</p>
+        <p>3. 送信者情報と本文候補を確認</p>
+        {sourceLink && <a className="secondary inline-block mt-3" href={sourceLink} target="_blank" rel="noopener noreferrer">元フォームを開く ↗</a>}
+        <p className="muted text-sm mt-3">ここでの記録は入力内容の確認です。窓口の営業許可や送信承認を代替しません。技術未対応・送信禁止は解除されません。</p>
+      </section>
       <p className="muted mt-3">確認事項 {material.human_review_count}件 ／ 必須値の不足 {material.missing_required_values}件</p>
       <p className="muted">営業可否：{material.permission_status === 'PROHIBITED' ? '送信禁止' : material.permission_status === 'ALLOWED' ? '禁止判定なし（送信承認ではありません）' : '未確認'}</p>
       {material.profile_review_reason && <p className="notice mt-3">{material.profile_review_reason}</p>}
@@ -88,7 +110,12 @@ export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, read
       <p className="muted text-xs mt-3">元の観測日時：{material.source_observed_at ? new Date(material.source_observed_at).toLocaleString('ja-JP') : '未記録'}</p>
       {material.profile_fingerprint !== fingerprint && <p className="notice mt-3">保存されたフォーム構造が変わりました。「入力候補を更新」で読み直してください。</p>}
       {material.items.length === 0 && <p className="muted mt-3">保存済みの入力項目はありません。</p>}
-      {material.profile_fingerprint === fingerprint && material.items.filter(item => item.review_state !== 'DO_NOT_FILL').map(item => {
+      <h3 className="mt-4">選択・同意・入力先の確認</h3>
+      <p className="muted text-sm mt-2">確認対象の一覧です。記録済みの項目も表示します。件数は未確認件数や送信可能件数ではありません。</p>
+      {material.profile_fingerprint === fingerprint && !material.items.some(item => reviewStates.has(item.review_state)) && <p className="muted mt-3">個別の選択確認対象はありません。窓口・本文・送信経路の確認は引き続き必要です。</p>}
+      {material.profile_fingerprint === fingerprint && material.items.some(item => item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED') && <CompanyFormChoiceGroups profileId={profileId} readOnly={readOnly} onSaved={async () => { await onRefresh(); await load() }} />}
+      <button className="secondary mt-3" aria-expanded={showCandidates} onClick={() => setShowCandidates(!showCandidates)}>{showCandidates ? '送信者情報・本文候補を閉じる' : '送信者情報・本文候補を見る'}</button>
+      {material.profile_fingerprint === fingerprint && material.items.filter(item => item.review_state !== 'DO_NOT_FILL' && (reviewStates.has(item.review_state) || showCandidates)).sort((a, b) => Number(reviewStates.has(b.review_state)) - Number(reviewStates.has(a.review_state))).map(item => {
         const field = fields.find(candidate => candidate.position === item.position && candidate.name === item.name)
         const editableChoice = field && ['CHOICE_REVIEW_REQUIRED', 'HUMAN_CONSENT_REQUIRED'].includes(item.review_state)
           && ['contact_category', 'contact_method', 'privacy_consent', 'newsletter_consent'].includes(field.mapped_key)
@@ -102,10 +129,9 @@ export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, read
         {item.proposed_value !== null && <p className="mt-2 break-all whitespace-pre-wrap">{item.proposed_value}</p>}
         {item.options.length > 0 && <p className="muted text-sm mt-2 break-all">選択肢：{item.options.map(option => option.label || option.value || '名称不明').join(' ／ ')}</p>}
         {editableChoice && <ChoiceReview key={`${field.id}:${field.updated_at}`} field={field} readOnly={readOnly} saving={saving || busy} onSave={value => saveChoice(field, value)} />}
-        {item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED' && <p className="notice mt-3">この項目は下の「複数項目の必須条件」で対象範囲と条件を確認します。</p>}
+        {item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED' && <p className="notice mt-3">この項目は上の「複数項目の必須条件」で対象範囲と条件を確認します。</p>}
       </article>})}
       <p className="muted text-xs mt-3">隠し欄・スパム対策欄・送信ボタン・ファイル欄には入力候補を作りません。</p>
-      {material.profile_fingerprint === fingerprint && material.items.some(item => item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED') && <CompanyFormChoiceGroups profileId={profileId} readOnly={readOnly} onSaved={async () => { await onRefresh(); await load() }} />}
     </div>}
   </section>
 }
