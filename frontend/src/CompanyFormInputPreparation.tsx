@@ -7,6 +7,7 @@ type Report = {
   snapshot: { form_url: string; plugin_version: string | null; rows: { position: number; name: string; label: string; required: boolean; values: string[]; state: string }[] }
 }
 type ContractPreview = { status: string; reasons: string[]; contract_hash: string | null; encoding_preview?: { wire_size: number; wire_sha256: string } | null; contract: { endpoint: string; contract_family: string; parts: { name: string }[] } | null }
+type HandoffPreview = { status: string; reasons: string[]; snapshot_hash: string | null; snapshot: { expires_at: string; contract: { endpoint: string; parts: { name: string; value: string; kind: string }[] }; input_review: { actor_user_id: string } } | null }
 const contractReasons: Record<string, string> = {
   WIRE_ENCODING_UNSUPPORTED: '送信データの変換条件・サイズ上限を満たしていません。送信せず確認してください。',
   INPUT_CONFIRMATION_REQUIRED: '現在の入力内容を人が確認・記録してください。', CONFIRMATION_EXPIRED: '確認記録またはフォーム観測が期限切れです。',
@@ -27,15 +28,16 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [contract, setContract] = useState<ContractPreview | null>(null)
+  const [handoff, setHandoff] = useState<HandoffPreview | null>(null)
   async function load() {
-    setBusy(true); setConfirmed(false); setError(''); setReport(null); setContract(null)
+    setBusy(true); setConfirmed(false); setError(''); setReport(null); setContract(null); setHandoff(null)
     try { setReport(await api<Report>(`/form-profiles/${profileId}/input-preparation`)) }
     catch (err) { setError(err instanceof Error ? err.message : '確認票を取得できませんでした。') }
     finally { setBusy(false) }
   }
   async function record() {
     if (!report?.can_record || !confirmed) return
-    setBusy(true); setError(''); setContract(null)
+    setBusy(true); setError(''); setContract(null); setHandoff(null)
     try {
       setReport(await api<Report>(`/form-profiles/${profileId}/input-preparation/reviews`, 'POST', { expected_snapshot_hash: report.snapshot_hash, input_content_confirmed: true }))
       setConfirmed(false)
@@ -45,9 +47,15 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
     } finally { setBusy(false) }
   }
   async function inspectContract() {
-    setBusy(true); setError(''); setContract(null)
+    setBusy(true); setError(''); setContract(null); setHandoff(null)
     try { setContract(await api<ContractPreview>(`/form-profiles/${profileId}/contract-preview`)) }
     catch (err) { setError(err instanceof Error ? err.message : '契約プレビューを取得できませんでした。') }
+    finally { setBusy(false) }
+  }
+  async function inspectHandoff() {
+    setBusy(true); setError(''); setHandoff(null)
+    try { setHandoff(await api<HandoffPreview>(`/form-profiles/${profileId}/approval-handoff-preview`)) }
+    catch (err) { setContract(null); setError(err instanceof Error ? err.message : '引き継ぎ内容を取得できませんでした。') }
     finally { setBusy(false) }
   }
   return <section aria-label="入力内容の確認票" className="notice mt-4">
@@ -76,6 +84,18 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
         {contract.reasons.map(code => <p key={code}>{contractReasons[code] ?? '追加確認が必要です。'}</p>)}
         {contract.contract && <><p>版別契約：{contract.contract.contract_family} / 項目数：{contract.contract.parts.length}</p><p className="break-all">確認したREST送信先：{contract.contract.endpoint}</p><p className="text-xs break-all">契約hash：{contract.contract_hash}</p></>}
         {contract.encoding_preview && <p>送信データの変換確認：{contract.encoding_preview.wire_size.toLocaleString('ja-JP')} bytes（送信は実行しません）</p>}
+        {!readOnly && contract.status === 'PREVIEW_ONLY' && <button type="button" className="secondary mt-2" disabled={busy} onClick={inspectHandoff}>承認へ引き継ぐ内容を確認</button>}
+      </div>}
+      {handoff && <div aria-label="承認引き継ぎプレビュー" className="mt-3">
+        <p>{handoff.status === 'PREPARATION_ONLY' ? '承認引き継ぎ用の内容を照合しました。送信承認は未作成です。' : '内容が変更・期限切れ・未確認のため、引き継ぎを保留しています。'}</p>
+        <p>入力確認と送信承認は別です。この画面から承認・送信は行えません。</p>
+        {handoff.reasons.map(code => <p key={code}>{contractReasons[code] ?? '追加確認が必要です。'}</p>)}
+        {handoff.snapshot && <>
+          <p className="break-all">対象送信先：{handoff.snapshot.contract.endpoint}</p>
+          <p>内容の有効期限：{new Date(handoff.snapshot.expires_at).toLocaleString('ja-JP')}</p>
+          <details><summary>引き継ぐ入力内容</summary>{handoff.snapshot.contract.parts.filter(part => part.kind !== 'metadata').map(part => <p className="break-all whitespace-pre-wrap" key={part.name}>{part.name}：{part.value || '空欄'}</p>)}</details>
+          <p className="text-xs break-all">引き継ぎhash：{handoff.snapshot_hash}</p>
+        </>}
       </div>}
     </div>}
   </section>

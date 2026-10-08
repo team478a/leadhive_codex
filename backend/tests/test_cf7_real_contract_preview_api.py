@@ -35,6 +35,27 @@ def test_preview_rebuilds_server_payload_without_writes_or_send(auth, db, users,
     assert result.json()["encoding_preview"]["wire_size"] > 0
     assert not result.json()["encoding_preview"]["execution_allowed"]
     assert "body" not in result.json()["encoding_preview"]
+    execution_tables = (
+        "approval_requests",
+        "email_deliveries",
+        "form_deliveries",
+        "operation_jobs",
+    )
+    execution_counts = {t: db.scalar(text("SELECT count(*) FROM " + t)) for t in execution_tables}
+    handoff = auth.get(path + "/approval-handoff-preview")
+    assert handoff.status_code == 200 and handoff.json()["status"] == "PREPARATION_ONLY"
+    assert handoff.json()["snapshot"]["contract"]["company_id"] == str(company.id)
+    assert not handoff.json()["approval_request_created"]
+    assert handoff.json()["authorization_type"] is None
+    assert (
+        auth.post(path + "/approval-handoff-preview", json={"confirmed": True}).status_code == 405
+    )
+    assert auth.get(
+        path + "/approval-handoff-preview", headers={"Authorization": "Bearer agent"}
+    ).status_code in (401, 403)
+    assert execution_counts == {
+        t: db.scalar(text("SELECT count(*) FROM " + t)) for t in execution_tables
+    }
     original_encoder = routes.encode_real_preview
 
     def fail_encoding(*args, **kwargs):
@@ -60,10 +81,16 @@ def test_preview_rebuilds_server_payload_without_writes_or_send(auth, db, users,
         "/api/auth/login", json={"email": users[1].email, "password": "test-only-long-password"}
     )
     assert auth.get(path + "/contract-preview").status_code == 404
+    assert auth.get(path + "/approval-handoff-preview").status_code == 404
     db.add(ProjectMember(project_id=company.project_id, user_id=users[1].id, role="viewer"))
     db.commit()
     viewer = auth.get(path + "/contract-preview")
     assert viewer.json()["status"] == "HOLD" and "sender@example.com" not in viewer.text
+    viewer_handoff = auth.get(path + "/approval-handoff-preview")
+    assert (
+        viewer_handoff.json()["status"] == "HOLD"
+        and "sender@example.com" not in viewer_handoff.text
+    )
     auth.post(
         "/api/auth/login", json={"email": users[0].email, "password": "test-only-long-password"}
     )
@@ -72,6 +99,8 @@ def test_preview_rebuilds_server_payload_without_writes_or_send(auth, db, users,
     db.commit()
     changed = auth.get(path + "/contract-preview").json()
     assert changed["status"] == "HOLD" and changed["contract"] is None
+    changed_handoff = auth.get(path + "/approval-handoff-preview").json()
+    assert changed_handoff["status"] == "HOLD" and changed_handoff["snapshot"] is None
     assert db.scalar(select(func.count()).select_from(FormAnalysisLog)) == before
 
 

@@ -104,6 +104,18 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(inputPreparation.getByText('照合済み・送信不可の契約プレビュー', { exact: true })).toBeVisible()
   await expect(inputPreparation.getByText(/確認したREST送信先/)).toBeVisible()
   await expect(inputPreparation.getByText(/送信データの変換確認：1,234 bytes/)).toBeVisible()
+  let handoffChanged = false
+  await page.route('**/api/form-profiles/*/approval-handoff-preview', route => route.fulfill({ json: handoffChanged ? { status: 'HOLD', reasons: ['CONFIRMATION_EXPIRED'], snapshot: null, snapshot_hash: null } : { status: 'PREPARATION_ONLY', reasons: [], snapshot_hash: 'd'.repeat(64), snapshot: { expires_at: '2099-01-01T00:00:00+00:00', input_review: { actor_user_id: 'human' }, contract: { endpoint: `https://${domain}/wp-json/contact-form-7/v1/contact-forms/7/feedback`, parts: [{ name: 'body', value: '引き継ぎ本文', kind: 'textarea' }] } } } }))
+  await inputPreparation.getByRole('button', { name: '承認へ引き継ぐ内容を確認' }).click()
+  const handoff = inputPreparation.locator('[aria-label="承認引き継ぎプレビュー"]')
+  await expect(handoff).toContainText('送信承認は未作成です')
+  await handoff.getByText('引き継ぐ入力内容', { exact: true }).click()
+  await expect(handoff).toContainText('引き継ぎ本文')
+  handoffChanged = true
+  await inputPreparation.getByRole('button', { name: '承認へ引き継ぐ内容を確認' }).click()
+  await expect(handoff).toContainText('引き継ぎを保留しています')
+  await expect(handoff.getByText(/引き継ぎ本文/)).toHaveCount(0)
+  await page.unroute('**/api/form-profiles/*/approval-handoff-preview')
   contractChanged = true
   await inputPreparation.getByRole('button', { name: 'フォーム証拠と入力を照合' }).click()
   await expect(inputPreparation.getByText('証拠照合は保留です。', { exact: true })).toBeVisible()

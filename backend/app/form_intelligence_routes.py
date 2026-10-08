@@ -29,6 +29,7 @@ from app.schemas import (
     OperationJobOut,
 )
 from app.security import current_user
+from app.services.cf7_approval_handoff import prepare as prepare_approval_handoff
 from app.services.cf7_candidate_preparation import profile_source_hash
 from app.services.cf7_real_contract_preview import preview as preview_real_contract
 from app.services.cf7_real_encoding import encode as encode_real_preview
@@ -399,6 +400,16 @@ def get_contract_preview(
                 contract_hash=None,
             )
     return result
+
+
+@router.get("/form-profiles/{profile_id}/approval-handoff-preview")
+def get_approval_handoff_preview(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    profile = _owned_profile(profile_id, db, user, write=False)
+    return prepare_approval_handoff(
+        _input_preparation(profile, db, user), latest_live_check(db, profile)
+    )
 
 
 @router.get("/form-profiles/{profile_id}/choice-groups", response_model=list[dict])
