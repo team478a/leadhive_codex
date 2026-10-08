@@ -36,7 +36,7 @@ jobs:
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_review_material.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/form_intelligence_routes.py backend/app/schema_form_review.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_choice_groups.py
-          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_live_check.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_live_check.py backend/app/services/cf7_static_inspection.py backend/app/services/cf7_static_parser.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_target_refresh.py backend/app/services/form_route_diagnostics.py backend/app/services/form_observation_projection.py backend/app/services/form_observation_safety.py backend/app/services/contact_permission.py
 
   backend-tests:

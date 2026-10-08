@@ -183,6 +183,54 @@ def test_redirect_robots_guard(monkeypatch):
         fetcher.close()
 
 
+def test_cf7_static_inspection_reuses_one_get_and_preserves_no_send(auth, db, monkeypatch):
+    from tests.test_cf7_static_inspection import HTML as cf7_html
+
+    _, _, profile = prepare(auth, db)
+    profile.form_status = "READY"
+    profile.sales_contact_status = "ALLOWED"
+    profile.delivery_supported = True
+    profile.fingerprint = form_fingerprint(
+        parse_form_fields(BeautifulSoup(cf7_html, "html.parser").form)
+    )
+    db.commit()
+    calls = mock_page(monkeypatch, profile, html=cf7_html)
+    path = f"/api/form-profiles/{profile.id}/live-check"
+    result = auth.post(path).json()
+    assert result["cf7_static"]["status"] == "CF7_CANDIDATE"
+    assert result["cf7_static"]["version"] == "6.1.4"
+    assert not result["cf7_static"]["execution_allowed"]
+    assert calls == [profile.form_url, "closed"]
+    assert auth.get(path).json()["cf7_static"] == result["cf7_static"]
+    db.refresh(profile)
+    assert not profile.delivery_supported and profile.form_status == "REVIEW_REQUIRED"
+    assert "PRIVATE" not in str(result) and "private-token" not in str(result)
+    for table in ("approval_requests", "email_deliveries", "form_deliveries", "operation_jobs"):
+        assert db.scalar(text("SELECT count(*) FROM " + table)) == 0
+
+
+def test_isolated_parse_failure_does_not_keep_ready(auth, db, monkeypatch):
+    _, _, profile = prepare(auth, db)
+    profile.form_status = "READY"
+    profile.sales_contact_status = "ALLOWED"
+    profile.delivery_supported = True
+    db.commit()
+    mock_page(monkeypatch, profile)
+    monkeypatch.setattr(
+        live,
+        "inspect_isolated",
+        lambda *args: {
+            "status": "PARSE_FAILED",
+            "execution_allowed": False,
+            "eligible_for_approval": False,
+        },
+    )
+    result = auth.post(f"/api/form-profiles/{profile.id}/live-check").json()
+    assert result["cf7_static"]["status"] == "PARSE_FAILED"
+    db.refresh(profile)
+    assert not profile.delivery_supported and profile.form_status == "REVIEW_REQUIRED"
+
+
 def test_latest_result_is_read_only_and_survives_reopen(auth, db, monkeypatch, users):
     project, _, profile = prepare(auth, db)
     calls = mock_page(monkeypatch, profile)

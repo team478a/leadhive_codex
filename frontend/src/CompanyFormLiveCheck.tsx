@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
 
-type Result = { checked_at: string | null; structure_status: string; sales_prohibition_detected: boolean; captcha_state: string; message: string; freshness: string; expires_at: string | null; fingerprint_match?: boolean | null; action_match?: boolean | null; method_is_post?: boolean | null }
+type CF7Static = { status: string; version?: string | null; form_count?: number; markers_complete?: boolean; form_id_valid?: boolean; rest_link_same_origin?: boolean; missing_names?: number; file_inputs?: number; unsupported_controls?: number; base_override?: boolean }
+type Result = { checked_at: string | null; structure_status: string; sales_prohibition_detected: boolean; captcha_state: string; message: string; freshness: string; expires_at: string | null; fingerprint_match?: boolean | null; action_match?: boolean | null; method_is_post?: boolean | null; cf7_static?: CF7Static | null }
 const names: Record<string, string> = { SAME_STRUCTURE: '保存済み構造と一致', CHANGED: '構造または送信先に変更あり', UNSUPPORTED_METHOD: '通常のPOST送信経路に未対応', SAVED_BASELINE_INCOMPLETE: '保存済みの比較情報が不足・再解析が必要', REDIRECTED: 'ページ移動あり・再確認が必要', FORM_NOT_FOUND: '保存済みフォームが見つかりません', FETCH_FAILED: 'ページを確認できませんでした' }
 
 export function CompanyFormLiveCheck({ profileId, fingerprint, readOnly, onRefresh }: { profileId: string; fingerprint: string; readOnly: boolean; onRefresh: () => Promise<void> }) {
@@ -50,6 +51,17 @@ export function CompanyFormLiveCheck({ profileId, fingerprint, readOnly, onRefre
       {result.action_match !== undefined && <p>送信先：{result.action_match === null ? '比較元が未保存' : result.action_match ? '保存済みと一致' : '変更あり'}</p>}
       <p>営業禁止表記：{result.sales_prohibition_detected ? '検出・送信対象外' : '未検出（営業許可ではありません）'}</p>
       <p>CAPTCHA：{result.captcha_state === 'DETECTED' ? '検出・人の操作が必要' : result.captcha_state === 'NOT_DETECTED_STATIC' ? '静的HTMLでは未検出・画面確認が必要' : '未確認'}</p>
+      {result.cf7_static && result.cf7_static.status !== 'NOT_CF7' && <div className="mt-3" aria-label="CF7の静的構造確認">
+        <strong>CF7の静的構造確認</strong>
+        <p>{result.freshness !== 'CURRENT' ? '以前の観察結果です。現在の構造とは限りません。' : '取得したHTMLだけの確認です。送信対応・営業許可・承認を意味しません。'}</p>
+        {result.cf7_static.status === 'CF7_CANDIDATE' ? <>
+          <p>保存マーカー：CF7候補 / バージョン：{result.cf7_static.version ?? '未確認'}</p>
+          <p>基本マーカー：{result.cf7_static.markers_complete && result.cf7_static.form_id_valid ? '確認できた' : '不足・確認が必要'}</p>
+          <p>同一サイトのRESTリンク：{result.cf7_static.rest_link_same_origin ? '見つかった（接続・受付は未検証）' : '未確認'}</p>
+          <p>項目名不足：{result.cf7_static.missing_names ?? '未確認'}件 / ファイル欄：{result.cf7_static.file_inputs ?? '未確認'}件 / 限定対応外の項目：{result.cf7_static.unsupported_controls ?? '未確認'}件</p>
+          {result.cf7_static.base_override && <p>ページの基準URL指定があります。別途確認が必要です。</p>}
+        </> : <p>{result.cf7_static.status === 'LIMIT_EXCEEDED' ? '解析サイズの上限を超えました。' : result.cf7_static.status === 'FORM_MISSING' ? '指定位置のフォームを確認できませんでした。' : '限定解析で構造を確認できませんでした。'}送信許可には使いません。</p>}
+      </div>}
       <p>{result.message}</p><p className="text-xs">確認日時：{result.checked_at ? new Date(result.checked_at).toLocaleString('ja-JP') : '未記録'}</p>
       <p className="text-xs">再確認の目安：{result.expires_at ? new Date(result.expires_at).toLocaleString('ja-JP') : '未記録'}</p>
     </div>}

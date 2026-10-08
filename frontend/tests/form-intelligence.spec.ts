@@ -134,6 +134,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
       freshness: 'CURRENT', expires_at: '2026-10-09T00:00:00Z',
       sales_prohibition_detected: false, captcha_state: 'NOT_DETECTED_STATIC',
       execution_allowed: false, message: '静的HTML確認・送信承認ではありません。',
+      cf7_static: { status: 'CF7_CANDIDATE', version: '6.1.4', form_count: 1, markers_complete: true, form_id_valid: true, rest_link_same_origin: true, missing_names: 0, file_inputs: 0, unsupported_controls: 0, base_override: false, execution_allowed: false, eligible_for_approval: false },
       }
       savedChecks.set(route.request().url(), result)
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(result) })
@@ -155,12 +156,18 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(liveReview.getByText('送信先：比較元が未保存', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('保存済みの確認結果（24時間以内の観測）', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('静的HTMLでは未検出・画面確認が必要', { exact: false })).toBeVisible()
+  const cf7Static = liveReview.getByLabel('CF7の静的構造確認')
+  await expect(cf7Static.getByText('保存マーカー：CF7候補 / バージョン：6.1.4', { exact: true })).toBeVisible()
+  await expect(cf7Static.getByText(/接続・受付は未検証/)).toBeVisible()
+  await cf7Static.scrollIntoViewIfNeeded()
+  await page.screenshot({ path: testInfo.outputPath('cf7-static-inspection.png') })
   await liveReview.getByText('保存済みの比較情報が不足・再解析が必要', { exact: true }).scrollIntoViewIfNeeded()
   await page.screenshot({ path: testInfo.outputPath('live-check-viewport.png') })
   await liveReview.getByRole('button', { name: '現在のフォームを確認', exact: true }).click()
   await expect(liveReview.getByRole('alert')).toContainText('1分待って')
   await liveReview.getByRole('button', { name: 'このフォームだけ再解析', exact: true }).click()
   await expect(liveReview.getByText('保存されたフォーム情報が変わりました。この確認結果は以前の情報です。', { exact: true })).toBeVisible()
+  await expect(cf7Static.getByText('以前の観察結果です。現在の構造とは限りません。', { exact: true })).toBeVisible()
   expect(targetRefreshes).toBe(1)
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toBeVisible()
   await expect(inputReview.getByRole('link', { name: '元フォームを開く ↗' })).toHaveAttribute('href', `https://${domain}/contact`)

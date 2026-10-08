@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import FormAnalysisLog, FormProfile, User
+from app.services.cf7_static_inspection import inspect_isolated, validate_saved
 from app.services.form_intelligence.analyzer import _captcha_type
 from app.services.form_intelligence.fields import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
@@ -74,7 +75,12 @@ def latest(db: Session, profile: FormProfile) -> dict | None:
             "action_match",
             "method_is_post",
         )
-    } | {"freshness": freshness, "expires_at": expires_at, "execution_allowed": False}
+    } | {
+        "freshness": freshness,
+        "expires_at": expires_at,
+        "execution_allowed": False,
+        "cf7_static": validate_saved(data.get("cf7_static")),
+    }
 
 
 class TargetFetcher(SafeFetcher):
@@ -87,7 +93,7 @@ class TargetFetcher(SafeFetcher):
 
 
 def check(profile: FormProfile) -> dict:
-    result = {
+    result: dict = {
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "saved_fingerprint": profile.fingerprint,
         "source_binding": source_binding(profile),
@@ -100,10 +106,13 @@ def check(profile: FormProfile) -> dict:
         "fingerprint_match": None,
         "action_match": None,
         "method_is_post": None,
+        "cf7_static": None,
     }
     fetcher = TargetFetcher()
     try:
         page = fetcher.fetch_html(profile.form_url)
+        if page.url == profile.form_url:
+            result["cf7_static"] = inspect_isolated(page.html, page.url, profile.form_index)
         soup = BeautifulSoup(page.html, "html.parser")
         result["sales_prohibition_detected"] = (
             sales_contact_status(soup.get_text(" ", strip=True), bool(soup.select("form")))[0]
@@ -187,6 +196,18 @@ def record(db: Session, profile: FormProfile, user: User | None, result: dict) -
             profile.form_status = "REVIEW_REQUIRED"
             profile.delivery_supported = False
             profile.review_reason = "現在のページでCAPTCHAを検出しました。Human操作が必要です。"
+        elif (result.get("cf7_static") or {}).get("status") == "CF7_CANDIDATE":
+            profile.form_status = "REVIEW_REQUIRED"
+            profile.delivery_supported = False
+            profile.review_reason = (
+                "CF7の静的構造候補です。実サイト送信対応・Human承認は未完了です。"
+            )
+        elif (result.get("cf7_static") or {}).get("status") in {"PARSE_FAILED", "LIMIT_EXCEEDED"}:
+            profile.form_status = "REVIEW_REQUIRED"
+            profile.delivery_supported = False
+            profile.review_reason = (
+                "限定した構造解析で確認できません。送信せずHuman確認が必要です。"
+            )
     db.add(
         FormAnalysisLog(
             company_id=profile.company_id,
