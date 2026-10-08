@@ -71,6 +71,24 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   const profileCards = formPanel.locator('.form-profile-card')
   await expect(profileCards).toHaveCount(2)
   const inputReview = profileCards.first().getByRole('region', { name: 'フォーム入力確認' })
+  // Fixture-only network response: no real website GET or send in this UI test.
+  let liveChecks = 0
+  await page.route('**/api/form-profiles/*/live-check', async route => {
+    liveChecks += 1
+    if (liveChecks === 1) await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+      checked_at: '2026-10-08T00:00:00Z', structure_status: 'CHANGED',
+      sales_prohibition_detected: false, captcha_state: 'NOT_DETECTED_STATIC',
+      execution_allowed: false, message: '静的HTML確認・送信承認ではありません。',
+    }) })
+    else await route.fulfill({ status: 429, contentType: 'application/json', body: JSON.stringify({ detail: '直前に確認済みです。1分待ってから再確認してください。' }) })
+  })
+  const liveReview = inputReview.getByRole('region', { name: '現在のフォーム確認' })
+  await liveReview.getByRole('button', { name: '現在のフォームを確認', exact: true }).click()
+  await expect(liveReview.getByText('構造または送信先に変更あり', { exact: true })).toBeVisible()
+  await expect(liveReview.getByText('静的HTMLでは未検出・画面確認が必要', { exact: false })).toBeVisible()
+  await liveReview.screenshot({ path: testInfo.outputPath('live-check.png') })
+  await liveReview.getByRole('button', { name: '現在のフォームを確認', exact: true }).click()
+  await expect(liveReview.getByRole('alert')).toContainText('1分待って')
   await inputReview.getByRole('button', { name: '入力候補と確認事項を見る' }).click()
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toBeVisible()
   await expect(inputReview.getByText('E2E review draft body', { exact: true })).toBeVisible()
@@ -155,6 +173,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(viewerReview.getByText('送信者設定は管理者のみ確認できます。')).toBeVisible()
   await expect(viewerReview.getByRole('button', { name: '確認した選択を保存' })).toHaveCount(0)
   await expect(viewerReview.getByRole('button', { name: 'グループの確認を記録' })).toHaveCount(0)
+  await expect(viewerReview.getByRole('button', { name: '現在のフォームを確認', exact: true })).toHaveCount(0)
 
   await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
   await login(page, process.env.E2E_EMAIL!, process.env.E2E_PASSWORD!)

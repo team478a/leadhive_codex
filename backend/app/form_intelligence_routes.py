@@ -1,4 +1,5 @@
 import hashlib
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -32,11 +33,42 @@ from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
 from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
+from app.services.form_live_check import check as check_live_form
+from app.services.form_live_check import record as record_live_check
 from app.services.form_profile_delivery import sender_values
 from app.services.form_review_material import build_review_material
 from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
+
+
+@router.post("/form-profiles/{profile_id}/live-check")
+def live_check_form(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    _owned_profile(profile_id, db, user)
+    profile = db.scalar(
+        select(FormProfile)
+        .where(FormProfile.id == profile_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    recent = db.scalar(
+        select(FormAnalysisLog.id)
+        .where(
+            FormAnalysisLog.form_profile_id == profile.id,
+            FormAnalysisLog.provider == "rule-target-get",
+            FormAnalysisLog.created_at > datetime.now(timezone.utc) - timedelta(seconds=60),
+        )
+        .limit(1)
+    )
+    if recent:
+        raise HTTPException(429, "直前に確認済みです。1分待ってから再確認してください。")
+    result = check_live_form(profile)
+    record_live_check(db, profile, user, result)
+    db.commit()
+    return result
 
 
 def _owned_profile(profile_id: UUID, db: Session, user: User, *, write: bool = True) -> FormProfile:
