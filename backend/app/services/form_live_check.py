@@ -3,7 +3,7 @@
 import hashlib
 import json
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
 from sqlalchemy import select
@@ -70,6 +70,9 @@ def latest(db: Session, profile: FormProfile) -> dict | None:
             "sales_prohibition_detected",
             "captcha_state",
             "message",
+            "fingerprint_match",
+            "action_match",
+            "method_is_post",
         )
     } | {"freshness": freshness, "expires_at": expires_at, "execution_allowed": False}
 
@@ -94,6 +97,9 @@ def check(profile: FormProfile) -> dict:
         "captcha_state": "UNVERIFIED",
         "execution_allowed": False,
         "message": "",
+        "fingerprint_match": None,
+        "action_match": None,
+        "method_is_post": None,
     }
     fetcher = TargetFetcher()
     try:
@@ -116,14 +122,32 @@ def check(profile: FormProfile) -> dict:
             fingerprint = form_fingerprint(parse_form_fields(form))
             result["observed_fingerprint"] = fingerprint
             action = urljoin(page.url, str(form.get("action") or page.url))
-            result["structure_status"] = (
-                "SAME_STRUCTURE"
-                if profile.fingerprint
-                and fingerprint == profile.fingerprint
-                and action == profile.action_url
-                and str(form.get("method") or "get").lower() == "post"
-                else "CHANGED"
+
+            # A fragment is never sent to the server. Preserve path and query:
+            # these identify distinct destinations and must remain significant.
+            def without_fragment(value: str) -> str:
+                parsed = urlsplit(value)
+                return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, parsed.query, ""))
+
+            result["fingerprint_match"] = (
+                fingerprint == profile.fingerprint if profile.fingerprint else None
             )
+            result["action_match"] = (
+                without_fragment(action) == without_fragment(profile.action_url)
+                if profile.action_url
+                else None
+            )
+            result["method_is_post"] = str(form.get("method") or "get").lower() == "post"
+            if not profile.fingerprint or not profile.action_url:
+                result["structure_status"] = "SAVED_BASELINE_INCOMPLETE"
+            else:
+                result["structure_status"] = (
+                    "SAME_STRUCTURE"
+                    if result["fingerprint_match"]
+                    and result["action_match"]
+                    and result["method_is_post"]
+                    else "CHANGED"
+                )
         result["message"] = (
             "静的HTMLの確認結果です。営業許可・CAPTCHAなし・送信承認を保証しません。"
         )

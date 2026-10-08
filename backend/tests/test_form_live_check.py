@@ -271,3 +271,38 @@ def test_individual_correction_cannot_clear_invalidated_profile(auth, db, status
     db.refresh(profile)
     assert profile.form_status == status and not profile.delivery_supported
     assert profile.review_reason == "現在のサイトの確認が必要"
+
+
+@pytest.mark.parametrize("missing", ["action", "fingerprint", "both"])
+def test_missing_baseline_is_not_reported_as_a_website_change(auth, db, monkeypatch, missing):
+    _, _, profile = prepare(auth, db)
+    if missing in {"action", "both"}:
+        profile.action_url = ""
+    if missing in {"fingerprint", "both"}:
+        profile.fingerprint = ""
+    db.commit()
+    mock_page(monkeypatch, profile)
+    result = auth.post(f"/api/form-profiles/{profile.id}/live-check").json()
+    assert result["structure_status"] == "SAVED_BASELINE_INCOMPLETE"
+    assert result["action_match"] is (True if missing == "fingerprint" else None)
+    assert result["fingerprint_match"] is (True if missing == "action" else None)
+    db.refresh(profile)
+    assert profile.form_status == "STALE" and not profile.delivery_supported
+
+
+@pytest.mark.parametrize(
+    "action,expected",
+    [
+        ("/contact#form-anchor", "SAME_STRUCTURE"),
+        ("/contact?different=1", "CHANGED"),
+        ("/elsewhere", "CHANGED"),
+    ],
+)
+def test_action_fragment_is_ignored_but_query_and_path_are_not(
+    auth, db, monkeypatch, action, expected
+):
+    _, _, profile = prepare(auth, db)
+    mock_page(monkeypatch, profile, HTML.replace('action="/contact"', f'action="{action}"'))
+    result = auth.post(f"/api/form-profiles/{profile.id}/live-check").json()
+    assert result["structure_status"] == expected
+    assert result["fingerprint_match"] is True

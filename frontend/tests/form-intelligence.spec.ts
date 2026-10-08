@@ -82,7 +82,8 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     liveChecks += 1
     if (liveChecks === 1) {
       const result = {
-      checked_at: '2026-10-08T00:00:00Z', structure_status: 'CHANGED',
+      checked_at: '2026-10-08T00:00:00Z', structure_status: 'SAVED_BASELINE_INCOMPLETE',
+      fingerprint_match: true, action_match: null, method_is_post: true,
       freshness: 'CURRENT', expires_at: '2026-10-09T00:00:00Z',
       sales_prohibition_detected: false, captcha_state: 'NOT_DETECTED_STATIC',
       execution_allowed: false, message: '静的HTML確認・送信承認ではありません。',
@@ -94,7 +95,9 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   })
   const liveReview = inputReview.getByRole('region', { name: '現在のフォーム確認' })
   await liveReview.getByRole('button', { name: '現在のフォームを確認', exact: true }).click()
-  await expect(liveReview.getByText('構造または送信先に変更あり', { exact: true })).toBeVisible()
+  await expect(liveReview.getByText('保存済みの比較情報が不足・再解析が必要', { exact: true })).toBeVisible()
+  await expect(liveReview.getByText('入力項目：保存済みと一致', { exact: true })).toBeVisible()
+  await expect(liveReview.getByText('送信先：比較元が未保存', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('保存済みの確認結果（24時間以内の観測）', { exact: true })).toBeVisible()
   await expect(liveReview.getByText('静的HTMLでは未検出・画面確認が必要', { exact: false })).toBeVisible()
   await liveReview.screenshot({ path: testInfo.outputPath('live-check.png') })

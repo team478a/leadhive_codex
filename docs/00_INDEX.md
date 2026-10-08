@@ -308,3 +308,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [175_TARGET_FORM_LIVE_CHECK.md](175_TARGET_FORM_LIVE_CHECK.md): 現在の対象フォームをGETで比較・営業禁止/CAPTCHA/取得失敗を表示・自動許可なし
 
 - [176_FORM_CHECK_RESULT_PERSISTENCE.md](176_FORM_CHECK_RESULT_PERSISTENCE.md): 最新確認結果の再表示・鮮度/変更表示・古い手動修正で失効状態を解除しない
+
+- [177_SELF_USE_THREE_CANDIDATE_PREFLIGHT.md](177_SELF_USE_THREE_CANDIDATE_PREFLIGHT.md): 候補3社の実GETと入力照合・保存比較元不足の切分け・未送信の停止理由

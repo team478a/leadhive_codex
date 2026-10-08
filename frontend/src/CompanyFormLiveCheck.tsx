@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
 
-type Result = { checked_at: string | null; structure_status: string; sales_prohibition_detected: boolean; captcha_state: string; message: string; freshness: string; expires_at: string | null }
-const names: Record<string, string> = { SAME_STRUCTURE: '保存済み構造と一致', CHANGED: '構造または送信先に変更あり', REDIRECTED: 'ページ移動あり・再確認が必要', FORM_NOT_FOUND: '保存済みフォームが見つかりません', FETCH_FAILED: 'ページを確認できませんでした' }
+type Result = { checked_at: string | null; structure_status: string; sales_prohibition_detected: boolean; captcha_state: string; message: string; freshness: string; expires_at: string | null; fingerprint_match?: boolean | null; action_match?: boolean | null; method_is_post?: boolean | null }
+const names: Record<string, string> = { SAME_STRUCTURE: '保存済み構造と一致', CHANGED: '構造または送信先に変更あり', SAVED_BASELINE_INCOMPLETE: '保存済みの比較情報が不足・再解析が必要', REDIRECTED: 'ページ移動あり・再確認が必要', FORM_NOT_FOUND: '保存済みフォームが見つかりません', FETCH_FAILED: 'ページを確認できませんでした' }
 
 export function CompanyFormLiveCheck({ profileId, fingerprint, readOnly, onRefresh }: { profileId: string; fingerprint: string; readOnly: boolean; onRefresh: () => Promise<void> }) {
   const [result, setResult] = useState<Result | null>(null)
@@ -32,6 +32,8 @@ export function CompanyFormLiveCheck({ profileId, fingerprint, readOnly, onRefre
     {result && <div className="notice mt-3" role="status">
       <p>{result.freshness === 'CURRENT' ? '保存済みの確認結果（24時間以内の観測）' : result.freshness === 'EXPIRED' ? '確認から24時間が経過しました。再確認が必要です。' : result.freshness === 'SOURCE_CHANGED' ? '保存されたフォーム情報が変わりました。この確認結果は以前の情報です。' : '確認結果の有効性を確認できません。再確認が必要です。'}</p>
       <strong>{names[result.structure_status] ?? '未確認'}</strong>
+      {result.fingerprint_match !== undefined && <p>入力項目：{result.fingerprint_match === null ? '比較元が未保存' : result.fingerprint_match ? '保存済みと一致' : '変更あり'}</p>}
+      {result.action_match !== undefined && <p>送信先：{result.action_match === null ? '比較元が未保存' : result.action_match ? '保存済みと一致' : '変更あり'}</p>}
       <p>営業禁止表記：{result.sales_prohibition_detected ? '検出・送信対象外' : '未検出（営業許可ではありません）'}</p>
       <p>CAPTCHA：{result.captcha_state === 'DETECTED' ? '検出・人の操作が必要' : result.captcha_state === 'NOT_DETECTED_STATIC' ? '静的HTMLでは未検出・画面確認が必要' : '未確認'}</p>
       <p>{result.message}</p><p className="text-xs">確認日時：{result.checked_at ? new Date(result.checked_at).toLocaleString('ja-JP') : '未記録'}</p>
