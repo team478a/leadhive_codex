@@ -1,0 +1,146 @@
+{
+  "cohort_hash": "e28cdcf53c32b6a0658e35ec095061a636b98b7fe8ad843292059994a5bf28b4",
+  "collection": {
+    "observations": 30,
+    "formal_raw_reviewed": 0,
+    "unreviewed": 30,
+    "review_coverage": 0.0,
+    "raw_strict_precision": null,
+    "raw_resolved_precision": null,
+    "duplicate_rate": null,
+    "uncertain_rate": null,
+    "outcomes": {},
+    "dimension_metrics": {
+      "target_fit": {
+        "strict": null,
+        "resolved": null,
+        "labelled": 0,
+        "applicable": 0,
+        "resolved_count": 0,
+        "unknown": 0,
+        "not_applicable": 0
+      },
+      "official_site": {
+        "strict": null,
+        "resolved": null,
+        "labelled": 0,
+        "applicable": 0,
+        "resolved_count": 0,
+        "unknown": 0,
+        "not_applicable": 0
+      },
+      "contact_accuracy": {
+        "strict": null,
+        "resolved": null,
+        "labelled": 0,
+        "applicable": 0,
+        "resolved_count": 0,
+        "unknown": 0,
+        "not_applicable": 0
+      }
+    },
+    "human_review_seconds": null,
+    "worksheet_labels_counted": false,
+    "receipt_trust": "Operator must verify authenticated-server export; local files are not authentication"
+  },
+  "forms": {
+    "records": 17,
+    "sendability": {
+      "HOLD": 15,
+      "BLOCKED": 2
+    },
+    "form_status": {
+      "ERROR": 1,
+      "REVIEW_REQUIRED": 13,
+      "BLOCKED": 2,
+      "UNANALYZED": 1
+    },
+    "reasons": [
+      {
+        "code": "CAPTCHA",
+        "affected": 5,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "CONTACT_PERMISSION_UNCERTAIN",
+        "affected": 15,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "DESTINATION_PURPOSE_UNCERTAIN",
+        "affected": 17,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "DO_NOT_CONTACT",
+        "affected": 2,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "FORM_ANALYSIS_STALE",
+        "affected": 3,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "FORM_FINGERPRINT_MISSING",
+        "affected": 14,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "FORM_NOT_READY",
+        "affected": 17,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "FORM_TECHNICALLY_UNSUPPORTED",
+        "affected": 17,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "IDENTITY_UNCERTAIN",
+        "affected": 17,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "REQUIRED_FIELD_UNKNOWN",
+        "affected": 14,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "SALES_PERMISSION_UNCERTAIN",
+        "affected": 17,
+        "sole_reason": 0,
+        "potential_unlock": null
+      },
+      {
+        "code": "SALES_PROHIBITED",
+        "affected": 2,
+        "sole_reason": 0,
+        "potential_unlock": null
+      }
+    ],
+    "rates_denominator": 17,
+    "causal_failure_rate": null,
+    "reason_counts_overlap": true,
+    "technical_unsupported_does_not_mean_submission_failed": true
+  },
+  "domain_review_pairs": 6,
+  "automatic_human_labels": 0,
+  "safety": {
+    "db_writes": 0,
+    "api_calls": 0,
+    "ai_calls": 0,
+    "send_calls": 0,
+    "approvals": 0
+  }
+}
