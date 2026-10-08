@@ -1,0 +1,36 @@
+{
+  "baseline_commit": "fc581aaf0cb0cb09575c2e05862a6dd697c13222",
+  "working_tree_modified": true,
+  "service_sha256": "d034903928f9f0a133b248b3ac4286118cad1e83ef6521631ba9debeb5fcc1f0",
+  "profiles": 3,
+  "routes": {
+    "CF7_CANDIDATE": 2,
+    "BROWSER_REVIEW": 1
+  },
+  "boundaries": {
+    "TECHNICAL_HOLD": 3
+  },
+  "reason_counts": {
+    "FORM_TECHNICALLY_UNSUPPORTED": 3,
+    "SALES_PERMISSION_UNCERTAIN": 3,
+    "REQUIRED_FIELD_UNKNOWN": 1
+  },
+  "missing_field_names": 5,
+  "permission_statuses": {
+    "UNCERTAIN": 3
+  },
+  "observation_freshness": {
+    "CURRENT": 3
+  },
+  "read_only": true,
+  "database_unchanged": true,
+  "external_requests": 0,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "review_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound": false,
+  "estimated_cost": null
+}

@@ -316,3 +316,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [179_HUMAN_FORM_REVIEW_HANDOFF.md](179_HUMAN_FORM_REVIEW_HANDOFF.md): 入力資料の自動読込・確認対象優先・候補折りたたみ・自社3候補のHuman確認引継ぎ
 
 - [180_DESTINATION_FORM_REVIEW_NAVIGATION.md](180_DESTINATION_FORM_REVIEW_NAVIGATION.md): 対象URLで窓口用途確認とフォーム入力確認を往復・自動記録なし・3候補の保存情報照合
+
+- [181_SAVED_FORM_TECHNICAL_DIAGNOSTICS.md](181_SAVED_FORM_TECHNICAL_DIAGNOSTICS.md): 保存情報でCF7・非POST・項目名不足・CAPTCHA・禁止を切り分ける技術診断・外部取得なし

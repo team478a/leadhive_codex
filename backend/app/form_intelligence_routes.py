@@ -39,6 +39,7 @@ from app.services.form_live_check import record as record_live_check
 from app.services.form_live_check import source_binding
 from app.services.form_profile_delivery import sender_values
 from app.services.form_review_material import build_review_material
+from app.services.form_route_diagnostics import diagnose as diagnose_saved_route
 from app.services.form_target_refresh import refresh as refresh_target_form
 from app.services.operations import add_operation_job
 
@@ -253,6 +254,15 @@ def get_form_review_material(
         "permission_reason": permission.reason_code,
         "profile_review_reason": profile.review_reason,
         "live_form_checked": False,
+        "technical_diagnostic": diagnose_saved_route(
+            profile,
+            [field.model_dump() for field in fields],
+            latest_live_check(db, profile),
+            permission_status=permission.status,
+            permission_reason=permission.reason_code,
+            do_not_contact=company.do_not_contact,
+            permission_message=permission.message,
+        ),
     }
 
 

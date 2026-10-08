@@ -6,6 +6,7 @@ import { CompanyFormChoiceGroups } from './CompanyFormChoiceGroups'
 import { CompanyFormLiveCheck } from './CompanyFormLiveCheck'
 
 type Material = {
+  technical_diagnostic?: { route: string; boundary: string; reasons: { code: string; message: string }[]; observation_freshness: string; missing_field_names: number; execution_allowed: false; next_action: string }
   draft_id: string | null
   source_observed_at: string | null
   sender_settings_visible: boolean
@@ -115,6 +116,14 @@ export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, finge
       <p className="muted text-xs mt-3">元の観測日時：{material.source_observed_at ? new Date(material.source_observed_at).toLocaleString('ja-JP') : '未記録'}</p>
       {material.profile_fingerprint !== fingerprint && <p className="notice mt-3">保存されたフォーム構造が変わりました。「入力候補を更新」で読み直してください。</p>}
       {material.items.length === 0 && <p className="muted mt-3">保存済みの入力項目はありません。</p>}
+      {material.technical_diagnostic && <section className="notice mt-4" aria-label="送信経路の技術診断">
+        <h3>送信を止めている技術上の理由</h3>
+        <p className="mt-2">経路：{({ CF7_CANDIDATE: 'Contact Form 7の候補・実サイト経路未対応', BROWSER_REVIEW: 'ブラウザ動作の確認が必要', NATIVE_CANDIDATE: '通常POST経路の候補', UNKNOWN: '保存情報だけでは経路不明' } as Record<string, string>)[material.technical_diagnostic.route] ?? '未確認'}</p>
+        <p>扱い：{({ BLOCKED: '送信対象外', HUMAN_REQUIRED: '人の操作が必要', TECHNICAL_HOLD: '技術対応の確認待ち', HUMAN_REVIEW: '人の確認・承認待ち' } as Record<string, string>)[material.technical_diagnostic.boundary] ?? '未確認'}</p>
+        <ul className="mt-2">{material.technical_diagnostic.reasons.map(reason => <li key={reason.code}>{reason.message}</li>)}</ul>
+        <p className="mt-2">{material.technical_diagnostic.next_action}</p>
+        <p className="muted text-sm mt-2">保存済みデータの診断です。現在のサイト取得・ブラウザ入力・送信は行いません。候補経路の表示は送信対応済みや承認済みを意味しません。</p>
+      </section>}
       <h3 className="mt-4">選択・同意・入力先の確認</h3>
       <p className="muted text-sm mt-2">確認対象の一覧です。記録済みの項目も表示します。件数は未確認件数や送信可能件数ではありません。</p>
       {material.profile_fingerprint === fingerprint && !material.items.some(item => reviewStates.has(item.review_state)) && <p className="muted mt-3">個別の選択確認対象はありません。窓口・本文・送信経路の確認は引き続き必要です。</p>}

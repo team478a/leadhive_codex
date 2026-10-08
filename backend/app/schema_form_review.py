@@ -24,3 +24,5 @@ class FormReviewMaterialOut(BaseModel):
     permission_reason: str
     profile_review_reason: str
     live_form_checked: Literal[False]
+
+    technical_diagnostic: dict

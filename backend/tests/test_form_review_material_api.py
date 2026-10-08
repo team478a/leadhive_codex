@@ -97,6 +97,9 @@ def test_read_only_material_missing_draft_and_agent_rejected(auth, db):
     assert body["draft_id"] is None and body["missing_required_values"] == 2
     assert not body["execution_supported"] and not body["human_approved"]
     assert not body["live_form_checked"]
+    assert body["technical_diagnostic"]["route"] == "UNKNOWN"
+    assert not body["technical_diagnostic"]["execution_allowed"]
+    assert not body["technical_diagnostic"]["live_fetch_performed"]
     assert auth.get(
         path, headers={"Authorization": "Bearer invalid-agent-credential"}
     ).status_code in (401, 403)
