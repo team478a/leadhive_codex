@@ -2,6 +2,19 @@ name: LeadHive checks
 on: [push, pull_request]
 
 jobs:
+  offline-collection-replay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==9.1.1 mypy==2.4.0
+      - run: |
+          python -m pytest offline_tests -q
+          python -m mypy offline_replay --check-untyped-defs
+        working-directory: backend
+
   backend-lint:
     runs-on: ubuntu-24.04
     steps:

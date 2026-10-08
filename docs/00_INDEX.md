@@ -1,5 +1,7 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
+- [Raw Collection共通入力オフライン比較](RAW_OFFLINE_COLLECTION_REPLAY.md)
+
 - [旧版・現行版・OSSの収集精度比較監査](COLLECTION_ACCURACY_COMPARATIVE_AUDIT.md)
 - [収集移植候補・段階的実装・テスト計画](COLLECTION_TRANSPLANT_AND_IMPLEMENTATION_PLAN.md)
 - [SNS運用代行会社の同条件比較Benchmark設計（実行前）](SNS_AGENCY_COLLECTION_COMPARISON_BENCHMARK.md)
