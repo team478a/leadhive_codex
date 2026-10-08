@@ -3,10 +3,11 @@ from typing import Literal
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, or_, select, true
 from sqlalchemy.orm import Session
 
 from app.models import Company, ContactPerson, FormProfile, SuppressionEntry
+from app.services.form_observation_safety import observation_hold
 from app.services.form_submission_guard import UNKNOWN_MESSAGE, unresolved_form_submission
 
 ContactPermissionStatus = Literal["ALLOWED", "PROHIBITED", "UNCERTAIN"]
@@ -187,7 +188,7 @@ def _shared_location_destination(
             .where(
                 Company.project_id == company.project_id,
                 Company.id != company.id,
-                True if company.record_type == "location" else Company.record_type == "location",
+                true() if company.record_type == "location" else Company.record_type == "location",
                 matches,
             )
             .limit(1)
@@ -198,6 +199,17 @@ def _shared_location_destination(
 
 def _form_permission(db: Session, company: Company) -> ContactPermissionDecision:
     profile = _primary_form_profile(db, company.id)
+    if profile and (
+        profile.form_status == "BLOCKED" or profile.sales_contact_status == "PROHIBITED"
+    ):
+        return _decision(
+            "PROHIBITED",
+            "form_sales_prohibited",
+            "営業目的の送信が禁止されているフォームです。",
+        )
+    hold = observation_hold(db, company)
+    if hold is not None:
+        return _decision(*hold)
     if profile is None:
         if not company.contact_url.strip():
             return _decision(
@@ -209,12 +221,6 @@ def _form_permission(db: Session, company: Company) -> ContactPermissionDecision
             "UNCERTAIN",
             "form_unanalyzed",
             "フォーム解析が未実行です。確認または解析が必要です。",
-        )
-    if profile.form_status == "BLOCKED" or profile.sales_contact_status == "PROHIBITED":
-        return _decision(
-            "PROHIBITED",
-            "form_sales_prohibited",
-            "営業目的の送信が禁止されているフォームです。",
         )
     if profile.sales_contact_status != "ALLOWED":
         return _decision(
