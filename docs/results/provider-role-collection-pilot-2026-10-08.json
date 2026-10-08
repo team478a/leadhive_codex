@@ -1,0 +1,108 @@
+{
+  "timestamp": "20261008T013912Z",
+  "branch": "codex/integration",
+  "baseline_commit": "cf419fe04278728fccc012dad3018097f2476234",
+  "working_tree_changes": true,
+  "source": "serper",
+  "regions": [
+    "大阪府",
+    "兵庫県"
+  ],
+  "api_calls": 4,
+  "api_budget": 12,
+  "raw_hits": 40,
+  "adapter_candidates": 40,
+  "saved_leads": 30,
+  "unique_domains": 26,
+  "review_hint_contexts": {
+    "MEDIA_CONTEXT": 16,
+    "PROVISION_CONTEXT": 28
+  },
+  "raw_field_availability": {
+    "name": 30,
+    "website": 30,
+    "address": 0,
+    "phone": 0,
+    "email": 0
+  },
+  "human_reviewed": 0,
+  "correct": null,
+  "strict_precision": null,
+  "resolved_precision": null,
+  "estimated_api_cost": null,
+  "api_calls_per_correct_lead": null,
+  "comparison": {
+    "old_logic_first_page_matched_growth": 0,
+    "old_logic_would_advance_query_after_first_page": true,
+    "new_logic_fetched_later_pages": true,
+    "not_an_independent_historical_precision_benchmark": true
+  },
+  "actual_queries": [
+    "SNS運用代行 会社"
+  ],
+  "per_region": [
+    {
+      "region": "大阪府",
+      "api_calls": 2,
+      "saved_leads": 15,
+      "states": {
+        "REVIEW_REQUIRED": 15
+      },
+      "pages": [
+        1,
+        2
+      ],
+      "stop_reason": "RAW_CANDIDATE_CAP"
+    },
+    {
+      "region": "兵庫県",
+      "api_calls": 2,
+      "saved_leads": 15,
+      "states": {
+        "REVIEW_REQUIRED": 15
+      },
+      "pages": [
+        1,
+        2
+      ],
+      "stop_reason": "RAW_CANDIDATE_CAP"
+    }
+  ],
+  "search_api_calls_per_saved_candidate": 0.13333333333333333,
+  "search_api_calls_per_unique_domain": 0.15384615384615385,
+  "cross_region_domain_overlap": 4,
+  "public_page_check": {
+    "domains": 26,
+    "public_get_requests": 72,
+    "fetched": 23,
+    "unavailable": 3,
+    "literal_mention": 21,
+    "contexts": {
+      "PROVISION_CONTEXT": 20
+    },
+    "human_reviewed": 0,
+    "correct": null,
+    "precision": null,
+    "one_page_only": true,
+    "official_identity_confirmed": 0,
+    "raw_snapshot_unchanged": true,
+    "completion_database_changes": 0
+  },
+  "unavailable_reasons": {
+    "Webサイトを取得できませんでした（HTTP 503）。": 1,
+    "robots.txtにより解析が許可されていません。": 1,
+    "Webサイトを取得できませんでした（HTTP 403）。": 1
+  },
+  "safety": {
+    "existing_database_unchanged": true,
+    "isolated_database": "leadhive_role_pilot_20261008t013912z_test",
+    "outbound": false,
+    "ai_calls": 0,
+    "completion_jobs": 0,
+    "email_sent": 0,
+    "form_sent": 0,
+    "approvals": 0,
+    "worker_started": false
+  },
+  "method": "Isolated DB; real target_collection Service; no browser collection/worker; Pilot-only raw caps; no Human ground truth"
+}

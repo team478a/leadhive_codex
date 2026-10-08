@@ -284,3 +284,9 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [162_WINDOWS_NATIVE_PROTOTYPE.md](162_WINDOWS_NATIVE_PROTOTYPE.md): Docker不要のWindows x64方式検証・隔離DB・送信OFF・配布先ランタイム同梱
 
 - [163_DAILY_SENDING_WINDOW.md](163_DAILY_SENDING_WINDOW.md): 曜日を問わない日本時間の送信時間帯、時間外待機・再開と送信直前の共通guard
+
+- [165_PROVIDER_ROLE_HINTS_AND_COLLECTION_GROWTH.md](165_PROVIDER_ROLE_HINTS_AND_COLLECTION_GROWTH.md): 提供者の文脈確認ヒントと、条件一致・確認待ちを分離した収集停止判定
+
+- [166_PROVIDER_ROLE_COLLECTION_PILOT.md](166_PROVIDER_ROLE_COLLECTION_PILOT.md): 最新ローカル反映・大阪兵庫の実API少量収集・確認待ちでも2ページ目へ継続・Human Truth未測定
+
+- [167_PROVIDER_ROLE_HUMAN_REVIEW_HANDOFF.md](167_PROVIDER_ROLE_HUMAN_REVIEW_HANDOFF.md): 大阪兵庫の既存検索40件をRaw確認へ取込・不変Snapshot・Human Truth未確認
