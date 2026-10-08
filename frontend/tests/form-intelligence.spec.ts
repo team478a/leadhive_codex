@@ -205,7 +205,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(cf7Static.getByText('保存マーカー：CF7候補 / バージョン：6.1.4', { exact: true })).toBeVisible()
   await expect(cf7Static.getByText(/接続・受付は未検証/)).toBeVisible()
   const contract = cf7Static.getByLabel('限定契約との差分')
-  await expect(contract.getByText(/管理下テストと同じ版/)).toBeVisible()
+  await expect(contract.getByText(/隔離環境で検証した版と一致/)).toBeVisible()
   await expect(contract.getByText(/不一致・確認が必要/)).toBeVisible()
   await expect(contract.getByText(/未対応のラジオ：2件/)).toBeVisible()
   await expect(contract.getByText(/同意内容と選択値は人による確認が必要/)).toBeVisible()
@@ -237,6 +237,27 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await inputReview.getByRole('button', { name: '入力候補を更新', exact: true }).click()
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toBeVisible()
   await page.unroute('**/api/form-profiles/*/review-material')
+  // Presentation-only fixtures; no external GET, approval or send.
+  for (const status of ['HOLD', 'HUMAN_REQUIRED', 'BLOCKED']) {
+    await page.route('**/api/form-profiles/*/review-material', async route => {
+      const response = await route.fetch()
+      const body = await response.json()
+      body.adapter_prerequisites.cf7_readiness = {
+        status, observed_version: '6.2', lab_contract_status: 'VERIFIED_FIXTURE_ONLY', freshness: 'CURRENT',
+        reasons: [{ code: 'fixture-reason', message: '6.2実サイト準備は未接続です。', next_action: '送信せず入力内容を確認する。' }],
+      }
+      await route.fulfill({ response, json: body })
+    })
+    await inputReview.getByRole('button', { name: '入力候補を更新', exact: true }).click()
+    const readiness = prerequisites.getByRole('region', { name: 'CF7対応状況' })
+    await expect(readiness).toContainText(({ HOLD: '実サイト送信は保留', HUMAN_REQUIRED: '人の操作が必要', BLOCKED: '送信対象外' } as Record<string, string>)[status])
+    await expect(readiness).toContainText('検証済み（実サイト対応ではありません）')
+    await expect(readiness.getByText('送信せず入力内容を確認する。', { exact: true })).toBeVisible()
+    await expect(readiness.getByRole('button')).toHaveCount(0)
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
+    await page.unroute('**/api/form-profiles/*/review-material')
+  }
+  await inputReview.getByRole('button', { name: '入力候補を更新', exact: true }).click()
   await page.route('**/api/form-profiles/*/review-material', async route => {
     const response = await route.fetch()
     const body = await response.json()

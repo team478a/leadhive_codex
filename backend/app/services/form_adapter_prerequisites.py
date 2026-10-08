@@ -1,5 +1,7 @@
 """Saved evidence checklist only; never creates a runnable form contract."""
 
+from app.services.cf7_readiness import summarize
+
 
 def assess(diagnostic: dict, observation: dict | None, choice_reviews: list[dict]) -> dict:
     checks = []
@@ -116,6 +118,7 @@ def assess(diagnostic: dict, observation: dict | None, choice_reviews: list[dict
         "definition_version": "saved-adapter-prerequisites-v1",
         "checks": checks,
         "cf7_shape_issues": shape_issues,
+        "cf7_readiness": summarize(diagnostic, observation, choice_reviews),
         "source": "SAVED_EVIDENCE_ONLY",
         "live_fetch_performed": False,
         "execution_allowed": False,

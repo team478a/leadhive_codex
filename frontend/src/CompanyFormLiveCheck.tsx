@@ -63,8 +63,9 @@ export function CompanyFormLiveCheck({ profileId, fingerprint, readOnly, onRefre
           <div aria-label="限定契約との差分">
             <p>限定契約との照合（送信可否の判定ではありません）</p>
             {result.cf7_static.contract_shape ? <>
-              <p>バージョン：{result.cf7_static.contract_shape.reviewed_lab_version ? '管理下テストと同じ版（実サイト受付は未検証）' : '管理下テストの対象外・追加検証が必要'}</p>
-              <p>hidden 6項目：{result.cf7_static.contract_shape.hidden_complete ? 'そろっている' : '不足あり'} / 形式と対応関係：{result.cf7_static.contract_shape.hidden_shape_valid ? '限定形式に一致' : '不一致・確認が必要'}</p>
+              <p>HTML記載の版：{['6.1.4', '6.2'].includes(result.cf7_static.version ?? '') ? '隔離環境で検証した版と一致（実サイト受付・実行版は未検証）' : '管理下テストの対象外・追加検証が必要'}</p>
+              {result.cf7_static.version === '6.2' && <p>6.2の契約は管理下fixture専用です。既存の実サイト候補準備（6.1.4限定）には使用できません。</p>}
+              <p>hidden 6項目：{result.cf7_static.contract_shape.hidden_complete ? 'そろっている' : '不足あり'} / 6.1.4候補契約の形式と対応関係：{result.cf7_static.contract_shape.hidden_shape_valid ? '限定形式に一致' : '不一致・確認が必要'}</p>
               <p>契約外hidden：{result.cf7_static.contract_shape.extra_hidden}件 / 項目名の形式不一致：{result.cf7_static.contract_shape.invalid_names}件 / 項目名の重複：{result.cf7_static.contract_shape.repeated_names}件</p>
               <p>未対応のラジオ：{result.cf7_static.contract_shape.radio_controls}件 / 選択リスト：{result.cf7_static.contract_shape.select_controls}件 / 無効化された項目：{result.cf7_static.contract_shape.disabled_controls}件</p>
               <p>チェック欄：{result.cf7_static.contract_shape.checkbox_controls}件（初期選択済み：{result.cf7_static.contract_shape.checked_checkboxes}件）。同意内容と選択値は人による確認が必要です。</p>
