@@ -294,3 +294,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [168_SELF_USE_OEM_HANDOFF.md](168_SELF_USE_OEM_HANDOFF.md): 自社OEM候補16社のローカル保存・窓口確認・未承認下書き引継ぎ
 
 - [169_FORM_GROUP_AND_HONEYPOT_GUARDS.md](169_FORM_GROUP_AND_HONEYPOT_GUARDS.md): 必須選択グループの確認待ちとCF7隠し欄への本文入力防止
+
+- [170_SELF_USE_SAVED_FORM_REFRESH.md](170_SELF_USE_SAVED_FORM_REFRESH.md): 保存HTMLの2社限定再解析・確認理由更新・既存データ保護
