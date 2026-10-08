@@ -202,6 +202,11 @@ def invalidate_if_needed(db, item):
 
         if not valid_request(db, item):
             reason = "CF7 candidate evidence or payload changed"
+    elif item.delivery_method == "cf7_real_candidate_only":
+        from app.services.cf7_real_approval import valid_request
+
+        if not valid_request(db, item):
+            reason = "CF7 real candidate evidence or payload changed"
     elif company_fingerprint(db.get(Company, item.company_id)) != item.payload_snapshot.get(
         "company_source_hash"
     ):
@@ -273,7 +278,7 @@ def create_proposal(
 
         if bound_draft(db, body.source_draft_id):
             raise HTTPException(409, "根拠付き下書きの専用準備を利用してください。")
-    if previous and previous.delivery_method == "cf7_candidate_only":
+    if previous and previous.delivery_method in {"cf7_candidate_only", "cf7_real_candidate_only"}:
         raise HTTPException(
             409, "CF7候補の改訂は未公開です。専用準備から新しい候補を作成してください。"
         )

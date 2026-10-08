@@ -66,6 +66,10 @@ class ApprovalRequest(Base):
             name="ck_cf7_candidate_not_consumed",
         ),
         CheckConstraint(
+            "delivery_method <> 'cf7_real_candidate_only' OR status <> 'CONSUMED'",
+            name="ck_cf7_real_candidate_not_consumed",
+        ),
+        CheckConstraint(
             "delivery_method <> 'form_plan_fixture' OR status <> 'CONSUMED'",
             name="ck_fixture_plan_not_consumed",
         ),

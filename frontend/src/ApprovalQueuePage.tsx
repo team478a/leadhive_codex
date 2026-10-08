@@ -19,6 +19,7 @@ const reasonNames: Record<string, string> = {
   "source draft changed": "元の文面が変わりました。新しい内容で再準備してください。",
   "lead completion evidence, destination or sender changed": "下書き・根拠・窓口・送信者が変更または無効になりました。最新の情報で再準備してください。",
   'CF7 candidate evidence or payload changed': '保存済み証拠・文面・送信者・連絡可否のいずれかが変更または無効になりました。確認して再準備してください。',
+  'CF7 real candidate evidence or payload changed': '実サイトの入力確認・フォーム証拠・文面・送信者・連絡可否が変更または失効しました。企業詳細から再準備してください。',
   'superseded by CF7 revision': '改訂候補を作成したため、旧候補を無効にしました。',
   'request expired': '候補の有効期限が切れました。新しい有効な証拠で再準備してください。',
 }
@@ -148,6 +149,14 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
       {selected && <article className="panel mt-4">
         <h2>{selected.company_name} の提案内容</h2>
         {selected.delivery_method === 'cf7_candidate_only' && <p role="status">CF7候補内容の承認のみです。送信予約・実送信には使用できません。</p>}
+        {selected.delivery_method === 'cf7_real_candidate_only' && <section aria-label="実サイトCF7候補の承認資料">
+          <p role="status">実サイトCF7候補内容の承認です。承認後も送信予約・実送信には使用できません。</p>
+          {selected.cf7_real_handoff ? <>
+            <p>版別契約：{selected.cf7_real_handoff.snapshot.contract.contract_family} / 変換データ：{selected.cf7_real_handoff.snapshot.encoding.wire_size.toLocaleString('ja-JP')} bytes</p>
+            <p>入力確認日時：{date(selected.cf7_real_handoff.snapshot.input_review.reviewed_at)} / 証拠期限：{date(selected.cf7_real_handoff.snapshot.expires_at)}</p>
+            <p className="break-all">引き継ぎhash：{selected.cf7_real_handoff.snapshot_hash}</p>
+          </> : <p role="alert">確認資料を表示できません。最新状態を取得してください。</p>}
+        </section>}
         {selected.delivery_method === 'cf7_candidate_only' && <>
           {selected.cf7_candidate_snapshot ? <CF7CandidateDetails snapshot={selected.cf7_candidate_snapshot} hash={selected.cf7_candidate_snapshot_hash} observation={selected.cf7_observation} />
             : <p role="alert">候補証拠を表示できません。最新の状態を取得してください。</p>}
@@ -171,7 +180,8 @@ export function ApprovalQueuePage({ projects, projectRoles }: {
         {canWrite && selected.status === 'PENDING' && <form onSubmit={e => { e.preventDefault(); void approve() }}>
           <Field label="承認用パスワード（再認証）"><input type="password" autoComplete="current-password" required value={password} onChange={e => setPassword(e.target.value)} /></Field>
           {selected.delivery_method === 'cf7_candidate_only' && <label><input type="checkbox" checked={cf7Reviewed} onChange={e => setCf7Reviewed(e.target.checked)} /> CF7の入力値・同意・証拠期限を確認しました</label>}
-          <button type="submit" disabled={selected.delivery_method === 'cf7_candidate_only' && (!cf7Reviewed || !selected.cf7_candidate_snapshot || !selected.cf7_observation)}>{selected.delivery_method === 'cf7_candidate_only' ? 'CF7候補内容を承認（送信不可）' : '内容を確認して承認'}</button>
+          {selected.delivery_method === 'cf7_real_candidate_only' && <label><input type="checkbox" checked={cf7Reviewed} onChange={e => setCf7Reviewed(e.target.checked)} /> 実サイトの宛先・入力内容・証拠期限を確認しました（送信不可）</label>}
+          <button type="submit" disabled={selected.delivery_method === 'cf7_candidate_only' && (!cf7Reviewed || !selected.cf7_candidate_snapshot || !selected.cf7_observation) || selected.delivery_method === 'cf7_real_candidate_only' && (!cf7Reviewed || !selected.cf7_real_handoff)}>{['cf7_candidate_only', 'cf7_real_candidate_only'].includes(selected.delivery_method ?? '') ? 'CF7候補内容を承認（送信不可）' : '内容を確認して承認'}</button>
         </form>}
         {canWrite && ['PENDING', 'APPROVED'].includes(selected.status) && <div className="mt-4">
           <Field label="却下・取消の理由"><input maxLength={1000} value={reason} onChange={e => setReason(e.target.value)} /></Field>

@@ -16,6 +16,7 @@ export interface ApprovalProposal {
   cf7_candidate_snapshot?: CF7Snapshot | null
   cf7_candidate_snapshot_hash?: string | null
   cf7_observation?: CF7Observation | null
+  cf7_real_handoff?: { snapshot_hash: string; snapshot: { expires_at: string; input_review: { actor_user_id: string; reviewed_at: string }; encoding: { wire_size: number; wire_sha256: string }; contract: { contract_family: string; endpoint: string } } } | null
   source_draft_id?: string | null; proposal_id?: string; supersedes_request_id?: string | null
   sender: Record<string, string>; field_values: Record<string, string>
   payload_hash: string; payload_version: number; status: string

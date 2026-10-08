@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from app.models import (
     User,
 )
 from app.project_access import company_access, project_access
+from app.schema_core import Input
 from app.schema_form_review import FormInputReviewInput, FormReviewMaterialOut
 from app.schemas import (
     FormAnalysisLogOut,
@@ -410,6 +412,26 @@ def get_approval_handoff_preview(
     return prepare_approval_handoff(
         _input_preparation(profile, db, user), latest_live_check(db, profile)
     )
+
+
+class RealApprovalPreparation(Input):
+    expected_handoff_hash: str = Field(pattern="^[a-f0-9]{64}$")
+
+
+@router.post("/form-profiles/{profile_id}/approval-handoff-request", status_code=201)
+def create_real_approval_request(
+    profile_id: UUID,
+    data: RealApprovalPreparation,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.approval_routes import lock_preparation_sources, serialize
+    from app.services.cf7_real_approval import create_request
+
+    profile = _owned_profile(profile_id, db, user)
+    company = db.get(Company, profile.company_id)
+    lock_preparation_sources(db, company, user)
+    return serialize(db, create_request(db, profile, user, data.expected_handoff_hash))
 
 
 @router.get("/form-profiles/{profile_id}/choice-groups", response_model=list[dict])

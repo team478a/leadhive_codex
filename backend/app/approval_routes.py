@@ -70,7 +70,7 @@ def human_item(db, request_id, user, write=True, owner=False):
     )
     project_access(item.project_id, db, user, write=write, owner=owner)
     item = request_item(db, request_id)
-    if item.delivery_method == "cf7_candidate_only" and write:
+    if item.delivery_method in {"cf7_candidate_only", "cf7_real_candidate_only"} and write:
         lock_preparation_sources(db, db.get(Company, item.company_id), user)
     return item
 
@@ -85,6 +85,7 @@ def serialize(db, item):
     result["execution_plan_hash"] = item.payload_snapshot.get("execution_plan_hash")
     result["adapter_plan"] = item.payload_snapshot.get("adapter_plan")
     result["adapter_plan_hash"] = item.payload_snapshot.get("adapter_plan_hash")
+    result["cf7_real_handoff"] = item.payload_snapshot.get("cf7_real_handoff")
     if item.delivery_method == "cf7_candidate_only":
         result["cf7_candidate_snapshot"] = item.payload_snapshot.get("cf7_candidate_snapshot")
         result["cf7_candidate_snapshot_hash"] = item.payload_snapshot.get(
@@ -161,9 +162,17 @@ def lock_preparation_sources(db, company, user):
         .with_for_update()
         .execution_options(populate_existing=True)
     ).all()
-    db.scalar(select(FormSenderSettings).where(FormSenderSettings.id == 1).with_for_update())
+    db.scalar(
+        select(FormSenderSettings)
+        .where(FormSenderSettings.id == 1)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     db.scalars(
-        select(FormProfile).where(FormProfile.company_id == company.id).with_for_update()
+        select(FormProfile)
+        .where(FormProfile.company_id == company.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     ).all()
     db.scalars(
         select(FormProfileField)
@@ -173,6 +182,7 @@ def lock_preparation_sources(db, company, user):
             )
         )
         .with_for_update()
+        .execution_options(populate_existing=True)
     ).all()
 
 

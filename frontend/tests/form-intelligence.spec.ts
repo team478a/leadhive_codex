@@ -111,6 +111,17 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(handoff).toContainText('送信承認は未作成です')
   await handoff.getByText('引き継ぐ入力内容', { exact: true }).click()
   await expect(handoff).toContainText('引き継ぎ本文')
+  let candidateRequests = 0
+  await page.route('**/api/form-profiles/*/approval-handoff-request', route => {
+    expect(route.request().postDataJSON()).toEqual({ expected_handoff_hash: 'd'.repeat(64) })
+    candidateRequests++
+    return route.fulfill({ status: 201, json: { status: 'PENDING' } })
+  })
+  await handoff.getByRole('button', { name: '候補内容を承認キューへ追加（送信不可）' }).click()
+  await expect(handoff.getByRole('status')).toContainText('承認キューへ追加しました')
+  await expect(handoff.getByRole('button', { name: '候補内容を承認キューへ追加（送信不可）' })).toHaveCount(0)
+  expect(candidateRequests).toBe(1)
+  await page.unroute('**/api/form-profiles/*/approval-handoff-request')
   handoffChanged = true
   await inputPreparation.getByRole('button', { name: '承認へ引き継ぐ内容を確認' }).click()
   await expect(handoff).toContainText('引き継ぎを保留しています')

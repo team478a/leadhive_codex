@@ -29,15 +29,16 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
   const [error, setError] = useState('')
   const [contract, setContract] = useState<ContractPreview | null>(null)
   const [handoff, setHandoff] = useState<HandoffPreview | null>(null)
+  const [approvalNotice, setApprovalNotice] = useState('')
   async function load() {
-    setBusy(true); setConfirmed(false); setError(''); setReport(null); setContract(null); setHandoff(null)
+    setBusy(true); setConfirmed(false); setError(''); setReport(null); setContract(null); setHandoff(null); setApprovalNotice('')
     try { setReport(await api<Report>(`/form-profiles/${profileId}/input-preparation`)) }
     catch (err) { setError(err instanceof Error ? err.message : '確認票を取得できませんでした。') }
     finally { setBusy(false) }
   }
   async function record() {
     if (!report?.can_record || !confirmed) return
-    setBusy(true); setError(''); setContract(null); setHandoff(null)
+    setBusy(true); setError(''); setContract(null); setHandoff(null); setApprovalNotice('')
     try {
       setReport(await api<Report>(`/form-profiles/${profileId}/input-preparation/reviews`, 'POST', { expected_snapshot_hash: report.snapshot_hash, input_content_confirmed: true }))
       setConfirmed(false)
@@ -47,15 +48,24 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
     } finally { setBusy(false) }
   }
   async function inspectContract() {
-    setBusy(true); setError(''); setContract(null); setHandoff(null)
+    setBusy(true); setError(''); setContract(null); setHandoff(null); setApprovalNotice('')
     try { setContract(await api<ContractPreview>(`/form-profiles/${profileId}/contract-preview`)) }
     catch (err) { setError(err instanceof Error ? err.message : '契約プレビューを取得できませんでした。') }
     finally { setBusy(false) }
   }
   async function inspectHandoff() {
-    setBusy(true); setError(''); setHandoff(null)
+    setBusy(true); setError(''); setHandoff(null); setApprovalNotice('')
     try { setHandoff(await api<HandoffPreview>(`/form-profiles/${profileId}/approval-handoff-preview`)) }
     catch (err) { setContract(null); setError(err instanceof Error ? err.message : '引き継ぎ内容を取得できませんでした。') }
+    finally { setBusy(false) }
+  }
+  async function requestApproval() {
+    if (readOnly || !handoff?.snapshot_hash || handoff.status !== 'PREPARATION_ONLY') return
+    setBusy(true); setError(''); setApprovalNotice('')
+    try {
+      const item = await api<{ status: string }>(`/form-profiles/${profileId}/approval-handoff-request`, 'POST', { expected_handoff_hash: handoff.snapshot_hash })
+      setApprovalNotice(item.status === 'APPROVED' ? '同じ候補は承認済みです。送信は行っていません。' : '承認キューへ追加しました。承認キューで内容確認とパスワード再認証を行ってください。送信は行っていません。')
+    } catch (err) { setHandoff(null); setContract(null); setError(err instanceof Error ? err.message : '承認候補を作成できませんでした。再確認してください。') }
     finally { setBusy(false) }
   }
   return <section aria-label="入力内容の確認票" className="notice mt-4">
@@ -87,7 +97,7 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
         {!readOnly && contract.status === 'PREVIEW_ONLY' && <button type="button" className="secondary mt-2" disabled={busy} onClick={inspectHandoff}>承認へ引き継ぐ内容を確認</button>}
       </div>}
       {handoff && <div aria-label="承認引き継ぎプレビュー" className="mt-3">
-        <p>{handoff.status === 'PREPARATION_ONLY' ? '承認引き継ぎ用の内容を照合しました。送信承認は未作成です。' : '内容が変更・期限切れ・未確認のため、引き継ぎを保留しています。'}</p>
+        <p>{handoff.status === 'PREPARATION_ONLY' ? approvalNotice ? '承認キューへ引き継ぎました（送信不可）。' : '承認引き継ぎ用の内容を照合しました。送信承認は未作成です。' : '内容が変更・期限切れ・未確認のため、引き継ぎを保留しています。'}</p>
         <p>入力確認と送信承認は別です。この画面から承認・送信は行えません。</p>
         {handoff.reasons.map(code => <p key={code}>{contractReasons[code] ?? '追加確認が必要です。'}</p>)}
         {handoff.snapshot && <>
@@ -95,7 +105,9 @@ export function CompanyFormInputPreparation({ profileId, readOnly }: { profileId
           <p>内容の有効期限：{new Date(handoff.snapshot.expires_at).toLocaleString('ja-JP')}</p>
           <details><summary>引き継ぐ入力内容</summary>{handoff.snapshot.contract.parts.filter(part => part.kind !== 'metadata').map(part => <p className="break-all whitespace-pre-wrap" key={part.name}>{part.name}：{part.value || '空欄'}</p>)}</details>
           <p className="text-xs break-all">引き継ぎhash：{handoff.snapshot_hash}</p>
+          {!readOnly && handoff.status === 'PREPARATION_ONLY' && !approvalNotice && <button type="button" className="secondary mt-2" disabled={busy} onClick={requestApproval}>候補内容を承認キューへ追加（送信不可）</button>}
         </>}
+        {approvalNotice && <p role="status">{approvalNotice}</p>}
       </div>}
     </div>}
   </section>
