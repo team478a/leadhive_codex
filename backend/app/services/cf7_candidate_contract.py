@@ -56,9 +56,11 @@ def origin(url: str) -> str:
     return "https://" + host
 
 
-class CF7Candidate(FrozenContract):
-    contract_version: Literal["cf7-candidate-v1"] = "cf7-candidate-v1"
-    canonicalization_version: Literal["cf7-candidate-json-v1"] = "cf7-candidate-json-v1"
+class CF7ValidatedFields(FrozenContract):
+    """Shared lexical validation; concrete contracts must pin plugin/source versions."""
+
+    contract_version: str
+    canonicalization_version: str
     encoding_version: Literal["browser-crlf-utf8-v1"] = "browser-crlf-utf8-v1"
     environment: Literal["NON_EXECUTABLE"] = "NON_EXECUTABLE"
     delivery_method: Literal["cf7_candidate_only"] = "cf7_candidate_only"
@@ -72,12 +74,10 @@ class CF7Candidate(FrozenContract):
     endpoint: str = Field(max_length=2200)
     method: Literal["POST"] = "POST"
     form_id: int = Field(ge=1, le=2147483647)
-    plugin_version: Literal["6.1.4"] = "6.1.4"
+    plugin_version: str
     captcha_state: Literal["NONE"]
     execution_path: Literal["STATIC_CF7"] = "STATIC_CF7"
-    source_commit: Literal["165278e868387ec393569ecd2dbfda37e8b5b950"] = (
-        "165278e868387ec393569ecd2dbfda37e8b5b950"
-    )
+    source_commit: str
     dom_fingerprint_version: Literal["cf7-dom-rest-v1"] = "cf7-dom-rest-v1"
     dom_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
     hidden: tuple[InputValue, ...] = Field(min_length=6, max_length=6)
@@ -95,7 +95,7 @@ class CF7Candidate(FrozenContract):
     field_values: tuple[InputValue, ...] = Field(min_length=3, max_length=50)
 
     @model_validator(mode="after")
-    def binding(self) -> CF7Candidate:
+    def binding(self) -> CF7ValidatedFields:
         site = origin(self.form_url)
         roots = {site + "/wp-json/", site + "/?rest_route=/", site + "/index.php?rest_route=/"}
         expected_route = "contact-form-7/v1/contact-forms/" + str(self.form_id) + "/feedback"
@@ -190,6 +190,15 @@ class CF7Candidate(FrozenContract):
         if sum(len(v.value.encode("utf-8")) for v in (*self.hidden, *self.field_values)) > 40000:
             raise ValueError("Payload too large")
         return self
+
+
+class CF7Candidate(CF7ValidatedFields):
+    contract_version: Literal["cf7-candidate-v1"] = "cf7-candidate-v1"
+    canonicalization_version: Literal["cf7-candidate-json-v1"] = "cf7-candidate-json-v1"
+    plugin_version: Literal["6.1.4"] = "6.1.4"
+    source_commit: Literal["165278e868387ec393569ecd2dbfda37e8b5b950"] = (
+        "165278e868387ec393569ecd2dbfda37e8b5b950"
+    )
 
 
 def canonical(candidate: CF7Candidate) -> dict[str, Any]:

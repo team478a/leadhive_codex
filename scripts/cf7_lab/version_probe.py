@@ -262,6 +262,9 @@ def verify_version(origin, output, report, fixture, check, command, assets, page
         query, query_pairs = fixture_wire(query_page.text, origin)
         check("6.2 query root", "/index.php?rest_route=/" in query.endpoint)
         submit("query root", query, query_pairs)
+        from contract_62_probe import verify_contract_62
+
+        verify_contract_62(client, page.text, origin, report, fixture, check)
     report["version_comparison"] = {
         "plugin_version": "6.2",
         "hidden_names": [n for n, _ in standard.hidden],
@@ -270,7 +273,7 @@ def verify_version(origin, output, report, fixture, check, command, assets, page
         "browser_full_part_order_equal": equal,
         "part_count": len(mixed_pairs),
         "feedback_post_count": report["feedback_post_count"],
-        "candidate_contract_added": False,
+        "candidate_contract_added": True,
         "execution_allowed": False,
         "eligible_for_approval": False,
     }

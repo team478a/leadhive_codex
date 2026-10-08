@@ -326,3 +326,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [196_CF7_DOM_ORDERED_PROTOCOL_LAB.md](196_CF7_DOM_ORDERED_PROTOCOL_LAB.md): 混在フォーム全体のDOM順序・ブラウザpart一致・順序変更時のsnapshot拒否
 
 - [197_CF7_62_VERSION_COMPARISON.md](197_CF7_62_VERSION_COMPARISON.md): 固定6.2ソースと対応WP環境による比較・既定6.1.4の拒否境界維持
+
+- [198_CF7_62_NON_EXECUTABLE_CONTRACT.md](198_CF7_62_NON_EXECUTABLE_CONTRACT.md): 6.2専用の非実行契約・混在項目/DOM順序固定・6.1.4回帰検証・実送信接続なし

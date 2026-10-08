@@ -73,10 +73,16 @@ def canonical(candidate: OrderedCandidate) -> dict[str, Any]:
 def wire(candidate: OrderedCandidate) -> tuple[str, bytes]:
     data = canonical(candidate)
     plan = OrderedCandidate.model_validate_json(json.dumps(data))
+    return render_ordered(data, plan.order, values(plan.mixed))
+
+
+def render_ordered(
+    data: dict[str, Any], order: tuple[PartRef, ...], lookup: dict[tuple[str, str, str], str]
+) -> tuple[str, bytes]:
+    """Inert byte renderer; callers must validate their version-specific contract."""
     boundary = "----LeadHiveCF7Ordered" + digest(data)[:32]
-    lookup = values(plan.mixed)
     chunks = []
-    for ref in plan.order:
+    for ref in order:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,197}(?:\[\])?", ref.name):
             raise PlanError("Unsafe multipart name")
         value = re.sub(r"\r\n|\r|\n", "\r\n", lookup[key(ref)])
