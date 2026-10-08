@@ -322,3 +322,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [194_CF7_EXTRA_HIDDEN_PROTOCOL_LAB.md](194_CF7_EXTRA_HIDDEN_PROTOCOL_LAB.md): 固定非秘密hiddenの非実行契約・隔離CF7受付・変更/重複の拒否境界
 
 - [195_CF7_MIXED_PROTOCOL_LAB.md](195_CF7_MIXED_PROTOCOL_LAB.md): checkbox・radio・固定hiddenの混在契約・scope一致・合計上限・隔離受付検証
+
+- [196_CF7_DOM_ORDERED_PROTOCOL_LAB.md](196_CF7_DOM_ORDERED_PROTOCOL_LAB.md): 混在フォーム全体のDOM順序・ブラウザpart一致・順序変更時のsnapshot拒否
