@@ -7,6 +7,14 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
 LIMIT = 262144
+CONTRACT_MARKERS = {
+    "_wpcf7",
+    "_wpcf7_version",
+    "_wpcf7_locale",
+    "_wpcf7_unit_tag",
+    "_wpcf7_container_post",
+    "_wpcf7_posted_data_hash",
+}
 MARKERS = {"_wpcf7", "_wpcf7_version", "_wpcf7_locale", "_wpcf7_unit_tag"}
 
 
@@ -51,6 +59,13 @@ class Inspector(HTMLParser):
                 "enctype": (attrs.get("enctype") or "application/x-www-form-urlencoded").lower()
                 in {"application/x-www-form-urlencoded", "multipart/form-data"},
                 "names": [],
+                "hidden": {},
+                "visible_names": [],
+                "radios": 0,
+                "selects": 0,
+                "checkboxes": 0,
+                "checked": 0,
+                "disabled": 0,
                 "markers": set(),
                 "version": None,
                 "id_valid": False,
@@ -71,6 +86,17 @@ class Inspector(HTMLParser):
             self.current["names"].append(name)
         elif kind not in {"hidden", "submit", "button", "reset", "image"}:
             self.current["missing"] += 1
+        if kind == "hidden":
+            if name in self.current["hidden"]:
+                raise ValueError("duplicate hidden")
+            self.current["hidden"][name] = attrs.get("value") or ""
+        elif kind not in {"submit", "button", "reset", "image"}:
+            self.current["visible_names"].append(name)
+            self.current["disabled"] += "disabled" in attrs
+        self.current["radios"] += kind == "radio"
+        self.current["selects"] += kind == "select"
+        self.current["checkboxes"] += kind == "checkbox"
+        self.current["checked"] += kind == "checkbox" and "checked" in attrs
         if name in MARKERS:
             self.current["marker"] = True
             if name in self.current["markers"]:
@@ -92,8 +118,6 @@ class Inspector(HTMLParser):
             "tel",
             "textarea",
             "checkbox",
-            "radio",
-            "select",
             "hidden",
             "submit",
             "button",
@@ -109,6 +133,47 @@ class Inspector(HTMLParser):
     def handle_startendtag(self, tag, attrs):
         self.handle_starttag(tag, attrs)
         self.handle_endtag(tag)
+
+
+def contract_shape(form: dict | None) -> dict | None:
+    if form is None or not form["marker"]:
+        return None
+    hidden = form["hidden"]
+    form_id = hidden.get("_wpcf7", "")
+    container = hidden.get("_wpcf7_container_post", "")
+    id_valid = bool(re.fullmatch(r"[1-9][0-9]{0,9}", form_id)) and int(form_id) <= 2147483647
+    container_valid = bool(re.fullmatch(r"0|[1-9][0-9]*", container))
+    unit_prefix = "wpcf7-f" + form_id + ("-p" + container if container != "0" else "")
+    hidden_complete = CONTRACT_MARKERS <= hidden.keys()
+    hidden_valid = (
+        hidden_complete
+        and id_valid
+        and container_valid
+        and hidden.get("_wpcf7_version") == "6.1.4"
+        and bool(re.fullmatch(r"[a-z]{2,3}(?:_[A-Z]{2})?", hidden.get("_wpcf7_locale", "")))
+        and bool(
+            re.fullmatch(
+                re.escape(unit_prefix) + r"-o[1-9][0-9]*", hidden.get("_wpcf7_unit_tag", "")
+            )
+        )
+        and hidden.get("_wpcf7_posted_data_hash") == ""
+    )
+    names = form["visible_names"]
+    return {
+        "reviewed_lab_version": form["version"] == "6.1.4",
+        "hidden_complete": hidden_complete,
+        "hidden_shape_valid": hidden_valid,
+        "extra_hidden": len(hidden.keys() - CONTRACT_MARKERS),
+        "invalid_names": sum(
+            not bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,99}", name)) for name in names
+        ),
+        "repeated_names": len(names) - len(set(names)),
+        "radio_controls": form["radios"],
+        "select_controls": form["selects"],
+        "checkbox_controls": form["checkboxes"],
+        "checked_checkboxes": form["checked"],
+        "disabled_controls": form["disabled"],
+    }
 
 
 def inspect_html(html: str, url: str, index: int) -> dict:
@@ -137,6 +202,7 @@ def inspect_html(html: str, url: str, index: int) -> dict:
         "unsupported_controls": form["unsupported"] if form else 0,
         "rest_link_same_origin": parser.rest_same_origin and not parser.base_override,
         "base_override": parser.base_override,
+        "contract_shape": contract_shape(form),
         "execution_allowed": False,
         "eligible_for_approval": False,
     }

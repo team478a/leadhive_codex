@@ -134,7 +134,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
       freshness: 'CURRENT', expires_at: '2026-10-09T00:00:00Z',
       sales_prohibition_detected: false, captcha_state: 'NOT_DETECTED_STATIC',
       execution_allowed: false, message: '静的HTML確認・送信承認ではありません。',
-      cf7_static: { status: 'CF7_CANDIDATE', version: '6.1.4', form_count: 1, markers_complete: true, form_id_valid: true, rest_link_same_origin: true, missing_names: 0, file_inputs: 0, unsupported_controls: 0, base_override: false, execution_allowed: false, eligible_for_approval: false },
+      cf7_static: { contract_shape: { reviewed_lab_version: true, hidden_complete: true, hidden_shape_valid: false, extra_hidden: 1, invalid_names: 2, repeated_names: 1, radio_controls: 2, select_controls: 1, checkbox_controls: 1, checked_checkboxes: 1, disabled_controls: 1 }, status: 'CF7_CANDIDATE', version: '6.1.4', form_count: 1, markers_complete: true, form_id_valid: true, rest_link_same_origin: true, missing_names: 0, file_inputs: 0, unsupported_controls: 0, base_override: false, execution_allowed: false, eligible_for_approval: false },
       }
       savedChecks.set(route.request().url(), result)
       await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(result) })
@@ -159,6 +159,11 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   const cf7Static = liveReview.getByLabel('CF7の静的構造確認')
   await expect(cf7Static.getByText('保存マーカー：CF7候補 / バージョン：6.1.4', { exact: true })).toBeVisible()
   await expect(cf7Static.getByText(/接続・受付は未検証/)).toBeVisible()
+  const contract = cf7Static.getByLabel('限定契約との差分')
+  await expect(contract.getByText(/管理下テストと同じ版/)).toBeVisible()
+  await expect(contract.getByText(/不一致・確認が必要/)).toBeVisible()
+  await expect(contract.getByText(/未対応のラジオ：2件/)).toBeVisible()
+  await expect(contract.getByText(/同意内容と選択値は人による確認が必要/)).toBeVisible()
   await cf7Static.scrollIntoViewIfNeeded()
   await page.screenshot({ path: testInfo.outputPath('cf7-static-inspection.png') })
   await liveReview.getByText('保存済みの比較情報が不足・再解析が必要', { exact: true }).scrollIntoViewIfNeeded()

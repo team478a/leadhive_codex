@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { api } from './api'
 
-type CF7Static = { status: string; version?: string | null; form_count?: number; markers_complete?: boolean; form_id_valid?: boolean; rest_link_same_origin?: boolean; missing_names?: number; file_inputs?: number; unsupported_controls?: number; base_override?: boolean }
+type ContractShape = { reviewed_lab_version: boolean; hidden_complete: boolean; hidden_shape_valid: boolean; extra_hidden: number; invalid_names: number; repeated_names: number; radio_controls: number; select_controls: number; checkbox_controls: number; checked_checkboxes: number; disabled_controls: number }
+type CF7Static = { contract_shape?: ContractShape | null; status: string; version?: string | null; form_count?: number; markers_complete?: boolean; form_id_valid?: boolean; rest_link_same_origin?: boolean; missing_names?: number; file_inputs?: number; unsupported_controls?: number; base_override?: boolean }
 type Result = { checked_at: string | null; structure_status: string; sales_prohibition_detected: boolean; captcha_state: string; message: string; freshness: string; expires_at: string | null; fingerprint_match?: boolean | null; action_match?: boolean | null; method_is_post?: boolean | null; cf7_static?: CF7Static | null }
 const names: Record<string, string> = { SAME_STRUCTURE: '保存済み構造と一致', CHANGED: '構造または送信先に変更あり', UNSUPPORTED_METHOD: '通常のPOST送信経路に未対応', SAVED_BASELINE_INCOMPLETE: '保存済みの比較情報が不足・再解析が必要', REDIRECTED: 'ページ移動あり・再確認が必要', FORM_NOT_FOUND: '保存済みフォームが見つかりません', FETCH_FAILED: 'ページを確認できませんでした' }
 
@@ -59,6 +60,16 @@ export function CompanyFormLiveCheck({ profileId, fingerprint, readOnly, onRefre
           <p>基本マーカー：{result.cf7_static.markers_complete && result.cf7_static.form_id_valid ? '確認できた' : '不足・確認が必要'}</p>
           <p>同一サイトのRESTリンク：{result.cf7_static.rest_link_same_origin ? '見つかった（接続・受付は未検証）' : '未確認'}</p>
           <p>項目名不足：{result.cf7_static.missing_names ?? '未確認'}件 / ファイル欄：{result.cf7_static.file_inputs ?? '未確認'}件 / 限定対応外の項目：{result.cf7_static.unsupported_controls ?? '未確認'}件</p>
+          <div aria-label="限定契約との差分">
+            <p>限定契約との照合（送信可否の判定ではありません）</p>
+            {result.cf7_static.contract_shape ? <>
+              <p>バージョン：{result.cf7_static.contract_shape.reviewed_lab_version ? '管理下テストと同じ版（実サイト受付は未検証）' : '管理下テストの対象外・追加検証が必要'}</p>
+              <p>hidden 6項目：{result.cf7_static.contract_shape.hidden_complete ? 'そろっている' : '不足あり'} / 形式と対応関係：{result.cf7_static.contract_shape.hidden_shape_valid ? '限定形式に一致' : '不一致・確認が必要'}</p>
+              <p>契約外hidden：{result.cf7_static.contract_shape.extra_hidden}件 / 項目名の形式不一致：{result.cf7_static.contract_shape.invalid_names}件 / 項目名の重複：{result.cf7_static.contract_shape.repeated_names}件</p>
+              <p>未対応のラジオ：{result.cf7_static.contract_shape.radio_controls}件 / 選択リスト：{result.cf7_static.contract_shape.select_controls}件 / 無効化された項目：{result.cf7_static.contract_shape.disabled_controls}件</p>
+              <p>チェック欄：{result.cf7_static.contract_shape.checkbox_controls}件（初期選択済み：{result.cf7_static.contract_shape.checked_checkboxes}件）。同意内容と選択値は人による確認が必要です。</p>
+            </> : <p>以前の診断には限定契約の照合結果がありません。未確認として扱います。</p>}
+          </div>
           {result.cf7_static.base_override && <p>ページの基準URL指定があります。別途確認が必要です。</p>}
         </> : <p>{result.cf7_static.status === 'LIMIT_EXCEEDED' ? '解析サイズの上限を超えました。' : result.cf7_static.status === 'FORM_MISSING' ? '指定位置のフォームを確認できませんでした。' : '限定解析で構造を確認できませんでした。'}送信許可には使いません。</p>}
       </div>}

@@ -11,6 +11,21 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class ContractShape(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    reviewed_lab_version: bool
+    hidden_complete: bool
+    hidden_shape_valid: bool
+    extra_hidden: int = Field(ge=0, le=100)
+    invalid_names: int = Field(ge=0, le=100)
+    repeated_names: int = Field(ge=0, le=100)
+    radio_controls: int = Field(ge=0, le=100)
+    select_controls: int = Field(ge=0, le=100)
+    checkbox_controls: int = Field(ge=0, le=100)
+    checked_checkboxes: int = Field(ge=0, le=100)
+    disabled_controls: int = Field(ge=0, le=100)
+
+
 class StaticInspection(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     status: Literal["CF7_CANDIDATE", "NOT_CF7", "FORM_MISSING"]
@@ -25,6 +40,7 @@ class StaticInspection(BaseModel):
     unsupported_controls: int = Field(ge=0, le=10000)
     rest_link_same_origin: bool
     base_override: bool
+    contract_shape: ContractShape | None = None
     execution_allowed: Literal[False]
     eligible_for_approval: Literal[False]
 

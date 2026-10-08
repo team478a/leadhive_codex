@@ -115,3 +115,66 @@ def test_rest_link_must_be_a_root_and_scripts_remain_inert():
     result = service.inspect_isolated(html, URL, 0)
     assert result["status"] == "CF7_CANDIDATE" and not result["rest_link_same_origin"]
     assert "PRIVATE" not in json.dumps(result)
+
+
+CONTRACT_HTML = HTML.replace("private-token", "wpcf7-f7-o1").replace(
+    "</form>",
+    '<input type="hidden" name="_wpcf7_container_post" value="0">'
+    '<input type="hidden" name="_wpcf7_posted_data_hash" value=""></form>',
+)
+
+
+def test_contract_hidden_shape_is_separate_from_basic_markers():
+    basic = service.inspect_isolated(HTML, URL, 0)
+    assert basic["markers_complete"]
+    assert not basic["contract_shape"]["hidden_complete"]
+    full = service.inspect_isolated(CONTRACT_HTML, URL, 0)
+    assert full["contract_shape"]["hidden_shape_valid"]
+    assert not full["eligible_for_approval"] and not full["execution_allowed"]
+
+
+@pytest.mark.parametrize(
+    "old,new",
+    [
+        ("6.1.4", "6.2"),
+        ("wpcf7-f7-o1", "wpcf7-f8-o1"),
+        ('value="7"', 'value="2147483648"'),
+        ('value="ja"', 'value="PRIVATE"'),
+        (
+            'name="_wpcf7_posted_data_hash" value=""',
+            'name="_wpcf7_posted_data_hash" value="PRIVATE"',
+        ),
+    ],
+    ids=["unreviewed-version", "unit-mismatch", "id-overflow", "locale", "posted-hash"],
+)
+def test_contract_hidden_mismatch_never_claims_compatibility(old, new):
+    result = service.inspect_isolated(CONTRACT_HTML.replace(old, new), URL, 0)
+    assert not result["contract_shape"]["hidden_shape_valid"]
+    assert "PRIVATE" not in json.dumps(result)
+
+
+def test_selection_groups_extra_hidden_and_defaults_are_explicit():
+    html = CONTRACT_HTML.replace(
+        "</form>",
+        '<input type="hidden" name="nonce" value="PRIVATE">'
+        '<input type="radio" name="group[]"><input type="radio" name="group[]">'
+        '<select name="choice"></select>'
+        '<input type="checkbox" name="consent" checked disabled></form>',
+    )
+    result = service.inspect_isolated(html, URL, 0)
+    shape = result["contract_shape"]
+    assert result["unsupported_controls"] == 3
+    assert shape["radio_controls"] == 2 and shape["select_controls"] == 1
+    assert shape["invalid_names"] == 2 and shape["repeated_names"] == 1
+    assert shape["extra_hidden"] == 1 and shape["disabled_controls"] == 1
+    assert shape["checkbox_controls"] == shape["checked_checkboxes"] == 1
+    assert "PRIVATE" not in json.dumps(result) and "nonce" not in json.dumps(result)
+
+
+def test_older_saved_diagnosis_is_unknown_not_success():
+    result = service.inspect_isolated(HTML, URL, 0)
+    result.pop("contract_shape")
+    assert service.validate_saved(result)["contract_shape"] is None
+    malicious = service.inspect_isolated(HTML, URL, 0)
+    malicious["contract_shape"]["extra_hidden"] = "PRIVATE"
+    assert service.validate_saved(malicious) is None
