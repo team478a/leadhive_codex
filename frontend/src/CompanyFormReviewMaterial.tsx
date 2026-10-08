@@ -100,7 +100,7 @@ export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, finge
     <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : '入力候補を更新'}</button>
     {error && <p className="error mt-3" role="alert">{error}</p>}
     <CompanyFormSavedChoices profileId={profileId} structure={material?.saved_choice_structure ?? null} />
-    {material?.saved_choice_structure?.groups.length ? <CompanyFormSavedChoiceReviews key={material.saved_choice_structure.source_hash} profileId={profileId} readOnly={readOnly} /> : null}
+    {material?.saved_choice_structure ? <CompanyFormSavedChoiceReviews key={material.saved_choice_structure.source_hash} profileId={profileId} readOnly={readOnly} /> : null}
     {material && <div className="mt-3">
       <h3>フォーム入力の確認資料</h3>
       <p className="notice mt-3">保存済み情報から作った候補です。この表示では承認・送信されません。現在のページの確認結果は上の欄で確認してください。</p>

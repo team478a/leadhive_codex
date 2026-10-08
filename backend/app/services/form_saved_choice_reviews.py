@@ -71,31 +71,75 @@ def reviews(db: Session, profile: FormProfile) -> list[dict]:
         .order_by(FormAnalysisLog.created_at.desc(), FormAnalysisLog.id.desc())
     ).all()
     result = []
+    now = datetime.now(timezone.utc)
+    current_ids: set[str] = set()
     for group in material(db, profile)["groups"]:
+        current_ids.add(group["group_id"])
         latest = next(
             (log for log in logs if log.details.get("group_id") == group["group_id"]), None
         )
         status = "NOT_REVIEWED"
+        reasons = []
+        supported = reviewable(group, profile)
         if latest:
             status = "RECORDED"
-            if latest.details["source_hash"] != group["source_hash"] or profile.form_status in {
-                "STALE",
-                "ERROR",
-            }:
+            if latest.details["source_hash"] != group["source_hash"]:
                 status = "STALE"
-            elif datetime.fromisoformat(latest.details["expires_at"]) <= datetime.now(timezone.utc):
-                status = "EXPIRED"
+                reasons.append("SOURCE_CHANGED")
+            if profile.form_status in {"STALE", "ERROR"}:
+                status = "STALE"
+                reasons.append("PROFILE_UNVERIFIED")
+            if datetime.fromisoformat(latest.details["expires_at"]) <= now:
+                if status == "RECORDED":
+                    status = "EXPIRED"
+                reasons.append("REVIEW_EXPIRED")
+        else:
+            reasons.append("REVIEW_MISSING")
+        if not supported:
+            reasons.append("REVIEW_UNSUPPORTED")
         result.append(
             group
             | {
-                "review_supported": reviewable(group, profile),
+                "review_supported": supported,
                 "review_status": status,
+                "review_current": status == "RECORDED" and supported,
+                "check_reasons": reasons,
+                "evaluated_at": now,
+                "present_in_saved_fields": True,
                 "reviewed_at": latest.created_at if latest else None,
                 "reviewed_by": str(latest.actor_user_id) if latest else None,
                 "expires_at": latest.details["expires_at"] if latest else None,
                 "recorded_rule": latest.details["rule"] if latest else None,
                 # Stale/expired values are historical only, never active selections.
                 "recorded_options": latest.details["options"] if latest else [],
+            }
+        )
+    # A removed/renamed group must not silently disappear from the review queue.
+    seen = set(current_ids)
+    for log in logs:
+        group_id = log.details.get("group_id")
+        if not isinstance(group_id, str) or group_id in seen:
+            continue
+        seen.add(group_id)
+        result.append(
+            {
+                "group_id": group_id,
+                "label": "現在の保存情報にない項目",
+                "source_hash": log.details["source_hash"],
+                "options": [],
+                "review_supported": False,
+                "review_status": "REMOVED",
+                "review_current": False,
+                "present_in_saved_fields": False,
+                "check_reasons": ["GROUP_REMOVED"],
+                "evaluated_at": now,
+                "recorded_rule": log.details["rule"],
+                "recorded_options": log.details["options"],
+                "reviewed_at": log.created_at,
+                "reviewed_by": str(log.actor_user_id),
+                "expires_at": log.details["expires_at"],
+                "execution_allowed": False,
+                "eligible_for_approval": False,
             }
         )
     return result
