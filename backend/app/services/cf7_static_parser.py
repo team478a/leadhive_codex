@@ -149,7 +149,7 @@ def contract_shape(form: dict | None) -> dict | None:
         hidden_complete
         and id_valid
         and container_valid
-        and hidden.get("_wpcf7_version") == "6.1.4"
+        and hidden.get("_wpcf7_version") in {"6.1.4", "6.2"}
         and bool(re.fullmatch(r"[a-z]{2,3}(?:_[A-Z]{2})?", hidden.get("_wpcf7_locale", "")))
         and bool(
             re.fullmatch(
@@ -162,7 +162,8 @@ def contract_shape(form: dict | None) -> dict | None:
     return {
         "reviewed_lab_version": form["version"] == "6.1.4",
         "hidden_complete": hidden_complete,
-        "hidden_shape_valid": hidden_valid,
+        "hidden_shape_valid": hidden_valid and form["version"] == "6.1.4",
+        "review_hidden_shape_valid": hidden_valid,
         "extra_hidden": len(hidden.keys() - CONTRACT_MARKERS),
         "invalid_names": sum(
             not bool(re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]{0,99}", name)) for name in names

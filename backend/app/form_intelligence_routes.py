@@ -18,7 +18,7 @@ from app.models import (
     User,
 )
 from app.project_access import company_access, project_access
-from app.schema_form_review import FormReviewMaterialOut
+from app.schema_form_review import FormInputReviewInput, FormReviewMaterialOut
 from app.schemas import (
     FormAnalysisLogOut,
     FormFieldCorrectionInput,
@@ -29,9 +29,11 @@ from app.schemas import (
     OperationJobOut,
 )
 from app.security import current_user
+from app.services.cf7_candidate_preparation import profile_source_hash
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_adapter_prerequisites import assess as assess_adapter_prerequisites
 from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
+from app.services.form_input_preparation import prepare as prepare_form_inputs
 from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
 from app.services.form_live_check import check as check_live_form
@@ -277,6 +279,96 @@ def get_form_review_material(
             diagnostic, observation, saved_choice_reviews(db, profile)
         ),
     }
+
+
+def _input_preparation(profile: FormProfile, db: Session, user: User) -> dict:
+    material = get_form_review_material(profile.id, db, user)
+    material["form_url"] = profile.form_url
+    company = db.get(Company, profile.company_id)
+    assert company is not None
+    material["project_id"] = str(company.project_id)
+    fields = [f.model_dump() for f in _profile_out(db, profile).fields]
+    report = prepare_form_inputs(
+        material,
+        fields,
+        latest_live_check(db, profile),
+        source_hash=profile_source_hash(db, profile),
+    )
+    log = db.scalar(
+        select(FormAnalysisLog)
+        .where(
+            FormAnalysisLog.form_profile_id == profile.id,
+            FormAnalysisLog.details["operation"].astext == "input_preparation_review",
+        )
+        .order_by(FormAnalysisLog.created_at.desc(), FormAnalysisLog.id.desc())
+        .limit(1)
+    )
+    if log:
+        same = report["can_record"] and log.details.get("snapshot_hash") == report["snapshot_hash"]
+        valid_until = datetime.fromisoformat(log.details["expires_at"])
+        report["review_status"] = (
+            "RECORDED"
+            if same and valid_until > datetime.now(timezone.utc)
+            else "EXPIRED"
+            if same
+            else "INVALIDATED"
+        )
+        report["reviewed_at"] = log.created_at
+        report["reviewed_by"] = str(log.actor_user_id)
+        report["review_expires_at"] = log.details["expires_at"]
+    return report
+
+
+@router.get("/form-profiles/{profile_id}/input-preparation")
+def get_input_preparation(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    return _input_preparation(_owned_profile(profile_id, db, user, write=False), db, user)
+
+
+@router.post("/form-profiles/{profile_id}/input-preparation/reviews")
+def record_input_preparation(
+    profile_id: UUID,
+    data: FormInputReviewInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    _owned_profile(profile_id, db, user)
+    profile = db.scalar(
+        select(FormProfile)
+        .where(FormProfile.id == profile_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    report = _input_preparation(profile, db, user)
+    if not report["can_record"] or report["snapshot_hash"] != data.expected_snapshot_hash:
+        raise HTTPException(
+            409, "入力内容・構造・証拠が変更または未確認です。確認票を読み直してください。"
+        )
+    if report["review_status"] != "RECORDED":
+        expiry = min(
+            datetime.now(timezone.utc) + timedelta(hours=24),
+            datetime.fromisoformat(report["snapshot"]["observation_expires_at"]),
+        )
+        db.add(
+            FormAnalysisLog(
+                company_id=profile.company_id,
+                form_profile_id=profile.id,
+                actor_user_id=user.id,
+                event_type="manual_corrected",
+                details={
+                    "operation": "input_preparation_review",
+                    "snapshot_hash": report["snapshot_hash"],
+                    "definition_version": "saved-form-input-review-v1",
+                    "expires_at": expiry.isoformat(),
+                    "execution_allowed": False,
+                    "eligible_for_approval": False,
+                },
+            )
+        )
+        db.commit()
+    return _input_preparation(profile, db, user)
 
 
 @router.get("/form-profiles/{profile_id}/choice-groups", response_model=list[dict])

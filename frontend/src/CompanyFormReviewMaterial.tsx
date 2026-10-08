@@ -9,6 +9,7 @@ import type { SavedChoiceStructure } from './CompanyFormSavedChoices'
 import { CompanyFormSavedChoiceReviews } from './CompanyFormSavedChoiceReviews'
 import { CompanyFormAdapterPrerequisites } from './CompanyFormAdapterPrerequisites'
 import type { AdapterPrerequisites } from './CompanyFormAdapterPrerequisites'
+import { CompanyFormInputPreparation } from './CompanyFormInputPreparation'
 
 type Material = {
   adapter_prerequisites?: AdapterPrerequisites
@@ -135,6 +136,7 @@ export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, finge
       </section>}
       <h3 className="mt-4">選択・同意・入力先の確認</h3>
       {material.adapter_prerequisites && <CompanyFormAdapterPrerequisites report={material.adapter_prerequisites} />}
+      <CompanyFormInputPreparation key={`${profileId}:${material.profile_fingerprint}:${material.draft_id}:${fieldVersion}:${JSON.stringify(material.items)}`} profileId={profileId} readOnly={readOnly} />
       <p className="muted text-sm mt-2">確認対象の一覧です。記録済みの項目も表示します。件数は未確認件数や送信可能件数ではありません。</p>
       {material.profile_fingerprint === fingerprint && !material.items.some(item => reviewStates.has(item.review_state)) && <p className="muted mt-3">個別の選択確認対象はありません。窓口・本文・送信経路の確認は引き続き必要です。</p>}
       {material.profile_fingerprint === fingerprint && material.items.some(item => item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED') && <CompanyFormChoiceGroups profileId={profileId} readOnly={readOnly} onSaved={async () => { await onRefresh(); await load() }} />}

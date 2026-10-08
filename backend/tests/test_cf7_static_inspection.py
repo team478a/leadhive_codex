@@ -133,6 +133,17 @@ def test_contract_hidden_shape_is_separate_from_basic_markers():
     assert not full["eligible_for_approval"] and not full["execution_allowed"]
 
 
+def test_62_input_review_shape_does_not_enable_legacy_contract():
+    result = service.inspect_isolated(CONTRACT_HTML.replace("6.1.4", "6.2"), URL, 0)
+    assert result["contract_shape"]["review_hidden_shape_valid"]
+    assert not result["contract_shape"]["hidden_shape_valid"]
+    assert not result["execution_allowed"] and not result["eligible_for_approval"]
+    changed = service.inspect_isolated(
+        CONTRACT_HTML.replace("6.1.4", "6.2").replace("wpcf7-f7-o1", "wpcf7-f8-o1"), URL, 0
+    )
+    assert not changed["contract_shape"]["review_hidden_shape_valid"]
+
+
 @pytest.mark.parametrize(
     "old,new",
     [

@@ -78,6 +78,35 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   const prerequisites = inputReview.getByRole('region', { name: 'フォーム対応の前提条件' })
   await expect(prerequisites).toContainText('実サイト対応済み・営業許可・送信承認を意味しません。')
   await expect(prerequisites).toContainText('複数選択の確認履歴：確認が必要')
+  const inputPreparation = inputReview.getByRole('region', { name: '入力内容の確認票' })
+  let preparationRecords = 0
+  let changedPreparation = false
+  await page.route('**/api/form-profiles/*/input-preparation', route => route.fulfill({ json: {
+    snapshot_hash: 'a'.repeat(64), can_record: true, review_status: 'NOT_RECORDED', reasons: [],
+    snapshot: { form_url: `https://${domain}/contact`, plugin_version: '6.2', rows: [{ position: 0, name: 'body', label: '本文', required: true, values: ['確認票の本文候補'], state: 'UNAPPROVED_DRAFT_VALUE' }] },
+  } }))
+  await page.route('**/api/form-profiles/*/input-preparation/reviews', async route => {
+    preparationRecords += 1
+    expect(route.request().postDataJSON()).toEqual({ expected_snapshot_hash: 'a'.repeat(64), input_content_confirmed: true })
+    if (changedPreparation) await route.fulfill({ status: 409, json: { detail: '入力内容が変更されました。確認票を読み直してください。' } })
+    else await route.fulfill({ json: { snapshot_hash: 'a'.repeat(64), can_record: true, review_status: 'RECORDED', reasons: [], snapshot: { form_url: `https://${domain}/contact`, plugin_version: '6.2', rows: [] } } })
+  })
+  await inputPreparation.getByRole('button', { name: '入力内容をまとめて確認' }).click()
+  await expect(inputPreparation.getByRole('button', { name: '入力内容の確認を記録' })).toBeDisabled()
+  await inputPreparation.getByText('本文（必須）：値あり', { exact: true }).click()
+  await expect(inputPreparation.getByText('確認票の本文候補', { exact: true })).toBeVisible()
+  await inputPreparation.getByRole('checkbox').check()
+  await inputPreparation.getByRole('button', { name: '入力内容の確認を記録' }).click()
+  await expect(inputPreparation).toContainText('入力確認を記録済み（送信承認ではありません）')
+  changedPreparation = true
+  await inputPreparation.getByRole('button', { name: '入力内容をまとめて確認' }).click()
+  await inputPreparation.getByRole('checkbox').check()
+  await inputPreparation.getByRole('button', { name: '入力内容の確認を記録' }).click()
+  await expect(inputPreparation.getByRole('alert')).toContainText('確認票を読み直してください')
+  await expect(inputPreparation.getByRole('checkbox')).toHaveCount(0)
+  expect(preparationRecords).toBe(2)
+  await page.unroute('**/api/form-profiles/*/input-preparation')
+  await page.unroute('**/api/form-profiles/*/input-preparation/reviews')
   await prerequisites.getByText('送信承認：別工程で確認', { exact: true }).click()
   await expect(prerequisites).toContainText('入力の確認履歴は送信承認ではありません。')
   const choiceRecord = inputReview.getByRole('region', { name: '複数選択の確認記録' })

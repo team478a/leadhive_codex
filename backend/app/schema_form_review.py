@@ -2,7 +2,21 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, StrictBool, field_validator
+
+from app.schema_core import Input
+
+
+class FormInputReviewInput(Input):
+    expected_snapshot_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
+    input_content_confirmed: StrictBool
+
+    @field_validator("input_content_confirmed")
+    @classmethod
+    def confirmed(cls, value: bool) -> bool:
+        if not value:
+            raise ValueError("Explicit Human input confirmation required")
+        return value
 
 
 class FormReviewMaterialOut(BaseModel):

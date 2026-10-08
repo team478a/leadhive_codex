@@ -16,6 +16,7 @@ class ContractShape(BaseModel):
     reviewed_lab_version: bool
     hidden_complete: bool
     hidden_shape_valid: bool
+    review_hidden_shape_valid: bool | None = None
     extra_hidden: int = Field(ge=0, le=100)
     invalid_names: int = Field(ge=0, le=100)
     repeated_names: int = Field(ge=0, le=100)
