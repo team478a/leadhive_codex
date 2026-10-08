@@ -76,6 +76,17 @@ def seed(auth, db):
 
 def test_read_only_material_missing_draft_and_agent_rejected(auth, db):
     _, _, profile = seed(auth, db)
+    db.add(
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=2,
+            name="services[]",
+            field_type="checkbox",
+            label="事業内容",
+            options=[{"label": "SNS運用", "value": "SNS"}, {"label": "OEM", "value": "OEM"}],
+        )
+    )
+    db.commit()
     tables = (
         "form_profiles",
         "form_profile_fields",
@@ -97,6 +108,10 @@ def test_read_only_material_missing_draft_and_agent_rejected(auth, db):
     assert body["draft_id"] is None and body["missing_required_values"] == 2
     assert not body["execution_supported"] and not body["human_approved"]
     assert not body["live_form_checked"]
+    structure = body["saved_choice_structure"]
+    assert len(structure["groups"]) == 1
+    assert not structure["execution_allowed"] and not structure["eligible_for_approval"]
+    assert structure["groups"][0]["options"][0]["value"] == "SNS"
     assert body["technical_diagnostic"]["route"] == "UNKNOWN"
     assert not body["technical_diagnostic"]["execution_allowed"]
     assert not body["technical_diagnostic"]["live_fetch_performed"]

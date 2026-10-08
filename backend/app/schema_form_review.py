@@ -26,3 +26,4 @@ class FormReviewMaterialOut(BaseModel):
     live_form_checked: Literal[False]
 
     technical_diagnostic: dict
+    saved_choice_structure: dict

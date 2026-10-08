@@ -90,6 +90,15 @@ with SessionLocal() as db:
     db.add_all(
         [
             FormProfileField(
+                form_profile_id=primary.id,
+                position=2,
+                name="services[]",
+                label="事業内容",
+                field_type="checkbox",
+                mapped_key="unknown",
+                options=[{"label": "SNS運用", "value": "SNS"}, {"label": "OEM", "value": "OEM"}],
+            ),
+            FormProfileField(
                 form_profile_id=secondary.id,
                 position=3,
                 name="web[]",

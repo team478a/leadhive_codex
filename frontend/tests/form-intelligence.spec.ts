@@ -71,6 +71,10 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   const profileCards = formPanel.locator('.form-profile-card')
   await expect(profileCards).toHaveCount(2)
   const inputReview = profileCards.first().getByRole('region', { name: 'フォーム入力確認' })
+  const savedChoices = inputReview.getByRole('region', { name: '同名チェック項目の確認資料' })
+  await expect(savedChoices.getByText('SNS運用（選択値：SNS）', { exact: true })).toBeVisible()
+  await expect(savedChoices.getByText(/用途と選択条件は未確認/)).toBeVisible()
+  await expect(savedChoices.getByRole('checkbox')).toHaveCount(0)
   await expect(inputReview.getByRole('region', { name: '送信経路の技術診断' })).toContainText('通常POST経路の候補')
   await expect(inputReview.getByRole('region', { name: '送信経路の技術診断' })).toContainText('技術対応の確認待ち')
   await page.getByRole('button', { name: 'プロジェクトの窓口候補を整理', exact: true }).click()
@@ -191,6 +195,29 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toHaveCount(0)
   await inputReview.getByRole('button', { name: '入力候補を更新', exact: true }).click()
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toBeVisible()
+  await page.unroute('**/api/form-profiles/*/review-material')
+  await page.route('**/api/form-profiles/*/review-material', async route => {
+    const response = await route.fetch()
+    const body = await response.json()
+    if (body.saved_choice_structure?.groups.length) {
+      body.saved_choice_structure.source_hash = 'c'.repeat(64)
+      body.saved_choice_structure.groups[0].options[0].label = '変更された選択肢'
+    }
+    await route.fulfill({ response, json: body })
+  })
+  await inputReview.getByRole('button', { name: '入力候補を更新', exact: true }).click()
+  await expect(savedChoices.getByText(/以前表示した項目・選択肢・フォーム構造から変更/)).toBeVisible()
+  await expect(savedChoices.getByText(/変更された選択肢/)).toBeVisible()
+  await page.unroute('**/api/form-profiles/*/review-material')
+  await page.route('**/api/form-profiles/*/review-material', async route => {
+    const response = await route.fetch()
+    const body = await response.json()
+    body.saved_choice_structure = { ...body.saved_choice_structure, source_hash: 'd'.repeat(64), groups: [] }
+    await route.fulfill({ response, json: body })
+  })
+  await inputReview.getByRole('button', { name: '入力候補を更新', exact: true }).click()
+  await expect(savedChoices.getByText(/以前表示した項目・選択肢・フォーム構造から変更/)).toBeVisible()
+  await expect(savedChoices.getByText('現在の保存情報には、複数選択の候補がありません。', { exact: true })).toBeVisible()
   await page.unroute('**/api/form-profiles/*/review-material')
   await inputReview.getByRole('region', { name: '確認の進め方' }).scrollIntoViewIfNeeded()
   await page.screenshot({ path: testInfo.outputPath('human-review-handoff-viewport.png') })

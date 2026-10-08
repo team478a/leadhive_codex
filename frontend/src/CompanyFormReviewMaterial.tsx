@@ -4,8 +4,11 @@ import { openDestinationReview } from './formReviewNavigation'
 import type { FormMappedKey, FormProfileField } from './types'
 import { CompanyFormChoiceGroups } from './CompanyFormChoiceGroups'
 import { CompanyFormLiveCheck } from './CompanyFormLiveCheck'
+import { CompanyFormSavedChoices } from './CompanyFormSavedChoices'
+import type { SavedChoiceStructure } from './CompanyFormSavedChoices'
 
 type Material = {
+  saved_choice_structure?: SavedChoiceStructure
   technical_diagnostic?: { route: string; boundary: string; reasons: { code: string; message: string }[]; observation_freshness: string; missing_field_names: number; execution_allowed: false; next_action: string }
   draft_id: string | null
   source_observed_at: string | null
@@ -95,6 +98,7 @@ export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, finge
     <CompanyFormLiveCheck profileId={profileId} fingerprint={fingerprint} readOnly={readOnly} onRefresh={onRefresh} />
     <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : '入力候補を更新'}</button>
     {error && <p className="error mt-3" role="alert">{error}</p>}
+    <CompanyFormSavedChoices profileId={profileId} structure={material?.saved_choice_structure ?? null} />
     {material && <div className="mt-3">
       <h3>フォーム入力の確認資料</h3>
       <p className="notice mt-3">保存済み情報から作った候補です。この表示では承認・送信されません。現在のページの確認結果は上の欄で確認してください。</p>

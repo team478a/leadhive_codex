@@ -1,0 +1,21 @@
+{
+  "baseline_commit": "5fe61b32b112889fd5b418a8f80336d3c1d6eba5",
+  "working_tree_modified": true,
+  "source": "SAVED_FIELDS",
+  "profiles": 2,
+  "groups": 5,
+  "options": 22,
+  "warnings": {
+    "PURPOSE_AND_RULE_UNCONFIRMED": 5,
+    "STORED_ORDER_ONLY": 5
+  },
+  "database_unchanged": true,
+  "database_tables_hashed": 12,
+  "read_only": true,
+  "external_requests": 0,
+  "review_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound": false
+}
