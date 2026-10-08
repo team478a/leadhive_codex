@@ -322,6 +322,22 @@ def test_group_expiration_and_changes_invalidate_ledger(auth, db):
     assert auth.get(path).json()[0]["review_status"] == "STALE"
 
 
+@pytest.mark.parametrize("status", ["STALE", "ERROR"])
+def test_group_review_cannot_clear_live_check_failure(auth, db, status):
+    _, _, profile, _, path, group, payload = seed_group(auth, db)
+    write = path + f"/{group['group_id']}/review"
+    assert auth.post(write, json=payload).status_code == 200
+    profile.form_status = status
+    profile.delivery_supported = False
+    profile.review_reason = "最新状態を確認できません"
+    db.commit()
+    payload["expected_source_hash"] = auth.get(path).json()[0]["source_hash"]
+    assert auth.get(path).json()[0]["review_status"] == "STALE"
+    assert auth.post(write, json=payload).status_code == 409
+    db.refresh(profile)
+    assert profile.form_status == status and profile.review_reason == "最新状態を確認できません"
+
+
 @pytest.mark.parametrize("bad", ["unnamed", "consent", "duplicates", "duplicate_option_values"])
 def test_group_unsupported_shapes_are_not_reviewable(auth, db, bad):
     _, _, _, fields, path, group, payload = seed_group(auth, db)

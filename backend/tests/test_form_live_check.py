@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta, timezone
+
 import pytest
 from bs4 import BeautifulSoup
 from sqlalchemy import select, text
@@ -174,3 +176,98 @@ def test_redirect_robots_guard(monkeypatch):
             fetcher._request("https://public.example/redirect-target", 100, redirects=1)
     finally:
         fetcher.close()
+
+
+def test_latest_result_is_read_only_and_survives_reopen(auth, db, monkeypatch, users):
+    project, _, profile = prepare(auth, db)
+    calls = mock_page(monkeypatch, profile)
+    path = f"/api/form-profiles/{profile.id}/live-check"
+    assert auth.get(path).json() is None
+    posted = auth.post(path).json()
+    assert posted["freshness"] == "CURRENT" and posted["expires_at"]
+    before = (
+        db.execute(text("SELECT row_to_json(t)::text FROM form_analysis_logs t")).scalars().all()
+    )
+    assert auth.get(path).json() == posted
+    assert auth.get(path, headers={"Authorization": "Bearer agent"}).status_code in (401, 403)
+    auth.post(
+        "/api/auth/login", json={"email": users[1].email, "password": "test-only-long-password"}
+    )
+    assert auth.get(path).status_code == 404
+    db.add(ProjectMember(project_id=project["id"], user_id=users[1].id, role="viewer"))
+    db.commit()
+    assert auth.get(path).json() == posted
+    assert calls == [profile.form_url, "closed"]
+    assert (
+        before
+        == db.execute(text("SELECT row_to_json(t)::text FROM form_analysis_logs t")).scalars().all()
+    )
+    assert "source_binding" not in posted
+
+
+@pytest.mark.parametrize(
+    "change,expected",
+    [
+        ("expired", "EXPIRED"),
+        ("fingerprint", "SOURCE_CHANGED"),
+        ("url", "SOURCE_CHANGED"),
+        ("action", "SOURCE_CHANGED"),
+        ("index", "SOURCE_CHANGED"),
+        ("invalid", "INVALID"),
+        ("future", "INVALID"),
+    ],
+)
+def test_latest_freshness_never_grants_permission(auth, db, monkeypatch, change, expected):
+    _, _, profile = prepare(auth, db)
+    mock_page(monkeypatch, profile)
+    path = f"/api/form-profiles/{profile.id}/live-check"
+    assert auth.post(path).status_code == 200
+    log = db.scalar(select(FormAnalysisLog).where(FormAnalysisLog.form_profile_id == profile.id))
+    if change == "expired":
+        log.details = log.details | {
+            "checked_at": (datetime.now(timezone.utc) - timedelta(hours=25)).isoformat()
+        }
+    elif change == "invalid":
+        log.details = log.details | {"checked_at": "bad-date"}
+    elif change == "future":
+        log.details = log.details | {
+            "checked_at": (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        }
+    elif change == "fingerprint":
+        profile.fingerprint = "a" * 64
+    elif change == "url":
+        profile.form_url += "?private=not-for-response"
+    elif change == "action":
+        profile.action_url += "?private=not-for-response"
+    else:
+        profile.form_index += 1
+    db.commit()
+    result = auth.get(path)
+    assert result.json()["freshness"] == expected
+    assert not result.json()["execution_allowed"]
+    assert "private" not in result.text
+    db.refresh(profile)
+    assert profile.form_status == "REVIEW_REQUIRED" and profile.sales_contact_status == "UNCERTAIN"
+
+
+@pytest.mark.parametrize("status", ["STALE", "ERROR", "BLOCKED"])
+def test_individual_correction_cannot_clear_invalidated_profile(auth, db, status):
+    _, _, profile = prepare(auth, db)
+    field = db.scalar(
+        select(FormProfileField).where(FormProfileField.form_profile_id == profile.id)
+    )
+    profile.form_status = status
+    profile.review_reason = "現在のサイトの確認が必要"
+    db.commit()
+    response = auth.patch(
+        f"/api/form-profile-fields/{field.id}",
+        json={
+            "mapped_key": "message",
+            "recommended_value": "Stored Human edit",
+            "reason": "Correction",
+        },
+    )
+    assert response.status_code == 200
+    db.refresh(profile)
+    assert profile.form_status == status and not profile.delivery_supported
+    assert profile.review_reason == "現在のサイトの確認が必要"

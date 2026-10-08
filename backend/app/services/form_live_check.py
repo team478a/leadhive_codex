@@ -1,9 +1,12 @@
 """Target-page GET diagnostics; never grants approval or execution permission."""
 
-from datetime import datetime, timezone
+import hashlib
+import json
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urljoin
 
 from bs4 import BeautifulSoup
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import FormAnalysisLog, FormProfile, User
@@ -12,6 +15,63 @@ from app.services.form_intelligence.fields import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.rules import sales_contact_status
 from app.services.scraper import SafeFetcher, ScrapeError
+
+
+def source_binding(profile: FormProfile) -> str:
+    # Store only a hash: form URLs can contain query tokens.
+    payload = [
+        str(profile.id),
+        profile.form_url,
+        profile.action_url,
+        profile.form_index,
+        profile.fingerprint,
+    ]
+    return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()
+
+
+def latest(db: Session, profile: FormProfile) -> dict | None:
+    log = db.scalar(
+        select(FormAnalysisLog)
+        .where(
+            FormAnalysisLog.form_profile_id == profile.id,
+            FormAnalysisLog.provider == "rule-target-get",
+            FormAnalysisLog.details["operation"].astext == "target_live_check",
+        )
+        .order_by(FormAnalysisLog.created_at.desc(), FormAnalysisLog.id.desc())
+        .limit(1)
+    )
+    if log is None:
+        return None
+    data = log.details
+    freshness = "INVALID"
+    expires_at = None
+    try:
+        checked_at = datetime.fromisoformat(data["checked_at"])
+        if checked_at.tzinfo is not None:
+            expires_at = checked_at + timedelta(hours=24)
+            if data.get("source_binding") != source_binding(profile):
+                freshness = "SOURCE_CHANGED"
+            elif checked_at > datetime.now(timezone.utc):
+                freshness = "INVALID"
+            elif expires_at <= datetime.now(timezone.utc):
+                freshness = "EXPIRED"
+            else:
+                freshness = "CURRENT"
+    except (ValueError, KeyError, TypeError):
+        pass
+    # Explicit whitelist; never expose arbitrary log detail or site content.
+    return {
+        key: data.get(key)
+        for key in (
+            "checked_at",
+            "saved_fingerprint",
+            "observed_fingerprint",
+            "structure_status",
+            "sales_prohibition_detected",
+            "captcha_state",
+            "message",
+        )
+    } | {"freshness": freshness, "expires_at": expires_at, "execution_allowed": False}
 
 
 class TargetFetcher(SafeFetcher):
@@ -27,6 +87,7 @@ def check(profile: FormProfile) -> dict:
     result = {
         "checked_at": datetime.now(timezone.utc).isoformat(),
         "saved_fingerprint": profile.fingerprint,
+        "source_binding": source_binding(profile),
         "observed_fingerprint": None,
         "structure_status": "UNVERIFIED",
         "sales_prohibition_detected": False,
@@ -105,6 +166,7 @@ def record(db: Session, profile: FormProfile, user: User, result: dict) -> None:
             if result["structure_status"] == "FETCH_FAILED"
             else "analysis_completed",
             provider="rule-target-get",
+            created_at=datetime.now(timezone.utc),
             details={"operation": "target_live_check", **result},
         )
     )

@@ -115,7 +115,10 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
         status = "NOT_REVIEWED"
         if latest:
             status = "RECORDED"
-            if latest.details.get("source_hash_after") != binding:
+            if (
+                profile.form_status in {"STALE", "ERROR"}
+                or latest.details.get("source_hash_after") != binding
+            ):
                 status = "STALE"
             elif datetime.fromisoformat(latest.details["expires_at"]) <= now:
                 status = "EXPIRED"
@@ -124,7 +127,8 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
                 "group_id": group_id,
                 "label": members[0].label.replace(GROUP_REVIEW_MARKER, ""),
                 "source_hash": binding,
-                "review_supported": supported(members),
+                "review_supported": supported(members)
+                and profile.form_status not in {"STALE", "ERROR"},
                 "review_status": status,
                 "execution_supported": False,
                 "rule": latest.details.get("rule") if latest else None,
@@ -159,6 +163,8 @@ def record_review(
         ).all()
     )
     members = grouped_fields(fields).get(group_id)
+    if profile.form_status in {"STALE", "ERROR"}:
+        raise HTTPException(409, "フォームの最新状態が未確認です。再解析してから確認してください。")
     if not members:
         raise HTTPException(404, "必須グループが見つかりません。")
     if source_hash(profile, members) != body.expected_source_hash:

@@ -34,12 +34,20 @@ from app.services.form_choice_groups import GroupReviewInput, inventory, record_
 from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
 from app.services.form_live_check import check as check_live_form
+from app.services.form_live_check import latest as latest_live_check
 from app.services.form_live_check import record as record_live_check
 from app.services.form_profile_delivery import sender_values
 from app.services.form_review_material import build_review_material
 from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/form-profiles/{profile_id}/live-check")
+def get_latest_live_check(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    return latest_live_check(db, _owned_profile(profile_id, db, user, write=False))
 
 
 @router.post("/form-profiles/{profile_id}/live-check")
@@ -68,7 +76,7 @@ def live_check_form(
     result = check_live_form(profile)
     record_live_check(db, profile, user, result)
     db.commit()
-    return result
+    return latest_live_check(db, profile)
 
 
 def _owned_profile(profile_id: UUID, db: Session, user: User, *, write: bool = True) -> FormProfile:
@@ -275,6 +283,13 @@ def correct_form_field(
     if field is None:
         raise HTTPException(404, "フォーム項目が見つかりません。")
     profile = _owned_profile(field.form_profile_id, db, user)
+    db.scalar(
+        select(FormProfile)
+        .where(FormProfile.id == profile.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    db.refresh(field)
     before = {
         "mapped_key": field.mapped_key,
         "recommended_value": field.recommended_value,
@@ -310,6 +325,9 @@ def correct_form_field(
     )
     if profile.sales_contact_status == "PROHIBITED":
         profile.form_status = "BLOCKED"
+    elif profile.form_status in {"STALE", "ERROR", "BLOCKED"}:
+        # Correcting a stored value is not a fresh observation of the website.
+        profile.delivery_supported = False
     elif (
         not profile.form_found
         or profile.sales_contact_status == "UNCERTAIN"

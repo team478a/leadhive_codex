@@ -74,7 +74,7 @@ export function CompanyFormReviewMaterial({ profileId, fingerprint, fields, read
     return saved
   }
   return <section className="mt-4" aria-label="フォーム入力確認">
-    <CompanyFormLiveCheck profileId={profileId} readOnly={readOnly} onRefresh={onRefresh} />
+    <CompanyFormLiveCheck profileId={profileId} fingerprint={fingerprint} readOnly={readOnly} onRefresh={onRefresh} />
     <button className="secondary" disabled={busy} onClick={load}>{busy ? '読み込み中…' : material ? '入力候補を更新' : '入力候補と確認事項を見る'}</button>
     {error && <p className="error mt-3" role="alert">{error}</p>}
     {material && <div className="mt-3">
