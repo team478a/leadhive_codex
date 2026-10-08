@@ -40,6 +40,9 @@ from app.services.form_live_check import source_binding
 from app.services.form_profile_delivery import sender_values
 from app.services.form_review_material import build_review_material
 from app.services.form_route_diagnostics import diagnose as diagnose_saved_route
+from app.services.form_saved_choice_reviews import SavedChoiceReviewInput
+from app.services.form_saved_choice_reviews import record as record_saved_choice_review
+from app.services.form_saved_choice_reviews import reviews as saved_choice_reviews
 from app.services.form_saved_choice_structure import inventory as saved_choice_structure
 from app.services.form_target_refresh import refresh as refresh_target_form
 from app.services.operations import add_operation_job
@@ -275,6 +278,28 @@ def get_choice_groups(
     profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     return inventory(db, _owned_profile(profile_id, db, user, write=False))
+
+
+@router.get("/form-profiles/{profile_id}/saved-choice-reviews", response_model=list[dict])
+def get_saved_choice_reviews(
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    return saved_choice_reviews(db, _owned_profile(profile_id, db, user, write=False))
+
+
+@router.post(
+    "/form-profiles/{profile_id}/saved-choice-reviews/{group_id}", response_model=list[dict]
+)
+def save_choice_review(
+    profile_id: UUID,
+    group_id: str,
+    body: SavedChoiceReviewInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    profile = _owned_profile(profile_id, db, user)
+    record_saved_choice_review(db, profile, group_id, body, user)
+    return saved_choice_reviews(db, profile)
 
 
 @router.post(

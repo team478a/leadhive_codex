@@ -46,7 +46,7 @@ def inventory(fields: list[dict], fingerprint: str) -> dict:
         malformed = False
         for field in members:
             saved_options = field.get("options")
-            malformed = malformed or not isinstance(saved_options, list)
+            malformed = malformed or not isinstance(saved_options, list) or not saved_options
             for index, option in enumerate(
                 saved_options if isinstance(saved_options, list) else []
             ):

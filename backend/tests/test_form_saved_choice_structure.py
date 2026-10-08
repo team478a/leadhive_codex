@@ -34,6 +34,12 @@ def test_aggregated_options_are_read_only_and_never_inherit_recommendation():
     assert "recommended_value" not in group and "selected" not in group
 
 
+def test_missing_member_options_remain_incomplete():
+    source = fields()
+    source.append(source[0] | {"id": "field-b", "position": 1, "options": []})
+    assert "INCOMPLETE_OPTIONS" in inventory(source, "a" * 64)["groups"][0]["warnings"]
+
+
 @pytest.mark.parametrize(
     "key,value",
     [
