@@ -1,6 +1,7 @@
 """Field-local evidence; never use unrelated fields to infer a destination."""
 
 import re
+from typing import Any
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
@@ -8,6 +9,72 @@ from bs4.element import Tag
 from app.services.form_intelligence.consent import CONSENT_KEYS, consent_review_reason
 from app.services.form_intelligence.contact_method import contact_method_review_reason
 from app.services.form_intelligence.rules import dom_mapping, normalize, rule_mapping
+
+GROUP_REVIEW_MARKER = "（グループの必須選択範囲は確認待ち）"
+
+
+def _classes(element: Tag) -> set[str]:
+    value = element.get("class")
+    if isinstance(value, str):
+        return set(value.split())
+    return set(value or ())
+
+
+def _required_choice_group(element: Tag, form: Tag) -> tuple[str, bool]:
+    """Find local group requirements without making every checkbox mandatory."""
+    for parent in element.parents:
+        if parent is form:
+            break
+        if parent.name not in {"div", "fieldset", "td", "dd"}:
+            continue
+        controls = [
+            control
+            for control in parent.select("input,textarea,select")
+            if control.get("type") != "hidden" and not control.has_attr("disabled")
+        ]
+        if not controls or any(
+            control.name != "input" or control.get("type") not in {"checkbox", "radio"}
+            for control in controls
+        ):
+            continue
+        headings = []
+        for child in parent.find_all(recursive=False):
+            if child.name in {"legend", "label", "p", "h2", "h3", "h4"} and not child.select(
+                "input,textarea,select"
+            ):
+                headings.append(child.get_text(" ", strip=True))
+        headings.append(str(parent.get("aria-label") or ""))
+        context = " ".join(filter(None, headings))[:500]
+        explicitly_required = str(parent.get("aria-required") or "").lower() == "true"
+        if not explicitly_required and not re.search(
+            r"必須|(?<![a-z])required(?![a-z])|[※＊*]\s*$", normalize(context)
+        ):
+            continue
+        names = {str(control.get("name") or "") for control in controls}
+        # An unnamed or cross-name choice group cannot be represented by the
+        # existing single-field required flag. Persist a fail-closed review label.
+        return context or "必須選択グループ", "" in names or len(names) > 1
+    return "", False
+
+
+def _cf7_honeypot(element: Tag, form: Tag) -> bool:
+    if (
+        element.name != "textarea"
+        or element.get("name") != "_wpcf7_ak_hp_textarea"
+        or "wpcf7-form" not in _classes(form)
+    ):
+        return False
+    for container in [element, *element.parents]:
+        if container is form:
+            break
+        style = str(container.get("style") or "").lower()
+        if (
+            container.has_attr("hidden")
+            or str(container.get("aria-hidden") or "").lower() == "true"
+            or re.search(r"(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden)", style)
+        ):
+            return True
+    return False
 
 
 def _local_context(element: Tag, form: Tag) -> str:
@@ -63,11 +130,11 @@ def _field_label(element: Tag, form: Tag) -> str:
 def _required(element: Tag, form: Tag) -> bool:
     if element.has_attr("required") or str(element.get("aria-required", "")).lower() == "true":
         return True
-    classes = set(element.get("class", []))
+    classes = _classes(element)
     if "wpcf7-validates-as-required" in classes:
         return True
     acceptance = element.find_parent(class_="wpcf7-acceptance")
-    if acceptance and "optional" not in acceptance.get("class", []):
+    if acceptance and "optional" not in _classes(acceptance):
         return True
     text = normalize(_local_context(element, form) + " " + _field_label(element, form))
     return bool(re.search(r"必須|(?<![a-z])required(?![a-z])|[※＊*]\s*$", text))
@@ -84,7 +151,7 @@ def _selector(element: Tag, position: int) -> str:
 
 
 def parse_form_fields(form: Tag) -> list[dict]:
-    fields = []
+    fields: list[dict[str, Any]] = []
     grouped = set()
     for element in form.select("input,textarea,select,button"):
         if element.has_attr("disabled"):
@@ -119,8 +186,23 @@ def parse_form_fields(form: Tag) -> list[dict]:
             required = _required(element, form)
         label = _field_label(element, form)
         surrounding = _local_context(element, form)
+        if field_type in {"checkbox", "radio"}:
+            group_context, needs_group_review = _required_choice_group(element, form)
+            if group_context:
+                surrounding = group_context
+                label = group_context
+                if needs_group_review:
+                    label = label[:450] + GROUP_REVIEW_MARKER
+                else:
+                    required = True
         mapped = dom_mapping(field_type, name)
-        if field_type in {"hidden", "submit", "button", "reset", "image"}:
+        honeypot = _cf7_honeypot(element, form)
+        if honeypot:
+            # Keep the field in the fingerprint, but never map DM text into it.
+            mapped_key, confidence, source = "other", 1.0, "DOM"
+            label = "スパム対策用の隠し項目（入力しない）"
+            required = False
+        elif field_type in {"hidden", "submit", "button", "reset", "image"}:
             mapped_key, confidence, source = "other", 1.0, "DOM"
         elif mapped:
             mapped_key, confidence, source = mapped[0], mapped[1], "DOM"
@@ -145,12 +227,12 @@ def parse_form_fields(form: Tag) -> list[dict]:
             label = surrounding[:500]
         acceptance = element.find_parent(class_="wpcf7-acceptance")
         if mapped_key in CONSENT_KEYS and not required:
-            optional = (acceptance and "optional" in acceptance.get("class", [])) or bool(
+            optional = (acceptance and "optional" in _classes(acceptance)) or bool(
                 re.search(r"任意|(?<![a-z])optional(?![a-z])", normalize(label))
             )
             if not optional:
                 label = label[:480] + "（必須性未確認）"
-        if acceptance and "invert" in acceptance.get("class", []):
+        if acceptance and "invert" in _classes(acceptance):
             mapped_key, confidence = "privacy_consent", 0.0
             options = [{"value": "", "label": "逆条件の同意チェック（未対応）"}]
         fields.append(
@@ -179,6 +261,8 @@ def mapping_review_reason(fields: list[dict]) -> str:
     relevant = [
         f for f in fields if f["field_type"] not in {"hidden", "submit", "button", "reset", "image"}
     ]
+    if any(GROUP_REVIEW_MARKER in str(field.get("label") or "") for field in relevant):
+        return "グループ単位の必須選択があります。選択範囲を確認してください。"
     message = [f for f in relevant if f["mapped_key"] == "message"]
     if not message:
         return "営業文面の本文を入力する項目が確認できません。"

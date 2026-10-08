@@ -1,4 +1,5 @@
 from dataclasses import dataclass, replace
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -54,7 +55,7 @@ def primary_form_profiles(db: Session, company_ids: list) -> dict:
             FormProfile.id,
         )
     ).all()
-    selected = {}
+    selected: dict[UUID, FormProfile] = {}
     for profile in profiles:
         selected.setdefault(profile.company_id, profile)
     return selected
@@ -161,6 +162,9 @@ def mapped_values(
     }
     values: dict[str, str] = {}
     for field in preview.fields:
+        # Protect old profiles too: this reserved CF7 spam trap is never a DM field.
+        if field.name == "_wpcf7_ak_hp_textarea":
+            continue
         value = sources.get(field.mapped_key, "")
         if not value:
             value = field.value

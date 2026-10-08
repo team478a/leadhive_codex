@@ -290,3 +290,7 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [166_PROVIDER_ROLE_COLLECTION_PILOT.md](166_PROVIDER_ROLE_COLLECTION_PILOT.md): 最新ローカル反映・大阪兵庫の実API少量収集・確認待ちでも2ページ目へ継続・Human Truth未測定
 
 - [167_PROVIDER_ROLE_HUMAN_REVIEW_HANDOFF.md](167_PROVIDER_ROLE_HUMAN_REVIEW_HANDOFF.md): 大阪兵庫の既存検索40件をRaw確認へ取込・不変Snapshot・Human Truth未確認
+
+- [168_SELF_USE_OEM_HANDOFF.md](168_SELF_USE_OEM_HANDOFF.md): 自社OEM候補16社のローカル保存・窓口確認・未承認下書き引継ぎ
+
+- [169_FORM_GROUP_AND_HONEYPOT_GUARDS.md](169_FORM_GROUP_AND_HONEYPOT_GUARDS.md): 必須選択グループの確認待ちとCF7隠し欄への本文入力防止
