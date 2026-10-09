@@ -248,6 +248,9 @@ def test_group_record_is_atomic_human_review_not_dispatch(auth, db, users, sales
     assert response.status_code == 200
     assert response.json()[0]["review_status"] == "RECORDED"
     assert response.json()[0]["execution_supported"] is False
+    assert response.json()[0]["requirement_scope_status"] == "HUMAN_RECORDED"
+    assert response.json()[0]["minimum_selected"] == 1
+    assert response.json()[0]["maximum_selected"] is None
     db.refresh(profile)
     assert profile.form_status == expected
     for f in fields:
@@ -339,9 +342,59 @@ def test_group_expiration_and_changes_invalidate_ledger(auth, db):
     }
     db.commit()
     assert auth.get(path).json()[0]["review_status"] == "EXPIRED"
+    assert auth.get(path).json()[0]["requirement_scope_status"] == "UNCONFIRMED"
+    assert auth.get(path).json()[0]["minimum_selected"] is None
     fields[1].recommended_value = ""
     db.commit()
     assert auth.get(path).json()[0]["review_status"] == "STALE"
+    assert auth.get(path).json()[0]["requirement_scope_status"] == "UNCONFIRMED"
+    assert auth.get(path).json()[0]["maximum_selected"] is None
+
+
+def test_cross_name_18_options_summary_is_unknown_until_human_records(auth, db):
+    _, _, profile, fields, path, _, _ = seed_group(auth, db)
+    for index, field in enumerate(fields):
+        field.options = [{"value": f"option-{i}"} for i in range((6, 5)[index])]
+    db.add_all(
+        [
+            FormProfileField(
+                form_profile_id=profile.id,
+                position=index + 4,
+                name=f"extra-{index}[]",
+                label=fields[0].label,
+                field_type="checkbox",
+                mapped_key="other",
+                required=False,
+                options=[{"value": f"choice-{i}"} for i in range(count)],
+            )
+            for index, count in enumerate((3, 4))
+        ]
+    )
+    db.commit()
+    before = auth.get(path).json()[0]
+    assert before["member_count"] == 4 and before["option_count"] == 18
+    assert before["individual_required_count"] == 0
+    assert before["grouping_basis"] == "SAVED_HEADING_CANDIDATE"
+    assert before["requirement_scope_status"] == "UNCONFIRMED"
+    assert before["minimum_selected"] is None and before["maximum_selected"] is None
+    assert all(not member["individually_required"] for member in before["members"])
+    assert before["saved_selections"] == {} and not before["execution_supported"]
+    response = auth.post(
+        path + f"/{before['group_id']}/review",
+        json={
+            "expected_source_hash": before["source_hash"],
+            "rule": "EXACTLY_ONE",
+            "selections": [{"field_id": str(fields[0].id), "value": "option-0"}],
+            "membership_and_rule_confirmed": True,
+        },
+    )
+    assert response.status_code == 200
+    after = response.json()[0]
+    assert after["requirement_scope_status"] == "HUMAN_RECORDED"
+    assert after["minimum_selected"] == after["maximum_selected"] == 1
+    assert after["individual_required_count"] == 0 and not after["execution_supported"]
+    db.refresh(profile)
+    assert profile.form_status == "REVIEW_REQUIRED" and not profile.delivery_supported
 
 
 @pytest.mark.parametrize("status", ["STALE", "ERROR"])
