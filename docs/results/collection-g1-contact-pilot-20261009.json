@@ -1,0 +1,49 @@
+{
+  "baseline_commit": "73509180f5c1a33a55aa4da06ec17355b5e4ff81",
+  "cohort_rows": 20,
+  "unique_input_roots": 20,
+  "method": "root_navigation_static_get",
+  "uses_supplied_contact_url": false,
+  "max_get_requests": 300,
+  "get_requests": 118,
+  "states": {
+    "STATIC_UNRESOLVED": 6,
+    "DOM_DETECTED": 10,
+    "EMBEDDED_UNVERIFIED": 4
+  },
+  "leads_with_partial_errors": 7,
+  "independent_detected_form_urls": 10,
+  "duration_seconds": 71.625,
+  "human_reviewed": 0,
+  "human_precision": null,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound_enabled": false,
+  "worker_started": false,
+  "estimated_api_cost": 0,
+  "limitations": [
+    "Known URL cohort, not Discovery precision",
+    "Static HTML only; no browser JavaScript",
+    "Detection is not sales permission or sendability",
+    "Partial fetch errors are not absence evidence",
+    "Private page cache contains only successful HTML, not full HTTP response capture",
+    "No same-cache legacy comparison completed"
+  ],
+  "historical_comparison": {
+    "prior_dom_detected": 11,
+    "current_dom_detected": 10,
+    "prior_detected_current_unresolved": 1,
+    "same_cache_comparison": false,
+    "causal_improvement_rate": null
+  },
+  "partial_fetch_error_counts": {
+    "http_404": 15,
+    "secondary_cross_site_or_downgrade_blocked": 2,
+    "robots_blocked": 7
+  },
+  "runner_sha256": "5ee2e1b520f63f5b875feb6feee0f9516ddaa401dd99b94e5233224591adce00"
+}
