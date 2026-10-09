@@ -8,6 +8,20 @@ from urllib.parse import urljoin, urlsplit
 
 LIMIT = 262144
 LARGE_REVIEW_LIMIT = 1048576
+REVIEW_FAILURE_REASONS = {
+    "duplicate attribute": "DUPLICATE_ATTRIBUTE",
+    "nested form": "NESTED_FORM",
+    "unclosed form": "UNCLOSED_FORM",
+    "duplicate hidden": "DUPLICATE_HIDDEN",
+    "duplicate marker": "DUPLICATE_MARKER",
+    "tag limit": "TAG_LIMIT",
+    "form limit": "FORM_LIMIT",
+    "name limit": "NAME_LIMIT",
+    "control limit": "CONTROL_LIMIT",
+    "review size limit": "SIZE_LIMIT",
+    "review index limit": "INVALID_INDEX",
+    "input limit": "INPUT_LIMIT",
+}
 CONTRACT_MARKERS = {
     "_wpcf7",
     "_wpcf7_version",
@@ -408,8 +422,8 @@ def contract_evidence(parser: Inspector, form: dict | None) -> dict | None:
 
 
 if __name__ == "__main__":
+    review_only = sys.argv[1:] == ["--large-review-only"]
     try:
-        review_only = sys.argv[1:] == ["--large-review-only"]
         input_limit = LARGE_REVIEW_LIMIT * 6 + 4096 if review_only else LIMIT * 2
         raw = sys.stdin.buffer.read(input_limit + 1)
         if len(raw) > input_limit:
@@ -418,5 +432,14 @@ if __name__ == "__main__":
         handler = review_large_html if review_only else inspect_html
         result = handler(data["html"], data["url"], data["index"])
         print(json.dumps(result, ensure_ascii=True))
-    except Exception:
-        print('{"status":"PARSE_FAILED"}')
+    except Exception as exc:
+        failure: dict = {"status": "PARSE_FAILED"}
+        if review_only:
+            failure.update(
+                failure_reason=REVIEW_FAILURE_REASONS.get(str(exc), "INVALID_INPUT"),
+                whole_page_scanned=False,
+                human_review_required=True,
+                execution_allowed=False,
+                eligible_for_approval=False,
+            )
+        print(json.dumps(failure))

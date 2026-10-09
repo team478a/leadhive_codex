@@ -34,17 +34,43 @@ class LargePageReview(BaseModel):
     eligible_for_approval: Literal[False]
 
 
+class LargePageFailure(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    status: Literal["PARSE_FAILED"]
+    failure_reason: Literal[
+        "DUPLICATE_ATTRIBUTE",
+        "NESTED_FORM",
+        "UNCLOSED_FORM",
+        "DUPLICATE_HIDDEN",
+        "DUPLICATE_MARKER",
+        "TAG_LIMIT",
+        "FORM_LIMIT",
+        "NAME_LIMIT",
+        "CONTROL_LIMIT",
+        "SIZE_LIMIT",
+        "INVALID_INDEX",
+        "INPUT_LIMIT",
+        "INVALID_INPUT",
+    ]
+    whole_page_scanned: Literal[False]
+    human_review_required: Literal[True]
+    execution_allowed: Literal[False]
+    eligible_for_approval: Literal[False]
+
+
 def review_saved_large_page(html: str, url: str, index: int) -> dict:
     failed = {
         "status": "PARSE_FAILED",
         "human_review_required": True,
         "execution_allowed": False,
         "eligible_for_approval": False,
+        "whole_page_scanned": False,
+        "failure_reason": "INVALID_RESULT",
     }
     if len(html.encode("utf-8")) > 1048576:
-        return failed | {"status": "LIMIT_EXCEEDED"}
+        return failed | {"status": "LIMIT_EXCEEDED", "failure_reason": "SIZE_LIMIT"}
     if type(index) is not int or not 0 <= index < 20:
-        return failed
+        return failed | {"failure_reason": "INVALID_INDEX"}
     try:
         result = subprocess.run(
             [
@@ -64,11 +90,18 @@ def review_saved_large_page(html: str, url: str, index: int) -> dict:
         )
         if len(result.stdout) > 32000:
             return failed
-        parsed = LargePageReview.model_validate(json.loads(result.stdout))
+        output = json.loads(result.stdout)
+        if isinstance(output, dict) and output.get("status") == "PARSE_FAILED":
+            return LargePageFailure.model_validate(output).model_dump()
+        parsed = LargePageReview.model_validate(output)
         if parsed.version is not None and not re.fullmatch(
             r"[0-9]{1,3}(?:\.[0-9]{1,3}){1,3}", parsed.version
         ):
             return failed
         return parsed.model_dump()
-    except (subprocess.SubprocessError, OSError, ValueError, TypeError):
+    except subprocess.TimeoutExpired:
+        return failed | {"failure_reason": "TIMEOUT"}
+    except (subprocess.SubprocessError, OSError):
+        return failed | {"failure_reason": "SUBPROCESS_FAILURE"}
+    except (ValueError, TypeError):
         return failed
