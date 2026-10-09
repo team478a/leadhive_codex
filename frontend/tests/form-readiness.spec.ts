@@ -9,7 +9,7 @@ test('stored form overview filters, paginates and does not authorize sending', a
     const params = new URL(route.request().url()).searchParams
     const category = params.get('category')
     const offset = Number(params.get('offset'))
-    const items = category === 'captcha' ? [{ ...row, category: 'captcha', review_reason: '人による操作・確認が必要です。' }] : offset ? [] : [row]
+    const items = offset ? [] : category === 'all' ? [row] : [{ ...row, category: category === 'legacy' ? 'UNRECOGNIZED' : category, review_reason: category === 'captcha' ? '人による操作・確認が必要です。' : '', permission: { status: category === 'review' ? 'UNCERTAIN' : 'ALLOWED', reason_code: '', message: '保存情報からは未確定です。' } }]
     return route.fulfill({ json: { counts: { candidate: 26, captcha: 1 }, company_total: 27, total: category === 'captcha' ? 1 : 27, analysis_version: '1.2', items } })
   })
   const writes: string[] = []
@@ -24,13 +24,26 @@ test('stored form overview filters, paginates and does not authorize sending', a
   const panel = page.getByRole('region', { name: 'フォーム候補の集計' })
   await expect(panel.getByText('プロジェクト全体: 27社 / 現行解析: 1.2', { exact: true })).toBeVisible()
   await expect(panel.getByText(/連絡制御: Suppression/)).toBeVisible()
+  await expect(panel.getByText(/次にすること：連絡制御によって停止しています/)).toBeVisible()
   await expect(panel.getByText(/送信許可の件数ではありません/)).toBeVisible()
   await panel.getByRole('button', { name: 'フォーム集計の次の25社' }).click()
   await expect(panel.getByRole('button', { name: '集計テスト会社の企業詳細を確認' })).toHaveCount(0)
+  await expect(panel.getByText(/この表示範囲に該当する企業はありません/)).toBeVisible()
   await panel.getByRole('button', { name: 'フォーム集計の前の25社' }).click()
   await panel.getByRole('combobox', { name: 'フォーム集計の表示対象', exact: true }).selectOption('captcha')
   await expect(panel.getByText('表示対象: 1社', { exact: true })).toBeVisible()
   await expect(panel.getByText('人による操作・確認が必要です。', { exact: true })).toBeVisible()
+  await expect(panel.getByText(/次にすること：CAPTCHAは人の操作・確認が必要/)).toBeVisible()
+  for (const [category, text] of [
+    ['review', '次にすること：連絡できるか未確定です。'],
+    ['confirmation', '確認画面の発見は送信経路の検証完了ではありません。'],
+    ['missing_form', '静的HTMLでの未検出をフォームなしと判断しないでください。'],
+    ['prohibited', '項目修正や文面作成で禁止状態は解除できません。'],
+    ['legacy', '分類不明のまま送信準備完了とは扱いません。'],
+  ]) {
+    await panel.getByRole('combobox', { name: 'フォーム集計の表示対象', exact: true }).selectOption(category)
+    await expect(panel.getByText(text, { exact: false })).toBeVisible()
+  }
   expect(writes).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
 })
