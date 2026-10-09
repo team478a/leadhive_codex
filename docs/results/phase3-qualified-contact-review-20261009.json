@@ -1,0 +1,30 @@
+{
+  "baseline_main": "e15b1a773e2b61295f5b1c72ec09c41e7cba9b37",
+  "evaluation": "SAVED_EVIDENCE_ONLY_SELECTED_HUMAN_SUITABILITY_POSITIVES",
+  "selected_candidates": 4,
+  "human_sales_suitability_pass": 4,
+  "static_forms_observed": 4,
+  "existing_rule_allowed": 4,
+  "explicit_prohibition_missed_by_rule": 2,
+  "blocked_at_observed_destination": 2,
+  "remaining_destination_review": 2,
+  "sendability_ready": 0,
+  "dm_ready": 0,
+  "official_site_human_accuracy": null,
+  "prohibition_false_negative_rate_population": null,
+  "external_requests": 0,
+  "search_api_calls": 0,
+  "ai_calls": 0,
+  "production_db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_posts": 0,
+  "core_code_changed": false,
+  "stop_reason": "EXPLICIT_SALES_PROHIBITION_FALSE_NEGATIVES",
+  "limitations": [
+    "Selected four records are not an unbiased population sample",
+    "Saved extracted text only; full DOM/fingerprint not available",
+    "No live website or current form confirmation",
+    "Human sales suitability is not Human send authorization"
+  ]
+}
