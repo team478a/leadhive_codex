@@ -323,13 +323,13 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toBeVisible()
   await page.unroute('**/api/form-profiles/*/review-material')
   // Presentation-only fixtures; no external GET, approval or send.
-  for (const status of ['HOLD', 'HUMAN_REQUIRED', 'BLOCKED']) {
+  for (const [status, version] of [['HOLD', '6.2'], ['HOLD', '6.1.6'], ['HUMAN_REQUIRED', '6.1.6'], ['BLOCKED', '6.1.6']]) {
     await page.route('**/api/form-profiles/*/review-material', async route => {
       const response = await route.fetch()
       const body = await response.json()
       body.adapter_prerequisites.cf7_readiness = {
-        status, observed_version: '6.2', lab_contract_status: 'VERIFIED_FIXTURE_ONLY', freshness: 'CURRENT',
-        reasons: [{ code: 'fixture-reason', message: '6.2実サイト準備は未接続です。', next_action: '送信せず入力内容を確認する。' }],
+        status, observed_version: version, lab_contract_status: 'VERIFIED_FIXTURE_ONLY', freshness: 'CURRENT',
+        reasons: [{ code: 'fixture-reason', message: `${version}実サイト準備は未接続です。`, next_action: '送信せず入力内容を確認する。' }],
       }
       await route.fulfill({ response, json: body })
     })
@@ -337,6 +337,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     const readiness = prerequisites.getByRole('region', { name: 'CF7対応状況' })
     await expect(readiness).toContainText(({ HOLD: '実サイト送信は保留', HUMAN_REQUIRED: '人の操作が必要', BLOCKED: '送信対象外' } as Record<string, string>)[status])
     await expect(readiness).toContainText('検証済み（実サイト対応ではありません）')
+    if (version === '6.1.6') await expect(readiness).toContainText('6.1.4として代用できません。')
     await expect(readiness.getByText('送信せず入力内容を確認する。', { exact: true })).toBeVisible()
     await expect(readiness.getByRole('button')).toHaveCount(0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
