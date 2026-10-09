@@ -357,3 +357,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md](205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md): 実サイト候補のHuman再認証承認・変更/期限失効・DB不変性/予約拒否・送信未接続
 
 - [206_CF7_REAL_RESERVATION_REAPPROVAL.md](206_CF7_REAL_RESERVATION_REAPPROVAL.md): 実サイト候補とは別のHuman再承認・予約のみの保存・worker/DB実行拒否・送信未接続
+
+- [COLLECTION_QUERY_SCHEDULER.md](COLLECTION_QUERY_SCHEDULER.md): 工程2・公平な検索配分、停滞2回、永続予算、再開と部分結果
