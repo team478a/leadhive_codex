@@ -154,3 +154,17 @@ Company・URL・連絡先を新規公開成果物へ転記しない。
 未完了: API残高回復後のAI7種類×2回の操作実測、AI費用・再現性、実フォームのDOM適用可能性。
 実企業アクセス・本番adapter・送信は今回の許可範囲外。
 次はAPI billing確認後、このlocalhost AI比較だけを再実行し、結果を本PRへ追加する。
+
+## CIのイメージ取得障害（2026-10-10）
+
+初回push run 37989785241のbackend-tests / form-http-acceptanceと、PR run
+37989845186のbackend-tests / migration-validation / e2eは、いずれもテスト実行前の
+`docker pull postgres:16`でDocker Hubの匿名pull制限に達して停止した。
+PR側の再実行でも同じ障害を確認した。テスト失敗とは区別する。
+
+CIの4つのPostgreSQL serviceのみを`public.ecr.aws/docker/library/postgres:16`へ変更。
+[Docker公式のECR Public配布案内](https://www.docker.com/blog/news-from-aws-reinvent-docker-official-images-on-amazon-ecr-public/)
+に基づくDocker Official Imageの配布先であり、ローカルの`docker manifest inspect`で
+Linux amd64を含むPostgreSQL 16のmanifestが取得できることを確認した。
+DB名、health check、テスト、migration検証、送信設定は変更しない。
+実際のテスト成否は変更後のGitHub Actionsで確認する。
