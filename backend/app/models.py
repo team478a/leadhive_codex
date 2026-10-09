@@ -15,6 +15,7 @@ from app.model_approved_email import (
 from app.model_approved_form import ApprovedFormDispatch, FormDispatchLimits, FormDispatchSite
 from app.model_cf7 import CF7Observation
 from app.model_collection_conditions import CollectionConditionRequest, CollectionFactReview
+from app.model_collection_discovery import CollectionDiscoveryHit
 from app.model_company import (
     Activity,
     AiReview,
@@ -93,6 +94,7 @@ from app.model_settings import (
 from app.model_site_identity_review import SiteIdentityReviewEvent
 
 __all__ = [
+    "CollectionDiscoveryHit",
     "CollectionFactReview",
     "CollectionConditionRequest",
     "ExternalPresence",

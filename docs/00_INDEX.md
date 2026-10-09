@@ -1,5 +1,7 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
+- [収集改善PR1: 取得候補・分類・未取込理由](COLLECTION_DISCOVERY_LEDGER.md)
+
 - [キーワード収集改善・全国展開の統合実装計画](KEYWORD_NATIONWIDE_COLLECTION_IMPLEMENTATION_PLAN.md)
 
 - [Phase 2C 収集エンジン監査・再現結果](PHASE2C_COLLECTION_ENGINE_AUDIT.md)
