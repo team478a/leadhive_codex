@@ -1,5 +1,7 @@
 # Phase 2C — 実装前の段階計画・テスト計画
 
+添付全国収集設計書との統合案は [KEYWORD_NATIONWIDE_COLLECTION_IMPLEMENTATION_PLAN.md](KEYWORD_NATIONWIDE_COLLECTION_IMPLEMENTATION_PLAN.md) を参照。実装範囲の提案を補完する文書であり、自動実装・外部実行を承認するものではない。
+
 この計画の提出は実装承認ではない。監査PRを確認後に指示を受ける。送信/承認機能、CRM/SFA、既存企業データは対象外。
 
 ## STEP 1: Raw先行固定と停止状態の区別（推奨する次の1工程）
