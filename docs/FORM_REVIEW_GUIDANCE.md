@@ -22,4 +22,6 @@ Branch: `codex/form-review-guidance`。既存のフォーム画面とHuman確認
 
 既存Desktop/Mobile Form Intelligence E2Eへ、未確定項目リンク、API書込なし、修正後リンク除去、CAPTCHA/承認境界の説明、Viewerの案内表示を追加。既存の権限・修正保存・確認履歴・承認引き継ぎテストを維持する。
 
-型チェック・lint成功。buildとDesktop/Mobile E2Eの結果は完了後に追記する。Backend/API/DB変更なし。実送信なし。
+型チェック・lint・build成功。最初のローカルE2EはwebServer起動60秒timeoutで停止した。起動状態を確認して同じ構成で再実行し、Desktop/Mobileの2件が成功（2.3分）。リンク操作のAPI書込0、修正後リンク除去、Viewer案内と既存編集禁止を確認した。専用test DBと合成fixtureのみ使用し、実サイト/実運用DB/実送信は使用していない。
+
+Backend/API/DB schema変更なし。GitHub CIの全体結果はPR #15で確認する。ビルドは既存のbundle size警告を伴うが成功した。
