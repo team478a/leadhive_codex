@@ -13,6 +13,14 @@ test('raw observations explain target truncation without claiming official confi
   try {
     const fixture = JSON.parse(execFileSync(python, ['../backend/tests/e2e_user.py', 'destination-selection-fixture'], { env, encoding: 'utf8' })) as { project_id: string }
     const jobId = 'dfe24dde-5a02-4734-a3cc-c1ac889f7465'
+    await page.route(`**/api/projects/${fixture.project_id}/operations`, route => route.fulfill({ json: [{
+      id: 'scheduler-fixture', project_id: fixture.project_id, operation_type: 'collect_search', status: 'completed',
+      total_count: 500, processed_count: 49, success_count: 49, failed_count: 0, attempt_count: 1,
+      cancel_requested: false, acknowledged_at: null, error_message: '', created_at: '2026-10-09T00:00:00Z',
+      collection_progress: { scheduler_version: 'fair-v1', target_count: 500, collected_count: 49, requests: 50, request_budget: 50,
+        stop_reason: 'REQUEST_BUDGET_REACHED', coverage_status: 'PARTIAL', planned_queries: 20, unsearched_queries: 0,
+        pending_queries: 20, failed_queries: 0, capped_queries: 0, unknown_attempts: 1 },
+    }] }))
     await page.route(`**/api/projects/${fixture.project_id}/collection-jobs?*`, route => route.fulfill({ json: [{
       id: jobId, project_id: fixture.project_id, source: 'serper', keyword: 'SNS', region: '大阪', status: 'completed',
       found_count: 10, saved_count: 1, duplicate_count: 0, excluded_count: 0, error_count: 0,
@@ -29,6 +37,10 @@ test('raw observations explain target truncation without claiming official confi
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
     await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
+    await expect(page.getByText('新規候補 49 / 500 件・検索 50 / 50 回・検索上限に到達')).toBeVisible()
+    await expect(page.getByText(/検索語 20 件・未検索 0 件・継続候補 20 件/)).toBeVisible()
+    await expect(page.getByText(/一部の検索が残っています。/)).toBeVisible()
+    await expect(page.getByText('結果不明の検索 1 回も検索予算に含めています。')).toBeVisible()
     await page.getByRole('button', { name: '取得候補と未取込の理由を確認' }).click()
     await expect(page.getByText('検索応答 10 件 / 記録 10 件 / 記録上限による省略 0 件')).toBeVisible()
     await expect(page.getByText('目標件数を超えたため未取込 9', { exact: true })).toBeVisible()

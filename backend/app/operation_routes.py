@@ -386,6 +386,9 @@ def enqueue_operation(
     job = OperationJob(project_id=project_id, operation_type=body.operation_type, payload=payload)
     if not add_operation_job(db, job):
         raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
+    from app.services.collection_query_plan import stamp_plan
+
+    stamp_plan(job)
     db.commit()
     db.refresh(job)
     return job
