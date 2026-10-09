@@ -1,0 +1,1370 @@
+{
+  "schema_version": "phase2c-offline-scheduler-v1",
+  "dataset_kind": "SYNTHETIC",
+  "evaluation": "CONTROL_FLOW_ONLY_NOT_REAL_PRECISION",
+  "cases": {
+    "duplicate_plateau_then_new_page": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 100
+        },
+        "synthetic_raw_hits": 20,
+        "synthetic_ingested_hits": 20,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 10,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 10,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 2,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 2,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_grace_2": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 2,
+          "target": 100
+        },
+        "synthetic_raw_hits": 30,
+        "synthetic_ingested_hits": 30,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 20,
+        "synthetic_match_count": 20,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 4,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 5,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 20,
+          "discovered_count": 20,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 5,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 5,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      }
+    },
+    "excluded_first_page_then_valid": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 100
+        },
+        "synthetic_raw_hits": 10,
+        "synthetic_ingested_hits": 10,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 0,
+        "synthetic_match_count": 0,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 0,
+          "discovered_count": 0,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 1,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 1,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_grace_2": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 2,
+          "target": 100
+        },
+        "synthetic_raw_hits": 20,
+        "synthetic_ingested_hits": 20,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 10,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 4,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 10,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 4,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 4,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      }
+    },
+    "review_growth_is_not_exhaustion": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 100
+        },
+        "synthetic_raw_hits": 20,
+        "synthetic_ingested_hits": 20,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 20,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 20,
+          "review_required_count": 10,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 3,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 3,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_grace_2": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 2,
+          "target": 100
+        },
+        "synthetic_raw_hits": 20,
+        "synthetic_ingested_hits": 20,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 20,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 4,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 20,
+          "review_required_count": 10,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 4,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 4,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      }
+    },
+    "target_truncates_uningested_raw": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 1
+        },
+        "synthetic_raw_hits": 10,
+        "synthetic_ingested_hits": 1,
+        "retrieved_but_not_ingested": 9,
+        "synthetic_unique_candidates": 1,
+        "synthetic_match_count": 1,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 1,
+          "collected_count": 1,
+          "discovered_count": 1,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 1,
+          "request_budget": 50,
+          "keyword_index": 0,
+          "next_page": 2,
+          "query_stops": [],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "TARGET_REACHED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_grace_2": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 2,
+          "target": 1
+        },
+        "synthetic_raw_hits": 10,
+        "synthetic_ingested_hits": 1,
+        "retrieved_but_not_ingested": 9,
+        "synthetic_unique_candidates": 1,
+        "synthetic_match_count": 1,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 1,
+          "collected_count": 1,
+          "discovered_count": 1,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 1,
+          "request_budget": 50,
+          "keyword_index": 0,
+          "next_page": 2,
+          "query_stops": [],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "TARGET_REACHED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      }
+    },
+    "empty_tail_extra_cost": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 100
+        },
+        "synthetic_raw_hits": 10,
+        "synthetic_ingested_hits": 10,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 10,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 10,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 2,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 2,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_grace_2": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 2,
+          "target": 100
+        },
+        "synthetic_raw_hits": 10,
+        "synthetic_ingested_hits": 10,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 10,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 10,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 3,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 3,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      }
+    },
+    "source_error_is_not_exhaustion": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 100
+        },
+        "synthetic_raw_hits": 10,
+        "synthetic_ingested_hits": 10,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 10,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 10,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 2,
+          "request_budget": 50,
+          "keyword_index": 0,
+          "next_page": 2,
+          "query_stops": [],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "SOURCE_ERROR"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_grace_2": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 2,
+          "target": 100
+        },
+        "synthetic_raw_hits": 10,
+        "synthetic_ingested_hits": 10,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 10,
+        "synthetic_match_count": 10,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 10,
+          "discovered_count": 10,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 2,
+          "request_budget": 50,
+          "keyword_index": 0,
+          "next_page": 2,
+          "query_stops": [],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "SOURCE_ERROR"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      }
+    },
+    "global_budget_starves_later_query": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 100
+        },
+        "synthetic_raw_hits": 500,
+        "synthetic_ingested_hits": 500,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 500,
+        "synthetic_match_count": 0,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 4,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 5,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 6,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 7,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 8,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 9,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 10,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 11,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 12,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 13,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 14,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 15,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 16,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 17,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 18,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 19,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 20,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 21,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 22,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 23,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 24,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 25,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 26,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 27,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 28,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 29,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 30,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 31,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 32,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 33,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 34,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 35,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 36,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 37,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 38,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 39,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 40,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 41,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 42,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 43,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 44,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 45,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 46,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 47,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 48,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 49,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 50,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 0,
+          "discovered_count": 500,
+          "review_required_count": 500,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 50,
+          "request_budget": 50,
+          "keyword_index": 0,
+          "next_page": 51,
+          "query_stops": [],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "REQUEST_BUDGET_REACHED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_grace_2": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 2,
+          "target": 100
+        },
+        "synthetic_raw_hits": 500,
+        "synthetic_ingested_hits": 500,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 500,
+        "synthetic_match_count": 0,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 4,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 5,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 6,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 7,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 8,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 9,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 10,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 11,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 12,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 13,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 14,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 15,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 16,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 17,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 18,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 19,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 20,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 21,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 22,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 23,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 24,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 25,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 26,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 27,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 28,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 29,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 30,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 31,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 32,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 33,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 34,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 35,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 36,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 37,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 38,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 39,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 40,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 41,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 42,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 43,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 44,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 45,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 46,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 47,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 48,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 49,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 50,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 100,
+          "collected_count": 0,
+          "discovered_count": 500,
+          "review_required_count": 500,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 50,
+          "request_budget": 50,
+          "keyword_index": 0,
+          "next_page": 51,
+          "query_stops": [],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "REQUEST_BUDGET_REACHED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      }
+    },
+    "page_size_contract_sensitivity": {
+      "baseline": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 10,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 40
+        },
+        "synthetic_raw_hits": 20,
+        "synthetic_ingested_hits": 20,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 20,
+        "synthetic_match_count": 20,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 10
+          },
+          {
+            "query": "q",
+            "page": 3,
+            "requested_size": 10
+          }
+        ],
+        "progress": {
+          "target_count": 40,
+          "collected_count": 20,
+          "discovered_count": 20,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 3,
+          "request_budget": 50,
+          "keyword_index": 1,
+          "next_page": 1,
+          "query_stops": [
+            {
+              "keyword": "q",
+              "page": 3,
+              "reason": "NO_NEW_TARGETS"
+            }
+          ],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "QUERIES_EXHAUSTED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "proposal_size_20": {
+        "source_sha256": "ccf94f0c778b77a0961ba6c7c9a792ad7c6aae82371f27e947a5262a4c1f2123",
+        "configuration": {
+          "page_size": 20,
+          "request_budget": 50,
+          "no_growth_grace": 1,
+          "target": 40
+        },
+        "synthetic_raw_hits": 40,
+        "synthetic_ingested_hits": 40,
+        "retrieved_but_not_ingested": 0,
+        "synthetic_unique_candidates": 40,
+        "synthetic_match_count": 40,
+        "requests": [
+          {
+            "query": "q",
+            "page": 1,
+            "requested_size": 20
+          },
+          {
+            "query": "q",
+            "page": 2,
+            "requested_size": 20
+          }
+        ],
+        "progress": {
+          "target_count": 40,
+          "collected_count": 40,
+          "discovered_count": 40,
+          "review_required_count": 0,
+          "no_match_count": 0,
+          "conditions_applied": false,
+          "requests": 2,
+          "request_budget": 50,
+          "keyword_index": 0,
+          "next_page": 3,
+          "query_stops": [],
+          "operation_ids": [
+            "00000000-0000-0000-0000-000000000001"
+          ],
+          "stop_reason": "TARGET_REACHED"
+        },
+        "human_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": null,
+        "api_cost": null
+      },
+      "warning": "Synthetic explicit response fixture; not proof that Serper returns 20 or identical page boundaries."
+    }
+  },
+  "safety": {
+    "external_requests": 0,
+    "db_writes": 0,
+    "human_labels_created": 0,
+    "approvals": 0,
+    "email_sent": 0,
+    "form_sent": 0
+  },
+  "current_commit": "31ec306819a5485de3c3cc9f3bb11a3da3cc6d0f",
+  "legacy_commit": "393f690e34c7a5fbdddd4b15e0285aa2ff313269",
+  "legacy_service_contract_case": {
+    "source_sha256": "380eec7bb12d848a4320896626c3be9f999988f73c70a8ea3399138b6d1e6b0d",
+    "synthetic_raw_hits": 30,
+    "synthetic_unique_urls": 20,
+    "requests": [
+      {
+        "num": 30,
+        "page": 1
+      }
+    ],
+    "human_precision": null,
+    "api_cost": null,
+    "boundary": "SERPER_SERVICE_ONLY_NOT_LEGACY_APPLICATION",
+    "warning": "Explicit synthetic size-30 provider response. Not evidence of real yield or ranking stability."
+  }
+}

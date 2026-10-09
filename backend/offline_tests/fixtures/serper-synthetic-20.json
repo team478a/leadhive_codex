@@ -1,0 +1,36 @@
+{
+  "schema_version": "serper-replay-input-v1",
+  "dataset_kind": "SYNTHETIC",
+  "runs": [{
+    "run_id": "synthetic-run-1",
+    "query_id": "synthetic-query-1",
+    "query": "SNS運用代行 会社 大阪府",
+    "region": "大阪府",
+    "industry": "SNS運用代行",
+    "observed_at": "2026-10-09T00:00:00Z",
+    "source": "serper",
+    "status": "COMPLETED",
+    "organic": [
+      {"title": "合成企業A", "link": "https://alpha.example/service", "snippet": "合成SNS代行サービス"},
+      {"title": "合成企業Aのブログ", "link": "https://alpha.example/blog/sns", "snippet": "同一hostの別page"},
+      {"title": "合成企業Bのコラム", "link": "https://beta.example/column/guide", "snippet": "記事所有者の候補"},
+      {"title": "合成企業C", "link": "https://gamma.example/", "snippet": "合成企業"},
+      {"title": "合成企業D", "link": "https://delta.example/company", "snippet": "会社概要"},
+      {"title": "合成企業E", "link": "https://epsilon.example/contact", "snippet": "form未確認"},
+      {"title": "合成比較ページ", "link": "https://boxil.jp/synthetic-comparison", "snippet": "ポータル差分"},
+      {"title": "合成SNS掲載", "link": "https://instagram.com/synthetic-replay-example", "snippet": "追加GETしない"},
+      {"title": "合成美容媒体", "link": "https://hotpepper.jp/synthetic-replay-example", "snippet": "掲載媒体"},
+      {"title": "合成企業F", "link": "https://theta.example/", "snippet": "他業種か未評価"},
+      {"title": "合成企業G", "link": "https://eta.example/", "snippet": "所在地未確認"},
+      {"title": "合成公共ページ", "link": "https://synthetic.go.jp/guide", "snippet": "旧preview公的除外"},
+      {"title": "合成社団法人", "link": "https://association.example/", "snippet": "旧title除外"},
+      {"title": "合成domain境界", "link": "https://notyoutube.com.example/service", "snippet": "substringとsuffix判定"},
+      {"title": "合成重複C", "link": "https://www.gamma.example/contact", "snippet": "www正規化"},
+      {"title": "合成不正URL", "link": "not-a-url", "snippet": "入力検証差"},
+      {"title": "合成空URL", "link": "", "snippet": "URLなし"},
+      {"title": "合成メールURL", "link": "mailto:synthetic@example.com", "snippet": "http以外"},
+      {"title": "合成企業H", "link": "https://kappa.example:443/about#part", "snippet": "port/fragment正規化"},
+      {"title": "合成PDF", "link": "https://lambda.example/report.pdf", "snippet": "会社/公式/業種は未判定"}
+    ]
+  }]
+}

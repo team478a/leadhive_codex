@@ -7,6 +7,7 @@ import { PresenceRequirements } from './PresenceRequirements'
 import { CollectionConditions, type ConditionRevision } from './CollectionConditions'
 import { ConditionCollectionReport } from './ConditionCollectionReport'
 import { CollectionProgress } from './CollectionProgress'
+import { CollectionDiscovery } from './CollectionDiscovery'
 import { Field } from './forms'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
@@ -314,6 +315,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             {(job.keyword || job.region) && <p className="muted my-2 text-sm">{[job.keyword, job.region].filter(Boolean).join(' / ')}</p>}
             <PresenceRequirements key={`${job.id}-${job.status}-${operations.map(o => o.status).join()}-${companies.length}`} jobId={job.id} /><div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
               <span>重複 {job.duplicate_count}</span><span>公式外 {job.excluded_count}</span><span>エラー {job.error_count}</span><span>{job.processing_ms}ms</span></div>
+            {job.source === 'serper' && <CollectionDiscovery key={`${job.id}-${job.status}`} jobId={job.id} />}
             {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
             {job.source === 'csv' && job.error_count > 0 && <button type="button" className="secondary mt-3" onClick={() => void download(`/collection-jobs/${job.id}/errors.csv`, 'csv-import-errors.csv').catch(e => setError(errorMessage(e)))}>行別エラーをダウンロード</button>}
           </article>)}

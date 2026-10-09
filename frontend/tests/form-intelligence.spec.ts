@@ -68,8 +68,34 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
 
   const formPanel = page.getByRole('heading', { name: 'フォーム事前解析' })
     .locator('xpath=ancestor::section[1]')
+  await formPanel.getByText(/解析ログ（/).click()
+  await expect(formPanel.getByText('取得したHTMLで問い合わせフォーム未検出', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('外部埋め込みあり・表示後の確認が必要', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('ページ取得失敗・フォームの有無は未確認', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('検証用の取得失敗', { exact: true })).toBeVisible()
   const profileCards = formPanel.locator('.form-profile-card')
   await expect(profileCards).toHaveCount(2)
+  const reviewGuidance = profileCards.last().getByRole('region', { name: 'フォームの確認手順' })
+  await expect(reviewGuidance).toContainText('CAPTCHAは人による操作・確認が必要です。')
+  await expect(reviewGuidance).toContainText('フォーム確認や優先フォームの選択はHuman送信承認ではありません。')
+  await expect(reviewGuidance).toContainText('入力先のマッピング済み表示は、選択肢や同意内容の確認済み表示ではありません。')
+  await expect(reviewGuidance.getByRole('link', { name: 'メルマガ登録の選択・同意を確認する' })).toHaveCount(0)
+  await expect(profileCards.first().getByRole('region', { name: 'フォームの確認手順' })).toContainText('表示後や確認画面でのCAPTCHAがないことは未確認です。')
+  await expect(formPanel.getByText('営業可否: 営業禁止表記は未検出', { exact: true })).toHaveCount(2)
+  await expect(reviewGuidance.getByRole('link', { name: '元の問い合わせページを開く（別タブ）' })).toHaveAttribute('target', '_blank')
+  let guidanceWrites = 0
+  const trackGuidanceWrite = (request: import('@playwright/test').Request) => {
+    if (request.url().includes('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) guidanceWrites++
+  }
+  page.on('request', trackGuidanceWrite)
+  await reviewGuidance.getByRole('link', { name: '連絡方法の選択・同意を確認する' }).click()
+  await expect(formPanel.getByLabel('連絡方法の標準マッピング').locator('xpath=ancestor::tr')).toBeInViewport()
+  const fieldJump = reviewGuidance.getByRole('link', { name: '部署コードを確認する' })
+  await fieldJump.click()
+  const targetRow = formPanel.getByLabel('部署コードの標準マッピング').locator('xpath=ancestor::tr')
+  await expect(targetRow).toBeInViewport()
+  expect(guidanceWrites).toBe(0)
+  page.off('request', trackGuidanceWrite)
   const inputReview = profileCards.first().getByRole('region', { name: 'フォーム入力確認' })
   const savedChoices = inputReview.getByRole('region', { name: '同名チェック項目の確認資料' })
   await expect(savedChoices.getByText('SNS運用（選択値：SNS）', { exact: true })).toBeVisible()
@@ -302,13 +328,13 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(inputReview.getByRole('heading', { name: 'フォーム入力の確認資料' })).toBeVisible()
   await page.unroute('**/api/form-profiles/*/review-material')
   // Presentation-only fixtures; no external GET, approval or send.
-  for (const status of ['HOLD', 'HUMAN_REQUIRED', 'BLOCKED']) {
+  for (const [status, version] of [['HOLD', '6.2'], ['HOLD', '6.1.6'], ['HUMAN_REQUIRED', '6.1.6'], ['BLOCKED', '6.1.6']]) {
     await page.route('**/api/form-profiles/*/review-material', async route => {
       const response = await route.fetch()
       const body = await response.json()
       body.adapter_prerequisites.cf7_readiness = {
-        status, observed_version: '6.2', lab_contract_status: 'VERIFIED_FIXTURE_ONLY', freshness: 'CURRENT',
-        reasons: [{ code: 'fixture-reason', message: '6.2実サイト準備は未接続です。', next_action: '送信せず入力内容を確認する。' }],
+        status, observed_version: version, lab_contract_status: 'VERIFIED_FIXTURE_ONLY', freshness: 'CURRENT',
+        reasons: [{ code: 'fixture-reason', message: `${version}実サイト準備は未接続です。`, next_action: '送信せず入力内容を確認する。' }],
       }
       await route.fulfill({ response, json: body })
     })
@@ -316,6 +342,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     const readiness = prerequisites.getByRole('region', { name: 'CF7対応状況' })
     await expect(readiness).toContainText(({ HOLD: '実サイト送信は保留', HUMAN_REQUIRED: '人の操作が必要', BLOCKED: '送信対象外' } as Record<string, string>)[status])
     await expect(readiness).toContainText('検証済み（実サイト対応ではありません）')
+    if (version === '6.1.6') await expect(readiness).toContainText('6.1.4として代用できません。')
     await expect(readiness.getByText('送信せず入力内容を確認する。', { exact: true })).toBeVisible()
     await expect(readiness.getByRole('button')).toHaveCount(0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
@@ -363,6 +390,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     .getByRole('button', { name: '修正を保存' }).click()
   await expect(page.getByText('フォーム項目の判定を修正しました。')).toBeVisible()
   await expect(departmentMapping).toHaveValue('department')
+  await expect(captchaCard.getByRole('link', { name: '部署コードを確認する' })).toHaveCount(0)
   await expect(captchaCard.getByText('MANUAL', { exact: true })).toBeVisible()
   const contactMethod = formPanel.getByLabel('連絡方法の連絡方法')
   await expect(contactMethod).toHaveValue('')
@@ -421,6 +449,8 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     .locator('xpath=ancestor::section[1]')
   await expect(viewerPanel.getByText('閲覧者は解析結果を確認できます。', { exact: false })).toBeVisible()
   await expect(viewerPanel.getByRole('button', { name: '再解析' })).toBeDisabled()
+  await expect(viewerPanel.getByRole('region', { name: 'フォームの確認手順' })).toHaveCount(2)
+  await expect(viewerPanel.getByRole('region', { name: 'フォームの確認手順' }).first()).toContainText('営業許可を確認した意味ではありません。')
   await expect(viewerPanel.getByRole('button', { name: '優先フォームにする' })).toBeDisabled()
   await expect(viewerPanel.getByLabel('部署コードの標準マッピング')).toBeDisabled()
   await expect(viewerPanel.getByLabel('部署コードの推奨値')).toBeDisabled()

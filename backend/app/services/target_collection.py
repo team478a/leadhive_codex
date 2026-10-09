@@ -8,6 +8,7 @@ from app.models import CollectionJob, Company, LeadSourceObservation
 from app.schema_external_presence import PresenceSearchPlan
 from app.services.collection import ExternalServiceError, canonicalize_url, search_serper_page
 from app.services.collection_conditions import evaluate
+from app.services.collection_discovery import classify_hit, mark_discovery, persist_discovery
 from app.services.collection_jobs import (
     fail_job,
     is_duplicate,
@@ -15,6 +16,7 @@ from app.services.collection_jobs import (
     save_candidates,
     start_job,
 )
+from app.services.discovery_capture import capturing_discovery
 from app.services.external_presence import extra_searches
 from app.services.processing_usage import capture_usage, persist_usage
 from app.services.scraper import is_aggregator_domain
@@ -62,6 +64,11 @@ def bounded_candidates(db, job, candidates, remaining):
             is_duplicate(db, job.project_id, candidate)
             or is_suppressed(db, job.project_id, candidate)
             or (domain and is_aggregator_domain(domain))
+            or (
+                candidate.website_url
+                and classify_hit({"link": candidate.website_url})[0]
+                in {"SOCIAL", "JOB_PR", "PORTAL_DIRECTORY", "OTHER", "ARTICLE"}
+            )
         ):
             selected.append(candidate)
             continue
@@ -69,6 +76,8 @@ def bounded_candidates(db, job, candidates, remaining):
         if key in keys or len(keys) < remaining:
             keys.add(key)
             selected.append(candidate)
+        else:
+            mark_discovery(db, job, candidate, "TARGET_LIMIT")
     return selected
 
 
@@ -121,12 +130,13 @@ def run(db, job, payload, conditions, stopped):
         # Reserve the attempt before HTTP, retaining the ceiling after a crash/retry.
         requests += 1
         record()
-        with capture_usage() as usage:
+        with capture_usage() as usage, capturing_discovery() as discovery:
             try:
                 candidates = search_serper_page(keyword, payload["region"], PAGE_SIZE, page)
                 error = None
             except ExternalServiceError as exc:
                 candidates, error = [], exc
+        persist_discovery(db, collection, discovery)
         persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
         if stopped():
             fail_job(db, collection, "収集が中断されました。")
@@ -139,7 +149,7 @@ def run(db, job, payload, conditions, stopped):
         save_candidates(
             db,
             collection,
-            bounded_candidates(db, job, candidates, target - len(before)),
+            bounded_candidates(db, collection, candidates, target - len(before)),
             keyword,
         )
         collection.found_count = len(candidates)

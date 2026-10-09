@@ -2,11 +2,15 @@ import csv
 import io
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from urllib.parse import urlsplit, urlunsplit
+from uuid import UUID
 
 import httpx
 
 from app.config import settings
+from app.services.discovery_capture import capture_serper
 from app.services.processing_usage import measured_request
 from app.services.raw_capture import capture
 
@@ -14,9 +18,26 @@ logger = logging.getLogger("leadhive")
 
 
 class ExternalServiceError(Exception):
-    def __init__(self, public_message: str):
+    def __init__(self, public_message: str, *, retryable: bool = False, retry_after: float = 0):
         super().__init__(public_message)
         self.public_message = public_message
+        self.retryable = retryable
+        self.retry_after = retry_after
+
+
+def search_retry_delay(value: str | None) -> float:
+    """Honor Retry-After without exposing response bodies or credentials."""
+    if not value:
+        return 0
+    try:
+        return max(0, float(value))
+    except ValueError:
+        try:
+            return max(
+                0, (parsedate_to_datetime(value) - datetime.now(timezone.utc)).total_seconds()
+            )
+        except (ValueError, TypeError, OverflowError):
+            return 0
 
 
 @dataclass
@@ -30,6 +51,7 @@ class Candidate:
     reference_url: str = ""
     presence_urls: list[str] = field(default_factory=list)
     search_excerpt: str = ""
+    discovery_hit_id: UUID | None = field(default=None, compare=False)
 
 
 def canonicalize_url(value: str) -> tuple[str, str]:
@@ -182,21 +204,46 @@ def search_serper_page(keyword: str, region: str, max_results: int, page: int) -
             data = response.json()
     except (httpx.HTTPError, ValueError) as exc:
         logger.error("external API error: provider=serper type=%s", type(exc).__name__)
-        raise ExternalServiceError("Google検索に失敗しました。設定を確認してください。") from exc
+        status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
+        retryable = isinstance(exc, (httpx.ConnectError, httpx.TimeoutException)) or (
+            status == 429 or (status is not None and 500 <= status <= 599)
+        )
+        delay = (
+            search_retry_delay(exc.response.headers.get("Retry-After"))
+            if isinstance(exc, httpx.HTTPStatusError)
+            else 0
+        )
+        raise ExternalServiceError(
+            "Google検索に失敗しました。設定を確認してください。",
+            retryable=retryable,
+            retry_after=delay,
+        ) from exc
+    if not isinstance(data, dict):
+        raise ExternalServiceError("Google検索の応答形式が正しくありません。")
     candidates = []
-    capture("serper", data.get("organic", [])[:max_results])
-    for item in data.get("organic", [])[:max_results]:
+    organic = data.get("organic", [])
+    if not isinstance(organic, list):
+        raise ExternalServiceError("Google検索の応答形式が正しくありません。")
+    hit_ids = capture_serper(organic, page=page, requested=max_results)
+    capture("serper", organic[:max_results])
+    for position, item in enumerate(organic[:max_results], start=1):
+        if not isinstance(item, dict):
+            continue
         url = item.get("link", "")
-        title = (item.get("title") or "").strip()
+        title_value = item.get("title")
+        title = title_value if isinstance(title_value, str) else ""
         try:
+            if not isinstance(url, str) or urlsplit(url).username or urlsplit(url).password:
+                continue
             normalized, domain = canonicalize_url(url)
         except ValueError:
             continue
         candidates.append(
             Candidate(
-                company_name=(title or domain)[:500],
+                company_name=(title.strip() or domain)[:500],
                 website_url=normalized,
                 search_excerpt=str(item.get("snippet") or "")[:2000],
+                discovery_hit_id=hit_ids.get(position),
             )
         )
     return candidates

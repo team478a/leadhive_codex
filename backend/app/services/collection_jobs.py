@@ -1,6 +1,7 @@
 """Persistence and deduplication for collection jobs."""
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CollectionJob, Company, Project, SuppressionEntry
 from app.services.collection import Candidate, canonicalize_url
+from app.services.collection_discovery import classify_hit, mark_discovery
 from app.services.external_presence import capture_candidate
 from app.services.lead_enrichment import observe_candidate
 from app.services.location_identity import location_key
@@ -118,6 +120,8 @@ def save_candidates(
     candidates: list[Candidate],
     source_keyword: str = "",
     input_errors: int | list[dict[str, object]] = 0,
+    *,
+    before_commit: Callable[[], None] | None = None,
 ) -> CollectionJob:
     error_details = input_errors if isinstance(input_errors, list) else []
     error_count = len(input_errors) if isinstance(input_errors, list) else input_errors
@@ -131,6 +135,12 @@ def save_candidates(
     )
     for candidate in candidates:
         capture_candidate(db, job, candidate)
+        if job.source == "serper" and candidate.website_url:
+            kind, _ = classify_hit({"link": candidate.website_url})
+            if kind in {"SOCIAL", "JOB_PR", "PORTAL_DIRECTORY", "OTHER", "ARTICLE"}:
+                job.excluded_count += 1
+                mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
+                continue
         if candidate.website_url:
             _, candidate_domain = canonicalize_url(candidate.website_url)
             if is_aggregator_domain(candidate_domain):
@@ -139,9 +149,11 @@ def save_candidates(
                     candidate.website_url = None
                 else:
                     job.excluded_count += 1
+                    mark_discovery(db, job, candidate, "AGGREGATOR_EXCLUDED")
                     continue
         if is_suppressed(db, job.project_id, candidate):
             job.duplicate_count += 1
+            mark_discovery(db, job, candidate, "SUPPRESSED")
             continue
         duplicate = duplicate_company(db, job.project_id, candidate)
         if duplicate:
@@ -149,6 +161,7 @@ def save_candidates(
             observe_candidate(db, job, duplicate, candidate)
             capture_candidate(db, job, candidate, duplicate)
             job.duplicate_count += 1
+            mark_discovery(db, job, candidate, "DUPLICATE", duplicate)
             continue
         domain = None
         if candidate.website_url:
@@ -188,13 +201,19 @@ def save_candidates(
             if duplicate:
                 db.refresh(duplicate, with_for_update=True)
                 observe_candidate(db, job, duplicate, candidate)
+            mark_discovery(
+                db, job, candidate, "DUPLICATE" if duplicate else "INGESTION_CONFLICT", duplicate
+            )
         else:
             job.saved_count += 1
             observe_candidate(db, job, company, candidate, new=True)
             capture_candidate(db, job, candidate, company)
+            mark_discovery(db, job, candidate, "SAVED", company)
     job.status = "completed"
     job.finished_at = datetime.now(timezone.utc)
     job.processing_ms = max(0, int((job.finished_at - job.created_at).total_seconds() * 1000))
+    if before_commit:
+        before_commit()
     db.commit()
     db.refresh(job)
     logger.info(

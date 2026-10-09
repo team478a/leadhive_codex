@@ -568,6 +568,9 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     if payload.get("target_count"):
         from app.services.target_collection import run
 
+        if payload.get("query_plan"):
+            from app.services.collection_scheduler import run
+
         job.total_count = payload["target_count"]
         db.commit()
         run(db, job, payload, conditions, lambda: stop_requested(db, job, worker_id))
@@ -593,17 +596,27 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         ]
 
         def fetch(keyword):
-            with capture_usage() as usage:
+            from app.services.discovery_capture import capturing_discovery
+
+            with capture_usage() as usage, capturing_discovery() as discovery:
                 try:
-                    return search(keyword, payload["region"], payload["max_results"]), None, usage
+                    return (
+                        search(keyword, payload["region"], payload["max_results"]),
+                        None,
+                        usage,
+                        discovery,
+                    )
                 except ExternalServiceError as exc:
-                    return [], exc, usage
+                    return [], exc, usage, discovery
 
         with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
             results = list(executor.map(fetch, keywords))
-        for keyword, collection, (candidates, error, usage) in zip(
+        for keyword, collection, (candidates, error, usage, discovery) in zip(
             keywords, collections, results, strict=True
         ):
+            from app.services.collection_discovery import persist_discovery
+
+            persist_discovery(db, collection, discovery)
             persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
             if stop_requested(db, job, worker_id):
                 return

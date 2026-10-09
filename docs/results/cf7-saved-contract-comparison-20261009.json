@@ -1,0 +1,39 @@
+{
+  "baseline_commit": "1ad95c3091d3fe27c54a32a241f81889cccbba8c",
+  "method": "stored_isolated_inspection_current_readiness_rules",
+  "cases": 6,
+  "states": {
+    "HUMAN_REQUIRED": 3,
+    "HOLD": 3
+  },
+  "known_616_marker_cases": 2,
+  "known_616_human_required": 2,
+  "reasons_overlapping": {
+    "CAPTCHA": 3,
+    "OBSERVATION_STALE": 6,
+    "STRUCTURE_UNVERIFIED": 6,
+    "LEGACY_PREPARATION_UNSUPPORTED": 2,
+    "CONTRACT_SHAPE_REVIEW": 6,
+    "CONTACT_PERMISSION_REVIEW": 6,
+    "REAL_SITE_ADAPTER_UNCONNECTED": 6,
+    "VERSION_UNVERIFIED": 4,
+    "CONTROL_UNSUPPORTED": 2,
+    "STATIC_UNVERIFIED": 2,
+    "REST_ROOT_UNVERIFIED": 2
+  },
+  "verified_sendable": 0,
+  "human_reviewed": 0,
+  "human_precision": null,
+  "external_requests": 0,
+  "ai_calls": 0,
+  "db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "limitations": [
+    "Snapshots have different times; not Before/After gain",
+    "Core suppression, optout, identity and sender not queried; permission remains UNCERTAIN",
+    "No current observation, structure comparison or Human choice review",
+    "Known HTML version is not installed plugin version proof"
+  ]
+}

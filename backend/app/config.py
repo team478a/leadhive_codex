@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +14,10 @@ class Settings(BaseSettings):
     session_hours: int = 12
     agent_features_enabled: bool = False
     worker_paused: bool = False
+    collection_fair_scheduler_enabled: bool = False
+    collection_discovery_max_operation_hits: int = Field(default=5000, ge=100, le=5000)
+    collection_discovery_field_chars: int = Field(default=4000, ge=100, le=4000)
+    collection_discovery_retention_days: int = Field(default=90, ge=1, le=365)
     outbound_enabled: bool = False
     human_approved_email_enabled: bool = False
     human_approved_form_enabled: bool = False
