@@ -25,8 +25,8 @@ REASONS = {
         "版を確認し、対応する管理下テストが必要。",
     ),
     "LEGACY_PREPARATION_UNSUPPORTED": (
-        "6.2は隔離検証済みですが、既存の実サイト候補準備は6.1.4限定です。",
-        "6.1.4として代用せず、6.2用の実サイト準備境界を別工程で整備する。",
+        "この版は管理下契約を検証済みですが、既存の実サイト候補準備は6.1.4限定です。",
+        "6.1.4として代用せず、この版の実サイト構成・準備境界を別工程で確認する。",
     ),
     "CONTACT_PERMISSION_REVIEW": (
         "営業可否・窓口用途のHuman確認が必要です。",
@@ -65,7 +65,7 @@ def summarize(diagnostic: dict, observation: dict | None, choice_reviews: list[d
     version = static.get("version")
     version = (
         version
-        if cf7 and static.get("status") == "CF7_CANDIDATE" and version in ("6.1.4", "6.2")
+        if cf7 and static.get("status") == "CF7_CANDIDATE" and version in ("6.1.4", "6.1.6", "6.2")
         else None
     )
     codes: list[str] = []
@@ -90,7 +90,7 @@ def summarize(diagnostic: dict, observation: dict | None, choice_reviews: list[d
         )
         add(static.get("status") != "CF7_CANDIDATE", "STATIC_UNVERIFIED")
         add(version is None, "VERSION_UNVERIFIED")
-        add(version == "6.2", "LEGACY_PREPARATION_UNSUPPORTED")
+        add(version in ("6.1.6", "6.2"), "LEGACY_PREPARATION_UNSUPPORTED")
         shape = static.get("contract_shape")
         shape = shape if isinstance(shape, dict) else {}
         add(

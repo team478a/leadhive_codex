@@ -58,16 +58,44 @@ def test_hard_block_wins_over_captcha_and_technical_facts():
     assert result["status"] == "BLOCKED" and result["primary_reason"] == "CONTACT_BLOCKED"
 
 
-@pytest.mark.parametrize("version", ["6.1.4", "6.2", "6.2.1", None, "SECRET"])
+@pytest.mark.parametrize("version", ["6.1.4", "6.1.6", "6.1.7", "6.2", "6.2.1", None, "SECRET"])
 def test_exact_versions_only_and_no_raw_output(version):
     value = saved()
     value["cf7_static"]["version"] = version
     result = summarize(diagnostic(), value, [])
     assert result["lab_contract_status"] == (
-        "VERIFIED_FIXTURE_ONLY" if version in ("6.1.4", "6.2") else "UNVERIFIED"
+        "VERIFIED_FIXTURE_ONLY" if version in ("6.1.4", "6.1.6", "6.2") else "UNVERIFIED"
     )
     assert "SECRET" not in json.dumps(result)
     assert result["status"] == "HOLD"
+
+
+@pytest.mark.parametrize("state,status", [("UNKNOWN", "HOLD"), ("DETECTED", "HUMAN_REQUIRED")])
+def test_616_fixture_contract_does_not_enable_saved_site_preparation(state, status):
+    value = saved(captcha_state=state)
+    value["cf7_static"].update(version="6.1.6")
+    value["cf7_static"]["contract_shape"].update(
+        reviewed_lab_version=False, hidden_shape_valid=False, extra_hidden=1
+    )
+    result = summarize(diagnostic(core_permission_status="ALLOWED"), value, [])
+    assert result["observed_version"] == "6.1.6"
+    assert result["lab_contract_status"] == "VERIFIED_FIXTURE_ONLY"
+    assert result["status"] == status
+    assert {
+        "LEGACY_PREPARATION_UNSUPPORTED",
+        "CONTRACT_SHAPE_REVIEW",
+        "REAL_SITE_ADAPTER_UNCONNECTED",
+    } <= {reason["code"] for reason in result["reasons"]}
+    assert not result["execution_allowed"] and not result["eligible_for_approval"]
+
+
+def test_616_marker_in_size_limited_inspection_is_not_lab_evidence():
+    value = saved()
+    value["cf7_static"].update(status="LIMIT_EXCEEDED", version="6.1.6")
+    result = summarize(diagnostic(), value, [])
+    assert result["observed_version"] is None
+    assert result["lab_contract_status"] == "UNVERIFIED"
+    assert result["status"] == "HOLD" and not result["execution_allowed"]
 
 
 def test_technical_reasons_and_choice_review():

@@ -2,6 +2,19 @@ name: LeadHive checks
 on: [push, pull_request]
 
 jobs:
+  offline-collection-replay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==9.1.1 mypy==2.4.0
+      - run: |
+          python -m pytest offline_tests -q
+          python -m mypy offline_replay --check-untyped-defs
+        working-directory: backend
+
   backend-lint:
     runs-on: ubuntu-24.04
     steps:
@@ -19,8 +32,11 @@ jobs:
       - run: |
           backend/.venv/bin/python -m ruff check backend
           backend/.venv/bin/python -m ruff format --check backend
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/cf7_616_contract.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/cf7_large_page_review.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/benchmark_evidence.py backend/app/services/benchmark_summary.py backend/app/services/cohort_destinations.py backend/app/services/completion_metrics.py backend/app/completion_metrics_routes.py backend/scripts/run_completion_benchmark.py backend/app/site_identity_review_routes.py backend/app/lead_completion_routes.py backend/app/raw_collection_routes.py backend/app/model_raw_collection.py backend/app/project_access.py backend/app/services/raw_capture.py backend/app/services/raw_benchmark.py backend/app/services/raw_repeat.py backend/app/raw_pair_routes.py
           backend/.venv/bin/python -c "from app.main import app; print(app.title)"
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/site_extraction.py backend/app/services/contact_discovery.py backend/app/services/website_evidence.py backend/app/services/scraper.py backend/app/services/lead_identity.py backend/app/services/web_analysis.py backend/app/services/form_intelligence/analyzer.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_external_presence.py backend/app/schema_external_presence.py backend/app/services/external_presence.py backend/app/services/presence_platforms.py backend/app/external_presence_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_conditions.py backend/app/schema_collection_conditions.py backend/app/services/collection_conditions.py backend/app/collection_condition_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/condition_collection.py backend/app/schema_workflow.py
@@ -32,6 +48,8 @@ jobs:
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/condition_summary.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/sending_window.py backend/app/sending_window_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/target_collection.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_discovery.py backend/app/services/discovery_capture.py backend/app/services/collection_discovery.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_scheduler.py backend/app/services/collection_query_plan.py backend/app/services/collection_search_policy.py backend/app/services/collection_scheduler.py backend/app/services/collection.py backend/app/services/collection_jobs.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_intelligence/fields.py backend/app/services/form_profile_delivery.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_review_material.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/form_intelligence_routes.py backend/app/schema_form_review.py

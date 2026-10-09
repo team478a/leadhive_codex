@@ -1,0 +1,76 @@
+{
+  "schema_version": "serper-boundary-replay-v1",
+  "dataset_kind": "SYNTHETIC",
+  "evaluation": "SYNTHETIC_BEHAVIOR_ONLY",
+  "legacy_commit": "393f690e34c7a5fbdddd4b15e0285aa2ff313269",
+  "current_commit": "31ec306819a5485de3c3cc9f3bb11a3da3cc6d0f",
+  "stage": "RAW_COLLECTION_BOUNDARY_REPLAY",
+  "input_hash": "d01e3524d5afd35966ef3585aab9e1135fdcd5a30c47e049ef55498ed6af7548",
+  "source_hashes": {
+    "legacy_aggregator": "f3a5cfd7e39ac158857d47320f4b1bf5a7d7f40bb42e18d44b80a82276b191b8",
+    "current_collection": "92203ea80064c04591f2125e435636788e18fb74b3d675cca7ebc04381a03e39",
+    "current_scraper": "a8e9b760a66f954cf1365ab3c2b27956f675abcdcd2fb536801f45ff5d732b17"
+  },
+  "runs": [
+    {
+      "ordinal": 1,
+      "status": "COMPLETED",
+      "raw_hits": 20,
+      "decision_differences": 6,
+      "candidate_url_differences": 9,
+      "projections": {
+        "legacy_preview": {
+          "CANDIDATE": 10,
+          "DUPLICATE": 3,
+          "EXCLUDED": 6,
+          "SKIPPED": 1
+        },
+        "current_ingestion": {
+          "CANDIDATE": 13,
+          "DUPLICATE": 2,
+          "EXCLUDED": 2,
+          "SKIPPED": 3
+        }
+      }
+    }
+  ],
+  "human_reviewed": 0,
+  "strict_precision": null,
+  "resolved_precision": null,
+  "official_site_accuracy": null,
+  "contact_discovery_rate": null,
+  "api_cost": null,
+  "coverage": null,
+  "limitations": [
+    "Boundary projections only; no whole-app legacy execution or DB ingestion.",
+    "No Human labels or official-site/contact validation are inferred.",
+    "Empty independent project per run; no suppression or existing DB state."
+  ],
+  "safety": {
+    "external_requests": 0,
+    "ai_calls": 0,
+    "completion_jobs": 0,
+    "approvals": 0,
+    "email_sent": 0,
+    "form_posts": 0
+  },
+  "raw_observation_stability": [
+    {
+      "query_group_hash": "3c314bff4be34f48fc6df53f859d4541a3b05f4a33e51c64c09e12c418ba215d",
+      "run_count": 1,
+      "union": 20,
+      "intersection": null,
+      "intersection_rate": null,
+      "repeat_discovery_rate": null,
+      "single_run_rate": null,
+      "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+    }
+  ],
+  "offline_processing_seconds": 0.0067229999986011535,
+  "started_at": "2026-10-08T23:54:45.098674+00:00",
+  "finished_at": "2026-10-08T23:54:45.342511+00:00",
+  "runner_source_hashes": {
+    "cli.py": "9c972ce798fc784a27628bae38e275f12bb93cd5ce9cee463a15efd47cd3acb5",
+    "comparison.py": "0736a3304f65dc2da539b099ad9ffc070a3b489689dc0b9c23ac044638fc40e9"
+  }
+}

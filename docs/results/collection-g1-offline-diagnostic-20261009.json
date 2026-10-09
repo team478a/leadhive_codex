@@ -1,0 +1,21 @@
+{
+  "method": "saved_diagnostic_html_only",
+  "pages": 9,
+  "contact_dom_pages": 0,
+  "embedded_marker_pages": 3,
+  "unresolved_pages": 6,
+  "external_requests": 0,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "human_precision": null,
+  "cohort_discovery_rate": null,
+  "limitations": [
+    "Selection-biased diagnostic pages, not full cohort",
+    "No root/navigation response cache",
+    "Markers are not rendered DOM proof"
+  ]
+}
