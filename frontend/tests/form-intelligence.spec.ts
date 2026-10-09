@@ -78,6 +78,9 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   const reviewGuidance = profileCards.last().getByRole('region', { name: 'フォームの確認手順' })
   await expect(reviewGuidance).toContainText('CAPTCHAは人による操作・確認が必要です。')
   await expect(reviewGuidance).toContainText('フォーム確認や優先フォームの選択はHuman送信承認ではありません。')
+  await expect(reviewGuidance).toContainText('入力先のマッピング済み表示は、選択肢や同意内容の確認済み表示ではありません。')
+  await expect(reviewGuidance.getByRole('link', { name: 'メルマガ登録の選択・同意を確認する' })).toHaveCount(0)
+  await expect(profileCards.first().getByRole('region', { name: 'フォームの確認手順' })).toContainText('表示後や確認画面でのCAPTCHAがないことは未確認です。')
   await expect(formPanel.getByText('営業可否: 営業禁止表記は未検出', { exact: true })).toHaveCount(2)
   await expect(reviewGuidance.getByRole('link', { name: '元の問い合わせページを開く（別タブ）' })).toHaveAttribute('target', '_blank')
   let guidanceWrites = 0
@@ -85,6 +88,8 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     if (request.url().includes('/api/') && !['GET', 'HEAD', 'OPTIONS'].includes(request.method())) guidanceWrites++
   }
   page.on('request', trackGuidanceWrite)
+  await reviewGuidance.getByRole('link', { name: '連絡方法の選択・同意を確認する' }).click()
+  await expect(formPanel.getByLabel('連絡方法の標準マッピング').locator('xpath=ancestor::tr')).toBeInViewport()
   const fieldJump = reviewGuidance.getByRole('link', { name: '部署コードを確認する' })
   await fieldJump.click()
   const targetRow = formPanel.getByLabel('部署コードの標準マッピング').locator('xpath=ancestor::tr')
