@@ -47,3 +47,24 @@ CAPTCHAマーカー未検出は動的CAPTCHA不存在の証明ではない。フ
 保存データ再計算のみで外部通信・AI・実データDB変更・Approval・メール・Form POSTは0。送信workerを起動・変更していない。prototypeの新helperを既存APIへ自動適用していない。
 
 ケース1は版別の安全な契約と用途確認が別途必要。ケース2の属性重複は意味を確認せず無視しない。実サイト再確認は対象・GET上限を整理し、既存許可を拡張して実行しない。
+
+## 停止理由の明示（2026-10-09追補）
+
+基準コミット: `8c4c9dc8af3c0054fb327c48a0263ce1b5d2752e`。
+
+調査専用の失敗結果に `failure_reason` と `whole_page_scanned=false` を追加した。部分解析をページ全体の成功やCAPTCHA不存在として扱わない。通常の静的検証結果のschema・許可条件は変更していない。
+
+原因コードは固定のallowlistのみ。重複属性、フォーム入れ子、未閉鎖フォーム、hidden/marker重複、tag/form/name/control/size/input上限、index不正、入力不正を区別する。helper側ではtimeout、subprocess失敗、不正な結果を区別する。例外文、HTML、属性名・値、URLは出力しない。subprocessから未知の原因・余分な原文・権限true・全体走査trueを含む失敗結果が返った場合は `INVALID_RESULT` で拒否する。
+
+匿名測定: [cf7-large-failure-reasons-20261009.json](results/cf7-large-failure-reasons-20261009.json)。過去の成果物は上書きしていない。
+
+| 保存ページ | 以前 | 今回 | 送信可否への影響 |
+| --- | --- | --- | --- |
+| 337004 bytes | REVIEW_ONLY / HTML表記5.9.3 | 同じ | なし。REST導線・対応契約未確認 |
+| 840296 bytes | PARSE_FAILED | PARSE_FAILED / DUPLICATE_ATTRIBUTE / 全体走査未完了 | なし。構造曖昧の拒否を維持 |
+
+技術確認が残る3件全体では、6.2.1表記の候補は版・hidden・選択肢・同意の対応未確認、5.9.3表記の候補はREST導線・版別契約未確認、もう1件は属性重複による解析拒否。今回、これらを送信対応済みへ昇格していない。既存6.1.4/6.1.6/6.2の検証を別版の実サイトへ代用しない。
+
+関連Backendテスト **73 passed**。Ruff、format、parser/helperのmypy成功。API/UI/DB/migration/送信経路の変更はないため、Frontend検証は追加実行していない。PR #22のCIは全ジョブ成功を確認した。今回のPRのCIは別途確認する。
+
+今回は保存済みデータのみ、外部GET・AI・実データDB書き込み・承認・送信は0。次は優先するフォームの構成を独立fixtureで検証する工程であり、この原因表示を実送信対応の完成と扱わない。
