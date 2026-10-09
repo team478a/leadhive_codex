@@ -1,5 +1,6 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
+- [Phase 4A: AI E2E導入監査・隔離比較PoC](PHASE4A_AI_E2E_AUDIT.md)
 - [Phase 4: フォーム判定分離・ブラウザ操作PoC](PHASE4_FORM_OPERATION_BROWSER_POC.md)
 
 - [収集改善PR1: 取得候補・分類・未取込理由](COLLECTION_DISCOVERY_LEDGER.md)
