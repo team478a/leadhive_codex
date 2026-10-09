@@ -143,6 +143,9 @@ def test_error_limits_never_become_stagnation(auth, db, monkeypatch, retryable, 
     assert state["collection_progress"]["stop_reason"] == "SOURCE_ERROR"
     task = db.scalar(select(CollectionQueryTask))
     assert task.stagnant_pages == 0
+    from app.models import CollectionJob
+
+    assert db.get(CollectionJob, attempts(db)[0].collection_job_id).error_message == "safe"
     retry = auth.post(f"/api/operations/{job_id}/retry")
     assert retry.status_code == 202
     worker.run_once()

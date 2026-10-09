@@ -108,11 +108,14 @@ def root_and_tasks(db, job, worker_id):
     return root, tasks, attempts
 
 
-def fail_attempt(db, attempt, task, reason, *, unknown=False, retryable=False, delay=0):
+def fail_attempt(
+    db, attempt, task, reason, *, unknown=False, retryable=False, delay=0, message=None
+):
     attempt.state = "UNKNOWN" if unknown else "FAILED"
     attempt.reason, attempt.finished_at = reason, datetime.now(timezone.utc)
     collection = db.get(CollectionJob, attempt.collection_job_id)
-    collection.status, collection.error_message = "failed", "検索結果を確定できませんでした。"
+    collection.status = "failed"
+    collection.error_message = (message or "検索結果を確定できませんでした。")[:500]
     collection.error_count, collection.finished_at = 1, attempt.finished_at
     used = (
         db.scalar(
@@ -266,6 +269,7 @@ def run(db, job, payload, conditions, stopped):
                     "SOURCE_ERROR",
                     retryable=error.retryable,
                     delay=error.retry_after,
+                    message=error.public_message,
                 )
                 db.commit()
                 continue
