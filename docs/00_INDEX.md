@@ -359,3 +359,5 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [206_CF7_REAL_RESERVATION_REAPPROVAL.md](206_CF7_REAL_RESERVATION_REAPPROVAL.md): 実サイト候補とは別のHuman再承認・予約のみの保存・worker/DB実行拒否・送信未接続
 
 - [COLLECTION_QUERY_SCHEDULER.md](COLLECTION_QUERY_SCHEDULER.md): 工程2・公平な検索配分、停滞2回、永続予算、再開と部分結果
+
+- [COLLECTION_SITE_EXTRACTION.md](COLLECTION_SITE_EXTRACTION.md): 工程3・企業情報の根拠、公式照合、段階的問い合わせ探索と取得診断
