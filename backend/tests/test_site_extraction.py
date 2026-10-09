@@ -96,3 +96,73 @@ def test_directory_mentions_target_but_does_not_become_official():
     status, reasons = website_match(company, data)
     assert status == "REVIEW_REQUIRED"
     assert "COMPANY_NAME_CONFLICT" in reasons
+
+
+@pytest.mark.parametrize(
+    "target", ["https://outside.example/contact", "http://example.com/contact"]
+)
+def test_secondary_redirect_is_rejected_before_external_get(monkeypatch, target):
+    monkeypatch.setattr(scraper, "_validated_target", lambda url: (url, "example.com"))
+    monkeypatch.setattr(scraper.time, "sleep", lambda seconds: None)
+    calls = []
+
+    def response(request):
+        calls.append(str(request.url))
+        if request.url.path == "/robots.txt":
+            return httpx.Response(200, text="User-agent: *\nAllow: /")
+        return httpx.Response(302, headers={"location": target})
+
+    fetcher = SafeFetcher()
+    fetcher.client.close()
+    fetcher.client = httpx.Client(transport=httpx.MockTransport(response))
+    fetcher.site_root = "https://example.com/"
+    try:
+        with pytest.raises(ScrapeError, match="追加探索"):
+            fetcher.fetch_html("https://example.com/contact")
+        assert calls == ["https://example.com/robots.txt", "https://example.com/contact"]
+        assert target not in calls
+    finally:
+        fetcher.close()
+
+
+def test_robots_fetch_failure_remains_fail_closed_with_correct_reason(monkeypatch):
+    fetcher = SafeFetcher()
+    monkeypatch.setattr(scraper, "_validated_target", lambda url: (url, "example.com"))
+
+    def failure(*args, **kwargs):
+        raise ScrapeError("Webサイトを取得できませんでした（HTTP 503）。")
+
+    monkeypatch.setattr(fetcher, "_request", failure)
+    try:
+        with pytest.raises(ScrapeError, match="503"):
+            fetcher.fetch_html("https://example.com/")
+    finally:
+        fetcher.close()
+
+
+def test_slow_stream_stops_at_elapsed_deadline(monkeypatch):
+    clock = [1.0]
+
+    class Stream(httpx.SyncByteStream):
+        def __iter__(self):
+            yield b"<html>"
+            clock[0] = 62.0
+            yield b"<form></form>"
+
+    monkeypatch.setattr(scraper.time, "monotonic", lambda: clock[0])
+    monkeypatch.setattr(scraper, "_validated_target", lambda url: (url, "example.com"))
+    fetcher = SafeFetcher()
+    monkeypatch.setattr(fetcher, "robots_allowed", lambda url: True)
+    fetcher.client.close()
+    fetcher.client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, headers={"content-type": "text/html"}, stream=Stream()
+            )
+        )
+    )
+    try:
+        with pytest.raises(ScrapeError, match="時間上限"):
+            fetcher.fetch_html("https://example.com/")
+    finally:
+        fetcher.close()

@@ -30,7 +30,7 @@ Form Intelligenceは最大8追加ページ・深さ3。実DOMの問い合わせ�
 
 ## 取得上限・安全境界
 
-SafeFetcherはrobots/redirectを含め32 HTTP要求まで。同一ホストは要求開始を1秒以上離す。開始から60秒経過後は新規要求を拒否する（実行中要求には既存HTTP timeoutが適用される）。各転送先のpublic URL検証とrobots確認を行う。サイズ・転送5回上限は維持する。
+SafeFetcherはrobots/redirectを含め32 HTTP要求まで。同一ホストは要求開始を1秒以上離す。開始から60秒経過後は新規要求を拒否し、ストリームの各chunkでも期限を確認する（読み取り待機には既存HTTP timeoutが適用される）。robots自体の取得失敗は取得失敗として伝え、営業禁止やrobots禁止とは混同せずfail-closedを維持する。各転送先のpublic URL検証とrobots確認を行う。トップ取得後の追加探索は転送先GET前に同一サイト制約も強制し、別ホスト・HTTPSからHTTPへの降格を取得しない。サイズ・転送5回上限は維持する。
 
 既存のWeb解析/Form Intelligence実行経路の改善であり、Raw BenchmarkからCompletionを自動起動する接続を追加しない。検索API上限、収集scheduler、Raw分類、AI設定、project権限、手動保護、営業禁止、CAPTCHA、Human承認、送信機能は維持する。HTMLは命令ではなく抽出対象データ。フォームが見つかることは営業許可・送信READY・Human承認を意味しない。
 

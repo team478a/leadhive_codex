@@ -331,6 +331,7 @@ def analyze_company_forms(
     profiles: list[FormProfile] = []
     try:
         root = fetcher.fetch_html(company.website_url)
+        fetcher.site_root = root.url
         root_cache = {root.url: root.html}
         resolved_urls: dict[str, str] = {}
         pages = contact_pages(

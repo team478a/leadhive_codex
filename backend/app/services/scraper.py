@@ -206,6 +206,7 @@ class SafeFetcher:
             },
         )
         self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
+        self.site_root = ""
         self._request_count = 0
         self._started = time.monotonic()
         self._last_request: dict[str, float] = {}
@@ -219,6 +220,8 @@ class SafeFetcher:
         if redirects > 5:
             raise ScrapeError("リダイレクト回数が上限を超えました。")
         normalized, _ = _validated_target(url)
+        if self.site_root and not same_site(self.site_root, normalized):
+            raise ScrapeError("追加探索の別サイト・HTTP降格への転送は取得しません。")
         if redirects and not robots_request and not self.robots_allowed(normalized):
             raise ScrapeError("転送先のrobots.txtにより解析が許可されていません。")
         if self._request_count >= 32 or time.monotonic() - self._started >= 60:
@@ -227,6 +230,8 @@ class SafeFetcher:
         wait = 1 - (time.monotonic() - self._last_request.get(host, 0))
         if wait > 0:
             time.sleep(wait)
+        if time.monotonic() - self._started >= 60:
+            raise ScrapeError("Webサイト取得の時間上限に達しました。")
         self._request_count += 1
         self._last_request[host] = time.monotonic()
         try:
@@ -255,6 +260,8 @@ class SafeFetcher:
                 chunks = []
                 size = 0
                 for chunk in response.iter_bytes():
+                    if time.monotonic() - self._started >= 60:
+                        raise ScrapeError("Webサイト取得の時間上限に達しました。")
                     size += len(chunk)
                     if size > max_bytes:
                         raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
@@ -275,10 +282,9 @@ class SafeFetcher:
         if cached:
             return cached.can_fetch(settings.scraper_user_agent, url)
         robots_url = urlunsplit((parsed.scheme, parsed.netloc, "/robots.txt", "", ""))
-        try:
-            page = self._request(robots_url, 256_000, robots_request=True)
-        except ScrapeError:
-            return False
+        # Failure to fetch robots is not evidence of a robots prohibition.
+        # Propagate the acquisition failure, remaining fail-closed.
+        page = self._request(robots_url, 256_000, robots_request=True)
         parser = urllib.robotparser.RobotFileParser()
         parser.set_url(robots_url)
         parser.parse(page.html.splitlines())
@@ -503,6 +509,7 @@ def scrape_company(url: str) -> tuple[FetchedPage, PageData]:
     fetcher = SafeFetcher()
     try:
         page = fetcher.fetch_html(url)
+        fetcher.site_root = page.url
         data = extract_page(page.html, page.url)
         data.scraped_urls = [page.url]
         primary_host = (urlsplit(page.url).hostname or "").lower().removeprefix("www.")
