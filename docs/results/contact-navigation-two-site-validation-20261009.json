@@ -1,0 +1,72 @@
+{
+  "baseline_commit": "459284da2b63dc1d4059c9fe592af4a384bbc8d8",
+  "cohort_rows": 2,
+  "unique_input_roots": 2,
+  "method": "root_navigation_static_get",
+  "uses_supplied_contact_url": false,
+  "max_get_requests": 64,
+  "get_requests": 6,
+  "states": {
+    "DOM_DETECTED": 2
+  },
+  "leads_with_partial_errors": 0,
+  "independent_detected_form_urls": 2,
+  "duration_seconds": 3.593,
+  "human_reviewed": 0,
+  "human_precision": null,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound_enabled": false,
+  "worker_started": false,
+  "estimated_api_cost": 0,
+  "limitations": [
+    "Known URL cohort, not Discovery precision",
+    "Static HTML only; no browser JavaScript",
+    "Detection is not sales permission or sendability",
+    "Partial fetch errors are not absence evidence",
+    "Private page cache contains only successful HTML, not full HTTP response capture",
+    "No same-cache legacy comparison completed",
+    "Two selected cases only; historical responses and timestamps differ",
+    "One detected destination changed; CAPTCHA-related field is a marker, not runtime validation"
+  ],
+  "historical_comparison": {
+    "same_response_cache": false,
+    "cases": [
+      {
+        "case": "previously_detected",
+        "previous_state": "DOM_DETECTED",
+        "current_state": "DOM_DETECTED",
+        "previous_successful_html_pages": 3,
+        "current_successful_html_pages": 2,
+        "previous_duration_seconds": 13.781,
+        "current_duration_seconds": 3.578,
+        "current_get_requests": 3,
+        "retained_previous_detected_url": false,
+        "captcha_related_field_marker": true,
+        "sales_permission_verified": false,
+        "sendability_verified": false
+      },
+      {
+        "case": "previously_missed",
+        "previous_state": "STATIC_UNRESOLVED",
+        "current_state": "DOM_DETECTED",
+        "previous_successful_html_pages": 9,
+        "current_successful_html_pages": 2,
+        "previous_duration_seconds": 13.922,
+        "current_duration_seconds": 2.922,
+        "current_get_requests": 3,
+        "retained_previous_detected_url": false,
+        "captcha_related_field_marker": false,
+        "sales_permission_verified": false,
+        "sendability_verified": false
+      }
+    ],
+    "whole_20_site_current_rate": null,
+    "previously_detected_destination_changed": true
+  },
+  "runner_sha256": "606a6cf9e3b64181c1bf8560169d571ef2e124b2bf95908cea675f5d6761fef3"
+}
