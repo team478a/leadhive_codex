@@ -305,3 +305,36 @@ def test_batch_analysis_and_access_isolation(auth, users, monkeypatch):
 
 def urlsplit_name(url):
     return url.split("//", 1)[-1].split(".", 1)[0]
+
+
+def test_extraction_evidence_does_not_bootstrap_official_confirmation(auth, db, monkeypatch):
+    from sqlalchemy import select
+
+    from app.models import LeadSiteEvidence, LeadSourceObservation
+
+    project = make_project(auth)
+    item = add_url(auth, project["id"], "https://example.jp")
+    company = db.get(Company, UUID(item["id"]))
+    before_name = company.company_name
+    monkeypatch.setattr(
+        web_analysis,
+        "scrape_company",
+        lambda url: (
+            FetchedPage("https://example.jp", HTML),
+            extract_page(HTML, "https://example.jp"),
+        ),
+    )
+    result = web_analysis.analyze(db, company)
+    assert result.company_name != before_name
+    evidence = db.scalar(select(LeadSiteEvidence).where(LeadSiteEvidence.company_id == company.id))
+    assert evidence.confidence == "REVIEW_REQUIRED"
+    assert "IDENTITY_CHANGED_DURING_EXTRACTION" in evidence.reasons
+    observation = db.scalar(
+        select(LeadSourceObservation).where(
+            LeadSourceObservation.company_id == company.id,
+            LeadSourceObservation.source == "website",
+        )
+    )
+    assert observation is not None
+    assert observation.facts["email"]["verified"] is False
+    assert observation.facts["email"]["source_url"] == "https://example.jp"

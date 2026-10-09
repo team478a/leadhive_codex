@@ -10,6 +10,12 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.models import Company, FormAnalysisLog, FormProfile, FormProfileField, Project
+from app.services.contact_discovery import (
+    contact_pages,
+    embedded_form_providers,
+    is_contact_form,
+    same_site,
+)
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
 from app.services.form_intelligence.fields import mapping_review_reason, parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
@@ -26,7 +32,7 @@ from app.services.form_intelligence.rules import (
 from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "1.8"
+ANALYSIS_VERSION = "1.9"
 MAX_CONTACT_PAGES = 8
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 
@@ -325,24 +331,59 @@ def analyze_company_forms(
     profiles: list[FormProfile] = []
     try:
         root = fetcher.fetch_html(company.website_url)
-        pages = _candidate_pages(company, root.url, root.html)
         root_cache = {root.url: root.html}
-        if not pages:
-            pages = [(root.url, True)]
+        resolved_urls: dict[str, str] = {}
+        pages = contact_pages(
+            root.url,
+            root_cache,
+            company.contact_url or "",
+            max_pages=MAX_CONTACT_PAGES,
+            resolved_urls=resolved_urls,
+        )
         provider = get_form_decision_provider() if allow_ai else None
         for url, explicit in pages:
             page_started = time.monotonic()
             try:
+                requested_url = url
                 html = root_cache.get(url)
                 if html is None:
                     page = fetcher.fetch_html(url)
+                    if not same_site(root.url, page.url):
+                        raise ScrapeError(
+                            "問い合わせページが別サイトへ転送されました。確認が必要です。"
+                        )
+                    resolved_urls[url] = page.url
+                    root_cache[url] = page.html
                     url, html = page.url, page.html
-                _log(db, company.id, "contact_page_found", details={"url": url})
+                    root_cache[url] = html
+                _log(
+                    db,
+                    company.id,
+                    "contact_page_found",
+                    details={
+                        "url": url,
+                        "requested_url": requested_url,
+                        "discovery_method": "LINK" if explicit else "GUESSED_PATH",
+                    },
+                )
                 soup = BeautifulSoup(html, "html.parser")
                 forms = list(soup.select("form"))
                 text = soup.get_text(" ", strip=True)[:30_000]
                 page_kind = _page_kind(url, text)
-                if not forms:
+                if not any(is_contact_form(form) for form in forms):
+                    embeds = embedded_form_providers(html)
+                    _log(
+                        db,
+                        company.id,
+                        "analysis_completed",
+                        details={
+                            "url": url,
+                            "finding": "EMBEDDED_FORM_UNVERIFIED"
+                            if embeds
+                            else "DOM_CONTACT_FORM_NOT_FOUND",
+                            "embedded_providers": embeds,
+                        },
+                    )
                     if explicit:
                         profile = _upsert_profile(
                             db,
@@ -358,10 +399,19 @@ def analyze_company_forms(
                             duration_ms=round((time.monotonic() - page_started) * 1000),
                             provider_name="rule",
                         )
+                        if embeds:
+                            profile.review_reason = (
+                                "外部埋め込みを検出しました（"
+                                + ", ".join(embeds)
+                                + "）。表示後のフォーム確認が必要です。"
+                                "フォームなしとは判定していません。"
+                            )[:500]
                         profiles.append(profile)
                         seen.add((url, 0))
                     continue
                 for form_index, form in enumerate(forms):
+                    if not is_contact_form(form):
+                        continue
                     form_started = time.monotonic()
                     compatibility = assess_delivery_compatibility(form, url)
                     fields = parse_form_fields(form)
@@ -534,7 +584,23 @@ def analyze_company_forms(
                         company.id,
                         "analysis_failed",
                         profile_id=profile.id,
-                        details={"reason": exc.public_message},
+                        details={
+                            "reason": exc.public_message,
+                            "finding": "FETCH_FAILED",
+                            "url": url,
+                        },
+                    )
+                else:
+                    _log(
+                        db,
+                        company.id,
+                        "analysis_failed",
+                        details={
+                            "reason": exc.public_message,
+                            "finding": "FETCH_FAILED",
+                            "url": url,
+                            "discovery_method": "GUESSED_PATH",
+                        },
                     )
 
         existing = db.scalars(select(FormProfile).where(FormProfile.company_id == company.id)).all()
@@ -576,8 +642,8 @@ def analyze_company_forms(
                     item.form_index,
                 ),
             )
-            for item in profiles:
-                item.is_primary = item.id == primary.id
+            for current_profile in profiles:
+                current_profile.is_primary = current_profile.id == primary.id
         db.commit()
         return list(
             db.scalars(
@@ -610,7 +676,7 @@ def analyze_company_forms(
             company.id,
             "analysis_failed",
             profile_id=profile.id,
-            details={"reason": exc.public_message},
+            details={"reason": exc.public_message, "finding": "FETCH_FAILED"},
         )
         db.commit()
         return [profile]

@@ -1,10 +1,11 @@
 import ipaddress
-import json
 import logging
 import re
 import socket
+import time
 import urllib.robotparser
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from html import unescape
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -12,7 +13,9 @@ import httpx
 from bs4 import BeautifulSoup
 
 from app.config import settings
+from app.services import site_extraction
 from app.services.collection import canonicalize_url
+from app.services.contact_discovery import navigation_links, same_site
 
 logger = logging.getLogger("leadhive")
 
@@ -135,6 +138,8 @@ class PageData:
     business_summary: str = ""
     website_text: str = ""
     scraped_urls: list[str] | None = None
+    field_evidence: dict = dataclass_field(default_factory=dict)
+    crawl_errors: list[dict] = dataclass_field(default_factory=list)
 
 
 def is_aggregator_domain(domain: str) -> bool:
@@ -201,6 +206,9 @@ class SafeFetcher:
             },
         )
         self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
+        self._request_count = 0
+        self._started = time.monotonic()
+        self._last_request: dict[str, float] = {}
 
     def close(self):
         self.client.close()
@@ -211,6 +219,16 @@ class SafeFetcher:
         if redirects > 5:
             raise ScrapeError("リダイレクト回数が上限を超えました。")
         normalized, _ = _validated_target(url)
+        if redirects and not robots_request and not self.robots_allowed(normalized):
+            raise ScrapeError("転送先のrobots.txtにより解析が許可されていません。")
+        if self._request_count >= 32 or time.monotonic() - self._started >= 60:
+            raise ScrapeError("Webサイト取得の回数・時間上限に達しました。")
+        host = urlsplit(normalized).hostname or ""
+        wait = 1 - (time.monotonic() - self._last_request.get(host, 0))
+        if wait > 0:
+            time.sleep(wait)
+        self._request_count += 1
+        self._last_request[host] = time.monotonic()
         try:
             with self.client.stream("GET", normalized) as response:
                 if response.status_code in {301, 302, 303, 307, 308}:
@@ -285,56 +303,23 @@ def _clean_url(value: str, base_url: str) -> str:
 
 
 def _extract_company_name(soup: BeautifulSoup) -> str:
-    for selector, attribute in (
-        ("meta[property='og:site_name']", "content"),
-        ("meta[name='application-name']", "content"),
-    ):
+    org = site_extraction.organization(soup)
+    if org.get("name"):
+        return str(org["name"]).strip()[:500]
+    for selector in ("meta[property='og:site_name']", "meta[name='application-name']"):
         element = soup.select_one(selector)
-        if element and element.get(attribute):
-            return str(element[attribute]).strip()[:500]
-    for script in soup.select("script[type='application/ld+json']"):
-        try:
-            value = json.loads(script.string or "")
-        except (json.JSONDecodeError, TypeError):
-            continue
-        values = value if isinstance(value, list) else [value]
-        for item in values:
-            if isinstance(item, dict) and item.get("@type") in {
-                "Organization",
-                "Corporation",
-                "LocalBusiness",
-            }:
-                if item.get("name"):
-                    return str(item["name"]).strip()[:500]
+        if element and element.get("content"):
+            return str(element["content"]).strip()[:500]
     title = soup.title.get_text(" ", strip=True) if soup.title else ""
     return re.split(r"\s*[|｜–—]\s*", title, maxsplit=1)[0].strip()[:500]
 
 
 def _extract_email(soup: BeautifulSoup, text: str) -> str:
-    candidates = []
-    for anchor in soup.select("a[href^='mailto:']"):
-        value = anchor.get("href", "").split(":", 1)[-1].split("?", 1)[0].strip()
-        if value:
-            candidates.append(value)
-    candidates.extend(re.findall(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", text))
-    unique = list(dict.fromkeys(value.lower() for value in candidates if len(value) <= 320))
-    priorities = ("info@", "contact@", "inquiry@", "sales@", "support@")
-    return next(
-        (value for prefix in priorities for value in unique if value.startswith(prefix)),
-        unique[0] if unique else "",
-    )
+    return site_extraction.email(soup, text)
 
 
 def _extract_phone(text: str) -> str:
-    patterns = (
-        r"(?:TEL|電話|Phone)\s*[：:]?\s*(0\d{1,4}[\s\-‐‑‒–—ー]\d{1,4}[\s\-‐‑‒–—ー]\d{3,4})",
-        r"(?<!\d)(0\d{1,4}[\-‐‑‒–—ー]\d{1,4}[\-‐‑‒–—ー]\d{3,4})(?!\d)",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            return re.sub(r"[\s‐‑‒–—ー]", "-", match.group(1))[:100]
-    return ""
+    return site_extraction.phone(text)
 
 
 def _extract_location(text: str) -> tuple[str, str, str]:
@@ -343,6 +328,12 @@ def _extract_location(text: str) -> tuple[str, str, str]:
         return "", "", ""
     start = text.find(prefecture)
     fragment = text[start : start + 160]
+    fragment = re.split(
+        r"\s+(?:TEL|FAX|Phone|電話|メール|営業時間|お問い合わせ|対応地域)",
+        fragment,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
     city_match = re.match(re.escape(prefecture) + r"([^\s、,]{1,30}?(?:市|区|町|村))", fragment)
     city = city_match.group(1) if city_match else ""
     address_match = re.match(r"[^\n。]{2,120}", fragment)
@@ -458,6 +449,8 @@ def merge_page_data(target: PageData, source: PageData, source_url: str) -> None
     ):
         if not getattr(target, field) and getattr(source, field):
             setattr(target, field, getattr(source, field))
+            if field in source.field_evidence:
+                target.field_evidence[field] = source.field_evidence[field]
     if source.website_text and source.website_text not in target.website_text:
         target.website_text = (f"{target.website_text}\n\n[{source_url}]\n{source.website_text}")[
             :100_000
@@ -469,10 +462,12 @@ def extract_page(html: str, base_url: str) -> PageData:
     summary_tag = soup.select_one("meta[name='description'], meta[property='og:description']")
     summary = str(summary_tag.get("content", "")).strip() if summary_tag else ""
     company_name = _extract_company_name(soup)
+    org = site_extraction.organization(soup)
     for element in soup.select("script, style, noscript, svg, template"):
         element.decompose()
     text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True)).strip()
-    address, prefecture, city = _extract_location(text)
+    location, address_method = site_extraction.location_text(soup, text, org)
+    address, prefecture, city = _extract_location(location)
     data = PageData(
         company_name=company_name,
         phone=_extract_phone(text),
@@ -484,6 +479,21 @@ def extract_page(html: str, base_url: str) -> PageData:
         business_summary=(summary or text[:500])[:2000],
         website_text=text[:100_000],
     )
+    for field_name, method in (
+        ("company_name", "JSON_LD_NAME" if org.get("name") else "METADATA_OR_TITLE_CANDIDATE"),
+        ("address", address_method),
+        ("phone", "PHONE_TEXT"),
+        ("email", "MAILTO_OR_TEXT"),
+        ("contact_url", "CONTACT_LINK"),
+    ):
+        value = getattr(data, field_name)
+        if value:
+            data.field_evidence[field_name] = {
+                "value": value,
+                "source_url": base_url,
+                "method": method,
+                "verified": False,
+            }
     for key, value in _social_links(soup, base_url).items():
         setattr(data, key, value)
     return data
@@ -496,16 +506,35 @@ def scrape_company(url: str) -> tuple[FetchedPage, PageData]:
         data = extract_page(page.html, page.url)
         data.scraped_urls = [page.url]
         primary_host = (urlsplit(page.url).hostname or "").lower().removeprefix("www.")
-        for secondary_url in discover_important_urls(page.html, page.url):
+        queue = discover_important_urls(page.html, page.url)
+        visited = {page.url.rstrip("/")}
+        count = 0
+        while queue and count < MAX_SECONDARY_PAGES:
+            secondary_url = queue.pop(0)
+            if secondary_url.rstrip("/") in visited:
+                continue
+            visited.add(secondary_url.rstrip("/"))
+            count += 1
             try:
                 secondary_page = fetcher.fetch_html(secondary_url)
-            except ScrapeError:
+            except ScrapeError as exc:
+                data.crawl_errors.append(
+                    {"requested_url": secondary_url, "reason": exc.public_message}
+                )
                 continue
             secondary_host = (
                 (urlsplit(secondary_page.url).hostname or "").lower().removeprefix("www.")
             )
-            if secondary_host != primary_host:
+            if secondary_host != primary_host or not same_site(page.url, secondary_page.url):
+                data.crawl_errors.append(
+                    {"requested_url": secondary_url, "reason": "CROSS_SITE_REDIRECT"}
+                )
                 continue
+            queue.extend(
+                navigation_links(
+                    secondary_page.html, secondary_page.url, page.url, contact_context=True
+                )
+            )
             merge_page_data(
                 data,
                 extract_page(secondary_page.html, secondary_page.url),

@@ -68,6 +68,11 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
 
   const formPanel = page.getByRole('heading', { name: 'フォーム事前解析' })
     .locator('xpath=ancestor::section[1]')
+  await formPanel.getByText(/解析ログ（/).click()
+  await expect(formPanel.getByText('取得したHTMLで問い合わせフォーム未検出', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('外部埋め込みあり・表示後の確認が必要', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('ページ取得失敗・フォームの有無は未確認', { exact: true })).toBeVisible()
+  await expect(formPanel.getByText('検証用の取得失敗', { exact: true })).toBeVisible()
   const profileCards = formPanel.locator('.form-profile-card')
   await expect(profileCards).toHaveCount(2)
   const inputReview = profileCards.first().getByRole('region', { name: 'フォーム入力確認' })
