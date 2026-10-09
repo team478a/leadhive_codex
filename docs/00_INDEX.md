@@ -1,5 +1,10 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
+- [キーワード収集改善・全国展開の統合実装計画](KEYWORD_NATIONWIDE_COLLECTION_IMPLEMENTATION_PLAN.md)
+
+- [Phase 2C 収集エンジン監査・再現結果](PHASE2C_COLLECTION_ENGINE_AUDIT.md)
+- [Phase 2C 実装前の段階計画](PHASE2C_COLLECTION_IMPLEMENTATION_PLAN.md)
+
 - [Raw Collection共通入力オフライン比較](RAW_OFFLINE_COLLECTION_REPLAY.md)
 
 - [旧版・現行版・OSSの収集精度比較監査](COLLECTION_ACCURACY_COMPARATIVE_AUDIT.md)
