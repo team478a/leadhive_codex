@@ -6,7 +6,10 @@ type Group = {
   review_status: 'NOT_REVIEWED' | 'RECORDED' | 'STALE' | 'EXPIRED'
   rule: 'AT_LEAST_ONE' | 'EXACTLY_ONE' | null
   saved_selections: Record<string, string>
-  members: { field_id: string; name: string; options: { value: string; label?: string }[] }[]
+  requirement_scope_status?: 'UNCONFIRMED' | 'HUMAN_RECORDED'
+  member_count?: number; option_count?: number; individual_required_count?: number
+  minimum_selected?: number | null; maximum_selected?: number | null
+  members: { field_id: string; name: string; individually_required?: boolean; options: { value: string; label?: string }[] }[]
 }
 const statuses = { NOT_REVIEWED: '未確認', RECORDED: '条件・選択を記録済み', STALE: '項目変更・再確認が必要', EXPIRED: '期限切れ・再確認が必要' }
 
@@ -18,6 +21,13 @@ function GroupEditor({ group, readOnly, saving, onSave }: { group: Group; readOn
   return <article className="panel mt-3" aria-label="必須グループの確認">
     <strong>{group.label || '必須選択グループ'}</strong>
     <p className="muted mt-2">{statuses[group.review_status]}</p>
+    <section className="notice mt-2" aria-label="必須範囲の確認状況">
+      <p>{group.member_count ?? group.members.length}項目・{group.option_count ?? group.members.reduce((count, member) => count + member.options.length, 0)}選択肢</p>
+      {group.requirement_scope_status === 'HUMAN_RECORDED' && group.review_status === 'RECORDED'
+        ? <p>必須範囲：人が条件を記録済み（送信承認ではありません）</p>
+        : <p>必須範囲：未確定（任意ではありません）。各欄すべてを必須として選ぶのではなく、対象範囲と必要な選択数を確認してください。</p>}
+      <p>個別に必須と記録された項目：{group.individual_required_count ?? group.members.filter(member => member.individually_required).length}件</p>
+    </section>
     <p className="notice mt-2">同じ見出しの項目をまとめた候補です。対象項目と条件を元フォームで確認してください。記録しても送信可能にはなりません。</p>
     <p className="muted mt-2">各欄に保存できる選択値は1つです。同じ欄で複数の値を選ぶケースは未対応です。</p>
     {!group.review_supported && <p className="notice mt-2">項目名・選択肢・同意条件を安全に確定できないため、このグループは記録できません。</p>}
@@ -28,7 +38,7 @@ function GroupEditor({ group, readOnly, saving, onSave }: { group: Group; readOn
         <label className="mt-3">確認した必須条件<select aria-label="確認した必須条件" value={rule} disabled={saving} onChange={event => { setRule(event.target.value); setConfirmed(false) }}>
           <option value="">元フォームで確認して選択</option><option value="AT_LEAST_ONE">最低1項目を選択</option><option value="EXACTLY_ONE">1項目だけ選択</option>
         </select></label>
-        {group.members.map(member => <label className="mt-3 block" key={member.field_id}>{member.options.map(option => option.label || option.value).join(' / ')}<select aria-label={`${member.name}のグループ選択`} disabled={saving} value={choices[member.field_id] || ''} onChange={event => { setChoices({ ...choices, [member.field_id]: event.target.value }); setConfirmed(false) }}>
+        {group.members.map(member => <label className="mt-3 block break-all" key={member.field_id}>{member.name}：{member.options.length}選択肢{member.individually_required ? '（個別必須）' : '（グループ条件を確認）'}<select aria-label={`${member.name}のグループ選択`} disabled={saving} value={choices[member.field_id] || ''} onChange={event => { setChoices({ ...choices, [member.field_id]: event.target.value }); setConfirmed(false) }}>
           <option value="">選択しない</option>{member.options.map(option => <option key={option.value} value={option.value}>{option.label || option.value}</option>)}
         </select></label>)}
         <label className="mt-3 flex items-start gap-2"><input type="checkbox" checked={confirmed} disabled={saving} onChange={event => setConfirmed(event.target.checked)} />対象項目・必須条件・選択値を元フォームで確認しました</label>
