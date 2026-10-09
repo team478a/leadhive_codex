@@ -67,6 +67,25 @@ def test_no_application_module_is_executed():
         assert policy.eligible({"link": "https://agency.example/service"})[0]
 
 
+def test_redacted_snapshot_is_not_eligible():
+    collection, scraper, presence, discovery = sources()
+    policies = Policies(
+        "KNOWN_AGGREGATOR_DOMAINS = []\nPUBLIC_ORG_DOMAIN_SUFFIXES = []\n"
+        "PUBLIC_ORG_TITLE_PATTERNS = []",
+        collection,
+        scraper,
+    )
+    with deny_network():
+        _, private = compare(
+            fixture([{"link": "https://agency.example/service", "redacted": True}]),
+            policies,
+            source_policy=SourcePolicy(collection, scraper, presence, discovery),
+        )
+    row = private["runs"][0]["observations"][0]
+    assert row["current_ingestion_eligibility"]["classification_reason"] == "CREDENTIAL_URL"
+    assert row["current_ingestion_eligibility"]["state"] == "EXCLUDED"
+
+
 @pytest.mark.parametrize(
     "body", ["return open(value)", "import socket\n return value", "return value.__class__"]
 )

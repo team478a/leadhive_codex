@@ -280,7 +280,9 @@ def compare(
                 }
             )
             if source_policy is not None:
-                eligible, kind, reason = source_policy.eligible(hit)
+                eligible, kind, reason = source_policy.eligible(
+                    {**hit, "redacted": original.get("redacted", False)}
+                )
                 observations[-1]["current_ingestion_eligibility"] = (
                     {
                         **policies.current(hit, eligible_seen),

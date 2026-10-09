@@ -16,6 +16,9 @@ from app.services.scraper import is_aggregator_domain
 
 SOCIAL = {"INSTAGRAM", "X", "FACEBOOK", "YOUTUBE", "TIKTOK"}
 JOBS = {"INDEED", "KYUJIN_BOX"}
+# These are sources about providers, not the provider's own website. Keep their
+# Raw observations without creating Company records from Serper results.
+THIRD_PARTY_DOMAINS = {"web-kanji.com", "probel.jp"}
 
 
 def classify_hit(snapshot: dict) -> tuple[str, str]:
@@ -45,7 +48,11 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
         return "SOCIAL", "EXTERNAL_PLATFORM"
     if platform in JOBS:
         return "JOB_PR", "EXTERNAL_PLATFORM"
-    if platform or is_aggregator_domain(domain):
+    if (
+        platform
+        or is_aggregator_domain(domain)
+        or any(domain == host or domain.endswith("." + host) for host in THIRD_PARTY_DOMAINS)
+    ):
         return "PORTAL_DIRECTORY", "EXTERNAL_PLATFORM"
     path = urlsplit(url).path.lower()
     if path.endswith((".pdf", ".jpg", ".png")):
