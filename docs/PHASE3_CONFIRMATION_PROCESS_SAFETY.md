@@ -31,8 +31,6 @@ outbound / legacy form deliveryは親子ともOFF。子プロセスは送信tran
 
 全ケースで、新しいSessionからApprovalRequestがAPPROVEDのままであること、ApprovedFormDispatch / FormDelivery / EmailDeliveryが0件であることを確認する。レビューtoken消費をApprovalRequestのCONSUMEDや外部送信と混同しない。
 
-## 限界と残工程
-
 ## 検証結果
 
 - 新規processテスト4件と、確認レビュー・承認境界・multipart parserの関連テスト: 59件PASS（74.56秒）。
