@@ -52,7 +52,7 @@ UNKNOWN / BLOCKEDではtoken消費・再開始を拒否する。確認結果が�
 
 新規16ケースで正常レビュー、一回限りの結果登録/token消費、UNKNOWN、内容変更、外部URL、未承認、flag OFF、outbound ON、無効session、hash/version不一致、連絡禁止、CAPTCHA、期限、誤ID、他Project/viewer、commit失敗、default OFFを確認。
 
-関連承認・multipart・A2 securityスイート、Ruff、format、mypyを追加確認する。DB test fixtureは既存migration upgradeとAlembic model diffを実行する。GitHub ActionsはPRで全体回帰・E2E・migration往復・配布チェックを確認する。
+関連承認・multipart・A2 securityスイート134件PASS。Backend全体Ruff / format（468ファイル）と、新規サービス2ファイルのmypy PASS。DB test fixtureの既存migration upgrade / Alembic model diff PASS。新規サービスのmypyもCIへ追加した。GitHub ActionsはPRで全体回帰・E2E・migration往復・配布チェックを確認する。
 
 ## 次の実装境界
 
