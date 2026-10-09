@@ -1,0 +1,50 @@
+{
+  "baseline_main": "6484249ed19c82311ad5f800d196ed0e5831b1cc",
+  "completed_at": "2026-10-09T10:46:46.309436+00:00",
+  "candidate_count": 2,
+  "max_get": 20,
+  "get_attempts": 8,
+  "completed_get_responses": 8,
+  "robots_get_attempts": 4,
+  "html_get_attempts": 4,
+  "html_pages_observed": 4,
+  "contact_pages_observed": 2,
+  "contact_forms_observed": 2,
+  "decision_counts": {
+    "REVIEW_REQUIRED": 2
+  },
+  "required_visible_fields": 8,
+  "confirmation_buttons_observed": 1,
+  "native_parser_supported_form_count": 0,
+  "elapsed_seconds": 4.391,
+  "api_cost": 0,
+  "network_cost": null,
+  "ready": 0,
+  "dm_ready": 0,
+  "safety": {
+    "search_api_calls": 0,
+    "ai_calls": 0,
+    "post_requests": 0,
+    "db_writes": 0,
+    "approvals": 0,
+    "email_sent": 0,
+    "form_sent": 0,
+    "outbound_process_flag": false,
+    "worker_started": false
+  },
+  "limitations": [
+    "Static exact-target GET only, no JS, input or confirmation traversal",
+    "Parser support is not final delivery compatibility",
+    "No suppression, duplicate-send or Human authorization verified",
+    "Blocked GET is UNKNOWN, never form absence"
+  ],
+  "measurement": "AUTHORIZED_TWO_COMPANY_STATIC_GET_NOT_DELIVERY_BENCHMARK",
+  "multipart_forms": 1,
+  "actual_file_inputs": 0,
+  "cf7_forms": 1,
+  "cf7_observed_version": "6.2.1",
+  "cf7_reviewed_contract_version_matched": false,
+  "required_checkbox_groups_unresolved": 1,
+  "required_visible_fields_definition": "Parser individual required flags only; unresolved group excluded",
+  "coding_changes": false
+}
