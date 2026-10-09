@@ -44,24 +44,27 @@ export type Fixture = {
   stop: () => Promise<void>
 }
 
-export async function startFixture(): Promise<Fixture> {
+export async function startFixture(companyField = false): Promise<Fixture> {
+  const makeForm = (extra = '', dynamic = false) => form(
+    (companyField ? '<label>会社名<input name="company" required></label>' : '') + extra, dynamic,
+  )
   const prefix = `/lab-${randomUUID()}`
   let posts = 0
   let forbidden = 0
   let origin = ''
   const pages: Record<string, string> = {
-    html: form(), dynamic: form('', true), confirmation: form(),
-    inner: form(),
-    selection: form(`<label>お問い合わせ種別<select name="topic" required>
+    html: makeForm(), dynamic: makeForm('', true), confirmation: makeForm(),
+    inner: makeForm(),
+    selection: makeForm(`<label>お問い合わせ種別<select name="topic" required>
 <option value="">選択してください</option><option value="business">事業提携</option><option value="support">サポート</option></select></label>
 <fieldset><legend>返信方法</legend><label><input type="radio" name="reply" value="email" required>メール</label>
 <label><input type="radio" name="reply" value="phone" required>電話</label></fieldset>`),
-    consent: form(`<label><input type="checkbox" name="privacy" value="agree" required>${consentText}</label>`),
+    consent: makeForm(`<label><input type="checkbox" name="privacy" value="agree" required>${consentText}</label>`),
     prohibited: document('<p>営業・勧誘目的のお問い合わせはお断りします。</p>' + '<form></form>'),
     captcha: document('<p>CAPTCHA</p><div class="g-recaptcha"></div><form></form>'),
     password: form('<label>パスワード<input type="password" name="password" required></label>'),
     unknown: form('<label>不明な項目<input name="unknown" required></label>'),
-    invalid: form(), robots: form(), terms: form(),
+    invalid: makeForm(), robots: form(), terms: form(),
     changed: form() + `<script>document.querySelector('[name=name]').addEventListener('input', () => {
       document.querySelector('textarea').required = false;
     });</script>`,
