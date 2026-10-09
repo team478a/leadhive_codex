@@ -1,0 +1,45 @@
+{
+  "comparison": [
+    {
+      "version": "before",
+      "commit": "79d5255db19573ce94143de35d1e986f197fdc83",
+      "input_hash": "4248e5ad0cef206a0bef71a1aca9d08be22f747d48b071e5cf0824a343b6b7e6",
+      "regions": [
+        {
+          "region": "大阪府",
+          "raw_hits": 30,
+          "unique_eligible_domains": 13,
+          "excluded_hits": 8
+        },
+        {
+          "region": "兵庫県",
+          "raw_hits": 30,
+          "unique_eligible_domains": 11,
+          "excluded_hits": 8
+        }
+      ]
+    },
+    {
+      "version": "after",
+      "commit": "791cbe07c86bb1e3ec8a9063eddf68576ebc6918",
+      "input_hash": "4248e5ad0cef206a0bef71a1aca9d08be22f747d48b071e5cf0824a343b6b7e6",
+      "regions": [
+        {
+          "region": "大阪府",
+          "raw_hits": 30,
+          "unique_eligible_domains": 11,
+          "excluded_hits": 14
+        },
+        {
+          "region": "兵庫県",
+          "raw_hits": 30,
+          "unique_eligible_domains": 10,
+          "excluded_hits": 11
+        }
+      ]
+    }
+  ],
+  "human_precision": null,
+  "company_saved_count": null,
+  "external_requests": 0
+}

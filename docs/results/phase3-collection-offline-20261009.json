@@ -1,0 +1,471 @@
+{
+  "schema_version": "phase3-collection-evaluation-v1",
+  "baseline_main": "79d5255db19573ce94143de35d1e986f197fdc83",
+  "legacy_commit": "393f690e34c7a5fbdddd4b15e0285aa2ff313269",
+  "source_hashes": {
+    "legacy_aggregator": "f3a5cfd7e39ac158857d47320f4b1bf5a7d7f40bb42e18d44b80a82276b191b8",
+    "current_collection": "717933dd365d83fe2f758ef2628c439c6fb0eda908505ead5e8ab345d897d443",
+    "current_scraper": "2bff27b73539f614105f7c5cfb9286595eb79c64773b65f4f9b5e2cb6a3c74b5"
+  },
+  "scheduler_source_hashes": {
+    "target_collection": "39d689c6ed4184e73ef814cc74615e3e648fa14f6f693eb09ef68bd61719fbd9",
+    "collection_search_policy": "b7485061dab293e23efef3b7aa7ea38c19ad78c5059a41ccdfaf64cc43a60756"
+  },
+  "synthetic_boundary": {
+    "schema_version": "serper-boundary-replay-v1",
+    "dataset_kind": "SYNTHETIC",
+    "evaluation": "SYNTHETIC_BEHAVIOR_ONLY",
+    "legacy_commit": "393f690e34c7a5fbdddd4b15e0285aa2ff313269",
+    "current_commit": "79d5255db19573ce94143de35d1e986f197fdc83",
+    "stage": "RAW_COLLECTION_BOUNDARY_REPLAY",
+    "input_hash": "d01e3524d5afd35966ef3585aab9e1135fdcd5a30c47e049ef55498ed6af7548",
+    "source_hashes": {
+      "legacy_aggregator": "f3a5cfd7e39ac158857d47320f4b1bf5a7d7f40bb42e18d44b80a82276b191b8",
+      "current_collection": "717933dd365d83fe2f758ef2628c439c6fb0eda908505ead5e8ab345d897d443",
+      "current_scraper": "2bff27b73539f614105f7c5cfb9286595eb79c64773b65f4f9b5e2cb6a3c74b5"
+    },
+    "runs": [
+      {
+        "ordinal": 1,
+        "status": "COMPLETED",
+        "raw_hits": 20,
+        "decision_differences": 6,
+        "candidate_url_differences": 9,
+        "projections": {
+          "legacy_preview": {
+            "CANDIDATE": 10,
+            "DUPLICATE": 3,
+            "EXCLUDED": 6,
+            "SKIPPED": 1
+          },
+          "current_ingestion": {
+            "CANDIDATE": 13,
+            "DUPLICATE": 2,
+            "EXCLUDED": 2,
+            "SKIPPED": 3
+          }
+        }
+      }
+    ],
+    "human_reviewed": 0,
+    "strict_precision": null,
+    "resolved_precision": null,
+    "official_site_accuracy": null,
+    "contact_discovery_rate": null,
+    "api_cost": null,
+    "coverage": null,
+    "limitations": [
+      "Boundary projections only; no whole-app legacy execution or DB ingestion.",
+      "No Human labels or official-site/contact validation are inferred.",
+      "Empty independent project per run; no suppression or existing DB state."
+    ],
+    "safety": {
+      "external_requests": 0,
+      "ai_calls": 0,
+      "completion_jobs": 0,
+      "approvals": 0,
+      "email_sent": 0,
+      "form_posts": 0
+    },
+    "raw_observation_stability": [
+      {
+        "query_group_hash": "3c314bff4be34f48fc6df53f859d4541a3b05f4a33e51c64c09e12c418ba215d",
+        "run_count": 1,
+        "union": 20,
+        "intersection": null,
+        "intersection_rate": null,
+        "repeat_discovery_rate": null,
+        "single_run_rate": null,
+        "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+      }
+    ]
+  },
+  "synthetic_boundary_processing_seconds": 0.019337200006702915,
+  "saved_normalized_capture": [
+    {
+      "region": "大阪府",
+      "target_companies": 100,
+      "methods": {
+        "legacy_preview": {
+          "raw_hits": 37,
+          "unique_candidate_domains": 25,
+          "states": {
+            "CANDIDATE": 25,
+            "EXCLUDED": 2,
+            "DUPLICATE": 10
+          },
+          "matched_companies": null,
+          "official_site_accuracy": null,
+          "contact_discovery_rate": null,
+          "search_api_requests": 0,
+          "historical_pages_replayed": 4,
+          "api_cost": null,
+          "human_reviewed": 0
+        },
+        "current_conventional_boundary": {
+          "raw_hits": 37,
+          "unique_candidate_domains": 27,
+          "states": {
+            "CANDIDATE": 27,
+            "DUPLICATE": 10
+          },
+          "matched_companies": null,
+          "official_site_accuracy": null,
+          "contact_discovery_rate": null,
+          "search_api_requests": 0,
+          "historical_pages_replayed": 4,
+          "api_cost": null,
+          "human_reviewed": 0
+        },
+        "fair_v1_boundary_policy": {
+          "raw_hits": 37,
+          "unique_candidate_domains": 27,
+          "states": {
+            "CANDIDATE": 27,
+            "DUPLICATE": 10
+          },
+          "matched_companies": null,
+          "official_site_accuracy": null,
+          "contact_discovery_rate": null,
+          "search_api_requests": 0,
+          "historical_pages_replayed": 4,
+          "api_cost": null,
+          "human_reviewed": 0,
+          "replay_stop": "MISSING_FIXTURE",
+          "missing_pages": [
+            {
+              "query": "SNS運用代行 会社",
+              "page": 3
+            },
+            {
+              "query": "Instagram運用代行 会社",
+              "page": 3
+            }
+          ],
+          "request_order": [
+            {
+              "query": "SNS運用代行 会社",
+              "page": 1
+            },
+            {
+              "query": "Instagram運用代行 会社",
+              "page": 1
+            },
+            {
+              "query": "SNS運用代行 会社",
+              "page": 2
+            },
+            {
+              "query": "Instagram運用代行 会社",
+              "page": 2
+            }
+          ]
+        }
+      }
+    },
+    {
+      "region": "兵庫県",
+      "target_companies": 100,
+      "methods": {
+        "legacy_preview": {
+          "raw_hits": 40,
+          "unique_candidate_domains": 23,
+          "states": {
+            "CANDIDATE": 23,
+            "EXCLUDED": 3,
+            "DUPLICATE": 14
+          },
+          "matched_companies": null,
+          "official_site_accuracy": null,
+          "contact_discovery_rate": null,
+          "search_api_requests": 0,
+          "historical_pages_replayed": 4,
+          "api_cost": null,
+          "human_reviewed": 0
+        },
+        "current_conventional_boundary": {
+          "raw_hits": 40,
+          "unique_candidate_domains": 26,
+          "states": {
+            "CANDIDATE": 26,
+            "DUPLICATE": 14
+          },
+          "matched_companies": null,
+          "official_site_accuracy": null,
+          "contact_discovery_rate": null,
+          "search_api_requests": 0,
+          "historical_pages_replayed": 4,
+          "api_cost": null,
+          "human_reviewed": 0
+        },
+        "fair_v1_boundary_policy": {
+          "raw_hits": 40,
+          "unique_candidate_domains": 26,
+          "states": {
+            "CANDIDATE": 26,
+            "DUPLICATE": 14
+          },
+          "matched_companies": null,
+          "official_site_accuracy": null,
+          "contact_discovery_rate": null,
+          "search_api_requests": 0,
+          "historical_pages_replayed": 4,
+          "api_cost": null,
+          "human_reviewed": 0,
+          "replay_stop": "MISSING_FIXTURE",
+          "missing_pages": [
+            {
+              "query": "SNS運用代行 会社",
+              "page": 3
+            },
+            {
+              "query": "Instagram運用代行 会社",
+              "page": 3
+            }
+          ],
+          "request_order": [
+            {
+              "query": "SNS運用代行 会社",
+              "page": 1
+            },
+            {
+              "query": "Instagram運用代行 会社",
+              "page": 1
+            },
+            {
+              "query": "SNS運用代行 会社",
+              "page": 2
+            },
+            {
+              "query": "Instagram運用代行 会社",
+              "page": 2
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "synthetic_scheduler_controls": [
+    {
+      "region": "大阪府",
+      "case": "duplicate_gap",
+      "conventional": {
+        "raw_hits": 2,
+        "unique_candidates": 1,
+        "synthetic_match": 1,
+        "mock_requests": 2,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      },
+      "fair_v1": {
+        "raw_hits": 3,
+        "unique_candidates": 2,
+        "synthetic_match": 2,
+        "mock_requests": 5,
+        "unsearched_queries": 0,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      }
+    },
+    {
+      "region": "大阪府",
+      "case": "empty_first",
+      "conventional": {
+        "raw_hits": 0,
+        "unique_candidates": 0,
+        "synthetic_match": 0,
+        "mock_requests": 1,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      },
+      "fair_v1": {
+        "raw_hits": 1,
+        "unique_candidates": 1,
+        "synthetic_match": 1,
+        "mock_requests": 4,
+        "unsearched_queries": 0,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      }
+    },
+    {
+      "region": "大阪府",
+      "case": "fair_budget",
+      "conventional": {
+        "raw_hits": 46,
+        "unique_candidates": 46,
+        "synthetic_match": 46,
+        "mock_requests": 50,
+        "stop_reason": "REQUEST_BUDGET_REACHED"
+      },
+      "fair_v1": {
+        "raw_hits": 50,
+        "unique_candidates": 50,
+        "synthetic_match": 50,
+        "mock_requests": 50,
+        "unsearched_queries": 0,
+        "stop_reason": "REQUEST_BUDGET_REACHED"
+      }
+    },
+    {
+      "region": "大阪府",
+      "case": "review_only_growth",
+      "conventional": {
+        "raw_hits": 10,
+        "unique_candidates": 10,
+        "synthetic_match": 0,
+        "mock_requests": 11,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      },
+      "fair_v1": {
+        "raw_hits": 5,
+        "unique_candidates": 5,
+        "synthetic_match": 0,
+        "mock_requests": 5,
+        "unsearched_queries": 0,
+        "stop_reason": "QUERY_PAGE_LIMIT"
+      }
+    },
+    {
+      "region": "兵庫県",
+      "case": "duplicate_gap",
+      "conventional": {
+        "raw_hits": 2,
+        "unique_candidates": 1,
+        "synthetic_match": 1,
+        "mock_requests": 2,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      },
+      "fair_v1": {
+        "raw_hits": 3,
+        "unique_candidates": 2,
+        "synthetic_match": 2,
+        "mock_requests": 5,
+        "unsearched_queries": 0,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      }
+    },
+    {
+      "region": "兵庫県",
+      "case": "empty_first",
+      "conventional": {
+        "raw_hits": 0,
+        "unique_candidates": 0,
+        "synthetic_match": 0,
+        "mock_requests": 1,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      },
+      "fair_v1": {
+        "raw_hits": 1,
+        "unique_candidates": 1,
+        "synthetic_match": 1,
+        "mock_requests": 4,
+        "unsearched_queries": 0,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      }
+    },
+    {
+      "region": "兵庫県",
+      "case": "fair_budget",
+      "conventional": {
+        "raw_hits": 46,
+        "unique_candidates": 46,
+        "synthetic_match": 46,
+        "mock_requests": 50,
+        "stop_reason": "REQUEST_BUDGET_REACHED"
+      },
+      "fair_v1": {
+        "raw_hits": 50,
+        "unique_candidates": 50,
+        "synthetic_match": 50,
+        "mock_requests": 50,
+        "unsearched_queries": 0,
+        "stop_reason": "REQUEST_BUDGET_REACHED"
+      }
+    },
+    {
+      "region": "兵庫県",
+      "case": "review_only_growth",
+      "conventional": {
+        "raw_hits": 10,
+        "unique_candidates": 10,
+        "synthetic_match": 0,
+        "mock_requests": 11,
+        "stop_reason": "QUERIES_EXHAUSTED"
+      },
+      "fair_v1": {
+        "raw_hits": 5,
+        "unique_candidates": 5,
+        "synthetic_match": 0,
+        "mock_requests": 5,
+        "unsearched_queries": 0,
+        "stop_reason": "QUERY_PAGE_LIMIT"
+      }
+    }
+  ],
+  "legacy_service_contract": {
+    "source_sha256": "380eec7bb12d848a4320896626c3be9f999988f73c70a8ea3399138b6d1e6b0d",
+    "synthetic_raw_hits": 30,
+    "synthetic_unique_urls": 20,
+    "requests": [
+      {
+        "num": 30,
+        "page": 1
+      }
+    ],
+    "human_precision": null,
+    "api_cost": null,
+    "boundary": "SERPER_SERVICE_ONLY_NOT_LEGACY_APPLICATION"
+  },
+  "historical_fixture_hashes": [
+    {
+      "file": "raw-request-001.json",
+      "sha256": "bc27c8bad43b8e8fb7159987b34088e3019951c2b9441b79f918c8c3bea6222d"
+    },
+    {
+      "file": "raw-request-002.json",
+      "sha256": "77d705482fdc9d0152d031e80e9e1ae798fe9d0b540e50a57d6f6a9548d1ce4d"
+    },
+    {
+      "file": "raw-request-011.json",
+      "sha256": "bb24971f06159e2ed9e63f1ab41cacf00ff89746b496bd352a30f622af2093de"
+    },
+    {
+      "file": "raw-request-012.json",
+      "sha256": "0d39520a8a9a1767f1155098afac38d3306887c66dc98673cd2787fb766d4c6a"
+    },
+    {
+      "file": "raw-request-471.json",
+      "sha256": "cc89e57810b9c200e32b1e488dd0d8db3bf647bf3e365b71e9ca228bd1c8f176"
+    },
+    {
+      "file": "raw-request-472.json",
+      "sha256": "6c7e57d4ced629d11665628f4ade8ecf660330d51827dc9c4ef0f080b0e8fb42"
+    },
+    {
+      "file": "raw-request-480.json",
+      "sha256": "80440148af63b01ce7eb2c183abcfd0de84f85c397e625d415e8dc7133569ee8"
+    },
+    {
+      "file": "raw-request-481.json",
+      "sha256": "015748e95feb37670409b052e2199dc838e26e5aaec5ef1739def27b5db8535f"
+    }
+  ],
+  "human_truth": {
+    "reviewed": 0,
+    "industry_precision": null,
+    "official_site_accuracy": null,
+    "contact_discovery_rate": null
+  },
+  "limitations": [
+    "Historical stored raw is normalized fields, not original Serper organic payload; snippet unavailable",
+    "No whole-app legacy or fair DB-runner cross-benchmark; policy and boundary comparison only",
+    "Missing saved page is not empty search result",
+    "Synthetic MATCH labels are fixture control states, never Human truth"
+  ],
+  "safety": {
+    "external_company_requests": 0,
+    "paid_api_requests": 0,
+    "ai_calls": 0,
+    "production_db_writes": 0,
+    "approvals": 0,
+    "email_sent": 0,
+    "form_sent": 0
+  }
+}

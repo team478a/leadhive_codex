@@ -1,0 +1,57 @@
+{
+  "baseline_main": "79d5255db19573ce94143de35d1e986f197fdc83",
+  "input_search_snapshot": "20261009T081157Z",
+  "candidate_domains": 27,
+  "get_requests": 114,
+  "max_get_budget": 300,
+  "max_per_site": 10,
+  "max_actual_per_site": 10,
+  "root_fetched": 25,
+  "states": {
+    "PARTIAL_FETCH_NO_FORM_OBSERVED": 7,
+    "CONTACT_FORM_OBSERVED": 16,
+    "FETCH_UNVERIFIED": 2,
+    "EMBED_REQUIRES_REVIEW": 2
+  },
+  "form_observed_domains": 16,
+  "observed_form_urls": 16,
+  "sns_service_text_observed_domains": 19,
+  "captcha_observations": {
+    "CAPTCHA_NONE": 8,
+    "CAPTCHA_RECAPTCHA": 7,
+    "CAPTCHA_TURNSTILE": 1
+  },
+  "sales_permission_rule_observations": {
+    "ALLOWED": 14,
+    "PROHIBITED": 2
+  },
+  "error_reasons": {
+    "robots.txtにより解析が許可されていません。": 9,
+    "Webサイトを取得できませんでした（HTTP 403）。": 2,
+    "追加探索の別サイト・HTTP降格への転送は取得しません。": 1,
+    "SITE_GET_BUDGET": 1,
+    "Webサイトを取得できませんでした（HTTP 404）。": 22
+  },
+  "elapsed_seconds": 55.906,
+  "human_reviewed": 0,
+  "official_site_accuracy": null,
+  "industry_precision": null,
+  "human_contact_discovery_rate": null,
+  "actual_api_cost": null,
+  "safety": {
+    "search_api_calls": 0,
+    "ai_calls": 0,
+    "email_sent": 0,
+    "form_posts": 0,
+    "approvals": 0,
+    "db_writes": 0,
+    "outbound_enabled": false
+  },
+  "limitations": [
+    "Static HTML observations only; not Human truth or sendability",
+    "Root from search domain; official identity unconfirmed",
+    "Partial or blocked fetch is not absence evidence",
+    "Embeds not fetched externally; no JS or CAPTCHA operations",
+    "Raw search snapshots not overwritten"
+  ]
+}

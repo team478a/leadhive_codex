@@ -1,0 +1,66 @@
+{
+  "verified_snapshots": 6,
+  "unique_candidate_domains_across_regions": 27,
+  "cross_region_domain_overlap": 4,
+  "query_order_summary": [
+    {
+      "region": "大阪府",
+      "query": "SNS運用代行 会社",
+      "raw_hits": 10,
+      "states": {
+        "CANDIDATE": 10
+      },
+      "new_candidate_domains_in_query_order": 10
+    },
+    {
+      "region": "大阪府",
+      "query": "SNS運用支援 会社",
+      "raw_hits": 10,
+      "states": {
+        "DUPLICATE": 8,
+        "CANDIDATE": 2
+      },
+      "new_candidate_domains_in_query_order": 2
+    },
+    {
+      "region": "大阪府",
+      "query": "Instagram運用代行 会社",
+      "raw_hits": 10,
+      "states": {
+        "DUPLICATE": 6,
+        "CANDIDATE": 4
+      },
+      "new_candidate_domains_in_query_order": 4
+    },
+    {
+      "region": "兵庫県",
+      "query": "SNS運用代行 会社",
+      "raw_hits": 10,
+      "states": {
+        "CANDIDATE": 10
+      },
+      "new_candidate_domains_in_query_order": 10
+    },
+    {
+      "region": "兵庫県",
+      "query": "SNS運用支援 会社",
+      "raw_hits": 10,
+      "states": {
+        "DUPLICATE": 8,
+        "CANDIDATE": 2
+      },
+      "new_candidate_domains_in_query_order": 2
+    },
+    {
+      "region": "兵庫県",
+      "query": "Instagram運用代行 会社",
+      "raw_hits": 10,
+      "states": {
+        "DUPLICATE": 7,
+        "CANDIDATE": 3
+      },
+      "new_candidate_domains_in_query_order": 3
+    }
+  ],
+  "human_unique_correct_gain": null
+}

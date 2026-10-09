@@ -1,0 +1,9 @@
+{
+  "no_observed_captcha_and_not_prohibited": 7,
+  "captcha_and_prohibited_overlap": 1,
+  "embedded_providers": {
+    "HUBSPOT": 7
+  },
+  "review_confirmed_sendable": null,
+  "source_review_hash": "acabfb539c3dc72c02f7bbb19dafb3c3a468142c51724a4609877c2ceea1f132"
+}

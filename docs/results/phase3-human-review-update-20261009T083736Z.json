@@ -1,0 +1,24 @@
+{
+  "human_reviewed_candidates_for_sales_suitability": 4,
+  "human_target_exclusions": 4,
+  "excluded_candidate_ids": [
+    1,
+    2,
+    3,
+    6
+  ],
+  "unreviewed_candidates": 23,
+  "human_correct_confirmed": 0,
+  "total_cohort": 27,
+  "reason_counts": {
+    "PORTAL_OR_AGGREGATOR": 4
+  },
+  "precision_for_entire_cohort": null,
+  "limitations": [
+    "User selected four negative examples; cannot estimate overall collection precision",
+    "Only sales suitability/outcome reviewed; other dimensions unreviewed",
+    "Chat provenance recorded; no browser-session or DB reviewer identity is asserted"
+  ],
+  "send_approvals": 0,
+  "production_db_writes": 0
+}
