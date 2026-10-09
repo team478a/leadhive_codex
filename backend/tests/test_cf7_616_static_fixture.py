@@ -50,7 +50,7 @@ def test_616_marker_is_observed_without_legacy_contract_or_authority():
     assert readiness["status"] == "HOLD"
     codes = {reason["code"] for reason in readiness["reasons"]}
     assert {
-        "VERSION_UNVERIFIED",
+        "LEGACY_PREPARATION_UNSUPPORTED",
         "CONTACT_PERMISSION_REVIEW",
         "REAL_SITE_ADAPTER_UNCONNECTED",
     } <= codes
