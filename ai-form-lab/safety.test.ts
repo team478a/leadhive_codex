@@ -54,3 +54,34 @@ test('redirect is rejected before following, POST denied before network, fixture
     assert.equal(fixture.forbiddenCount(), 0);
   } finally { await fixture.stop(); }
 });
+
+for (const mode of ['call-limit', 'cost-limit']) test(`provider ${mode} stops before the next network request`, async () => {
+  const originalCwd = process.cwd();
+  const originalFetch = globalThis.fetch;
+  mkdirSync('results', { recursive: true });
+  const isolated = mkdtempSync(resolve(`results/${mode}-`));
+  let calls = 0;
+  try {
+    process.chdir(isolated);
+    mkdirSync('results');
+    globalThis.fetch = async () => {
+      calls++;
+      return new Response(JSON.stringify({ usage: { input_tokens: 0, output_tokens: 0 } }), { status: 200 });
+    };
+    const modulePath = `./model.ts?${mode}`;
+    const { providerFetch } = await import(modulePath);
+    const body = JSON.stringify({ input: mode === 'cost-limit' ? 'x'.repeat(63000) : 'x' });
+    let blocked = false;
+    for (let index = 0; index < 113; index++) {
+      try { await providerFetch('https://api.openai.com/v1/responses', { body }); }
+      catch (error) { assert.match(String(error), /MODEL_COST_BUDGET/); blocked = true; break; }
+    }
+    assert.equal(blocked, true);
+    assert.equal(mode === 'call-limit' ? calls === 112 : calls < 112, true);
+    const reservations = readFileSync('results/model-reservations.jsonl', 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    assert.ok(reservations.reduce((sum, r) => sum + r.reserve, 0) <= 5);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.chdir(originalCwd);
+  }
+});

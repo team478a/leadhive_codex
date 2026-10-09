@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { cases } from './data.ts';
 function lines(file: string): Record<string, any>[] {
@@ -23,11 +23,13 @@ function summarize(mode: string) {
       durationMs: rows.length ? rows.map(r => r.durationMs) : null,
       repeatable: providerBlocked ? null : results.length === 2 && passed === 2 };
   });
-  return { status: report.run.status, summary: report.run.summary, comparisons,
+  return { status: report.run.status, vcs: report.run.vcs ?? null, summary: report.run.summary, comparisons,
     safety: JSON.parse(readFileSync(`results/${mode}-safety.json`, 'utf8')),
     modelTokensReportedByRunner: report.run.usage.modelTokens ?? null };
 }
 const usage = lines('results/model-usage.jsonl');
+const historicalRequests = readdirSync('results').filter(name => name.startsWith('model-usage.jsonl.previous-'))
+  .reduce((sum, name) => sum + lines(`results/${name}`).length, 0);
 const knownUsage = usage.every(r => r.usage?.input_tokens != null && r.usage?.output_tokens != null);
 const inputTokens = knownUsage ? usage.reduce((n, r) => n + r.usage.input_tokens, 0) : null;
 const outputTokens = knownUsage ? usage.reduce((n, r) => n + r.usage.output_tokens, 0) : null;
@@ -36,5 +38,7 @@ writeFileSync('results/comparison.json', JSON.stringify({ generatedAt: new Date(
   commit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
   model: 'gpt-5.4-mini-2026-03-17', priceSource: 'https://developers.openai.com/api/docs/models/gpt-5.4-mini',
   baseline: summarize('baseline'), ai: summarize('ai'),
-  cost: { calls: usage.length, inputTokens, outputTokens, estimatedUsdNoCacheDiscount: cost, budgetUsd: 5,
+  cost: { calls: usage.length, interruptedPreviousRequests: historicalRequests, totalProviderRequests: usage.length + historicalRequests,
+    errors: usage.map(r => ({ status: r.status, code: r.errorCode ?? null })),
+    inputTokens, outputTokens, estimatedUsdNoCacheDiscount: cost, budgetUsd: 5,
     realFormSendSuccessRate: null }, productionConnected: false }, null, 2) + '\n');
