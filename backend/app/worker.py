@@ -568,6 +568,9 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     if payload.get("target_count"):
         from app.services.target_collection import run
 
+        if payload.get("query_plan"):
+            from app.services.collection_scheduler import run
+
         job.total_count = payload["target_count"]
         db.commit()
         run(db, job, payload, conditions, lambda: stop_requested(db, job, worker_id))

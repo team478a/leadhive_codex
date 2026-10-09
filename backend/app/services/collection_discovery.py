@@ -3,6 +3,7 @@
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from sqlalchemy import func, select
 
@@ -61,15 +62,31 @@ def persist_discovery(db, job: CollectionJob, buffer: DiscoveryCapture):
     if job.operation_job_id:
         from app.models import OperationJob
 
-        db.scalar(
-            select(OperationJob.id).where(OperationJob.id == job.operation_job_id).with_for_update()
+        operation = db.scalar(
+            select(OperationJob).where(OperationJob.id == job.operation_job_id).with_for_update()
         )
+        operation_ids = [job.operation_job_id]
+        plan = (operation.payload or {}).get("query_plan") if operation else None
+        if plan:
+            from app.models import CollectionSearchAttempt
+
+            root_id = UUID(plan["root_operation_id"])
+            db.scalar(select(OperationJob.id).where(OperationJob.id == root_id).with_for_update())
+            operation_ids = list(
+                db.scalars(
+                    select(CollectionSearchAttempt.operation_job_id)
+                    .where(
+                        CollectionSearchAttempt.root_operation_id == root_id,
+                    )
+                    .distinct()
+                )
+            )
         used = (
             db.scalar(
                 select(func.count())
                 .select_from(CollectionDiscoveryHit)
                 .join(CollectionJob)
-                .where(CollectionJob.operation_job_id == job.operation_job_id)
+                .where(CollectionJob.operation_job_id.in_(operation_ids))
             )
             or 0
         )

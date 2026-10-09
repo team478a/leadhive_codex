@@ -1,6 +1,7 @@
 """Persistence and deduplication for collection jobs."""
 
 import logging
+from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -119,6 +120,8 @@ def save_candidates(
     candidates: list[Candidate],
     source_keyword: str = "",
     input_errors: int | list[dict[str, object]] = 0,
+    *,
+    before_commit: Callable[[], None] | None = None,
 ) -> CollectionJob:
     error_details = input_errors if isinstance(input_errors, list) else []
     error_count = len(input_errors) if isinstance(input_errors, list) else input_errors
@@ -209,6 +212,8 @@ def save_candidates(
     job.status = "completed"
     job.finished_at = datetime.now(timezone.utc)
     job.processing_ms = max(0, int((job.finished_at - job.created_at).total_seconds() * 1000))
+    if before_commit:
+        before_commit()
     db.commit()
     db.refresh(job)
     logger.info(
