@@ -1,0 +1,238 @@
+{
+  "schema_version": "serper-boundary-replay-v1",
+  "dataset_kind": "PRIVATE_LICENSED_RAW",
+  "evaluation": "UNREVIEWED_PRIVATE_REPLAY",
+  "legacy_commit": "393f690e34c7a5fbdddd4b15e0285aa2ff313269",
+  "current_commit": "791cbe07c86bb1e3ec8a9063eddf68576ebc6918",
+  "stage": "RAW_COLLECTION_BOUNDARY_REPLAY",
+  "input_hash": "4248e5ad0cef206a0bef71a1aca9d08be22f747d48b071e5cf0824a343b6b7e6",
+  "source_hashes": {
+    "legacy_aggregator": "f3a5cfd7e39ac158857d47320f4b1bf5a7d7f40bb42e18d44b80a82276b191b8",
+    "current_collection": "717933dd365d83fe2f758ef2628c439c6fb0eda908505ead5e8ab345d897d443",
+    "current_scraper": "2bff27b73539f614105f7c5cfb9286595eb79c64773b65f4f9b5e2cb6a3c74b5"
+  },
+  "runs": [
+    {
+      "ordinal": 1,
+      "status": "COMPLETED",
+      "raw_hits": 10,
+      "decision_differences": 1,
+      "candidate_url_differences": 9,
+      "projections": {
+        "legacy_preview": {
+          "CANDIDATE": 9,
+          "EXCLUDED": 1
+        },
+        "current_ingestion": {
+          "CANDIDATE": 10
+        },
+        "current_ingestion_eligibility": {
+          "EXCLUDED": 5,
+          "CANDIDATE": 5
+        }
+      }
+    },
+    {
+      "ordinal": 2,
+      "status": "COMPLETED",
+      "raw_hits": 10,
+      "decision_differences": 1,
+      "candidate_url_differences": 9,
+      "projections": {
+        "legacy_preview": {
+          "CANDIDATE": 9,
+          "EXCLUDED": 1
+        },
+        "current_ingestion": {
+          "CANDIDATE": 10
+        },
+        "current_ingestion_eligibility": {
+          "EXCLUDED": 5,
+          "CANDIDATE": 5
+        }
+      }
+    },
+    {
+      "ordinal": 3,
+      "status": "COMPLETED",
+      "raw_hits": 10,
+      "decision_differences": 1,
+      "candidate_url_differences": 9,
+      "projections": {
+        "legacy_preview": {
+          "CANDIDATE": 9,
+          "EXCLUDED": 1
+        },
+        "current_ingestion": {
+          "CANDIDATE": 10
+        },
+        "current_ingestion_eligibility": {
+          "EXCLUDED": 4,
+          "CANDIDATE": 6
+        }
+      }
+    },
+    {
+      "ordinal": 4,
+      "status": "COMPLETED",
+      "raw_hits": 10,
+      "decision_differences": 1,
+      "candidate_url_differences": 9,
+      "projections": {
+        "legacy_preview": {
+          "EXCLUDED": 1,
+          "CANDIDATE": 9
+        },
+        "current_ingestion": {
+          "CANDIDATE": 10
+        },
+        "current_ingestion_eligibility": {
+          "EXCLUDED": 3,
+          "CANDIDATE": 7
+        }
+      }
+    },
+    {
+      "ordinal": 5,
+      "status": "COMPLETED",
+      "raw_hits": 10,
+      "decision_differences": 1,
+      "candidate_url_differences": 8,
+      "projections": {
+        "legacy_preview": {
+          "EXCLUDED": 1,
+          "CANDIDATE": 8,
+          "DUPLICATE": 1
+        },
+        "current_ingestion": {
+          "CANDIDATE": 9,
+          "DUPLICATE": 1
+        },
+        "current_ingestion_eligibility": {
+          "EXCLUDED": 5,
+          "CANDIDATE": 5
+        }
+      }
+    },
+    {
+      "ordinal": 6,
+      "status": "COMPLETED",
+      "raw_hits": 10,
+      "decision_differences": 1,
+      "candidate_url_differences": 9,
+      "projections": {
+        "legacy_preview": {
+          "CANDIDATE": 9,
+          "EXCLUDED": 1
+        },
+        "current_ingestion": {
+          "CANDIDATE": 10
+        },
+        "current_ingestion_eligibility": {
+          "CANDIDATE": 7,
+          "EXCLUDED": 3
+        }
+      }
+    }
+  ],
+  "human_reviewed": 0,
+  "strict_precision": null,
+  "resolved_precision": null,
+  "official_site_accuracy": null,
+  "contact_discovery_rate": null,
+  "api_cost": null,
+  "coverage": null,
+  "limitations": [
+    "Boundary projections only; no whole-app legacy execution or DB ingestion.",
+    "No Human labels or official-site/contact validation are inferred.",
+    "Empty independent project per run; no suppression or existing DB state."
+  ],
+  "safety": {
+    "external_requests": 0,
+    "ai_calls": 0,
+    "completion_jobs": 0,
+    "approvals": 0,
+    "email_sent": 0,
+    "form_posts": 0
+  },
+  "ingestion_eligibility": {
+    "source_hashes": {
+      "collection": "717933dd365d83fe2f758ef2628c439c6fb0eda908505ead5e8ab345d897d443",
+      "scraper": "2bff27b73539f614105f7c5cfb9286595eb79c64773b65f4f9b5e2cb6a3c74b5",
+      "presence_platforms": "7b983d18e71e1d13b897602bd8a0eb5ad9583c40bed4e73a5cc9cb6932372cee",
+      "collection_discovery": "17c3da84fe62d73ccedf3f0ec831d88fff52214697b36ad2120ffd0ab8993957"
+    },
+    "company_saved_count": null,
+    "limitations": "Serper source gate only; no DB, suppression or condition evaluation"
+  },
+  "raw_observation_stability": [
+    {
+      "query_group_hash": "3c314bff4be34f48fc6df53f859d4541a3b05f4a33e51c64c09e12c418ba215d",
+      "run_count": 1,
+      "union": 10,
+      "intersection": null,
+      "intersection_rate": null,
+      "repeat_discovery_rate": null,
+      "single_run_rate": null,
+      "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+    },
+    {
+      "query_group_hash": "c3d2937e8368cd98c04bf91c4c7257de47cf93c92ad5cdeec4d54bb43f63c176",
+      "run_count": 1,
+      "union": 10,
+      "intersection": null,
+      "intersection_rate": null,
+      "repeat_discovery_rate": null,
+      "single_run_rate": null,
+      "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+    },
+    {
+      "query_group_hash": "62f266d971ce4b749ceca52ccc9c185a26550dd247b5c33cf4fc7791843e2c7f",
+      "run_count": 1,
+      "union": 10,
+      "intersection": null,
+      "intersection_rate": null,
+      "repeat_discovery_rate": null,
+      "single_run_rate": null,
+      "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+    },
+    {
+      "query_group_hash": "32af1a42fd6a51b23152e2a2d06d9f325f5fdb462fe65afa0581a75275bc6363",
+      "run_count": 1,
+      "union": 10,
+      "intersection": null,
+      "intersection_rate": null,
+      "repeat_discovery_rate": null,
+      "single_run_rate": null,
+      "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+    },
+    {
+      "query_group_hash": "8c2879ea88c3a0649edc81f00ff0d9f384fcf4bcf3583f9fec55dd79aed67ab9",
+      "run_count": 1,
+      "union": 10,
+      "intersection": null,
+      "intersection_rate": null,
+      "repeat_discovery_rate": null,
+      "single_run_rate": null,
+      "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+    },
+    {
+      "query_group_hash": "92a7352bf928727baaaf0b35061a0029764f08f12d1a69bed17a7b17b562740e",
+      "run_count": 1,
+      "union": 10,
+      "intersection": null,
+      "intersection_rate": null,
+      "repeat_discovery_rate": null,
+      "single_run_rate": null,
+      "identity_truth": "RAW_OBSERVATION_HASH_ONLY_NOT_ENTITY_TRUTH"
+    }
+  ],
+  "offline_processing_seconds": 0.02772659997572191,
+  "started_at": "2026-10-09T09:12:50.682419+00:00",
+  "finished_at": "2026-10-09T09:12:51.063447+00:00",
+  "runner_source_hashes": {
+    "cli.py": "a4192dbcf9fb563e2bdbf6f4d77a686e97e9b2b54c8714c57bcb5d1411cf4a8d",
+    "comparison.py": "ce90743c091bd0405e8d18521359ac3129025bd4358e08851668fb5fccdbdafd",
+    "source_policy.py": "0997651b38cae1cbe5ae9deb021986faab4eea5e88af2eefa1e13a2a34fe0cd9"
+  }
+}

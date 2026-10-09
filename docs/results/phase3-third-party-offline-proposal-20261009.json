@@ -1,0 +1,222 @@
+{
+  "baseline_main": "79d5255db19573ce94143de35d1e986f197fdc83",
+  "evaluation": "OFFLINE_PROPOSED_POLICY_NOT_IMPLEMENTED",
+  "human_negative_count": 4,
+  "current_eligible_human_negatives": 2,
+  "proposed_eligible_human_negatives": 0,
+  "human_cases": [
+    {
+      "candidate_id": 1,
+      "human_outcome": "PORTAL_OR_AGGREGATOR",
+      "current_classification": "OFFICIAL_SITE_CANDIDATE",
+      "current_ingestion_eligible": true,
+      "proposed_classification": "PORTAL_DIRECTORY",
+      "proposed_ingestion_eligible": false
+    },
+    {
+      "candidate_id": 2,
+      "human_outcome": "PORTAL_OR_AGGREGATOR",
+      "current_classification": "OFFICIAL_SITE_CANDIDATE",
+      "current_ingestion_eligible": true,
+      "proposed_classification": "PORTAL_DIRECTORY",
+      "proposed_ingestion_eligible": false
+    },
+    {
+      "candidate_id": 3,
+      "human_outcome": "PORTAL_OR_AGGREGATOR",
+      "current_classification": "JOB_PR",
+      "current_ingestion_eligible": false,
+      "proposed_classification": "JOB_PR",
+      "proposed_ingestion_eligible": false
+    },
+    {
+      "candidate_id": 6,
+      "human_outcome": "PORTAL_OR_AGGREGATOR",
+      "current_classification": "JOB_PR",
+      "current_ingestion_eligible": false,
+      "proposed_classification": "JOB_PR",
+      "proposed_ingestion_eligible": false
+    }
+  ],
+  "regions": [
+    {
+      "region": "大阪府",
+      "methods": {
+        "current_ingestion_classification": {
+          "raw_hits": 30,
+          "unique_candidate_domains": 13,
+          "classifications": {
+            "OFFICIAL_SITE_CANDIDATE": 22,
+            "JOB_PR": 5,
+            "ARTICLE": 3
+          },
+          "states": {
+            "CANDIDATE": 13,
+            "NON_COMPANY_SOURCE": 8,
+            "DUPLICATE": 9
+          },
+          "company_saved_count": null
+        },
+        "proposed_known_platform_classification": {
+          "raw_hits": 30,
+          "unique_candidate_domains": 11,
+          "classifications": {
+            "PORTAL_DIRECTORY": 6,
+            "JOB_PR": 5,
+            "OFFICIAL_SITE_CANDIDATE": 16,
+            "ARTICLE": 3
+          },
+          "states": {
+            "NON_COMPANY_SOURCE": 14,
+            "CANDIDATE": 11,
+            "DUPLICATE": 5
+          },
+          "company_saved_count": null
+        }
+      }
+    },
+    {
+      "region": "兵庫県",
+      "methods": {
+        "current_ingestion_classification": {
+          "raw_hits": 30,
+          "unique_candidate_domains": 11,
+          "classifications": {
+            "JOB_PR": 6,
+            "OFFICIAL_SITE_CANDIDATE": 22,
+            "ARTICLE": 2
+          },
+          "states": {
+            "NON_COMPANY_SOURCE": 8,
+            "CANDIDATE": 11,
+            "DUPLICATE": 11
+          },
+          "company_saved_count": null
+        },
+        "proposed_known_platform_classification": {
+          "raw_hits": 30,
+          "unique_candidate_domains": 10,
+          "classifications": {
+            "JOB_PR": 6,
+            "OFFICIAL_SITE_CANDIDATE": 19,
+            "PORTAL_DIRECTORY": 3,
+            "ARTICLE": 2
+          },
+          "states": {
+            "NON_COMPANY_SOURCE": 11,
+            "CANDIDATE": 10,
+            "DUPLICATE": 9
+          },
+          "company_saved_count": null
+        }
+      }
+    }
+  ],
+  "synthetic_controls": [
+    {
+      "case": "normal_provider",
+      "expected": "OFFICIAL_SITE_CANDIDATE",
+      "actual": "OFFICIAL_SITE_CANDIDATE",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "similar_host",
+      "expected": "OFFICIAL_SITE_CANDIDATE",
+      "actual": "OFFICIAL_SITE_CANDIDATE",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "similar_probel",
+      "expected": "OFFICIAL_SITE_CANDIDATE",
+      "actual": "OFFICIAL_SITE_CANDIDATE",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "platform_name_in_path",
+      "expected": "OFFICIAL_SITE_CANDIDATE",
+      "actual": "OFFICIAL_SITE_CANDIDATE",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "platform_name_in_query",
+      "expected": "OFFICIAL_SITE_CANDIDATE",
+      "actual": "OFFICIAL_SITE_CANDIDATE",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "known_directory_subdomain",
+      "expected": "PORTAL_DIRECTORY",
+      "actual": "PORTAL_DIRECTORY",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "broker_subdomain",
+      "expected": "PORTAL_DIRECTORY",
+      "actual": "PORTAL_DIRECTORY",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "uppercase_host",
+      "expected": "PORTAL_DIRECTORY",
+      "actual": "PORTAL_DIRECTORY",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "existing_job_root",
+      "expected": "JOB_PR",
+      "actual": "JOB_PR",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "existing_job_idna",
+      "expected": "JOB_PR",
+      "actual": "JOB_PR",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "existing_social",
+      "expected": "SOCIAL",
+      "actual": "SOCIAL",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    },
+    {
+      "case": "existing_article",
+      "expected": "ARTICLE",
+      "actual": "ARTICLE",
+      "passed": true,
+      "dataset_kind": "SYNTHETIC_CONTROL"
+    }
+  ],
+  "controls_passed": 12,
+  "all_raw_hits_preserved": true,
+  "actual_company_persistence_tested": false,
+  "industry_precision": null,
+  "source_hashes": {
+    "collection_discovery": "9cf4a21533e0e42196c9944c679ca91d75f555fb5aaaa09bb110c12d9cb24a57",
+    "presence_platforms": "7b983d18e71e1d13b897602bd8a0eb5ad9583c40bed4e73a5cc9cb6932372cee",
+    "collection_jobs": "287980a6c52e3ebe1420ef4a90fd3a5be9828a0155787f7f828be2480004f143"
+  },
+  "safety": {
+    "external_requests": 0,
+    "db_writes": 0,
+    "send": 0,
+    "approvals": 0
+  },
+  "limitations": [
+    "Current eligibility projection includes classification but not DB state or condition evaluation",
+    "Four selected Human negatives do not estimate overall precision",
+    "Known-host proposal only; not general unknown-platform detection",
+    "No production implementation or dependency change"
+  ]
+}

@@ -206,10 +206,75 @@ def test_project_boundary_viewer_and_agent(auth, client, users, db):
         ("https://a.test/blog/post", "ARTICLE"),
         ("https://a.test/service", "OFFICIAL_SITE_CANDIDATE"),
         ("https://a.test/file.pdf", "OTHER"),
+        ("https://web-kanji.com/companies/osaka/sns", "PORTAL_DIRECTORY"),
+        ("https://www.web-kanji.com/", "PORTAL_DIRECTORY"),
+        ("https://PROBEL.JP./providers", "PORTAL_DIRECTORY"),
+        ("https://www.probel.jp/", "PORTAL_DIRECTORY"),
+        ("https://web-kanji.com.evil.test/service", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://probel.jp.evil.test/service", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://a.test/probel.jp?ref=web-kanji.com", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://jp.indeed.com/", "JOB_PR"),
+        ("https://xn--pckua2a7gp15o89zb.com/", "JOB_PR"),
     ],
 )
 def test_classification_is_only_a_hint(url, kind):
     assert classify_hit({"link": url})[0] == kind
+
+
+def test_directory_hits_remain_raw_without_creating_companies(auth, db, monkeypatch):
+    project = make_project(auth)
+    rows = [
+        {"title": "Synthetic listing", "link": "https://web-kanji.com/companies/synthetic"},
+        {"title": "Synthetic broker", "link": "https://probel.jp/synthetic"},
+        {"title": "Synthetic job", "link": "https://jp.indeed.com/viewjob?jk=synthetic"},
+        {"title": "Synthetic job", "link": "https://xn--pckua2a7gp15o89zb.com/synthetic"},
+        {"title": "Synthetic provider", "link": "https://provider.example.test/service"},
+    ]
+    provider(monkeypatch, rows)
+    job = start_job(db, UUID(project["id"]), "serper", "Synthetic", "大阪")
+    candidates = measured_search(db, job, collection.search_serper, "Synthetic", "大阪", 10)
+    save_candidates(db, job, candidates)
+    hits = db.scalars(
+        select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
+    ).all()
+    assert len(hits) == 5
+    assert [h.snapshot["link"] for h in hits] == [r["link"] for r in rows]
+    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 4 + ["SAVED"]
+    assert db.scalar(select(func.count()).select_from(Company)) == 1
+    assert all(h.company_id is None for h in hits[:4])
+
+
+def test_manual_url_import_is_not_changed_by_serper_directory_policy(auth, db):
+    project = make_project(auth)
+    job = start_job(db, UUID(project["id"]), "url", "", "")
+    save_candidates(db, job, [collection.Candidate("User supplied", "https://probel.jp/")])
+    assert db.scalar(select(func.count()).select_from(Company)) == 1
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://web-kanji.com/",
+        "https://probel.jp/",
+        "https://jp.indeed.com/",
+        "https://agency.test/blog/post",
+        "https://agency.test/service",
+    ],
+)
+def test_offline_gate_matches_application_classification(url):
+    from pathlib import Path
+
+    from offline_replay.cli import deny_network
+    from offline_replay.source_policy import SourcePolicy
+
+    root = Path(__file__).resolve().parents[1]
+    sources = [
+        (root / f"app/services/{name}.py").read_text(encoding="utf-8")
+        for name in ("collection", "scraper", "presence_platforms", "collection_discovery")
+    ]
+    with deny_network():
+        projection = SourcePolicy(*sources)
+        assert projection.classify({"link": url}) == classify_hit({"link": url})
 
 
 def test_operation_ceiling_and_cross_project_association(auth, db, monkeypatch):

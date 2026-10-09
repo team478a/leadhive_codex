@@ -17,6 +17,8 @@ from types import FunctionType
 from typing import Any
 from urllib.parse import parse_qsl, urlparse, urlsplit, urlunsplit
 
+from offline_replay.source_policy import SourcePolicy
+
 LEGACY_COMMIT = "393f690e34c7a5fbdddd4b15e0285aa2ff313269"
 CURRENT_COMMIT = "31ec306819a5485de3c3cc9f3bb11a3da3cc6d0f"
 VERSION = "serper-boundary-replay-v1"
@@ -247,7 +249,9 @@ def reject_secrets(value: Any) -> None:
             raise ValueError("Credential URLs are forbidden in benchmark fixtures")
 
 
-def compare(fixture: dict[str, Any], policies: Policies) -> tuple[dict[str, Any], dict[str, Any]]:
+def compare(
+    fixture: dict[str, Any], policies: Policies, *, source_policy: SourcePolicy | None = None
+) -> tuple[dict[str, Any], dict[str, Any]]:
     validate_fixture(fixture)
     input_hash = digest(fixture)
     private = {
@@ -262,6 +266,7 @@ def compare(fixture: dict[str, Any], policies: Policies) -> tuple[dict[str, Any]
         # Independent empty-project projection per run: repeat discovery is not an error.
         seen: dict[str, set[str]] = {"legacy_preview": set(), "current_ingestion": set()}
         observations = []
+        eligible_seen: set[str] = set()
         for position, original in enumerate(run["organic"], 1):
             hit = {field: original.get(field, "") for field in ("title", "link", "snippet")}
             observations.append(
@@ -274,6 +279,24 @@ def compare(fixture: dict[str, Any], policies: Policies) -> tuple[dict[str, Any]
                     "human_truth": None,
                 }
             )
+            if source_policy is not None:
+                eligible, kind, reason = source_policy.eligible(
+                    {**hit, "redacted": original.get("redacted", False)}
+                )
+                observations[-1]["current_ingestion_eligibility"] = (
+                    {
+                        **policies.current(hit, eligible_seen),
+                        "classification": kind,
+                        "classification_reason": reason,
+                    }
+                    if eligible
+                    else decision(
+                        "EXCLUDED",
+                        "NON_COMPANY_SOURCE",
+                        classification=kind,
+                        classification_reason=reason,
+                    )
+                )
         private["runs"].append(
             {
                 "provenance": {k: v for k, v in run.items() if k != "organic"},
@@ -339,6 +362,17 @@ def compare(fixture: dict[str, Any], policies: Policies) -> tuple[dict[str, Any]
                 },
             }
         )
+        if source_policy is not None:
+            summary["runs"][-1]["projections"]["current_ingestion_eligibility"] = dict(
+                Counter(row["current_ingestion_eligibility"]["state"] for row in rows)
+            )
+    if source_policy is not None:
+        summary["ingestion_eligibility"] = {
+            "source_hashes": source_policy.source_hashes,
+            "company_saved_count": None,
+            "limitations": "Serper source gate only; no DB, suppression or condition evaluation",
+        }
+        private["ingestion_source_hashes"] = source_policy.source_hashes
     grouped: dict[str, list[set[str]]] = {}
     for run in private["runs"]:
         provenance = run["provenance"]
