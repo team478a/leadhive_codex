@@ -117,3 +117,35 @@ def test_articles_about_forms_do_not_consume_contact_budget():
         "https://example.com/",
         "https://example.com/",
     ) == ["https://example.com/contact"]
+
+
+def test_direct_contact_label_precedes_incidental_inquiry_copy():
+    result = crawl(
+        {
+            "https://example.com/": (
+                '<a href="/service/request?a=1">サービスへの相談・問合せ</a>'
+                '<a href="/interview/1">問い合わせが増えた導入事例</a>'
+                '<a href="/help/form/"> お問い 合わせ </a>'
+            ),
+            "https://example.com/help/form/": "<form><textarea></textarea></form>",
+        },
+        limit=1,
+    )
+    assert result == [("https://example.com/help/form/", True)]
+
+
+def test_direct_contact_priority_preserves_nested_navigation_and_query():
+    result = crawl(
+        {
+            "https://example.com/": (
+                '<a href="/service/inquiry">問い合わせについてのサービス</a>'
+                '<a href="/help?kind=business">Contact</a>'
+            ),
+            "https://example.com/help?kind=business": ('<a href="/entry/42">フォームはこちら</a>'),
+        },
+        limit=2,
+    )
+    assert result == [
+        ("https://example.com/help?kind=business", True),
+        ("https://example.com/entry/42", True),
+    ]

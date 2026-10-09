@@ -104,7 +104,19 @@ def navigation_links(
                 parsed.path.lower(),
             )
         )
-        score = 100 if any(hint in label for hint in HINTS) else (90 if path_hint else 0)
+        # A direct contact label outranks testimonials/service copy mentioning
+        # inquiries. Otherwise a large site's incidental links exhaust the
+        # bounded crawl before its general contact destination is reached.
+        direct_label = re.sub(r"\s+", "", label) in {re.sub(r"\s+", "", hint) for hint in HINTS}
+        score = (
+            120
+            if direct_label
+            else 100
+            if any(hint in label for hint in HINTS)
+            else 90
+            if path_hint
+            else 0
+        )
         if contact_context and (
             element.name == "iframe"
             or any(hint in label for hint in ("フォーム", "入力", "こちら", "進む"))
