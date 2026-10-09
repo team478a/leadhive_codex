@@ -9,7 +9,7 @@
 - 電話: 全角を正規化し、括弧形式とハイフン形式に対応。TELを優先しFAXを除外。国内10/11桁のみ。国際形式・難読化メールは未対応。
 - 住所: JSON-LD PostalAddress、address要素、所在地/住所/郵便番号の明示箇所を優先。対応地域だけの文章から所在地を作らない。TEL等の後続文を住所へ混入させない。一般本文fallbackは未確認候補。
 - `PageData.field_evidence`: value/source_url/method/verified=false。複数ページの補完で、採用した値の出典を維持する。取得失敗はcrawl_errorsに残す。
-- `website_match`: 更新前の企業情報で照合。ページ名称や電話の競合はREVIEW_REQUIRED。名前・ドメインだけでCONFIRMEDにしない。解析によりidentityが変わった場合は旧hashの根拠をREVIEW_REQUIREDとして残し、更新した情報から自己確認を作らない。
+- `website_match`: 更新前の企業情報で照合。ページ名称や電話の競合はREVIEW_REQUIRED。名前・ドメインだけでCONFIRMEDにしない。解析によりidentityが変わった場合は旧hashの根拠をREVIEW_REQUIREDとして残し、更新した情報から自己確認を作らない。同じ自動抽出を再実行しても独立照合とは扱わず、過去に抽出でIdentityが変わった根拠がある場合はREVIEW_REQUIREDを維持する。既存のHuman site/identity reviewによる明示確認は維持する。
 - `website_evidence.py`: 既存LeadSiteEvidenceとLeadSourceObservationを再利用。元の収集操作がある場合のみwebsite観測を追加。Raw hit/snapshotは書き換えない。値が変化していない再解析は同一facts hashの観測を重複保存しない。
 
 ## 問い合わせ探索

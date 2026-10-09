@@ -338,3 +338,16 @@ def test_extraction_evidence_does_not_bootstrap_official_confirmation(auth, db, 
     assert observation is not None
     assert observation.facts["email"]["verified"] is False
     assert observation.facts["email"]["source_url"] == "https://example.jp"
+    web_analysis.analyze(db, company, force=True)
+    assert all(
+        row.confidence == "REVIEW_REQUIRED"
+        for row in db.scalars(
+            select(LeadSiteEvidence).where(LeadSiteEvidence.company_id == company.id)
+        )
+    )
+    assert any(
+        "IDENTITY_DERIVED_FROM_EXTRACTION" in row.reasons
+        for row in db.scalars(
+            select(LeadSiteEvidence).where(LeadSiteEvidence.company_id == company.id)
+        )
+    )

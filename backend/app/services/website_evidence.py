@@ -3,7 +3,7 @@
 import hashlib
 import json
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.models import LeadSiteEvidence, LeadSourceObservation
 from app.services.lead_identity import identity_hash
@@ -11,6 +11,22 @@ from app.services.lead_identity import identity_hash
 
 def record(db, company, data, url, before_hash, confidence, reasons, applied):
     current_hash = identity_hash(company)
+    derived = db.scalar(
+        select(LeadSiteEvidence.id)
+        .where(
+            LeadSiteEvidence.company_id == company.id,
+            or_(
+                LeadSiteEvidence.reasons.contains(["IDENTITY_CHANGED_DURING_EXTRACTION"]),
+                LeadSiteEvidence.reasons.contains(["IDENTITY_DERIVED_FROM_EXTRACTION"]),
+            ),
+        )
+        .limit(1)
+    )
+    if confidence == "CONFIRMED" and derived:
+        # Running the same scraper twice is not independent identity verification.
+        # Human site/identity review remains the existing explicit confirmation path.
+        confidence = "REVIEW_REQUIRED"
+        reasons = [*reasons, "IDENTITY_DERIVED_FROM_EXTRACTION"]
     if current_hash != before_hash:
         confidence = "REVIEW_REQUIRED"
         reasons = [*reasons, "IDENTITY_CHANGED_DURING_EXTRACTION"]
