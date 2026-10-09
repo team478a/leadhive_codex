@@ -3,10 +3,12 @@ import io
 import logging
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit, urlunsplit
+from uuid import UUID
 
 import httpx
 
 from app.config import settings
+from app.services.discovery_capture import capture_serper
 from app.services.processing_usage import measured_request
 from app.services.raw_capture import capture
 
@@ -30,6 +32,7 @@ class Candidate:
     reference_url: str = ""
     presence_urls: list[str] = field(default_factory=list)
     search_excerpt: str = ""
+    discovery_hit_id: UUID | None = field(default=None, compare=False)
 
 
 def canonicalize_url(value: str) -> tuple[str, str]:
@@ -184,19 +187,28 @@ def search_serper_page(keyword: str, region: str, max_results: int, page: int) -
         logger.error("external API error: provider=serper type=%s", type(exc).__name__)
         raise ExternalServiceError("Google検索に失敗しました。設定を確認してください。") from exc
     candidates = []
-    capture("serper", data.get("organic", [])[:max_results])
-    for item in data.get("organic", [])[:max_results]:
+    organic = data.get("organic", [])
+    if not isinstance(organic, list):
+        raise ExternalServiceError("Google検索の応答形式が正しくありません。")
+    hit_ids = capture_serper(organic, page=page, requested=max_results)
+    capture("serper", organic[:max_results])
+    for position, item in enumerate(organic[:max_results], start=1):
+        if not isinstance(item, dict):
+            continue
         url = item.get("link", "")
-        title = (item.get("title") or "").strip()
+        title = item.get("title") if isinstance(item.get("title"), str) else ""
         try:
+            if not isinstance(url, str) or urlsplit(url).username or urlsplit(url).password:
+                continue
             normalized, domain = canonicalize_url(url)
         except ValueError:
             continue
         candidates.append(
             Candidate(
-                company_name=(title or domain)[:500],
+                company_name=(title.strip() or domain)[:500],
                 website_url=normalized,
                 search_excerpt=str(item.get("snippet") or "")[:2000],
+                discovery_hit_id=hit_ids.get(position),
             )
         )
     return candidates
