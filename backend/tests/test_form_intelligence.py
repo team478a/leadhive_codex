@@ -62,6 +62,53 @@ def install_pages(monkeypatch, pages):
     monkeypatch.setattr(analyzer, "get_form_decision_provider", lambda: None)
 
 
+def test_guidance_iframe_and_original_form_index(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<a href="/contact">お問い合わせ</a>',
+            "https://form-intelligence.example/contact": (
+                '<a href="/entry/index">フォームはこちら</a>'
+            ),
+            "https://form-intelligence.example/entry/index": '<iframe src="/embed"></iframe>',
+            "https://form-intelligence.example/embed": '<form><input type="search" name="q"></form>'
+            '<form method="post"><input type="email" name="email">'
+            '<textarea name="message"></textarea></form>',
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    found = [profile for profile in profiles if profile.form_found]
+    assert len(found) == 1
+    assert found[0].form_index == 1
+    assert found[0].form_url == "https://form-intelligence.example/embed"
+    logs = list(db.scalars(select(FormAnalysisLog).where(FormAnalysisLog.company_id == company.id)))
+    assert any(log.details.get("finding") == "DOM_CONTACT_FORM_NOT_FOUND" for log in logs)
+    from sqlalchemy import func
+
+    from app.models import ApprovalRequest, EmailDelivery, FormDelivery
+
+    for model in (ApprovalRequest, EmailDelivery, FormDelivery):
+        assert db.scalar(select(func.count()).select_from(model)) == 0
+
+
+def test_root_external_embed_is_unverified_and_not_fetched(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<iframe src="https://docs.google.com/forms/d/example/viewform"></iframe>',
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert not any(profile.form_found for profile in profiles)
+    assert any("GOOGLE_FORMS" in profile.review_reason for profile in profiles)
+    assert any(
+        log.details.get("finding") == "EMBEDDED_FORM_UNVERIFIED"
+        for log in db.scalars(select(FormAnalysisLog))
+    )
+
+
 def login_as(client, user):
     response = client.post(
         "/api/auth/login",

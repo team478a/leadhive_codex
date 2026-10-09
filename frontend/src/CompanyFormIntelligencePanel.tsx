@@ -32,6 +32,12 @@ type Props = {
   onRefresh: () => Promise<void>
 }
 
+const findingNames: Record<string, string> = {
+  EMBEDDED_FORM_UNVERIFIED: '外部埋め込みあり・表示後の確認が必要',
+  DOM_CONTACT_FORM_NOT_FOUND: '取得したHTMLで問い合わせフォーム未検出',
+  FETCH_FAILED: 'ページ取得失敗・フォームの有無は未確認',
+}
+
 function isReviewedChoice(key: FormMappedKey) {
   return ['contact_method', 'privacy_consent', 'newsletter_consent'].includes(key)
 }
@@ -70,6 +76,6 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
         })}
       </tbody></table></div>}
     </article>)}
-    {logs.length > 0 && <details className="mt-5"><summary>解析ログ（{logs.length}件）</summary><div className="form-analysis-log mt-3">{logs.slice(0, 50).map(log => <p key={log.id}><time>{new Date(log.created_at).toLocaleString('ja-JP')}</time><strong>{log.event_type}</strong>{log.provider && <span>{log.provider}</span>}{log.duration_ms > 0 && <span>{log.duration_ms} ms</span>}</p>)}</div></details>}
+    {logs.length > 0 && <details className="mt-5"><summary>解析ログ（{logs.length}件）</summary><div className="form-analysis-log mt-3">{logs.slice(0, 50).map(log => <p key={log.id}><time>{new Date(log.created_at).toLocaleString('ja-JP')}</time><strong>{log.event_type}</strong>{log.provider && <span>{log.provider}</span>}{log.duration_ms > 0 && <span>{log.duration_ms} ms</span>}{typeof log.details.finding === 'string' && <span>{findingNames[log.details.finding] || log.details.finding}</span>}{typeof log.details.reason === 'string' && <span>{log.details.reason}</span>}{typeof log.details.url === 'string' && <span className="break-all">{log.details.url}</span>}</p>)}</div></details>}
   </section>
 }

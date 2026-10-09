@@ -8,7 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.models import Company
 from app.services.collection import canonicalize_url
+from app.services.lead_identity import identity_hash, website_match
 from app.services.scraper import ScrapeError, is_aggregator_domain, scrape_company
+from app.services.website_evidence import record as record_website_evidence
 
 logger = logging.getLogger("leadhive")
 PROTECTABLE_WEB_FIELDS = (
@@ -91,6 +93,8 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
     logger.info("scraper start: company_id=%s", company.id)
     try:
         page, data = scrape_company(company.website_url)
+        before_hash = identity_hash(company)
+        confidence, reasons = website_match(company, data)
         website_url, domain = canonicalize_url(page.url)
         if company.record_type == "location" and is_aggregator_domain(domain):
             company.reference_url = company.reference_url or website_url
@@ -119,7 +123,16 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
         else:
             company.website_url = website_url
             company.domain = domain
+            before_values = {field: getattr(company, field) for field in PROTECTABLE_WEB_FIELDS}
             update_unprotected_fields(company, data)
+            applied = [
+                field
+                for field in PROTECTABLE_WEB_FIELDS
+                if before_values[field] != getattr(company, field)
+            ]
+            record_website_evidence(
+                db, company, data, page.url, before_hash, confidence, reasons, applied
+            )
             from app.services.external_presence import capture_website_links
 
             capture_website_links(db, company, data, page.url)
@@ -141,7 +154,9 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
         return company
     except ScrapeError as exc:
         db.rollback()
-        company = db.get(Company, company.id)
+        current = db.get(Company, company.id)
+        assert current is not None
+        company = current
         company.analysis_status = "failed"
         company.analysis_error = exc.public_message[:500]
         company.scraped_at = datetime.now(timezone.utc)
@@ -151,7 +166,9 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
         return company
     except Exception as exc:
         db.rollback()
-        company = db.get(Company, company.id)
+        current = db.get(Company, company.id)
+        assert current is not None
+        company = current
         company.analysis_status = "failed"
         company.analysis_error = "Webサイト解析中にエラーが発生しました。"
         company.scraped_at = datetime.now(timezone.utc)

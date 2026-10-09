@@ -59,9 +59,14 @@ def website_match(company, data) -> tuple[str, list[str]]:
         reasons.append("COMPANY_NAME_MATCH")
     if re.search(r"\d", address) and address in text:
         reasons.append("ADDRESS_MATCH")
+    observed_name = normalize(data.company_name)
+    if name and observed_name and name != observed_name:
+        return "REVIEW_REQUIRED", [*reasons, "COMPANY_NAME_CONFLICT"]
     phone = normalize(company.phone)
     if len(phone) >= 9 and phone == normalize(data.phone):
         reasons.append("PHONE_MATCH")
+    if len(phone) >= 9 and data.phone and phone != normalize(data.phone):
+        return "REVIEW_REQUIRED", [*reasons, "PHONE_CONFLICT"]
     confirmed = "COMPANY_NAME_MATCH" in reasons and any(
         r in reasons for r in ("ADDRESS_MATCH", "PHONE_MATCH")
     )
