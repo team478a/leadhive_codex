@@ -1,0 +1,40 @@
+{
+  "baseline_before": "c698e31b9af984e74da0b66a1b26b9bccfff278b",
+  "baseline_after": "73db23b71dd3901c49adc25cc134605a31b6f5c8",
+  "method": "same_saved_successful_html_cache_replay",
+  "cohort": 20,
+  "secondary_page_limit": 8,
+  "before_states": {
+    "CACHE_INCOMPLETE": 7,
+    "CACHED_STATIC_UNRESOLVED": 2,
+    "CACHED_DOM_DETECTED": 10,
+    "CACHED_EMBEDDED_UNVERIFIED": 1
+  },
+  "after_states": {
+    "CACHE_INCOMPLETE": 8,
+    "CACHED_STATIC_UNRESOLVED": 1,
+    "CACHED_DOM_DETECTED": 10,
+    "CACHED_EMBEDDED_UNVERIFIED": 1
+  },
+  "cached_dom_losses": 0,
+  "cached_dom_gains": 0,
+  "same_detected_destination_cases": 10,
+  "changed_selection_cases": 2,
+  "before_uncached_selection_count": 24,
+  "after_uncached_selection_count": 26,
+  "new_dom_detection_confirmation": null,
+  "precision": null,
+  "external_requests": 0,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "limitations": [
+    "Successful HTML cache only: robots and failed responses not replayed",
+    "Changed uncached branches cannot simulate their child links",
+    "No cache miss is absence evidence",
+    "No Human Truth or fresh live validation"
+  ],
+  "runner_sha256": "a1da634bb4f7f35209cbb959ec491a64270fe2dc76ae476fff4b0d05e517c261"
+}
