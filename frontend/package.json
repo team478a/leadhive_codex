@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "build": "tsc --noEmit && vite build",
-    "test": "playwright test"
+    "test": "playwright test",
+    "test:form-browser-poc": "playwright test --config form-lab/playwright.config.ts"
   },
   "dependencies": {
     "react": "^19.0.0", "react-dom": "^19.0.0"
