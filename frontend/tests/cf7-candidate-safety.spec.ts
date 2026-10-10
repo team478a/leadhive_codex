@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -28,7 +29,7 @@ test('non-executable CF7 candidates show a warning and never offer reservations'
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+    await navigateWorkspace(page, '✓ 承認キュー')
     await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
     await page.getByRole('button', { name: /CF7 Safety.*承認済み/ }).click()
     await expect(page.getByRole('status')).toContainText('送信予約・実送信には使用できません')

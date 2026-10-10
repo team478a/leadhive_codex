@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('sales preparation can queue cancel and resume without sending', async ({ page }, testInfo) => {
@@ -21,7 +22,7 @@ test('sales preparation can queue cancel and resume without sending', async ({ p
   })
   expect(imported.ok()).toBeTruthy()
   await page.reload()
-  await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+  await navigateWorkspace(page, '⌕ 企業収集')
   await page.getByLabel('プロジェクト', { exact: true }).selectOption(projectId)
   const panel = page.getByRole('region', { name: '営業準備', exact: true })
   await panel.getByLabel('検索回数の上限').fill('0')

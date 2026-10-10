@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
@@ -13,7 +14,7 @@ test('human approval queue requires step-up and records approve/revoke without s
   const guide = page.getByRole('dialog', { name: '3ステップで始めましょう' })
   await expect(guide).toBeVisible()
   await guide.getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   await page.getByRole('button', { name: '承認待ち提案を作成', exact: true }).click()
   await page.getByLabel('提案先の会社').selectOption(fixture.company_id)
@@ -52,13 +53,13 @@ test('human approval queue requires step-up and records approve/revoke without s
   await expect(page.getByRole('button', { name: /A2 E2E Company.*却下/ })).toBeVisible()
   const member = await page.request.post(`/api/projects/${fixture.project_id}/members`, { data: { email: process.env.E2E_MEMBER_EMAIL!, role: 'viewer' } })
   expect(member.ok()).toBeTruthy()
-  await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+  await navigateWorkspace(page, 'ログアウト')
   await page.getByLabel('メールアドレス').fill(process.env.E2E_MEMBER_EMAIL!)
   await page.getByLabel('パスワード').fill(process.env.E2E_MEMBER_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await expect(guide).toBeVisible()
   await guide.getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   await expect(page.getByRole('button', { name: /A2 E2E Company.*却下/ })).toBeVisible()
   await expect(page.getByRole('button', { name: '承認待ち提案を作成', exact: true })).toHaveCount(0)

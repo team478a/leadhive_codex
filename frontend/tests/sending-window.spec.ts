@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('daily sending hours persist without sending on desktop and mobile', async ({ page }) => {
@@ -8,7 +9,7 @@ test('daily sending hours persist without sending on desktop and mobile', async 
   const guide = page.getByRole('dialog', { name: '3ステップで始めましょう' })
   await expect(guide).toBeVisible()
   await guide.getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '⚙ 運用設定' }).click()
+  await navigateWorkspace(page, '⚙ 運用設定')
   const panel = page.getByRole('region', { name: '送信可能時間', exact: true })
   await expect(panel.getByRole('button', { name: '送信可能時間を保存' })).toBeEnabled()
   let sends = 0
@@ -22,7 +23,7 @@ test('daily sending hours persist without sending on desktop and mobile', async 
   await expect(panel.getByRole('status')).toContainText('保存しました')
   await expect(panel).toContainText('毎日 08:00〜20:00')
   await page.reload()
-  await page.getByRole('button', { name: '⚙ 運用設定' }).click()
+  await navigateWorkspace(page, '⚙ 運用設定')
   await expect(panel.getByRole('button', { name: '送信可能時間を保存' })).toBeEnabled()
   await expect(panel.getByRole('checkbox')).toBeChecked()
   await expect(panel.getByLabel('送信開始時刻')).toHaveValue('08:00')

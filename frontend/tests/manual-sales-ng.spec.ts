@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('Human sales NG registers exclusion, preserves quality and reasons without sending', async ({ page }, testInfo) => {
@@ -33,7 +34,7 @@ test('Human sales NG registers exclusion, preserves quality and reasons without 
     expect(existing.ok()).toBeTruthy()
     await page.reload()
     await expect(page.getByRole('heading', { name: `手動営業NG ${testInfo.project.name}`, exact: true })).toBeVisible()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(project.id)
     await page.getByTestId('company-list-item').getByRole('button', { name: '詳細', exact: true }).click()
     const ng = page.getByRole('region', { name: '営業NG登録' })
@@ -55,7 +56,7 @@ test('Human sales NG registers exclusion, preserves quality and reasons without 
     expect(report.items.map((item: { company_id: string }) => item.company_id)).toContain(company.id)
     expect(report.items[0].permission.status).toBe('PROHIBITED')
     await page.reload()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(project.id)
     await page.getByTestId('company-list-item').getByRole('button', { name: '詳細', exact: true }).click()
     await expect(page.getByRole('region', { name: '営業NG登録' })).toContainText('問い合わせページに営業禁止と明記')

@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('Human input trial records failures without approving, sending or changing prohibition', async ({ page }, testInfo) => {
@@ -25,7 +26,7 @@ test('Human input trial records failures without approving, sending or changing 
     } })).ok()).toBeTruthy()
     await page.reload()
     await expect(page.getByRole('heading', { name: `入力試行 ${testInfo.project.name}`, exact: true })).toBeVisible()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(project.id)
     await page.getByTestId('company-list-item').getByRole('button', { name: '詳細', exact: true }).click()
     const panel = page.getByRole('region', { name: 'フォーム入力の実運用記録' })
@@ -63,7 +64,7 @@ test('Human input trial records failures without approving, sending or changing 
     expect(stored.exclusion_reason).toBe('営業NG：合成テスト')
     expect(stored.status).toBe('excluded')
     await page.reload()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(project.id)
     await page.getByTestId('company-list-item').getByRole('button', { name: '詳細', exact: true }).click()
     await expect(panel.getByText('項目が表示されない', { exact: false })).toBeVisible()

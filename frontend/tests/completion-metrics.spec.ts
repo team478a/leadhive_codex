@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -18,7 +19,7 @@ test('Human freezes the funnel denominator and records review effort without app
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '⌂ ダッシュボード', exact: true }).click()
+    await navigateWorkspace(page, '⌂ ダッシュボード')
     const panel = page.getByRole('region', { name: 'Lead Completion計測' })
     await panel.getByLabel('完成率のプロジェクト').selectOption(fixture.project_id)
     await panel.getByRole('button', { name: '現在のリストを集計対象として固定', exact: true }).click()
@@ -88,7 +89,7 @@ test('Human freezes the funnel denominator and records review effort without app
     await panel.getByRole('button', { name: 'レビュー時間の記録を開始', exact: true }).click()
     await expect(panel.getByRole('status').filter({ hasText: 'レビュー計測中' })).toContainText('レビュー計測中')
     await page.reload()
-    await page.getByRole('button', { name: '⌂ ダッシュボード', exact: true }).click()
+    await navigateWorkspace(page, '⌂ ダッシュボード')
     await panel.getByLabel('完成率のプロジェクト').selectOption(fixture.project_id)
     await panel.getByLabel('固定した集計対象').selectOption({ index: 1 })
     await expect(panel.getByRole('status').filter({ hasText: 'レビュー計測中' })).toContainText('レビュー計測中')
@@ -173,7 +174,7 @@ test('Human freezes the funnel denominator and records review effort without app
       await route.fulfill({ response, json: { ...batch, discovered: 0, inspected: 0, offset: 0, next_offset: null, rows: [], benchmark_meta: { ...batch.benchmark_meta, definition: invalidBenchmark ? 'invalid' : 'completion-benchmark-v1' } } })
     })
     await page.reload()
-    await page.getByRole('button', { name: '⌂ ダッシュボード', exact: true }).click()
+    await navigateWorkspace(page, '⌂ ダッシュボード')
     await panel.getByLabel('完成率のプロジェクト').selectOption(fixture.project_id)
     await panel.getByLabel('固定した集計対象').selectOption(fixedCohortId)
     await expect(diagnostic).toContainText('診断済み 0 / 0件')
