@@ -62,7 +62,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     has: page.getByRole('heading', { name: projectName, exact: true }),
   })
   await projectCard.getByRole('button', { name: '企業一覧' }).click()
-  const companyRow = page.getByRole('row').filter({ hasText: domain })
+  const companyRow = page.getByTestId('company-list-item').filter({ hasText: domain })
   await expect(companyRow.getByText('準備完了', { exact: true })).toBeVisible()
   await companyRow.getByRole('button', { name: '詳細' }).click()
 
@@ -447,7 +447,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     has: page.getByRole('heading', { name: projectName, exact: true }),
   })
   await viewerProjectCard.getByRole('button', { name: '企業一覧' }).click()
-  await page.getByRole('row').filter({ hasText: domain }).getByRole('button', { name: '詳細' }).click()
+  await page.getByTestId('company-list-item').filter({ hasText: domain }).getByRole('button', { name: '詳細' }).click()
   const viewerPanel = page.getByRole('heading', { name: 'フォーム事前解析' })
     .locator('xpath=ancestor::section[1]')
   await expect(viewerPanel.getByText('閲覧者は解析結果を確認できます。', { exact: false })).toBeVisible()

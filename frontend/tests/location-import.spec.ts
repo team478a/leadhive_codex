@@ -46,7 +46,7 @@ test('location CSV keeps shared sites and prevents repeat import', async ({ page
   expect(again.duplicate_count).toBe(4)
   await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
   await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(projectId)
-  const east = page.getByRole('row').filter({ has: page.getByText('店舗東', { exact: true }) })
+  const east = page.getByTestId('company-list-item').filter({ has: page.getByText('店舗東', { exact: true }) })
   await expect(east).toBeVisible()
   await east.getByRole('button', { name: '詳細', exact: true }).click()
   await expect(page.getByRole('link', { name: '参考ページを開く', exact: true })).toHaveAttribute('href', 'https://beauty.hotpepper.jp/sln1')
