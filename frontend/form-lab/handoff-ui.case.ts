@@ -41,3 +41,23 @@ test('viewer cannot prepare and sales NG is bound into the PC task', async ({ pa
   const task = JSON.parse(await readFile((await (await download).path())!, 'utf8'))
   expect(task.input.permission).toBe('PROHIBITED')
 })
+test('automatic transfer issues metadata-only capability and refreshes returned report', async ({ page }) => {
+  await mount(page)
+  let issued: Record<string, string> = {}
+  await page.route('**/api/companies/company-a/pc-input-trials', async route => {
+    issued = route.request().postDataJSON()
+    expect(Object.keys(issued).sort()).toEqual(['companyId', 'htmlHash', 'projectId', 'requestHash', 'trialId'])
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ token: 'lh_diag_' + 'a'.repeat(64), expiresAt: new Date(Date.now() + 60000).toISOString() }) })
+  })
+  await page.getByRole('checkbox', { name: 'PCの結果をクラウドへ自動転送する' }).check()
+  const html = '<form><input name="name"></form>'
+  const download = page.waitForEvent('download')
+  await page.getByLabel('保存HTMLの入力JSON').setInputFiles({ name: 'input.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ html, expectedHtmlHash: await sha(html), sourceUrl: 'https://synthetic.example', permission: 'UNKNOWN', values: {}, choices: {}, consents: {} })) })
+  const task = JSON.parse(await readFile((await (await download).path())!, 'utf8'))
+  expect(task.transfer.origin).toBe('http://127.0.0.1:15179')
+  expect(task.binding).toEqual(issued)
+  await page.route('**/api/companies/company-a/activities', route => route.fulfill({ contentType: 'application/json', body: JSON.stringify([{ id: 'report', company_id: 'company-a', activity_type: 'note', created_at: new Date().toISOString(), note: '保存HTML入力報告 v1: ' + JSON.stringify({ version: 1, source: 'PC_REPORTED_UNVERIFIED', ...issued, status: 'HUMAN_REQUIRED', reason: 'CAPTCHA', sent: false }) }]) }))
+  await page.getByRole('button', { name: 'PC結果の履歴を更新' }).click()
+  await expect(page.getByText('PC報告・未認証・未送信', { exact: true })).toBeVisible()
+  await expect(page.getByText(/CAPTCHAのため人の操作が必要/)).toBeVisible()
+})
