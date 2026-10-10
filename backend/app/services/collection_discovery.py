@@ -110,6 +110,9 @@ def classify_candidate(candidate: Candidate) -> tuple[str, str]:
 def persist_discovery(db, job: CollectionJob, buffer: DiscoveryCapture):
     if job.source != "serper" or not buffer.response_received:
         return
+    from app.services.collection_runtime import runtime_snapshot
+
+    claim = None
     # Serialize the operation ceiling across fetches. No lock is held during HTTP.
     if job.operation_job_id:
         from app.models import OperationJob
@@ -118,6 +121,7 @@ def persist_discovery(db, job: CollectionJob, buffer: DiscoveryCapture):
             select(OperationJob).where(OperationJob.id == job.operation_job_id).with_for_update()
         )
         operation_ids = [job.operation_job_id]
+        claim = (operation.payload or {}).get("collection_runtime") if operation else None
         plan = (operation.payload or {}).get("query_plan") if operation else None
         if plan:
             from app.models import CollectionSearchAttempt
@@ -178,6 +182,8 @@ def persist_discovery(db, job: CollectionJob, buffer: DiscoveryCapture):
         operation_limit=settings.collection_discovery_max_operation_hits,
         retention_days=settings.collection_discovery_retention_days,
         field_chars=settings.collection_discovery_field_chars,
+        runtime=runtime_snapshot(),
+        collection_claim=claim,
     )
     db.commit()
 

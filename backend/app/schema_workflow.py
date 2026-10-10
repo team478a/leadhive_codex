@@ -108,6 +108,12 @@ class OperationJobOut(BaseModel):
     collection_progress: dict | None = Field(
         default=None, validation_alias=AliasPath("payload", "collection_progress")
     )
+    collection_runtime: dict | None = Field(
+        default=None, validation_alias=AliasPath("payload", "collection_runtime")
+    )
+    collection_runtime_history: list[dict] = Field(
+        default_factory=list, validation_alias=AliasPath("payload", "collection_runtime_history")
+    )
     id: UUID
     condition_request_id: UUID | None = None
     condition_version: int | None = None

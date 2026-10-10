@@ -520,6 +520,10 @@ def claim_job(db) -> OperationJob | None:
         job.lease_expires_at = lease_deadline()
         job.started_at = datetime.now(timezone.utc)
         job.finished_at = None
+        if job.operation_type == "collect_search":
+            from app.services.collection_runtime import annotate_claim
+
+            annotate_claim(job)
         db.commit()
         db.refresh(job)
     return job
