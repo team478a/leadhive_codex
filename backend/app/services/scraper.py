@@ -386,19 +386,11 @@ def _social_links(soup: BeautifulSoup, base_url: str) -> dict[str, str]:
 
 
 def _contact_url(soup: BeautifulSoup, base_url: str) -> str:
-    base_host = (urlsplit(base_url).hostname or "").lower()
-    scored = []
-    for anchor in soup.select("a[href]"):
-        label = anchor.get_text(" ", strip=True).lower()
-        href = str(anchor.get("href", ""))
-        combined = f"{label} {href.lower()}"
-        if not any(hint in combined for hint in CONTACT_HINTS):
-            continue
-        url = _clean_url(href, base_url)
-        if url and (urlsplit(url).hostname or "").lower() == base_host:
-            score = 2 if "お問い合わせ" in label or "contact" in label else 1
-            scored.append((score, url))
-    return max(scored, default=(0, ""))[1]
+    # Use the crawler's ranking rather than breaking equal scores by URL text.
+    # Keep this field an observed anchor destination, not iframe/form proof.
+    anchors = "".join(str(anchor) for anchor in soup.select("a[href]"))
+    links = navigation_links(anchors, base_url, base_url)
+    return links[0] if links else ""
 
 
 def discover_important_urls(html: str, base_url: str) -> list[str]:
