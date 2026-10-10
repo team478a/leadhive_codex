@@ -75,6 +75,16 @@ Contact Discovery **48 PASS**（合計68）。Ruff全backend、format全backend�
 進んだため期待値を修正し再実行した。営業禁止・CAPTCHAの期待値は変更していない。
 GitHub全CIはPR作成後に別途確認する。
 
+### 統合後のCI確認
+
+PR #51の全体Backend CIで `test_two_contact_offline_boundaries` の旧表示文言の
+期待値1件が失敗した（2196 PASS、47 SKIP、1 FAIL）。このテストはファイル欄がない
+multipart模擬フォームに「ファイル送信用」を期待していた。期待値を「multipart・未検証」
+に変更し、ファイル送信用ではないことも確認する。
+`supported=False`、実送信パーサーの `manual_required`、Human未承認の検証は維持する。
+クラウド収集ワーカーの確認時点の配備は `40a630f` であり、PR #51統合後のコードは
+まだ反映されていなかった。ブラウザ接続が応答しないため配備・実データ再検証は未実施。
+
 ## 制限と次工程
 
 - DB migration、UI、Human Approval、送信経路の変更なし。
