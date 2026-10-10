@@ -64,10 +64,13 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
     {company.website_url && profiles.length === 0 && <p className="muted mt-4">まだ解析されていません。</p>}
     {externalCandidates.length > 0 && <section className="notice mt-4" aria-label="外部問い合わせ候補">
       <h3>公式サイトから見つかった外部問い合わせリンク</h3>
-      <p>リンク先のフォーム・窓口用途・営業可否は未確認です。自動取得・入力・送信は行っていません。</p>
+      <p>外部リンクは最大3ページまで取得して解析します。取得結果と入力項目・失敗理由は下に表示します。入力・送信は行っていません。窓口用途・営業可否の確認とHuman送信承認は別途必要です。</p>
       {externalCandidates.map(log => <div className="mt-3" key={log.id}>
         <a className="text-link break-all" href={String(log.details.url)} target="_blank" rel="noreferrer">外部ページを確認 ↗：{String(log.details.url)}</a>
         <p className="muted text-xs break-all">発見元：{String(log.details.source_url || '')}</p>
+        <p className="text-sm">{profiles.some(profile => profile.form_url === log.details.url && profile.last_analyzed_at && Date.parse(profile.last_analyzed_at) >= latestAnalysis)
+          ? '解析結果あり：下のフォーム情報を確認してください。'
+          : '未解析：取得上限により今回の対象外です。フォームなしとは判定していません。'}</p>
       </div>)}
     </section>}
     {profiles.map(profile => <article className="form-profile-card" key={profile.id}>

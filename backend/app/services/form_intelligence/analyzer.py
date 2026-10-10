@@ -1,6 +1,7 @@
 import logging
 import re
 import time
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -33,8 +34,9 @@ from app.services.form_intelligence.rules import (
 from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "1.9"
+ANALYSIS_VERSION = "2.0"
 MAX_CONTACT_PAGES = 8
+MAX_EXTERNAL_CONTACT_PAGES = 3
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 
 
@@ -150,6 +152,8 @@ def _review_reason(
     fields: list[dict],
     compatibility_reason: str,
 ) -> str:
+    if sales_status == "PROHIBITED":
+        return "営業禁止を検出しました。送信対象から除外します。"
     if not form_found:
         return "送信可能なフォームが見つかりません。"
     if sales_status == "UNCERTAIN":
@@ -278,7 +282,7 @@ def _upsert_profile(
             fields,
             compatibility_reason,
         )[:500]
-        if status == "REVIEW_REQUIRED"
+        if status in {"REVIEW_REQUIRED", "BLOCKED"}
         else ""
     )
     profile.error_message = error_message[:500]
@@ -330,17 +334,44 @@ def analyze_company_forms(
     fetcher = SafeFetcher()
     seen: set[tuple[str, int]] = set()
     profiles: list[FormProfile] = []
+    prohibitions: list[tuple[str, str]] = []
     try:
         root = fetcher.fetch_html(company.website_url)
         fetcher.site_root = root.url
         root_cache = {root.url: root.html}
         external_seen: set[str] = set()
+        external_candidates: list[str] = []
+        root_permission, root_prohibition = sales_contact_status(
+            BeautifulSoup(root.html, "html.parser").get_text(" ", strip=True), False
+        )
+
+        def record_prohibition(matched: str, source_url: str) -> None:
+            if not matched:
+                return
+            if (matched, source_url) not in prohibitions:
+                prohibitions.append((matched, source_url))
+            # Sticky exclusion, shared by existing email/form guards. A later
+            # successful fetch must never silently restore contact permission.
+            company.do_not_contact = True
+            if not (company.exclusion_reason or "").startswith("営業NG："):
+                company.exclusion_reason = (
+                    f"営業NG：{matched} / {company.exclusion_reason or ''}"
+                )[:500]
+            _log(
+                db,
+                company.id,
+                "sales_prohibition_detected",
+                details={"matched_text": matched, "url": source_url},
+            )
+
+        record_prohibition(root_prohibition, root.url)
 
         def record_external_links(html: str, source_url: str) -> None:
             for candidate in external_contact_links(html, source_url, root.url):
                 if candidate["url"] in external_seen or len(external_seen) >= 8:
                     continue
                 external_seen.add(candidate["url"])
+                external_candidates.append(candidate["url"])
                 _log(
                     db,
                     company.id,
@@ -354,22 +385,36 @@ def analyze_company_forms(
 
         record_external_links(root.html, root.url)
         resolved_urls: dict[str, str] = {}
-        pages = contact_pages(
+        local_pages = contact_pages(
             root.url,
             root_cache,
             company.contact_url or "",
             max_pages=MAX_CONTACT_PAGES,
             resolved_urls=resolved_urls,
         )
+
+        def pages() -> Iterator[tuple[str, bool]]:
+            yield from local_pages
+            # Only links actually seen on the company site. No external crawl,
+            # guessed provider paths, or additional search API requests.
+            yield from ((url, True) for url in external_candidates[:MAX_EXTERNAL_CONTACT_PAGES])
+
         provider = get_form_decision_provider() if allow_ai else None
-        for url, explicit in pages:
+        for url, explicit in pages():
             page_started = time.monotonic()
             try:
                 requested_url = url
+                external = url in external_seen
                 html = root_cache.get(url)
                 if html is None:
-                    page = fetcher.fetch_html(url)
-                    if not same_site(root.url, page.url):
+                    # Keep the same global request/time budget and pin navigation
+                    # to this candidate's host before even fetching robots.txt.
+                    fetcher.site_root = url if external else root.url
+                    try:
+                        page = fetcher.fetch_html(url)
+                    finally:
+                        fetcher.site_root = root.url
+                    if not same_site(url if external else root.url, page.url):
                         raise ScrapeError(
                             "問い合わせページが別サイトへ転送されました。確認が必要です。"
                         )
@@ -384,13 +429,22 @@ def analyze_company_forms(
                     details={
                         "url": url,
                         "requested_url": requested_url,
-                        "discovery_method": "LINK" if explicit else "GUESSED_PATH",
+                        "discovery_method": "EXTERNAL_LINK"
+                        if external
+                        else "LINK"
+                        if explicit
+                        else "GUESSED_PATH",
                     },
                 )
                 soup = BeautifulSoup(html, "html.parser")
-                record_external_links(html, url)
+                if not external:
+                    record_external_links(html, url)
                 forms = list(soup.select("form"))
-                text = soup.get_text(" ", strip=True)[:30_000]
+                full_text = soup.get_text(" ", strip=True)
+                text = full_text[:30_000]
+                # Sales notices often live in the footer, after the AI text cap.
+                page_permission, page_prohibition = sales_contact_status(full_text, False)
+                record_prohibition(page_prohibition, url)
                 page_kind = _page_kind(url, text)
                 if not any(is_contact_form(form) for form in forms):
                     embeds = embedded_form_providers(html)
@@ -415,7 +469,9 @@ def analyze_company_forms(
                             form_found=False,
                             page_kind=page_kind,
                             fields=[],
-                            sales_status="UNCERTAIN",
+                            sales_status="PROHIBITED"
+                            if "PROHIBITED" in {root_permission, page_permission}
+                            else "UNCERTAIN",
                             captcha=_captcha_type(html),
                             confirmation=None,
                             duration_ms=round((time.monotonic() - page_started) * 1000),
@@ -440,6 +496,14 @@ def analyze_company_forms(
                     sales_status, prohibition = sales_contact_status(
                         f"{text} {form.get_text(' ', strip=True)}", True
                     )
+                    if root_permission == "PROHIBITED":
+                        sales_status, prohibition = "PROHIBITED", root_prohibition
+                    elif page_permission == "PROHIBITED":
+                        sales_status, prohibition = "PROHIBITED", page_prohibition
+                    elif external and sales_status != "PROHIBITED":
+                        # Provider form existence does not prove company identity
+                        # or permission to use a shared service for sales.
+                        sales_status = "UNCERTAIN"
                     captcha = _captcha_type(str(form) + html)
                     confirmation = _confirmation_page(form)
                     provider_name = "rule"
@@ -457,7 +521,7 @@ def analyze_company_forms(
                         and item["field_type"]
                         not in {"hidden", "submit", "button", "reset", "image"}
                     ]
-                    if provider and ambiguous:
+                    if provider and ambiguous and sales_status != "PROHIBITED":
                         _log(
                             db,
                             company.id,
@@ -567,6 +631,7 @@ def analyze_company_forms(
                             details={"captcha_type": captcha},
                         )
                     if prohibition:
+                        record_prohibition(prohibition, url)
                         _log(
                             db,
                             company.id,
@@ -678,6 +743,8 @@ def analyze_company_forms(
         )
     except ScrapeError as exc:
         db.rollback()
+        for matched, source_url in tuple(prohibitions):
+            record_prohibition(matched, source_url)
         profile = _upsert_profile(
             db,
             company,
@@ -704,6 +771,8 @@ def analyze_company_forms(
         return [profile]
     except Exception as exc:
         db.rollback()
+        for matched, source_url in tuple(prohibitions):
+            record_prohibition(matched, source_url)
         logger.error(
             "form intelligence error: company_id=%s type=%s",
             company.id,
