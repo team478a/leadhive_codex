@@ -14,9 +14,12 @@ export function SendingWindowPanel() {
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   useEffect(() => {
+    let active = true
     api<WindowSettings>('/admin/sending-window').then(value => {
+      if (!active) return
       setSaved(value); setEnabled(value.enabled); setStart(clock(value.start_minute)); setEnd(clock(value.end_minute))
-    }).catch(e => setError(errorMessage(e)))
+    }).catch(e => { if (active) setError(errorMessage(e)) })
+    return () => { active = false }
   }, [])
   async function save() {
     if (!start || !end || minutes(start) >= minutes(end)) { setError('終了時刻は開始時刻より後にしてください。'); return }
