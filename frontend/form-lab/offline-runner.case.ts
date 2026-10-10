@@ -1,6 +1,7 @@
 import { test } from '@playwright/test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
 import { runOfflineInput, type OfflineInput } from './offline-input'
+import { validateTask } from '../src/offlineHandoffContract'
 
 test('private saved HTML input trial', async ({ browser }, info) => {
   const file = process.env.LEADHIVE_OFFLINE_INPUT_FILE
@@ -8,6 +9,9 @@ test('private saved HTML input trial', async ({ browser }, info) => {
   if ((await stat(file)).size > 1_000_000) throw Error('Input file exceeds budget')
   let input: unknown
   try { input = JSON.parse(await readFile(file, 'utf8')) } catch { throw Error('Invalid input JSON') }
+  const handoff = typeof input === 'object' && input !== null && 'definition' in input
+    ? await validateTask(input) : null
+  if (handoff) input = handoff.input
   const record = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value)
   if (!record(input) || typeof input.html !== 'string' || typeof input.expectedHtmlHash !== 'string'
     || typeof input.sourceUrl !== 'string' || !['UNKNOWN', 'ALLOWED', 'PROHIBITED'].includes(String(input.permission))
@@ -17,7 +21,7 @@ test('private saved HTML input trial', async ({ browser }, info) => {
   const result = await runOfflineInput(browser, input as OfflineInput)
   // Only digests, counts and reason codes. Never attach HTML, values or screenshots.
   const output = info.outputPath('offline-input-result.json')
-  await writeFile(output, JSON.stringify(result, null, 2), 'utf8')
+  await writeFile(output, JSON.stringify(handoff ? { definition: 'offline-input-report-v1', binding: handoff.binding, result } : result, null, 2), 'utf8')
   await info.attach('offline-input-result', { path: output, contentType: 'application/json' })
   // A completed diagnostic can be BLOCKED/HUMAN_REQUIRED; it is not a success label.
 })
