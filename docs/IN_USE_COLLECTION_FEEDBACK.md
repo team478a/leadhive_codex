@@ -59,3 +59,5 @@ CIと最終結果はPRで確認し、自動merge/deployは行わない。
 Ruff check / format、Frontend typecheck / lint / build、新規2モジュールのmypy成功。
 専用DBのmigration upgrade・Alembic model diffはBackendテスト初期化で成功。
 フルアプリmypyは23ファイル86エラー。これは今回採用したCIの限定mypyとは異なる検証。
+
+CIでmobile既存4フローの回帰を検出し、カードへ掲載媒体/SNS・フォーム解析状態・担当等を追加。既存Company操作テストは表/カード共通の識別に更新。修正後、feedback・外部Presence・Form Intelligence・店舗CSV取込・通常操作のPC/mobile計10テスト成功。Frontend typecheck/lint/buildも再成功。

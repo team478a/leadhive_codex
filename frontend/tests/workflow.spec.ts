@@ -164,7 +164,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await renamedFilter.getByRole('button', { name: '削除' }).click()
   await expect(renamedFilter).toHaveCount(0)
   await expect(page.getByText('連絡先なし', { exact: true })).toBeVisible()
-  const companyRow = page.getByRole('row').filter({ hasText: 'example.com' }).filter({
+  const companyRow = page.getByTestId('company-list-item').filter({ hasText: 'example.com' }).filter({
     has: page.getByRole('button', { name: '詳細' }),
   })
   await companyRow.getByRole('button', { name: '詳細' }).click()
