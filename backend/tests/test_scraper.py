@@ -1,5 +1,6 @@
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
 
 from app.models import Company
@@ -26,6 +27,47 @@ HTML = """
 <script>secret script text</script>
 </body></html>
 """
+
+
+@pytest.mark.parametrize(
+    ("encoding", "declaration", "content_type"),
+    [
+        ("utf-8", "", "text/html"),
+        ("cp932", '<meta charset="shift_jis">', "text/html"),
+        (
+            "euc-jp",
+            '<meta http-equiv="Content-Type" content="text/html; charset=euc-jp">',
+            "text/html",
+        ),
+        ("cp932", '<meta charset="utf-8">', "text/html; charset=shift_jis"),
+        ("utf-8-sig", "", "text/html"),
+    ],
+)
+def test_safe_fetcher_decodes_japanese_before_extracting_links(
+    monkeypatch, encoding, declaration, content_type
+):
+    markup = (
+        f"<html><head>{declaration}<title>株式会社サンプル</title></head>"
+        '<body><a href="/entry">お問い合わせ</a></body></html>'
+    )
+    monkeypatch.setattr(scraper, "_validated_target", lambda url: (url, "example.com"))
+    fetcher = scraper.SafeFetcher()
+    fetcher.client.close()
+    fetcher.client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, content=markup.encode(encoding), headers={"Content-Type": content_type}
+            )
+        )
+    )
+    try:
+        page = fetcher._request("https://example.com/", 10000)
+        data = extract_page(page.html, page.url)
+        assert data.company_name == "株式会社サンプル"
+        assert data.contact_url == "https://example.com/entry"
+        assert "�" not in page.html
+    finally:
+        fetcher.close()
 
 
 def make_project(auth, name="解析テスト"):

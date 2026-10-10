@@ -524,6 +524,19 @@ def test_delivery_compatibility_reports_browser_only_forms():
     assert "name属性" in assess('<form method="post"><input type="text"></form>').reason
 
 
+@pytest.mark.parametrize("file_control", ["", '<input type="file" name="upload" disabled>'])
+def test_multipart_without_enabled_file_input_reports_transport_gap(file_control):
+    form = BeautifulSoup(
+        '<form method="post" enctype="multipart/form-data">'
+        f'{file_control}<textarea name="message"></textarea><button>送信</button></form>',
+        "html.parser",
+    ).select_one("form")
+    result = assess_delivery_compatibility(form, "https://example.com/contact")
+    assert result.supported is False
+    assert "multipart" in result.reason
+    assert "ファイル送信" not in result.reason
+
+
 def test_field_mapping_prefers_specific_labels_and_common_names():
     assert rule_mapping("お名前", "text")[0] == "contact_name"
     assert rule_mapping("会社名", "text")[0] == "company_name"
