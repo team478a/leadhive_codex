@@ -245,10 +245,11 @@ def test_agent_cannot_start_or_read_preparation(auth, db):
     assert auth.get(path, headers=headers).status_code == 403
 
 
-def test_form_preparation_disables_ai_fallback(auth, db, providers, monkeypatch):
+@pytest.mark.parametrize("contact_url", ["", "https://store0.example/contact"])
+def test_form_preparation_disables_ai_fallback(auth, db, providers, monkeypatch, contact_url):
     project = make_project(auth)
     row = companies(db, project)[0]
-    row.email, row.contact_url = "", "https://store0.example/contact"
+    row.email, row.contact_url = "", contact_url
     db.commit()
     calls = []
     monkeypatch.setattr(
@@ -258,6 +259,48 @@ def test_form_preparation_disables_ai_fallback(auth, db, providers, monkeypatch)
     assert calls == [{"allow_ai": False}]
     assert db.scalar(select(SalesPreparationItem)).status == "review"
     assert providers == {"analysis": 1, "draft": 0}
+
+
+@pytest.mark.parametrize(
+    ("markup", "expected_status"),
+    [
+        ("", "ready"),
+        ("営業目的の問い合わせは禁止です。", "blocked"),
+        ('<div class="g-recaptcha"></div>', "review"),
+    ],
+)
+def test_missing_contact_url_runs_bounded_form_discovery_without_send(
+    auth, db, providers, monkeypatch, markup, expected_status
+):
+    from app.models import FormProfile
+    from tests.test_form_intelligence import install_pages
+
+    project = make_project(auth)
+    row = companies(db, project)[0]
+    row.email, row.contact_url = "", ""
+    db.commit()
+    install_pages(
+        monkeypatch,
+        {
+            row.website_url: "<html>Company home</html>",
+            f"{row.website_url}/contact": (
+                f'<html>{markup}<form method="post">'
+                '<input name="email" type="email" required>'
+                '<textarea name="message" required></textarea>'
+                '<button type="submit">送信</button></form></html>'
+            ),
+        },
+    )
+    execute(db, start(auth, project, channel="form", max_search_requests=0))
+    item = db.scalar(select(SalesPreparationItem))
+    assert item.status == expected_status
+    assert item.details["form_checked"] is True
+    assert db.scalar(select(FormProfile).where(FormProfile.form_found.is_(True))) is not None
+    draft_count = 1 if expected_status == "ready" else 0
+    assert providers == {"analysis": 1, "draft": draft_count}
+    assert db.scalar(select(func.count()).select_from(OutreachDraft)) == draft_count
+    for model in (EmailDelivery, FormDelivery, ApprovalRequest):
+        assert db.scalar(select(func.count()).select_from(model)) == 0
 
 
 @pytest.mark.parametrize("matches", [False, True])

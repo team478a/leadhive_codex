@@ -10,7 +10,7 @@ from html import unescape
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, UnicodeDammit
 
 from app.config import settings
 from app.services import site_extraction
@@ -266,10 +266,16 @@ class SafeFetcher:
                     if size > max_bytes:
                         raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
                     chunks.append(chunk)
-                encoding = response.encoding or "utf-8"
-                return FetchedPage(
-                    str(response.url), b"".join(chunks).decode(encoding, errors="replace")
-                )
+                # httpx defaults to UTF-8 without consulting HTML charset.
+                # Respect an explicit HTTP charset, otherwise HTML metadata/BOM
+                # and byte detection, before extracting Japanese names/links.
+                charset = re.search(r"charset\s*=\s*[\"']?([^\s;\"']+)", content_type)
+                decoded = UnicodeDammit(
+                    b"".join(chunks),
+                    known_definite_encodings=[charset.group(1)] if charset else [],
+                    is_html=True,
+                ).unicode_markup
+                return FetchedPage(str(response.url), decoded if decoded is not None else "")
         except ScrapeError:
             raise
         except httpx.HTTPError as exc:
