@@ -37,6 +37,7 @@ const findingNames: Record<string, string> = {
   EMBEDDED_FORM_UNVERIFIED: '外部埋め込みあり・表示後の確認が必要',
   DOM_CONTACT_FORM_NOT_FOUND: '取得したHTMLで問い合わせフォーム未検出',
   FETCH_FAILED: 'ページ取得失敗・フォームの有無は未確認',
+  EXTERNAL_CONTACT_UNVERIFIED: '公式サイトに外部問い合わせリンクあり・未確認',
 }
 
 function isReviewedChoice(key: FormMappedKey) {
@@ -49,6 +50,8 @@ function reviewedValue(field: FormProfileField) {
 
 export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, readOnly, onAnalyze, onSelectPrimary, onCorrect, onRefresh }: Props) {
   const [drafts, setDrafts] = useState<Record<string, { mappedKey: FormMappedKey; value: string }>>({})
+  const latestAnalysis = Math.max(0, ...logs.filter(log => log.event_type === 'analysis_started').map(log => Date.parse(log.created_at)))
+  const externalCandidates = logs.filter(log => log.details.finding === 'EXTERNAL_CONTACT_UNVERIFIED' && Date.parse(log.created_at) >= latestAnalysis).filter((log, index, all) => all.findIndex(item => item.details.url === log.details.url) === index)
   useEffect(() => {
     setDrafts(Object.fromEntries(profiles.flatMap(profile => profile.fields.map(field => [
       field.id, { mappedKey: field.mapped_key, value: reviewedValue(field) },
@@ -59,6 +62,14 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
     {readOnly && <p className="muted mt-3">閲覧者は解析結果を確認できます。再解析と修正は編集者または所有者が行います。</p>}
     {!company.website_url && <p className="muted mt-4">公式サイトURLを登録すると解析できます。</p>}
     {company.website_url && profiles.length === 0 && <p className="muted mt-4">まだ解析されていません。</p>}
+    {externalCandidates.length > 0 && <section className="notice mt-4" aria-label="外部問い合わせ候補">
+      <h3>公式サイトから見つかった外部問い合わせリンク</h3>
+      <p>リンク先のフォーム・窓口用途・営業可否は未確認です。自動取得・入力・送信は行っていません。</p>
+      {externalCandidates.map(log => <div className="mt-3" key={log.id}>
+        <a className="text-link break-all" href={String(log.details.url)} target="_blank" rel="noreferrer">外部ページを確認 ↗：{String(log.details.url)}</a>
+        <p className="muted text-xs break-all">発見元：{String(log.details.source_url || '')}</p>
+      </div>)}
+    </section>}
     {profiles.map(profile => <article className="form-profile-card" key={profile.id}>
       <div className="section-heading">
         <div><div className="flex flex-wrap items-center gap-2"><strong>{profile.page_kind === 'partnership' ? '提携・法人向け' : profile.page_kind === 'recruitment' ? '採用向け' : profile.page_kind === 'support' ? 'サポート向け' : '一般問い合わせ'}</strong>{profile.is_primary && <span className="badge">優先フォーム</span>}<span className={`form-status ${profile.form_status.toLowerCase()}`}>{statusNames[profile.form_status]}</span></div><a className="text-link text-xs break-all" href={profile.form_url} target="_blank" rel="noreferrer">{profile.form_url}</a></div>

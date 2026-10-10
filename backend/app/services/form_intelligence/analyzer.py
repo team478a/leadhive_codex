@@ -13,6 +13,7 @@ from app.models import Company, FormAnalysisLog, FormProfile, FormProfileField, 
 from app.services.contact_discovery import (
     contact_pages,
     embedded_form_providers,
+    external_contact_links,
     is_contact_form,
     same_site,
 )
@@ -333,6 +334,25 @@ def analyze_company_forms(
         root = fetcher.fetch_html(company.website_url)
         fetcher.site_root = root.url
         root_cache = {root.url: root.html}
+        external_seen: set[str] = set()
+
+        def record_external_links(html: str, source_url: str) -> None:
+            for candidate in external_contact_links(html, source_url, root.url):
+                if candidate["url"] in external_seen or len(external_seen) >= 8:
+                    continue
+                external_seen.add(candidate["url"])
+                _log(
+                    db,
+                    company.id,
+                    "contact_page_found",
+                    details={
+                        **candidate,
+                        "finding": "EXTERNAL_CONTACT_UNVERIFIED",
+                        "discovery_method": "OFFICIAL_SITE_LINK",
+                    },
+                )
+
+        record_external_links(root.html, root.url)
         resolved_urls: dict[str, str] = {}
         pages = contact_pages(
             root.url,
@@ -368,6 +388,7 @@ def analyze_company_forms(
                     },
                 )
                 soup = BeautifulSoup(html, "html.parser")
+                record_external_links(html, url)
                 forms = list(soup.select("form"))
                 text = soup.get_text(" ", strip=True)[:30_000]
                 page_kind = _page_kind(url, text)
