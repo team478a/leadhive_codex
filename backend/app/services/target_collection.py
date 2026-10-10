@@ -84,6 +84,10 @@ def bounded_candidates(db, job, candidates, remaining):
 def run(db, job, payload, conditions, stopped):
     target = payload["target_count"]
     state = dict(job.payload.get("collection_progress") or {})
+    budget = min(
+        REQUEST_BUDGET,
+        state.get("request_budget", payload.get("search_request_limit") or REQUEST_BUDGET),
+    )
     index = state.get("keyword_index", 0)
     page = state.get("next_page", 1)
     requests = state.get("requests", 0)
@@ -101,7 +105,7 @@ def run(db, job, payload, conditions, stopped):
             no_match_count=sum(value == "NO_MATCH" for value in inventory.values()),
             conditions_applied=bool(conditions),
             requests=requests,
-            request_budget=REQUEST_BUDGET,
+            request_budget=budget,
             keyword_index=index,
             next_page=page,
             query_stops=query_stops,
@@ -118,7 +122,7 @@ def run(db, job, payload, conditions, stopped):
         if state["collected_count"] >= target:
             record("TARGET_REACHED")
             return
-        if requests >= REQUEST_BUDGET:
+        if requests >= budget:
             record("REQUEST_BUDGET_REACHED")
             return
         keyword = payload["keywords"][index]

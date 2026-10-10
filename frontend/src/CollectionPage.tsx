@@ -42,6 +42,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
   const [targetCount, setTargetCount] = useState(100)
+  const [searchRequestLimit, setSearchRequestLimit] = useState(50)
   const [file, setFile] = useState<File | null>(null)
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
@@ -118,7 +119,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
           operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
           presence_search: presencePlan,
-          ...(source === 'serper' ? { target_count: targetCount } : {}),
+          ...(source === 'serper' ? { target_count: targetCount, search_request_limit: searchRequestLimit } : {}),
           ...(useConditions && confirmedConditions ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
         })
         await reload()
@@ -244,7 +245,11 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             max={source === 'google_places' ? 60 : 100} value={maxResults}
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>}
         </div>}
-        {source === 'serper' && <p className="muted text-sm">目標件数まで収集します。新しい対象候補が増えないページで、その検索語を終了し、次の検索語へ進みます。重複・対象外は目標件数に含めません。検索は全体で最大50回。保存候補の所在地・営業適性は別途確認が必要です。</p>}
+        {source === 'serper' && <>
+          <Field label="一次収集の検索回数上限"><input type="number" min={1} max={50} required value={searchRequestLimit}
+            onChange={event => setSearchRequestLimit(Number(event.target.value))} disabled={loading} /></Field>
+          <p className="muted text-sm">目標件数まで収集します。重複・対象外は目標件数に含めません。一次収集の検索は全検索語・ページ・再試行を合わせて最大{searchRequestLimit}回で停止します。追加調査は別の上限です。少量検証では追加調査をOFFにしてください。保存候補の所在地・営業適性は別途確認が必要です。</p>
+        </>}
         {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
         <div className="actions"><button type="submit">{loading ? (['serper', 'google_places', 'gbizinfo'].includes(source) ? '登録中…' : '収集中…') : '収集を開始'}</button></div>

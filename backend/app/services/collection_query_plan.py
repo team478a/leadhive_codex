@@ -22,7 +22,9 @@ def plan_snapshot(payload):
         "target_count": payload["target_count"],
         "condition_binding": payload.get("condition_binding"),
         "presence_search": payload.get("presence_search"),
-        "request_budget": REQUEST_BUDGET,
+        "request_budget": min(
+            REQUEST_BUDGET, payload.get("search_request_limit") or REQUEST_BUDGET
+        ),
         "page_size": PAGE_SIZE,
         "max_pages": MAX_PAGES,
         "max_page_attempts": MAX_PAGE_ATTEMPTS,

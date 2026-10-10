@@ -158,7 +158,9 @@ def summarize(db, job, root, tasks, attempts, conditions, reason=None):
             no_match_count=sum(v == "NO_MATCH" for v in inventory.values()),
             conditions_applied=bool(conditions),
             requests=len(attempts),
-            request_budget=REQUEST_BUDGET,
+            request_budget=min(
+                REQUEST_BUDGET, root.payload["query_plan"]["snapshot"]["request_budget"]
+            ),
             stop_reason=reason,
             coverage_status="PARTIAL"
             if pending or failed_queries or capped
@@ -202,7 +204,9 @@ def run(db, job, payload, conditions, stopped):
             reason = None
             if sum(v == "MATCH" for v in inventory.values()) >= payload["target_count"]:
                 reason = "TARGET_REACHED"
-            elif len(attempts) >= REQUEST_BUDGET:
+            elif len(attempts) >= min(
+                REQUEST_BUDGET, root.payload["query_plan"]["snapshot"]["request_budget"]
+            ):
                 reason = "REQUEST_BUDGET_REACHED"
             elif not any(t.state == "READY" for t in tasks):
                 reason = (

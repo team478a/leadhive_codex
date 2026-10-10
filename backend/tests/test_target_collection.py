@@ -30,7 +30,7 @@ def test_serper_pagination_keeps_batch_size(monkeypatch):
     assert calls[0][1]["json"]["num"] == 10
 
 
-def setup_job(auth, db, monkeypatch, *, keywords=None, target=3):
+def setup_job(auth, db, monkeypatch, *, keywords=None, target=3, request_limit=None):
     project = make_project(auth)
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
@@ -40,6 +40,7 @@ def setup_job(auth, db, monkeypatch, *, keywords=None, target=3):
             keywords=keywords or ["a"],
             region="大阪",
             target_count=target,
+            **({"search_request_limit": request_limit} if request_limit is not None else {}),
         ),
     )
     assert response.status_code == 202
