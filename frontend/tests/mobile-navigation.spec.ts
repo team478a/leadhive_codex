@@ -61,3 +61,20 @@ test('raw entry uses the same collapsed navigation', async ({ page }, info) => {
   await navigateWorkspace(page, '▦ プロジェクト')
   await expect(page.getByRole('heading', { name: 'プロジェクト', level: 1 })).toBeVisible()
 })
+
+test('navigation waits for authenticated workspace instead of mistaking loading for a closed menu', async ({ page }) => {
+  let releaseAuth!: () => void
+  const authGate = new Promise<void>(resolve => { releaseAuth = resolve })
+  await page.route('**/api/auth/me', async route => {
+    await authGate
+    await route.fulfill({ json: { id: 'fixture-user', email: 'mobile@example.invalid', is_admin: true } })
+  })
+  await page.goto('/')
+  await expect(page.getByText('読み込み中…', { exact: true })).toBeVisible()
+  const navigate = navigateWorkspace(page, '◎ ターゲットプロファイル')
+  // No navigation control exists until auth completes, on either screen size.
+  await expect(page.locator('.sidebar')).toHaveCount(0)
+  releaseAuth()
+  await navigate
+  await expect(page.getByRole('heading', { name: 'ターゲットプロファイル', level: 1 })).toBeVisible()
+})

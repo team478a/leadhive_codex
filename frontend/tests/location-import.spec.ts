@@ -6,7 +6,7 @@ test('location CSV keeps shared sites and prevents repeat import', async ({ page
   await page.getByLabel('メールアドレス').fill(process.env.E2E_EMAIL!)
   await page.getByLabel('パスワード', { exact: true }).fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'ログアウト', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'プロジェクト', exact: true, level: 1 })).toBeVisible()
   const later = page.getByRole('button', { name: 'あとで見る', exact: true })
   await expect(later).toBeVisible()
   await later.click()
