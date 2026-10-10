@@ -16,6 +16,7 @@ from app.approved_form_routes import router as approved_form_router
 from app.campaign_routes import router as campaign_router
 from app.cf7_candidate_routes import router as cf7_candidate_router
 from app.collection_condition_routes import router as collection_condition_router
+from app.collection_feedback_routes import router as collection_feedback_router
 from app.collection_routes import router as collection_router
 from app.company_quality_routes import router as company_quality_router
 from app.company_reporting_routes import router as company_reporting_router
@@ -154,6 +155,7 @@ app.include_router(campaign_router)
 app.include_router(analysis_router)
 app.include_router(ai_router)
 app.include_router(company_router)
+app.include_router(collection_feedback_router)
 app.include_router(company_workflow_router)
 app.include_router(company_reporting_router)
 app.include_router(company_quality_router)

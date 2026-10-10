@@ -31,6 +31,7 @@ jobs:
           backend/.venv/bin/python -m pip install mypy==2.4.0
       - run: |
           backend/.venv/bin/python -m ruff check backend
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/collection_feedback_routes.py backend/app/services/collection_feedback.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/controlled_confirmation_contract.py backend/app/services/controlled_confirmation_review.py backend/app/services/two_stage_lab_contract.py
           backend/.venv/bin/python -m ruff format --check backend
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/cf7_616_contract.py

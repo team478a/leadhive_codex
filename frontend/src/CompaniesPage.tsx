@@ -924,6 +924,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onAssign={() => void assignSelected()}
       onAnalyzeSelected={() => void enqueueSelectedFormAnalysis()}
       onOpen={company => void open(company)}
+      onFeedbackSaved={() => { void reload().catch(e => setError(errorMessage(e))); setSelected(null); setNotice('確認結果を保存しました。送信承認は行っていません。') }}
     />
     {selected && <CompanyDetailsPanel
       company={selected}
