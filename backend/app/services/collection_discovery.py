@@ -1,5 +1,6 @@
 """Persist observations before ingestion, and track derived ingestion outcomes."""
 
+import re
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
@@ -94,9 +95,21 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
     if any(part in path.split("/") for part in ARTICLE_PATH_SEGMENTS):
         return "ARTICLE", "PATH_HINT_REQUIRES_REVIEW"
     title = snapshot.get("title") or ""
-    if any(marker in title for marker in COMPARISON_TITLE_MARKERS) or (
-        any(marker in title for marker in NUMBERED_SELECTION_MARKERS)
-        and any(marker in title for marker in ("会社", "企業", "おすすめ", "比較", "厳選"))
+    if (
+        any(marker in title for marker in COMPARISON_TITLE_MARKERS)
+        or (
+            any(marker in title for marker in NUMBERED_SELECTION_MARKERS)
+            and any(marker in title for marker in ("会社", "企業", "おすすめ", "比較", "厳選"))
+        )
+        or (
+            # A numbered provider list, not a provider's customer/support count.
+            re.search(
+                r"(?:会社|企業)\s*[0-9０-９]+\s*社"
+                r"(?!\s*(?:を|に|へ|の)?\s*(?:支援|導入|対応|実績))",
+                title,
+            )
+            and any(marker in title for marker in ("おすすめ", "比較", "厳選", "ランキング"))
+        )
     ):
         return "ARTICLE", "COMPARISON_TITLE_REQUIRES_REVIEW"
     return "OFFICIAL_SITE_CANDIDATE", "OFFICIAL_IDENTITY_NOT_VERIFIED"

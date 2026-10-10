@@ -1,0 +1,44 @@
+{
+  "baseline": "89cac404b367f03ecc4904282cfb4eb755aa339f",
+  "external_requests": 0,
+  "human_truth_precision": null,
+  "datasets": {
+    "historical_raw_20": {
+      "input_count": 20,
+      "before": {
+        "JOB_PR": 5,
+        "PORTAL_DIRECTORY": 2,
+        "ARTICLE": 7,
+        "OFFICIAL_SITE_CANDIDATE": 6
+      },
+      "after": {
+        "JOB_PR": 5,
+        "PORTAL_DIRECTORY": 2,
+        "ARTICLE": 8,
+        "OFFICIAL_SITE_CANDIDATE": 5
+      },
+      "transitions": {
+        "OFFICIAL_SITE_CANDIDATE->ARTICLE": 1
+      }
+    },
+    "latest_pilot_saved_subset_5": {
+      "input_count": 5,
+      "before": {
+        "OFFICIAL_SITE_CANDIDATE": 5
+      },
+      "after": {
+        "OFFICIAL_SITE_CANDIDATE": 4,
+        "ARTICLE": 1
+      },
+      "transitions": {
+        "OFFICIAL_SITE_CANDIDATE->ARTICLE": 1
+      }
+    }
+  },
+  "current_source_hashes": {
+    "collection": "717933dd365d83fe2f758ef2628c439c6fb0eda908505ead5e8ab345d897d443",
+    "scraper": "7600d37c160e9ce534cf2a1a92418f34407be5f69c127b45256c0e968f9ce19b",
+    "presence_platforms": "7b983d18e71e1d13b897602bd8a0eb5ad9583c40bed4e73a5cc9cb6932372cee",
+    "collection_discovery": "1d59d851f1e910255d0ac5fec5ec8bfe3e61d4d3981e24b685c732edb55b0fdd"
+  }
+}
