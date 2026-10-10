@@ -59,4 +59,4 @@ Rawの同一URL再出現と企業取込時の重複は異なる。Aの再出現2
 - 結果は同一日・単一実行の比較。繰り返し安定性・全母集団・Human精度は未測定。
 - Migration、送信機能、承認機能、Deployment、依存関係の変更なし。
 - 集計JSON：`docs/results/collection-query-live-comparison-20261010.json`。
-- この文書と集計は未commit・未push。
+- 比較実施時には未commit・未push。その後の求人媒体分類修正PRに集計根拠として同梱。
