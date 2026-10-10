@@ -45,6 +45,21 @@ def main() -> None:
     truth = truth_file.get("cases", {})
     with args.csv.open(encoding="utf-8-sig", newline="") as stream:
         candidates = list(csv.DictReader(stream))[: args.limit]
+    manifest = {
+        "source_sha256": source_hash,
+        "cases": {
+            f"case-{i:03}": candidate.get("URL", candidate.get("website_url", ""))
+            for i, candidate in enumerate(candidates, 1)
+        },
+    }
+    write_new(args.private_dir / "manifest.json", manifest)
+    replay_manifest = {}
+    if args.replay_dir and (args.replay_dir / "manifest.json").exists():
+        replay_manifest = json.loads(
+            (args.replay_dir / "manifest.json").read_text(encoding="utf-8")
+        )
+        if replay_manifest.get("source_sha256") != source_hash:
+            parser.error("Replay source hash mismatch")
     results = []
     for index, candidate in enumerate(candidates, 1):
         case_id = f"case-{index:03}"
@@ -59,7 +74,7 @@ def main() -> None:
                 )
                 page = FetchedPage(saved["url"], saved["html"])
                 if (
-                    saved["requested_url"] != url
+                    saved.get("requested_url", replay_manifest.get("cases", {}).get(case_id)) != url
                     or saved["html_sha256"] != hashlib.sha256(page.html.encode()).hexdigest()
                 ):
                     raise ValueError("SNAPSHOT_MISMATCH")

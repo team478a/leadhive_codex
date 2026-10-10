@@ -97,7 +97,49 @@ SafeFetcherはDNS検証後にhttpx側が再度名前解決するため、厳密�
 ## 比較結果
 
 100件の実測aggregate：`docs/results/scrapling-comparison-20261010.json`。
-集計完了後に下表へ実測値を追記する。完了前の値は成功・正答率として扱わない。
+固定100件（unique入力URL 100）の計測を完了した。raw snapshotは99件、取得失敗1件の
+resultも残し、分母100を維持。robots/redirectを含む外部GETは207回。
+
+|実測指標|現行root抽出|Scrapling static|Scrapling offline dynamic|
+|---|---:|---:|---:|
+|共通HTML取得|99/100|99/100|99/100|
+|抽出処理完了|99/100|99/100|99/100|
+|平均時間（取得込み・失敗含む）|2.43秒|2.43秒|5.61秒|
+|会社名候補あり|99|99|99|
+|住所候補あり|67|67|67|
+|電話候補あり|44|44|44|
+|問い合わせリンク候補あり|97|97|97|
+|Instagram / X / Facebook|38 / 42 / 33|38 / 42 / 33|38 / 42 / 33|
+|YouTube / TikTok / LINE|30 / 13 / 7|30 / 13 / 7|30 / 13 / 7|
+|各項目正答率・誤抽出数|未測定|未測定|未測定|
+
+表は**存在する値の候補抽出件数**であり、正しい企業名・公式窓口・フォーム・送信可能な
+会社数ではない。取得99件に対するfield availabilityと、全100件を分母とするsuccess rateを
+JSONで別保存。住所・電話なしを誤抽出/不存在と決めない。
+
+現行との値の不一致：staticはcontact_url 2件、その他0件。dynamicは全評価項目0件。
+staticの2件は件数増加ではなく選択URLの差であり、どちらが正しいかHuman未判定。
+ブラウザは全100件平均で約3.18秒追加（初回起動を含む、単回・固定順序の計測）。
+staticの微小な時間差を高速化効果と判断しない。
+
+取得99ページすべてに外部script要素があり、offline browserではそれらを読み込まない。
+browserのabort回数は5,489、browserからの外部取得は0。したがって今回のdynamic差分0件は
+**外部JSを許可した完全なScrapling取得でも改善しないという証明ではない**。
+
+失敗原因別の改善結果：
+
+|原因|今回の測定 / 改善|
+|---|---|
+|企業未発見|既存URL入力なので対象外。改善社数null|
+|HTTP取得失敗|1件。別クライアントでの再取得・突破なし、独立取得改善効果は未測定|
+|JS未描画|inline fixtureでcontact link追加を検証。実データの描画による値増加0、Human正答改善null|
+|抽出失敗|取得後の例外0件。ただし空欄の正否は未判定。staticの窓口選択差2件は要Human確認|
+|品質除外|営業対象適合・Source gate・同一性の判定を今回実行せず、改善効果null|
+
+private Human truth templateを用意したが、human_verified=falseのまま。Human確認を代行しない。
+保存結果の先頭2件をGETなしで再比較し、snapshot/hash bindingと再現経路を確認した。
+原本snapshotは変更していない。試用実装commitは`084941d`、manifest互換性と再現試験を
+続くcommitで追加。計測値を良くするためのparser/判定緩和は行わない。
 
 |指標|評価方法 / 現在の制限|
 |---|---|
@@ -131,7 +173,8 @@ Bは「通常HTTP失敗なら何でも再取得」という意味にしない。
 operation jobの描画timeout/cancel/lease予算、HTML取得method provenance、依存lock・Windows配布。
 Form Intelligenceやdispatchへ同時拡張せず、別PRで安全試験後に判断する。
 
-ローカル：隔離adapter 14 tests成功、既存offline regression 59 tests成功、Ruff / format / mypy成功。
+ローカル：隔離adapter 16 tests成功、既存offline regression 59 tests成功、Ruff / format / mypy成功。
+追加依存のpip check成功。private snapshot write-once、source/hash binding、GETなしreplayも検証。
 lxml strip_cdataのDeprecationWarningが1件あり、試用依存の更新課題として残す。
 既存Backend全体・Migration・E2EはレビューPRのGitHub Actionsで確認する。
 新CIは鍵不要、模擬HTMLだけ。実サイト比較はCIで実行しない。

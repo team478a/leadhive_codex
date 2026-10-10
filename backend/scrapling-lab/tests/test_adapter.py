@@ -1,4 +1,6 @@
+import hashlib
 import json
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -202,3 +204,66 @@ def test_human_labels_include_fetch_failures_in_denominator():
         ]
     )
     assert result["methods"]["current"]["human_accuracy"]["phone"]["accuracy"] == 0.5
+
+
+def test_snapshot_outputs_cannot_be_overwritten(tmp_path):
+    from scripts.compare_scrapling import write_new
+
+    output = tmp_path / "snapshot.json"
+    write_new(output, {"original": True})
+    with pytest.raises(FileExistsError):
+        write_new(output, {"original": False})
+    assert json.loads(output.read_text(encoding="utf-8")) == {"original": True}
+
+
+def test_replay_uses_bound_snapshot_without_external_get(tmp_path, monkeypatch):
+    from scripts import compare_scrapling as cli
+
+    source = tmp_path / "source.csv"
+    source.write_text("URL\n" + URL + "\n", encoding="utf-8")
+    replay = tmp_path / "replay"
+    replay.mkdir()
+    cli.write_new(
+        replay / "manifest.json",
+        {
+            "source_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+            "cases": {"case-001": URL},
+        },
+    )
+    cli.write_new(
+        replay / "case-001-snapshot.json",
+        {
+            "url": URL,
+            "html": HTML,
+            "html_sha256": hashlib.sha256(HTML.encode()).hexdigest(),
+        },
+    )
+    monkeypatch.setattr(cli, "acquire", lambda url: pytest.fail("Replay must not fetch"))
+    monkeypatch.setattr(
+        cli,
+        "probe",
+        lambda page, mode: adapter.ProbeResult(mode, extract_page(page.html, page.url), 0.01),
+    )
+    aggregate = tmp_path / "aggregate.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "compare",
+            "--csv",
+            str(source),
+            "--private-dir",
+            str(tmp_path / "output"),
+            "--aggregate",
+            str(aggregate),
+            "--limit",
+            "1",
+            "--replay-dir",
+            str(replay),
+        ],
+    )
+    cli.main()
+    result = json.loads(aggregate.read_text(encoding="utf-8"))
+    assert result["external_gets"] == 0
+    assert result["cohort_size"] == 1
+    assert result["methods"]["current"]["extraction_success"] == 1
