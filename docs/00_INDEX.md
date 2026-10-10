@@ -1,6 +1,7 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
 - [クラウド本体＋PC側Codex連携：読取コネクター](CLOUD_PC_CODEX_CONNECTOR.md)
+- [クラウド試験環境の準備](CLOUD_STAGING_READINESS.md)
 
 - [Scrapling導入適合性・隔離取得/描画比較](SCRAPLING_SUITABILITY_EVALUATION.md)
 
