@@ -1,0 +1,27 @@
+LeadHive PC診断ランナー（Windows 10/11 x64）
+
+1. ZIPを右クリックして「すべて展開」。ZIPの中では実行しません。
+2. 展開したフォルダのStart.cmdを開きます。
+3. LeadHiveで保存した入力試行の依頼JSONを選びます。
+4. 自動転送を使う場合、初回だけ信頼するLeadHiveのHTTPS URLを入力します。
+5. RECORDEDならLeadHiveの企業画面で「PC結果の履歴を更新」を押します。
+
+Node.js、npm、Python、Dockerのインストールや管理者権限は不要です。
+SmartScreen等で停止した場合は警告を無効にせず、配布者へ確認してください。
+自動転送にはクラウド側の対応版と有効化が必要です。
+FAILED/DISABLEDでも診断結果はfrontend/test-results/offline-input-runnerに残ります。
+結果JSONは以前と同じ方法で企業画面へ手動取り込みできます。
+接続先を変更する場合は%LOCALAPPDATA%\LeadHive\offline-input-origin.txtを修正します。
+
+これは保存HTMLの入力試行だけを行う診断ツールです。
+実サイトの取得、実フォーム操作、確認画面操作、メール/Form送信、Human承認は行いません。
+入力試行に成功しても営業送信の許可にはなりません。
+依頼JSONには短期限の接続キーが含まれる場合があります。公開・共有しないでください。
+期限切れならLeadHiveから新しい依頼を作成してください。自動再試行はしません。
+
+更新時は新しいZIPを別フォルダへ展開してください。
+同梱manifest.jsonは版とファイルhash、ZIP横の.sha256は配布ファイルhashです。
+hashは破損検出用です。発行者を証明する電子署名ではありません。
+配布元を確認し、Node/Chromiumのセキュリティ更新に合わせて最新版を使ってください。
+Nodeのライセンスはruntime/NODE-LICENSE.txt、Playwrightは各node_modules/LICENSE、
+Chromiumの利用条件・第三者ライセンスはruntime/chromium内の同梱ファイルを参照してください。

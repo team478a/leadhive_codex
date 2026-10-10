@@ -5,4 +5,6 @@ if (process.env.LEADHIVE_OFFLINE_FORM_INPUT !== '1' || !process.env.LEADHIVE_OFF
 }
 export default defineConfig({ testDir: '.', testMatch: 'offline-runner.case.ts', workers: 1,
   timeout: 30_000, outputDir: '../test-results/offline-input-runner', reporter: 'list',
-  use: { trace: 'off', screenshot: 'off', video: 'off' } })
+  use: { trace: 'off', screenshot: 'off', video: 'off',
+    launchOptions: process.env.LEADHIVE_OFFLINE_BROWSER_EXECUTABLE
+      ? { executablePath: process.env.LEADHIVE_OFFLINE_BROWSER_EXECUTABLE } : {} } })

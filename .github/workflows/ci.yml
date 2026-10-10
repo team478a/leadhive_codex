@@ -2,6 +2,33 @@ name: LeadHive checks
 on: [push, pull_request]
 
 jobs:
+  pc-input-package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install chromium
+      - name: Package and test without host runtimes on PATH
+        run: |
+          python scripts/pc_connector/package_runner.py
+          python scripts/pc_connector/verify_package.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pc-input-runner-windows-x64
+          path: |
+            dist/pc-input-*.zip
+            dist/pc-input-*.zip.sha256
+          retention-days: 14
+
   pc-review-connector:
     runs-on: ubuntu-24.04
     steps:
