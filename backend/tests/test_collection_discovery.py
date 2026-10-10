@@ -338,6 +338,10 @@ def test_capture_context_does_not_change_benchmark_or_leak_between_threads():
         ("https://agency.test/blogs/osaka/", "SNS運用代行", "ARTICLE"),
         ("https://agency.test/columns/osaka/", "SNS運用代行", "ARTICLE"),
         ("https://agency.test/osaka/", "大阪おすすめInstagram運用代行会社13選", "ARTICLE"),
+        ("https://publisher.test/area/osaka.html", "大阪のおすすめSNS運用代行会社21社", "ARTICLE"),
+        ("https://publisher.test/area/", "SNS運用代行会社２１社を比較", "ARTICLE"),
+        ("https://publisher.test/area/", "プロが厳選するSNS運用企業 21 社", "ARTICLE"),
+        ("https://publisher.test/area/", "SNS運用代行会社21社ランキング", "ARTICLE"),
         ("https://agency.test/", "大阪のSNS運用会社ランキング", "ARTICLE"),
         (
             "https://agency.test/service/",
@@ -352,6 +356,28 @@ def test_capture_context_does_not_change_benchmark_or_leak_between_threads():
         ("https://agency.test/", "BEASTAR株式会社｜大阪のSNS運用代行", "OFFICIAL_SITE_CANDIDATE"),
         ("https://agency.test/", "おすすめのSNS運用プラン", "OFFICIAL_SITE_CANDIDATE"),
         ("https://agency.test/", "厳選した3つのSNS運用プラン", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/", "SNS運用会社｜累計200社の支援実績", "OFFICIAL_SITE_CANDIDATE"),
+        (
+            "https://agency.test/",
+            "SNS運用会社｜おすすめプラン・21社を支援",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
+        (
+            "https://agency.test/",
+            "SNS運用代行会社21周年｜おすすめプラン",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
+        ("https://agency.test/", "株式会社21｜おすすめのSNS運用プラン", "OFFICIAL_SITE_CANDIDATE"),
+        (
+            "https://agency.test/",
+            "SNS運用会社21社を支援｜おすすめプラン",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
+        (
+            "https://agency.test/",
+            "SNS運用企業２１社の支援実績｜おすすめプラン",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
         ("https://agency.test/recruit/", "当社の採用・求人情報", "OFFICIAL_SITE_CANDIDATE"),
         ("https://agency.test/service/", "検索ランキング改善サービス", "OFFICIAL_SITE_CANDIDATE"),
     ],
@@ -384,7 +410,7 @@ def test_non_company_hits_do_not_spend_goal_slots(auth, db, monkeypatch, fair):
     project, operation_id = setup_job(auth, db, monkeypatch, keywords=["SNS運用代行"], target=2)
     rows = [
         {"title": "SNS求人", "link": "https://townwork.net/job_search/"},
-        {"title": "おすすめSNS運用会社13選", "link": "https://publisher.test/osaka/"},
+        {"title": "大阪のおすすめSNS運用代行会社21社", "link": "https://publisher.test/osaka/"},
         {"title": "SNS運用代行", "link": "https://agency-one.test/service/"},
         {"title": "記事", "link": "https://publisher.test/blogs/osaka/"},
         {"title": "Instagram運用代行", "link": "https://agency-two.test/instagram/"},

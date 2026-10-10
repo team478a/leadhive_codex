@@ -2,6 +2,7 @@
 
 import ast
 import hashlib
+import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -76,6 +77,10 @@ def load_function(source: str, name: str, namespace: dict[str, Any]) -> Any:
             and node.func.id in calls
             or isinstance(node.func, ast.Attribute)
             and node.func.attr in methods
+            or isinstance(node.func, ast.Attribute)
+            and isinstance(node.func.value, ast.Name)
+            and node.func.value.id == "re"
+            and node.func.attr == "search"
         ):
             raise ValueError("Unreviewed source policy call")
     function.returns = None
@@ -95,6 +100,7 @@ def load_function(source: str, name: str, namespace: dict[str, Any]) -> Any:
         "urlunsplit": urlunsplit,
         "parse_qsl": parse_qsl,
         "urlencode": urlencode,
+        "re": re,
         **namespace,
     }
     exec(compile(tree, "<reviewed-source-classification>", "exec"), environment)  # noqa: S102

@@ -16,7 +16,7 @@ from tests.test_collection import FakeResponse
 from tests.test_target_collection import setup_job
 
 
-def replay(auth, db, monkeypatch, pages, *, fair):
+def replay(auth, db, monkeypatch, pages, *, fair, expected_saved=6):
     monkeypatch.setattr(settings, "outbound_enabled", False)
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
     monkeypatch.setattr(settings, "serper_api_key", "test-only-never-transmitted")
@@ -52,16 +52,16 @@ def replay(auth, db, monkeypatch, pages, *, fair):
     operation = db.get(OperationJob, UUID(operation_id))
     assert operation.status == "completed"
     assert operation.payload["collection_progress"]["stop_reason"] == "QUERIES_EXHAUSTED"
-    assert operation.payload["collection_progress"]["collected_count"] == 6
+    assert operation.payload["collection_progress"]["collected_count"] == expected_saved
     assert calls[:2] == [1, 2]  # Filtering must not stop at the old ten saved records.
     assert len(calls) <= 50
     companies = list(db.scalars(select(Company).where(Company.project_id == UUID(project["id"]))))
-    assert len(companies) == 6
+    assert len(companies) == expected_saved
     assert db.scalar(select(func.count()).select_from(OperationJob)) == 1
     hits = list(db.scalars(select(CollectionDiscoveryHit)))
     assert len(hits) == 20
-    assert sum(h.disposition == "SAVED" for h in hits) == 6
-    assert sum(h.disposition == "NON_COMPANY_SOURCE" for h in hits) == 14
+    assert sum(h.disposition == "SAVED" for h in hits) == expected_saved
+    assert sum(h.disposition == "NON_COMPANY_SOURCE" for h in hits) == 20 - expected_saved
     assert all(
         h.disposition != "SAVED"
         for h in hits
@@ -114,7 +114,7 @@ def test_private_saved_raw_worker_replay(auth, db, monkeypatch, fair):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     pages = data["pages"]
     assert [len(page) for page in pages] == [10, 10]
-    replay(auth, db, monkeypatch, pages, fair=fair)
+    replay(auth, db, monkeypatch, pages, fair=fair, expected_saved=5)
 
 
 def test_fingerprint_tracks_loaded_rules_and_code_without_secrets(monkeypatch):
