@@ -16,11 +16,14 @@ test('collection uses a count goal and displays why searching ended', async ({ p
     await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByLabel('収集する新規候補数').fill('150')
+    await expect(page.getByLabel('一次収集の検索回数上限')).toHaveValue('50')
+    await page.getByLabel('一次収集の検索回数上限').fill('2')
     await page.getByLabel('検索キーワード（1行に1件）').fill('SNS運用代行会社')
     const responsePromise = page.waitForResponse(r => r.url().endsWith(`/projects/${fixture.project_id}/operations`) && r.request().method() === 'POST')
     await page.getByRole('button', { name: '収集を開始', exact: true }).click()
     const response = await responsePromise
     expect(response.request().postDataJSON().target_count).toBe(150)
+    expect(response.request().postDataJSON().search_request_limit).toBe(2)
     expect(response.status()).toBe(202)
     const operation = await response.json()
     await page.route(`**/projects/${fixture.project_id}/operations`, async route => {
@@ -33,10 +36,10 @@ test('collection uses a count goal and displays why searching ended', async ({ p
     await expect(page.getByText('新規候補 8 / 150 件・検索 4 / 50 回・新規対象が増えず検索を終了')).toBeVisible()
     await page.route(`**/projects/${fixture.project_id}/operations`, async route => {
       if (route.request().method() !== 'GET') return route.continue()
-      await route.fulfill({ json: [{ ...operation, status: 'completed', collection_progress: { target_count: 150, collected_count: 0, discovered_count: 8, review_required_count: 6, no_match_count: 2, conditions_applied: true, requests: 50, request_budget: 50, stop_reason: 'REQUEST_BUDGET_REACHED' } }] })
+      await route.fulfill({ json: [{ ...operation, status: 'completed', collection_progress: { target_count: 150, collected_count: 0, discovered_count: 8, review_required_count: 6, no_match_count: 2, conditions_applied: true, requests: 2, request_budget: 2, stop_reason: 'REQUEST_BUDGET_REACHED' } }] })
     })
     await page.getByRole('button', { name: '更新', exact: true }).last().click()
-    await expect(page.getByText('条件一致 0 / 150 件・検索 50 / 50 回・検索上限に到達')).toBeVisible()
+    await expect(page.getByText('条件一致 0 / 150 件・検索 2 / 2 回・検索上限に到達')).toBeVisible()
     await expect(page.getByText(/発見候補 8 件・確認待ち 6 件・条件不一致 2 件/)).toBeVisible()
   } finally {
     execFileSync(python, ['../backend/tests/e2e_user.py', 'cleanup'], { env })

@@ -67,6 +67,7 @@ class ReplyQueueItemOut(BaseModel):
 
 class OperationJobInput(Input):
     target_count: int | None = Field(default=None, ge=1, le=500)
+    search_request_limit: int | None = Field(default=None, ge=1, le=50, strict=True)
     condition_request_id: UUID | None = None
     condition_version: int | None = Field(default=None, ge=1)
     condition_hash: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
@@ -81,6 +82,12 @@ class OperationJobInput(Input):
 
     @model_validator(mode="after")
     def validate_operation(self):
+        if self.search_request_limit is not None and not (
+            self.operation_type == "collect_search"
+            and self.source == "serper"
+            and self.target_count is not None
+        ):
+            raise ValueError("検索回数の上限はSerperの件数目標収集のみ指定できます。")
         binding = (self.condition_request_id, self.condition_version, self.condition_hash)
         if any(v is not None for v in binding) and not all(v is not None for v in binding):
             raise ValueError("条件ID・版・hashをすべて指定してください。")
