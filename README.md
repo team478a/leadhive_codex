@@ -4,6 +4,9 @@ LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を�
 
 初めて利用する方は [`docs/82_LEADHIVE_USER_MANUAL.md`](docs/82_LEADHIVE_USER_MANUAL.md) を参照してください。
 
+導入先はクラウド/ローカルを会社ごとに選択する方針です。既存ローカル版を維持し、
+同じコードから提供します。[導入方法と現在の対応状況](docs/DEPLOYMENT_OPTIONS.md)を参照してください。
+
 メール・フォーム送信と追客の運用手順は [`docs/41_SMTP_SETTINGS_MANAGEMENT.md`](docs/41_SMTP_SETTINGS_MANAGEMENT.md) から [`docs/65_BULK_FORM_DELIVERY.md`](docs/66_DELIVERY_CAMPAIGNS_AND_PIPELINE.md) を参照してください。
 
 ## 開発方針
