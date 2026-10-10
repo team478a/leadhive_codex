@@ -1,0 +1,308 @@
+{
+  "records": 17,
+  "saved_sendability": {
+    "HOLD": 15,
+    "BLOCKED": 2
+  },
+  "operation_status": {
+    "TECHNICAL_UNKNOWN": 11,
+    "HUMAN_REQUIRED": 5,
+    "BROWSER_CANDIDATE": 1
+  },
+  "sales_authorization": {
+    "UNKNOWN": 15,
+    "PROHIBITED": 2
+  },
+  "overlapping_categories": {
+    "IDENTITY_UNCONFIRMED": 17,
+    "PURPOSE_UNCONFIRMED": 17,
+    "TECHNICAL_ANALYSIS_INCOMPLETE": 17,
+    "CAPTCHA": 5,
+    "SALES_PROHIBITED": 2
+  },
+  "saved_reason_counts": {
+    "CONTACT_PERMISSION_UNCERTAIN": 15,
+    "DESTINATION_PURPOSE_UNCERTAIN": 17,
+    "FORM_FINGERPRINT_MISSING": 14,
+    "FORM_NOT_READY": 17,
+    "FORM_TECHNICALLY_UNSUPPORTED": 17,
+    "IDENTITY_UNCERTAIN": 17,
+    "REQUIRED_FIELD_UNKNOWN": 14,
+    "SALES_PERMISSION_UNCERTAIN": 17,
+    "CAPTCHA": 5,
+    "DO_NOT_CONTACT": 2,
+    "FORM_ANALYSIS_STALE": 3,
+    "SALES_PROHIBITED": 2
+  },
+  "browser_verified": 0,
+  "real_form_success_rate": null,
+  "external_requests": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "rows": [
+    {
+      "record_number": 1,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 2,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "HUMAN_REQUIRED",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "CAPTCHA",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 3,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "HUMAN_REQUIRED",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "CAPTCHA",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 4,
+      "saved_sendability": "BLOCKED",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "PROHIBITED",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "SALES_PROHIBITED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 5,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 6,
+      "saved_sendability": "BLOCKED",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "PROHIBITED",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "SALES_PROHIBITED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 7,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 8,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 9,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "HUMAN_REQUIRED",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "CAPTCHA",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 10,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 11,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 12,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 13,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "HUMAN_REQUIRED",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "CAPTCHA",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 14,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 15,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "TECHNICAL_UNKNOWN",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 16,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "BROWSER_CANDIDATE",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    },
+    {
+      "record_number": 17,
+      "saved_sendability": "HOLD",
+      "definition_version": "form-operation-poc-v1",
+      "operation_status": "HUMAN_REQUIRED",
+      "sales_authorization": "UNKNOWN",
+      "execution_allowed": false,
+      "human_approved": false,
+      "live_fetch_performed": false,
+      "categories": [
+        "IDENTITY_UNCONFIRMED",
+        "PURPOSE_UNCONFIRMED",
+        "CAPTCHA",
+        "TECHNICAL_ANALYSIS_INCOMPLETE"
+      ]
+    }
+  ],
+  "private_source_sha256": "9d23796a0d6679b5ccaba9597a0723464ee8b0d46130ce1141a9cc841581b695"
+}

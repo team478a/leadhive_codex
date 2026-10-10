@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     scraper_timeout_seconds: float = 15.0
     scraper_max_bytes: int = 2_000_000
     scraper_user_agent: str = "LeadHiveBot/2.0 (+https://leadhive.work/bot)"
+    scrapling_probe_enabled: bool = False
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-luna"
     ai_timeout_seconds: float = 45.0

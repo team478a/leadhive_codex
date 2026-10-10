@@ -62,7 +62,8 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:16
+        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-test-only
@@ -92,7 +93,8 @@ jobs:
     timeout-minutes: 10
     services:
       postgres:
-        image: postgres:16
+        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-test-only
@@ -127,7 +129,8 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:16
+        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-test-only
@@ -176,7 +179,8 @@ jobs:
     runs-on: ubuntu-24.04
     services:
       postgres:
-        image: postgres:16
+        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
+        image: public.ecr.aws/docker/library/postgres:16
         env:
           POSTGRES_USER: postgres
           POSTGRES_PASSWORD: ci-test-only
@@ -210,6 +214,28 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           npm test
+
+  form-browser-poc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:form-browser-poc
+          node form-lab/summarize.mjs test-results/form-browser-poc/report.json test-results/form-browser-poc/summary.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: localhost-form-browser-poc
+          path: frontend/test-results/form-browser-poc
 
   windows-package:
     runs-on: windows-latest

@@ -1,0 +1,2 @@
+# Isolated trial only. Not part of runtime requirements.lock or packaging.
+scrapling[fetchers]==0.4.15
