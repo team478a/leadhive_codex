@@ -325,3 +325,87 @@ def test_capture_context_does_not_change_benchmark_or_leak_between_threads():
 
     with ThreadPoolExecutor(max_workers=3) as executor:
         assert list(executor.map(fetch, range(3))) == ["0", "1", "2"]
+
+
+@pytest.mark.parametrize(
+    "url,title,kind",
+    [
+        ("https://townwork.net/job_search/", "SNS求人", "JOB_PR"),
+        ("https://baitoru.com/kw/sns/", "SNS運用求人", "JOB_PR"),
+        ("https://next.rikunabi.com/job_search/", "SNS運用代行", "JOB_PR"),
+        ("https://www.townwork.net/", "求人", "JOB_PR"),
+        ("https://townwork.net.evil.test/service", "SNS運用代行", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/blogs/osaka/", "SNS運用代行", "ARTICLE"),
+        ("https://agency.test/columns/osaka/", "SNS運用代行", "ARTICLE"),
+        ("https://agency.test/osaka/", "大阪おすすめInstagram運用代行会社13選", "ARTICLE"),
+        ("https://agency.test/", "大阪のSNS運用会社ランキング", "ARTICLE"),
+        (
+            "https://agency.test/service/",
+            "大阪のSNS運用代行・SNS広告運用",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
+        (
+            "https://agency.test/instagram/",
+            "大阪のInstagram運用代行｜戦略・制作・分析",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
+        ("https://agency.test/", "BEASTAR株式会社｜大阪のSNS運用代行", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/", "おすすめのSNS運用プラン", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/", "厳選した3つのSNS運用プラン", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/recruit/", "当社の採用・求人情報", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/service/", "検索ランキング改善サービス", "OFFICIAL_SITE_CANDIDATE"),
+    ],
+)
+def test_search_page_hints_are_shared_with_ingestion(url, title, kind):
+    from pathlib import Path
+
+    from app.services.collection_discovery import classify_candidate
+    from offline_replay.cli import deny_network
+    from offline_replay.source_policy import SourcePolicy
+
+    snapshot = {"link": url, "title": title}
+    expected = classify_hit(snapshot)
+    assert expected[0] == kind
+    assert classify_candidate(collection.Candidate(title, url)) == expected
+    root = Path(__file__).resolve().parents[1]
+    sources = [
+        (root / f"app/services/{name}.py").read_text(encoding="utf-8")
+        for name in ("collection", "scraper", "presence_platforms", "collection_discovery")
+    ]
+    with deny_network():
+        assert SourcePolicy(*sources).classify(snapshot) == expected
+
+
+@pytest.mark.parametrize("fair", [False, True])
+def test_non_company_hits_do_not_spend_goal_slots(auth, db, monkeypatch, fair):
+    from app import worker
+
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
+    project, operation_id = setup_job(auth, db, monkeypatch, keywords=["SNS運用代行"], target=2)
+    rows = [
+        {"title": "SNS求人", "link": "https://townwork.net/job_search/"},
+        {"title": "おすすめSNS運用会社13選", "link": "https://publisher.test/osaka/"},
+        {"title": "SNS運用代行", "link": "https://agency-one.test/service/"},
+        {"title": "記事", "link": "https://publisher.test/blogs/osaka/"},
+        {"title": "Instagram運用代行", "link": "https://agency-two.test/instagram/"},
+        {"title": "超過", "link": "https://agency-three.test/"},
+    ]
+    provider(monkeypatch, rows)
+    monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
+    assert worker.run_once()
+    assert set(db.scalars(select(Company.domain))) == {"agency-one.test", "agency-two.test"}
+    hits = db.scalars(
+        select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
+    ).all()
+    assert [hit.disposition for hit in hits] == [
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
+        "SAVED",
+        "NON_COMPANY_SOURCE",
+        "SAVED",
+        "TARGET_LIMIT",
+    ]
+    assert [hit.classification for hit in hits[:2]] == ["JOB_PR", "ARTICLE"]
+    assert hits[1].snapshot["title"] == rows[1]["title"]
+    assert all(hit.snapshot["region"] == "大阪" for hit in hits)
+    assert auth.get(f"/api/projects/{project['id']}/operations").json()[0]["status"] == "completed"

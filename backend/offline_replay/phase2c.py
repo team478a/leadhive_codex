@@ -130,6 +130,7 @@ def replay(
         "persist_discovery": lambda *args: None,
         "mark_discovery": lambda *args: None,
         "classify_hit": lambda *args: ("OFFICIAL_SITE_CANDIDATE", "SYNTHETIC"),
+        "classify_candidate": lambda *args: ("OFFICIAL_SITE_CANDIDATE", "SYNTHETIC"),
         "persist_usage": lambda *args, **kwargs: None,
         "ExternalServiceError": SourceError,
         "search_serper_page": search,

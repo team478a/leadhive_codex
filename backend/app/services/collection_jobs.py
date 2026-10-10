@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models import CollectionJob, Company, Project, SuppressionEntry
 from app.services.collection import Candidate, canonicalize_url
-from app.services.collection_discovery import classify_hit, mark_discovery
+from app.services.collection_discovery import classify_candidate, mark_discovery
 from app.services.external_presence import capture_candidate
 from app.services.lead_enrichment import observe_candidate
 from app.services.location_identity import location_key
@@ -136,7 +136,7 @@ def save_candidates(
     for candidate in candidates:
         capture_candidate(db, job, candidate)
         if job.source == "serper" and candidate.website_url:
-            kind, _ = classify_hit({"link": candidate.website_url})
+            kind, _ = classify_candidate(candidate)
             if kind in {"SOCIAL", "JOB_PR", "PORTAL_DIRECTORY", "OTHER", "ARTICLE"}:
                 job.excluded_count += 1
                 mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
