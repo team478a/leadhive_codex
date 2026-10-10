@@ -9,7 +9,7 @@ interface Row {
 }
 interface Overview { counts: Record<string, number>; company_total: number; total: number; items: Row[]; analysis_version: string }
 const labels: Record<string, string> = {
-  candidate: '解析条件の候補', unanalyzed: '未解析', prohibited: '営業禁止', do_not_contact: '連絡禁止',
+  candidate: '解析条件の候補', unanalyzed: '未解析', prohibited: '営業NGリスト', do_not_contact: '連絡禁止',
   review: '内容・項目の確認', captcha: 'CAPTCHA・人の操作が必要', confirmation: '確認画面・段階の確認',
   stale: '変更検出・再解析', error: '解析エラー', missing_form: 'フォーム未発見', legacy: '旧解析・再解析',
 }
