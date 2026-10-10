@@ -460,6 +460,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(viewerPanel.getByText('閲覧者は解析結果を確認できます。', { exact: false })).toBeVisible()
   await expect(viewerPanel.getByRole('button', { name: '再解析' })).toBeDisabled()
   await expect(page.getByRole('region', { name: '営業NG登録' }).getByRole('button', { name: '営業NGリストへ移す' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'フォーム入力の実運用記録' }).getByRole('button', { name: '未送信の入力結果を記録' })).toHaveCount(0)
   await expect(viewerPanel.getByRole('region', { name: 'フォームの確認手順' })).toHaveCount(2)
   await expect(viewerPanel.getByRole('region', { name: 'フォームの確認手順' }).first()).toContainText('営業許可を確認した意味ではありません。')
   await expect(viewerPanel.getByRole('button', { name: '優先フォームにする' })).toBeDisabled()
