@@ -64,6 +64,39 @@ def test_empty_first_page_does_not_end_query(auth, db, monkeypatch):
     assert state["requests"] == 2 and state["stop_reason"] == "TARGET_REACHED"
 
 
+def test_nationwide_finishes_prefecture_before_next_and_keeps_global_budget(auth, db, monkeypatch):
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)
+    project, _ = setup_job(auth, db, monkeypatch)
+    monkeypatch.setattr(target_collection, "search_serper_page", lambda *args: [])
+    worker.run_once()
+    response = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json=dict(
+            operation_type="collect_search",
+            source="serper",
+            keywords=["a", "b"],
+            region="全国",
+            region_mode="prefecture_order",
+            target_count=100,
+            search_request_limit=6,
+        ),
+    )
+    assert response.status_code == 202
+    calls = []
+    monkeypatch.setattr(
+        scheduler, "search_serper_page", lambda k, r, n, p: calls.append((k, r, p)) or []
+    )
+    worker.run_once()
+    assert calls == [(k, "北海道", p) for p in (1, 2) for k in ("a", "b")] + [
+        ("a", "青森県", 1),
+        ("b", "青森県", 1),
+    ]
+    state = result(auth, response.json()["id"])["collection_progress"]
+    assert state["requests"] == 6 and state["request_budget"] == 6
+    assert state["planned_queries"] == 94 and state["unsearched_queries"] == 90
+    assert state["stop_reason"] == "REQUEST_BUDGET_REACHED"
+
+
 def test_all_empty_queries_are_bounded_and_not_complete_coverage(auth, db, monkeypatch):
     _, job_id = setup(auth, db, monkeypatch, keywords=["a", "b"], target=3)
     monkeypatch.setattr(scheduler, "search_serper_page", lambda *a: [])

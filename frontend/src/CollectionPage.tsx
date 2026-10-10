@@ -9,6 +9,7 @@ import { ConditionCollectionReport } from './ConditionCollectionReport'
 import { CollectionProgress } from './CollectionProgress'
 import { CollectionDiscovery } from './CollectionDiscovery'
 import { Field } from './forms'
+import { prefectures } from './prefectures'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
@@ -118,6 +119,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         if (useConditions && confirmedConditions?.project_id !== projectId) throw new Error('対象条件を先に確定してください。')
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
           operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
+          ...(source === 'serper' ? { region_mode: 'prefecture_order' } : {}),
           presence_search: presencePlan,
           ...(source === 'serper' ? { target_count: targetCount, search_request_limit: searchRequestLimit } : {}),
           ...(useConditions && confirmedConditions ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
@@ -239,13 +241,24 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
             placeholder={source === 'url' ? 'https://example.com' : '検索キーワード'} />
         </Field>}
         {(['serper', 'google_places', 'gbizinfo'].includes(source)) && <div className="grid gap-5 sm:grid-cols-2">
-          <Field label="地域"><input required maxLength={500} value={region} onChange={e => setRegion(e.target.value)} /></Field>
+          <Field label="都道府県"><select required value={region} onChange={e => setRegion(e.target.value)}>
+            <option value="全国">全国</option>
+            {prefectures.map(prefecture => <option key={prefecture} value={prefecture}>{prefecture}</option>)}
+            {region !== '全国' && !prefectures.some(prefecture => prefecture === region) && <option value={region}>{region}（プロジェクトの地域）</option>}
+          </select></Field>
           {source === 'serper' ? <Field label="収集する新規候補数"><input type="number" min={1} max={500} required value={targetCount}
             onChange={e => setTargetCount(Number(e.target.value))} /></Field> : <Field label="キーワードごとの最大件数"><input type="number" min={1}
             max={source === 'google_places' ? 60 : 100} value={maxResults}
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>}
         </div>}
         {source === 'serper' && <>
+          <section aria-label="検索の組み合わせ" className="muted text-sm">
+            <p>{region === '全国' ? '全国は北海道 → 青森県 → 岩手県 → … → 沖縄県の順に検索します。県内のキーワード検索が終了したら次の県へ進みます。' : `${region}と各キーワードを組み合わせて検索します。`}</p>
+            <p>目標件数・検索上限に達すると途中で停止します。全国のすべての県を必ず検索する設定ではありません。</p>
+            <details><summary>検索キーワードと地域の組み合わせを確認</summary><ul>
+              {(region === '全国' ? prefectures : [region]).map(area => <li key={area}>{keywords.split('\n').map(value => value.trim()).filter(Boolean).map(keyword => `${keyword} ${area}`).join(' / ') || `キーワード未入力 ${area}`}</li>)}
+            </ul></details>
+          </section>
           <Field label="一次収集の検索回数上限"><input type="number" min={1} max={50} required value={searchRequestLimit}
             onChange={event => setSearchRequestLimit(Number(event.target.value))} disabled={loading} /></Field>
           <p className="muted text-sm">目標件数まで収集します。重複・対象外は目標件数に含めません。一次収集の検索は全検索語・ページ・再試行を合わせて最大{searchRequestLimit}回で停止します。追加調査は別の上限です。少量検証では追加調査をOFFにしてください。保存候補の所在地・営業適性は別途確認が必要です。</p>
