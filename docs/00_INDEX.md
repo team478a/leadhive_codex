@@ -2,6 +2,7 @@
 
 - [クラウド本体＋PC側Codex連携：読取コネクター](CLOUD_PC_CODEX_CONNECTOR.md)
 - [クラウド試験環境の準備](CLOUD_STAGING_READINESS.md)
+- [Render試験配置案・費用・設定手順](RENDER_STAGING_SETUP.md)
 
 - [Scrapling導入適合性・隔離取得/描画比較](SCRAPLING_SUITABILITY_EVALUATION.md)
 

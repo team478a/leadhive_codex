@@ -1,0 +1,84 @@
+# Candidate only. Creating this Blueprint provisions PAID resources.
+# Review resource names, prices and secrets before syncing it in Render.
+previews:
+  generation: "off"
+
+services:
+  - type: pserv
+    name: leadhive-staging-api
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    branch: main
+    autoDeployTrigger: "off"
+    numInstances: 1
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    preDeployCommand: python -m alembic upgrade head
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: leadhive-staging-db
+          property: connectionString
+      - key: SETTINGS_ENCRYPTION_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: PUBLIC_APP_URL
+        sync: false
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: AGENT_FEATURES_ENABLED
+        value: "false"
+      - key: OUTBOUND_ENABLED
+        value: "false"
+      - key: WORKER_PAUSED
+        value: "true"
+      - key: HUMAN_APPROVED_EMAIL_ENABLED
+        value: "false"
+      - key: HUMAN_APPROVED_FORM_ENABLED
+        value: "false"
+      - key: LEGACY_FORM_DELIVERY_ENABLED
+        value: "false"
+      - key: EMAIL_FEEDBACK_WEBHOOK_ENABLED
+        value: "false"
+      - key: FORM_ADAPTER_PREPARATION_ENABLED
+        value: "false"
+      - key: CF7_CANDIDATE_PREPARATION_ENABLED
+        value: "false"
+      - key: FORM_ADAPTER_LAB_EXECUTION_ENABLED
+        value: "false"
+      - key: FORM_CONFIRMATION_LAB_ENABLED
+        value: "false"
+
+  - type: web
+    name: leadhive-staging-web
+    runtime: docker
+    region: singapore
+    plan: 0.5c-512mb
+    branch: main
+    autoDeployTrigger: "off"
+    numInstances: 1
+    dockerfilePath: frontend/Dockerfile.cloud
+    dockerContext: .
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: "10000"
+      - key: API_HOST
+        fromService:
+          type: pserv
+          name: leadhive-staging-api
+          property: host
+
+databases:
+  - name: leadhive-staging-db
+    region: singapore
+    plan: 0.1c-256mb
+    postgresMajorVersion: "16"
+    databaseName: leadhive_staging
+    diskSizeGB: 1
+    storageAutoscalingEnabled: false
+    ipAllowList: []
