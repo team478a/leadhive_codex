@@ -105,8 +105,10 @@ def test_multipart_without_upload_remains_blocked_before_dispatch():
     assert form.button["type"] == "submit"
     compatibility = assess_delivery_compatibility(form, URL)
     assert not compatibility.supported
-    # Current message describes enctype, not evidence of a required attachment.
-    assert "ファイル送信用" in compatibility.reason
+    # Multipart is an unverified transport, not evidence of a file input.
+    assert "multipart" in compatibility.reason
+    assert "未検証" in compatibility.reason
+    assert "ファイル送信用" not in compatibility.reason
     with pytest.raises(FormDeliveryError) as error:
         _parse_form(html, URL)
     assert error.value.code == "manual_required"
