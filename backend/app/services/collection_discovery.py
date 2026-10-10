@@ -9,7 +9,7 @@ from sqlalchemy import func, select
 
 from app.config import settings
 from app.models import CollectionDiscoveryHit, CollectionJob
-from app.services.collection import canonicalize_url
+from app.services.collection import Candidate, canonicalize_url
 from app.services.discovery_capture import DiscoveryCapture
 from app.services.presence_platforms import DOMAINS, classify
 from app.services.scraper import is_aggregator_domain
@@ -19,6 +19,38 @@ JOBS = {"INDEED", "KYUJIN_BOX"}
 # These are sources about providers, not the provider's own website. Keep their
 # Raw observations without creating Company records from Serper results.
 THIRD_PARTY_DOMAINS = {"web-kanji.com", "probel.jp"}
+JOB_SOURCE_DOMAINS = {"townwork.net", "baitoru.com", "next.rikunabi.com"}
+ARTICLE_PATH_SEGMENTS = {"blog", "blogs", "article", "articles", "column", "columns"}
+COMPARISON_TITLE_MARKERS = {
+    "会社比較",
+    "企業比較",
+    "会社一覧",
+    "企業一覧",
+    "会社ランキング",
+    "企業ランキング",
+}
+NUMBERED_SELECTION_MARKERS = {
+    "0選",
+    "1選",
+    "2選",
+    "3選",
+    "4選",
+    "5選",
+    "6選",
+    "7選",
+    "8選",
+    "9選",
+    "０選",
+    "１選",
+    "２選",
+    "３選",
+    "４選",
+    "５選",
+    "６選",
+    "７選",
+    "８選",
+    "９選",
+}
 
 
 def classify_hit(snapshot: dict) -> tuple[str, str]:
@@ -46,7 +78,9 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
     )
     if platform in SOCIAL or domain == "twitter.com" or domain.endswith(".twitter.com"):
         return "SOCIAL", "EXTERNAL_PLATFORM"
-    if platform in JOBS:
+    if platform in JOBS or any(
+        domain == host or domain.endswith("." + host) for host in JOB_SOURCE_DOMAINS
+    ):
         return "JOB_PR", "EXTERNAL_PLATFORM"
     if (
         platform
@@ -57,9 +91,20 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
     path = urlsplit(url).path.lower()
     if path.endswith((".pdf", ".jpg", ".png")):
         return "OTHER", "NON_HTML_CANDIDATE"
-    if any(part in path.split("/") for part in ("blog", "article", "articles", "column")):
+    if any(part in path.split("/") for part in ARTICLE_PATH_SEGMENTS):
         return "ARTICLE", "PATH_HINT_REQUIRES_REVIEW"
+    title = snapshot.get("title") or ""
+    if any(marker in title for marker in COMPARISON_TITLE_MARKERS) or (
+        any(marker in title for marker in NUMBERED_SELECTION_MARKERS)
+        and any(marker in title for marker in ("会社", "企業", "おすすめ", "比較", "厳選"))
+    ):
+        return "ARTICLE", "COMPARISON_TITLE_REQUIRES_REVIEW"
     return "OFFICIAL_SITE_CANDIDATE", "OFFICIAL_IDENTITY_NOT_VERIFIED"
+
+
+def classify_candidate(candidate: Candidate) -> tuple[str, str]:
+    """Use the same search title at quota selection and ingestion as in the Raw ledger."""
+    return classify_hit({"link": candidate.website_url or "", "title": candidate.company_name})
 
 
 def persist_discovery(db, job: CollectionJob, buffer: DiscoveryCapture):

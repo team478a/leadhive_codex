@@ -121,6 +121,15 @@ class SourcePolicy:
                 "DOMAINS": domains,
                 "SOCIAL": constant(discovery, "SOCIAL"),
                 "JOBS": constant(discovery, "JOBS"),
+                **{
+                    name: constant(discovery, name, optional=True)
+                    for name in (
+                        "JOB_SOURCE_DOMAINS",
+                        "ARTICLE_PATH_SEGMENTS",
+                        "COMPARISON_TITLE_MARKERS",
+                        "NUMBERED_SELECTION_MARKERS",
+                    )
+                },
                 "THIRD_PARTY_DOMAINS": constant(discovery, "THIRD_PARTY_DOMAINS", optional=True),
             },
         )

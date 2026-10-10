@@ -8,7 +8,7 @@ from app.models import CollectionJob, Company, LeadSourceObservation
 from app.schema_external_presence import PresenceSearchPlan
 from app.services.collection import ExternalServiceError, canonicalize_url, search_serper_page
 from app.services.collection_conditions import evaluate
-from app.services.collection_discovery import classify_hit, mark_discovery, persist_discovery
+from app.services.collection_discovery import classify_candidate, mark_discovery, persist_discovery
 from app.services.collection_jobs import (
     fail_job,
     is_duplicate,
@@ -66,7 +66,7 @@ def bounded_candidates(db, job, candidates, remaining):
             or (domain and is_aggregator_domain(domain))
             or (
                 candidate.website_url
-                and classify_hit({"link": candidate.website_url})[0]
+                and classify_candidate(candidate)[0]
                 in {"SOCIAL", "JOB_PR", "PORTAL_DIRECTORY", "OTHER", "ARTICLE"}
             )
         ):
