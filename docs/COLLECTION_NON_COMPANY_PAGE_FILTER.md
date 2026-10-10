@@ -37,9 +37,9 @@
 ## テスト結果
 
 - Backend関連: 103 PASS（discovery / target collection / scheduler / collection）。
-- オフライン比較・SourcePolicy・fair search policy: 40 PASS。
+- オフライン比較・SourcePolicy・fair search policy: 59 PASS（全offline_tests）。
 - Ruff check / format: PASS。
-- mypy: 4対象ファイル PASS。
+- mypy: 5対象ファイル PASS。
 - API import: `LeadHive V2` 起動対象の読み込み PASS。
 - 専用PostgreSQLテストDBで既存Migration upgrade/head・Alembic model diff確認（テストsession fixture）PASS。
 - Frontend変更なし。Frontend・全Backend・E2E等の全体回帰はPRのGitHub CIで確認。
