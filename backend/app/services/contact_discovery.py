@@ -94,7 +94,7 @@ def navigation_links(
             continue
         label = element.get_text(" ", strip=True).lower()
         if (
-            re.search(r"^/(?:blog|news|lab|column|article|srv)(?:/|$)", parsed.path.lower())
+            re.search(r"^/(?:blog|news|post|lab|column|article|srv)(?:/|$)", parsed.path.lower())
             and label not in HINTS
         ):
             continue
@@ -117,6 +117,10 @@ def navigation_links(
             if path_hint
             else 0
         )
+        # Dedicated contact paths beat incidental article text, including a
+        # footer link whose wording is longer than the exact contact label.
+        if path_hint:
+            score += 10
         if contact_context and (
             element.name == "iframe"
             or any(hint in label for hint in ("フォーム", "入力", "こちら", "進む"))
