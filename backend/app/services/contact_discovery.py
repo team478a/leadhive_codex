@@ -1,5 +1,6 @@
 """Bounded, GET-only contact navigation; discovered links are not send permission."""
 
+import ipaddress
 import re
 from collections.abc import Iterator
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -19,6 +20,43 @@ HINTS = (
     "ご相談",
 )
 FALLBACK_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
+
+
+def external_contact_links(html: str, base: str, root: str) -> list[dict[str, str]]:
+    """Unverified provenance only; these URLs are never added to the crawl queue."""
+    candidates: dict[str, dict[str, str]] = {}
+    for anchor in BeautifulSoup(html, "html.parser").select("a[href]"):
+        label = re.sub(r"\s+", "", anchor.get_text(" ", strip=True)).lower()
+        if label not in {re.sub(r"\s+", "", hint) for hint in HINTS}:
+            continue
+        try:
+            parsed = urlsplit(urljoin(base, str(anchor.get("href") or "")))
+            host = (parsed.hostname or "").lower().rstrip(".")
+            if (
+                parsed.scheme != "https"
+                or not host
+                or parsed.username
+                or parsed.password
+                or parsed.port not in {None, 443}
+                or "." not in host
+                or host.endswith((".localhost", ".local", ".internal", ".test"))
+                or same_site(root, parsed.geturl())
+            ):
+                continue
+            try:
+                if not ipaddress.ip_address(host).is_global:
+                    continue
+            except ValueError:
+                pass
+            url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", parsed.query, ""))
+            if parsed.path.lower().endswith((".pdf", ".jpg", ".png", ".zip")):
+                continue
+        except ValueError:
+            continue
+        candidates.setdefault(url, {"url": url, "source_url": base, "label": label[:100]})
+        if len(candidates) >= 8:
+            break
+    return list(candidates.values())
 
 
 def embedded_form_providers(html: str) -> list[str]:

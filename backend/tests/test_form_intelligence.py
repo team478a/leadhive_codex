@@ -62,6 +62,48 @@ def install_pages(monkeypatch, pages):
     monkeypatch.setattr(analyzer, "get_form_decision_provider", lambda: None)
 
 
+def test_official_external_contact_logged_without_fetch_or_permission(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    requested = []
+    root = "https://form-intelligence.example"
+    external = "https://1lejend.com/stepmail/kd.php?no=bAorms"
+    install_pages(
+        monkeypatch,
+        {
+            root: f'<a href="{external}">お問い合わせ</a><a href="/contact">Contact</a>',
+            root + "/contact": f'<a href="{external}">お問い合わせ</a>',
+        },
+    )
+    original_fetch = FakeFetcher.fetch_html
+
+    def track_fetch(self, url):
+        requested.append(url)
+        return original_fetch(self, url)
+
+    monkeypatch.setattr(FakeFetcher, "fetch_html", track_fetch)
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert external not in requested
+    assert all(not profile.form_found and not profile.delivery_supported for profile in profiles)
+    assert all(profile.sales_contact_status == "UNCERTAIN" for profile in profiles)
+    events = list(
+        db.scalars(
+            select(FormAnalysisLog).where(
+                FormAnalysisLog.company_id == company.id,
+                FormAnalysisLog.details["finding"].astext == "EXTERNAL_CONTACT_UNVERIFIED",
+            )
+        )
+    )
+    assert len(events) == 1
+    assert events[0].details == {
+        "url": external,
+        "source_url": root,
+        "label": "お問い合わせ",
+        "finding": "EXTERNAL_CONTACT_UNVERIFIED",
+        "discovery_method": "OFFICIAL_SITE_LINK",
+    }
+    assert not company.contact_url
+
+
 def test_guidance_iframe_and_original_form_index(auth, db, monkeypatch):
     _, company = make_company(auth, db)
     install_pages(

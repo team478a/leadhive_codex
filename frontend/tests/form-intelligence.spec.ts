@@ -68,6 +68,12 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
 
   const formPanel = page.getByRole('heading', { name: 'フォーム事前解析' })
     .locator('xpath=ancestor::section[1]')
+  const externalCandidate = formPanel.getByRole('region', { name: '外部問い合わせ候補' })
+  await expect(externalCandidate).toContainText('営業可否は未確認')
+  await expect(externalCandidate).toContainText('自動取得・入力・送信は行っていません')
+  await expect(externalCandidate.getByRole('link')).toHaveAttribute('href', 'https://external-contact.example/entry?no=test-only')
+  await expect(externalCandidate.getByRole('link')).toHaveAttribute('rel', 'noreferrer')
+  await expect(externalCandidate.getByRole('button')).toHaveCount(0)
   await formPanel.getByText(/解析ログ（/).click()
   await expect(formPanel.getByText('取得したHTMLで問い合わせフォーム未検出', { exact: true })).toBeVisible()
   await expect(formPanel.getByText('外部埋め込みあり・表示後の確認が必要', { exact: true })).toBeVisible()
