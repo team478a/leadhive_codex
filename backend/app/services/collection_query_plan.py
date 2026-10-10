@@ -15,7 +15,7 @@ from app.services.collection_search_policy import (
 
 
 def plan_snapshot(payload):
-    return {
+    snapshot = {
         "version": VERSION,
         "keywords": list(dict.fromkeys(payload["keywords"])),
         "region": payload["region"],
@@ -30,6 +30,21 @@ def plan_snapshot(payload):
         "max_page_attempts": MAX_PAGE_ATTEMPTS,
         "stagnant_pages": STAGNANT_PAGES,
     }
+    # Omit the default so hashes of existing jobs remain unchanged.
+    if payload.get("region_mode") == "prefecture_order":
+        snapshot["region_mode"] = "prefecture_order"
+    return snapshot
+
+
+def planned_queries(snapshot):
+    from app.services.scraper import PREFECTURES
+
+    regions = (
+        PREFECTURES
+        if snapshot.get("region_mode") == "prefecture_order" and snapshot["region"] == "全国"
+        else (snapshot["region"],)
+    )
+    return [(keyword, region) for region in regions for keyword in snapshot["keywords"]]
 
 
 def plan_hash(snapshot):
@@ -40,7 +55,10 @@ def plan_hash(snapshot):
 
 def stamp_plan(job):
     if (
-        settings.collection_fair_scheduler_enabled
+        (
+            settings.collection_fair_scheduler_enabled
+            or job.payload.get("region_mode") == "prefecture_order"
+        )
         and job.operation_type == "collect_search"
         and job.payload.get("target_count")
         and job.payload.get("source") == "serper"

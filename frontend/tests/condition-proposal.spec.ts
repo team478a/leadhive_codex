@@ -34,7 +34,7 @@ test('Text proposal needs human confirmation and applies the confirmed search fi
     await expect(page.getByLabel('条件4の種類')).toHaveValue('OFFICIAL_SITE')
     await page.getByRole('button', { name: '条件を確認して確定', exact: true }).click()
     await expect(page.getByRole('checkbox', { name: /確定条件を今回の収集に使う/ })).toBeChecked()
-    await expect(page.getByLabel('地域', { exact: true })).toHaveValue('姫路市')
+    await expect(page.getByRole('combobox', { name: '都道府県', exact: true })).toHaveValue('姫路市')
     await expect(page.getByLabel('検索キーワード（1行に1件）')).toHaveValue('美容院')
     await expect(page.getByLabel('収集する新規候補数')).toHaveValue('100')
     expect(starts).toEqual([])
