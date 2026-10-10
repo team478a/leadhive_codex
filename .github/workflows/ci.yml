@@ -246,6 +246,7 @@ jobs:
           npx playwright install --with-deps chromium
           npm run test:form-browser-poc
           node form-lab/summarize.mjs test-results/form-browser-poc/report.json test-results/form-browser-poc/summary.json
+          npx playwright test --config form-lab/handoff-ui.config.ts
       - uses: actions/upload-artifact@v7
         if: always()
         with:
