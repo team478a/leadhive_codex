@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
@@ -19,7 +20,7 @@ test('stored form overview filters, paginates and does not authorize sending', a
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+  await navigateWorkspace(page, '▤ 企業一覧')
   await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: 'フォーム候補の集計' })
   await expect(panel.getByText('プロジェクト全体: 27社 / 現行解析: 1.2', { exact: true })).toBeVisible()

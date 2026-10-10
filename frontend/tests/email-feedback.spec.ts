@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
@@ -9,7 +10,7 @@ test('confirmed complaint stops email and requires owner reauthentication', asyn
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✉ メール配信状況', exact: true }).click()
+  await navigateWorkspace(page, '✉ メール配信状況')
   await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: '配信結果と安全停止' })
   await panel.getByRole('button', { name: '確認済みの配信結果を登録', exact: true }).click()

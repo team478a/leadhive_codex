@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -35,7 +36,7 @@ test('raw observations explain target truncation without claiming official confi
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await expect(page.getByText('新規候補 49 / 500 件・検索 50 / 50 回・検索上限に到達')).toBeVisible()
     await expect(page.getByText(/検索語 20 件・未検索 0 件・継続候補 20 件/)).toBeVisible()

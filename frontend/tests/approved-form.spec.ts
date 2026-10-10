@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
@@ -35,7 +36,7 @@ test('approved form reservations show disabled execution, cancellation and unkno
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: '承認済みフォーム予約' })
   await panel.getByRole('button', { name: /フォーム予約テスト会社 の承認済みフォームを予約/ }).click()
@@ -98,7 +99,7 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: 'フォーム一括承認と上限管理' })
   await panel.getByRole('button', { name: 'このページのフォームをまとめて選択' }).click()

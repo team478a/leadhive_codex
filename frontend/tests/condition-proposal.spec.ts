@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -19,7 +20,7 @@ test('Text proposal needs human confirmation and applies the confirmed search fi
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('対象条件を確認・分類する', { exact: true }).click()
     await page.getByLabel('探したい対象').fill('姫路市の美容院でInstagramあり\n現在募集中')
@@ -73,7 +74,7 @@ test('Purpose sentence preserves mandatory recruiting and target count without s
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('対象条件を確認・分類する', { exact: true }).click()
     await page.getByLabel('探したい対象').fill('兵庫県姫路市の美容院で、HotPepper Beautyに掲載していて、現在求人募集中の店舗を100件探す。できればInstagramと公式サイトがある店舗。')
@@ -98,7 +99,7 @@ test('Purpose sentence preserves mandatory recruiting and target count without s
     await expect(page.getByRole('region', { name: '条件判定結果' })).toContainText('目標 20件（達成保証なし）')
     await expect(page.getByLabel('収集する新規候補数')).toHaveValue('20')
     await page.reload()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('対象条件を確認・分類する', { exact: true }).click()
     await expect(count).toHaveValue('20')
@@ -125,7 +126,7 @@ test('Condition summary distinguishes shortfall, partial counts and errors witho
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('対象条件を確認・分類する', { exact: true }).click()
     await page.getByLabel('条件1の種類').selectOption('ACTIVE_JOB')

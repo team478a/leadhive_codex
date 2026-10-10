@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect, type Page } from '@playwright/test'
 
@@ -448,7 +449,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     data: { email: process.env.E2E_MEMBER_EMAIL, role: 'viewer' },
   })
   expect(memberResponse.ok()).toBeTruthy()
-  await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+  await navigateWorkspace(page, 'ログアウト')
   await login(page, process.env.E2E_MEMBER_EMAIL!, process.env.E2E_MEMBER_PASSWORD!)
   const viewerProjectCard = page.getByRole('article').filter({
     has: page.getByRole('heading', { name: projectName, exact: true }),
@@ -478,7 +479,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(viewerPanel.getByText('保存されたフォーム情報が変わりました。この確認結果は以前の情報です。', { exact: true })).toBeVisible()
   await expect(viewerPanel.getByRole('button', { name: 'このフォームだけ再解析', exact: true })).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+  await navigateWorkspace(page, 'ログアウト')
   await login(page, process.env.E2E_EMAIL!, process.env.E2E_PASSWORD!)
   const deleteResponse = await page.request.delete(`/api/projects/${project.id}`)
   expect(deleteResponse.ok()).toBeTruthy()

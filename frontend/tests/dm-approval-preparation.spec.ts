@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -17,7 +18,7 @@ test('Human can prepare fixed PENDING proposal without approving or sending', as
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByRole('button', { name: '詳細', exact: true }).first().click()
     const panel = page.getByRole('region', { name: 'リスト完成の根拠' })
@@ -68,7 +69,7 @@ test('Human can prepare fixed PENDING proposal without approving or sending', as
     expect(rows[0].delivery_funnel).toMatchObject({ prepared_ever: true, human_approved: false, sent: false, attempt_count: 0 })
     await expect(handoff.getByRole('button', { name: '承認待ち提案を準備', exact: true })).toHaveCount(0)
     await page.reload()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByRole('button', { name: '詳細', exact: true }).first().click()
     await expect(saved).toContainText('下書き準備済み（DRAFT_PREPARED）')

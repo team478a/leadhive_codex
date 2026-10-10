@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -20,7 +21,7 @@ test('stored CF7 choices, human proof, source invalidation and revision never di
   await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: 'CF7候補の準備', exact: true })
   await panel.getByRole('button', { name: 'CF7候補の会社を選ぶ', exact: true }).click()

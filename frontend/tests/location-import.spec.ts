@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('location CSV keeps shared sites and prevents repeat import', async ({ page }, testInfo) => {
@@ -18,7 +19,7 @@ test('location CSV keeps shared sites and prevents repeat import', async ({ page
   expect(result.status()).toBe(201)
   const projectId = (await result.json()).id
   await page.reload()
-  await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+  await navigateWorkspace(page, '⌕ 企業収集')
   await page.getByLabel('プロジェクト', { exact: true }).selectOption(projectId)
   await page.getByLabel('収集元', { exact: true }).selectOption('csv')
   await page.getByLabel('取り込み単位', { exact: true }).selectOption('location')
@@ -44,7 +45,7 @@ test('location CSV keeps shared sites and prevents repeat import', async ({ page
   const again = await submit()
   expect(again.saved_count).toBe(0)
   expect(again.duplicate_count).toBe(4)
-  await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+  await navigateWorkspace(page, '▤ 企業一覧')
   await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(projectId)
   const east = page.getByTestId('company-list-item').filter({ has: page.getByText('店舗東', { exact: true }) })
   await expect(east).toBeVisible()

@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -17,7 +18,7 @@ test('controlled plan is prepared, human approved and reserved without execution
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+    await navigateWorkspace(page, '✓ 承認キュー')
     await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
     await page.getByLabel('フォーム準備方式').selectOption('adapter')
     await page.getByRole('button', { name: 'フォーム候補を選ぶ', exact: true }).click()
