@@ -1,0 +1,26 @@
+name: Scrapling isolated probe
+on: [push, pull_request]
+
+jobs:
+  offline-adapter:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      PYTHONPATH: backend
+      OUTBOUND_ENABLED: 'false'
+      SCRAPLING_PROBE_ENABLED: 'false'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: backend/scrapling-lab/requirements.lock
+      - run: |
+          python -m pip install -r backend/scrapling-lab/requirements.lock
+          python -m playwright install --with-deps chromium
+      - run: |
+          python -m pytest backend/scrapling-lab/tests -q
+          python -m ruff check backend/app/services/scrapling_adapter.py backend/app/services/scrapling_render_worker.py backend/offline_replay/scrapling_metrics.py backend/scripts/compare_scrapling.py backend/scrapling-lab/tests
+          python -m ruff format --check backend
+          python -m mypy --check-untyped-defs --follow-imports=silent --ignore-missing-imports backend/app/services/scrapling_adapter.py backend/app/services/scrapling_render_worker.py backend/offline_replay/scrapling_metrics.py backend/scripts/compare_scrapling.py
