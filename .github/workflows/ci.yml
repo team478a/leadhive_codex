@@ -64,7 +64,7 @@ jobs:
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/condition_summary.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/sending_window.py backend/app/sending_window_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/target_collection.py
-          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_discovery.py backend/app/services/discovery_capture.py backend/app/services/collection_discovery.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_discovery.py backend/app/services/discovery_capture.py backend/app/services/collection_discovery.py backend/app/services/collection_runtime.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_scheduler.py backend/app/services/collection_query_plan.py backend/app/services/collection_search_policy.py backend/app/services/collection_scheduler.py backend/app/services/collection.py backend/app/services/collection_jobs.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_intelligence/fields.py backend/app/services/form_profile_delivery.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_review_material.py
