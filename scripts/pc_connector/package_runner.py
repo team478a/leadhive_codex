@@ -13,6 +13,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = (
+    "frontend/form-lab/public-get.ts",
+    "frontend/form-lab/live-input.ts",
+    "frontend/form-lab/live-runner.case.ts",
+    "frontend/form-lab/live-runner.config.ts",
+    "frontend/src/liveInputContract.ts",
+    "scripts/pc_connector/Run-Live-Input.cmd",
+    "scripts/pc_connector/Run-Live-Input.ps1",
     "frontend/form-lab/offline-input.ts",
     "frontend/form-lab/offline-runner.case.ts",
     "frontend/form-lab/offline-runner.config.ts",
@@ -102,6 +109,9 @@ def main():
     # Root entry points need the repository-shaped script directory.
     (output / "Start.cmd").write_bytes(
         b'@echo off\r\ncall "%~dp0scripts\\pc_connector\\Run-Offline-Input.cmd"\r\n'
+    )
+    (output / "Start-Live-Input.cmd").write_bytes(
+        b'@echo off\r\ncall "%~dp0scripts\\pc_connector\\Run-Live-Input.cmd"\r\n'
     )
     shutil.copyfile(
         output / "docs/PC_INPUT_RUNNER_QUICKSTART.txt", output / "README-FIRST.txt"

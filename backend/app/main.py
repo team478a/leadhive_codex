@@ -39,6 +39,7 @@ from app.form_operations_routes import router as form_operations_router
 from app.form_readiness_routes import router as form_readiness_router
 from app.improvement_routes import router as improvement_router
 from app.lead_completion_routes import router as lead_completion_router
+from app.live_input_routes import router as live_input_router
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
@@ -73,6 +74,7 @@ app = FastAPI(
 app.include_router(raw_collection_router)
 app.include_router(source_exclusion_router)
 app.include_router(pc_input_router)
+app.include_router(live_input_router)
 app.include_router(sending_window_router)
 app.include_router(collection_condition_router)
 app.include_router(raw_pair_router)
