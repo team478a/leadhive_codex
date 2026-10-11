@@ -10,7 +10,8 @@
     "build": "tsc --noEmit && vite build",
     "test": "playwright test",
     "test:form-browser-poc": "playwright test --config form-lab/playwright.config.ts",
-    "trial:offline-form-input": "playwright test --config form-lab/offline-runner.config.ts"
+    "trial:offline-form-input": "playwright test --config form-lab/offline-runner.config.ts",
+    "trial:rendered-form-input": "playwright test --config form-lab/rendered-runner.config.ts"
   },
   "dependencies": {
     "react": "^19.0.0", "react-dom": "^19.0.0"
