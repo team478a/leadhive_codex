@@ -1,6 +1,6 @@
 /** Isolated input trial. Default: archived HTML. Optional bounded GET loader; never dispatch. */
 import { createHash } from 'node:crypto'
-import type { Browser, Frame } from '@playwright/test'
+import type { Browser, Locator } from '@playwright/test'
 
 export type OfflineInput = {
   html: string
@@ -35,9 +35,13 @@ export type LiveLoader = { fetch: (url: string, kind: 'script' | 'stylesheet') =
 const digest = (value: unknown) => htmlHash(JSON.stringify(value))
 const pairs = (value: Record<string, unknown>) => Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
 
-async function inspect(frame: Frame) {
-  return frame.locator('form').evaluate(form => ({
+async function inspect(scope: Locator) {
+  return scope.evaluate(form => ({
+    tag: form.tagName, id: form.id,
     action: form.getAttribute('action'), method: form.getAttribute('method'),
+    buttons: [...form.querySelectorAll('button, input[type=submit]')].map(node => ({
+      text: node.textContent, type: node.getAttribute('type'), disabled: node.matches(':disabled'),
+    })),
     controls: [...form.querySelectorAll('input, textarea, select')].map(node => {
       const field = node as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
       return { name: field.name, tag: field.tagName.toLowerCase(), type: field.type,
@@ -47,6 +51,34 @@ async function inspect(frame: Frame) {
           : ['checkbox', 'radio'].includes(field.type) ? [field.value] : [] }
     }),
   }))
+}
+
+// A custom contact container is an input candidate, never an executable form.
+const customSelector = 'div, section, fieldset, [role="form"]'
+async function customCandidates(scopes: Locator): Promise<number[]> {
+  return scopes.evaluateAll(nodes => {
+    const candidates = nodes.filter(node => {
+      if (node.closest('form') || node.querySelector('form')) return false
+      if (node.getAttribute('role') !== 'form'
+        && !/contact|inquiry|inquiries|問い合わせ|問合せ/i.test(node.id + ' ' + (node.getAttribute('aria-label') || ''))) return false
+      for (let ancestor: Element | null = node; ancestor; ancestor = ancestor.parentElement) {
+        const style = getComputedStyle(ancestor)
+        if (ancestor.hasAttribute('hidden') || ancestor.getAttribute('aria-hidden') === 'true'
+          || style.display === 'none' || style.visibility === 'hidden') return false
+      }
+      const controls = [...node.querySelectorAll('input, textarea, select')] as HTMLInputElement[]
+      if (!controls.length || controls.length > 100 || controls.some(field => field.hasAttribute('form')
+        || ['password', 'search'].includes(field.type) || !field.name)) return false
+      if (new Set(controls.map(field => field.name)).size !== controls.length) return false
+      return controls.some(field => field.type === 'email' && !field.matches(':disabled'))
+        && controls.some(field => field.tagName === 'TEXTAREA' && !field.matches(':disabled'))
+        && [...node.querySelectorAll('button, input[type=submit]')].some(button => !button.matches(':disabled')
+          && /送信|確認|send|submit|confirm/i.test(button.textContent || button.getAttribute('value') || ''))
+    })
+    if (candidates.length > 32) return []
+    return candidates.filter(node => !candidates.some(child => child !== node && node.contains(child)))
+      .map(node => nodes.indexOf(node))
+  })
 }
 
 export async function runOfflineInput(browser: Browser, input: OfflineInput, mobile = false,
@@ -157,11 +189,18 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
     }
     if (result.blockedRequests) return stop('NETWORK_REQUIRED')
     if (live) await live.beforeInput()
-    const candidates: Frame[] = []
-    for (const frame of frames) if (await frame.locator('form').count()) candidates.push(frame)
-    if (candidates.length !== 1 || await candidates[0].locator('form').count() !== 1) return stop('FORM_AMBIGUOUS')
-    const frame = candidates[0]
-    const structure = await inspect(frame)
+    const candidates: Locator[] = []
+    for (const frame of frames) {
+      const forms = frame.locator('form')
+      for (let index = 0; index < await forms.count(); index++) candidates.push(forms.nth(index))
+    }
+    if (!candidates.length) for (const frame of frames) {
+      const scopes = frame.locator(customSelector)
+      for (const index of await customCandidates(scopes)) candidates.push(scopes.nth(index))
+    }
+    if (candidates.length !== 1) return stop('FORM_AMBIGUOUS')
+    const scope = candidates[0]
+    const structure = await inspect(scope)
     const controls: Control[] = structure.controls
     if (!controls.length || controls.length > 100) return stop('FIELD_BUDGET')
     result.structureHash = digest(structure)
@@ -195,7 +234,7 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
     }
     for (const [index, field] of controls.entries()) {
       if (['hidden', 'submit', 'button', 'reset', 'image'].includes(field.type) || field.disabled) continue
-      const locator = frame.locator('form input, form textarea, form select').nth(index)
+      const locator = scope.locator('input, textarea, select').nth(index)
       if (field.type === 'checkbox') await action(() => locator.setChecked(input.consents[field.name].checked, { timeout: remaining() }))
       else if (field.tag === 'select') await action(() => locator.selectOption(input.choices[field.name], { timeout: remaining() }))
       else if (field.type === 'radio') {
@@ -212,10 +251,11 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
         if (/(?:営業|勧誘)[^。\n]{0,80}(?:お断り|禁止|ご遠慮)/.test(text.normalize('NFKC'))) return stop('SALES_PROHIBITED', 'BLOCKED')
         if (/CAPTCHA/i.test(text) || await current.locator('.g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey]').count()) return stop('CAPTCHA', 'HUMAN_REQUIRED')
       }
-      if (digest(await inspect(frame)) !== result.structureHash) return stop('STRUCTURE_CHANGED')
+      if (digest(await inspect(scope)) !== result.structureHash) return stop('STRUCTURE_CHANGED')
     }
-    const readback = await frame.locator('form').evaluate(form => ({
-      valid: (form as HTMLFormElement).checkValidity(),
+    const readback = await scope.evaluate(form => ({
+      valid: form instanceof HTMLFormElement ? form.checkValidity() : [...form.querySelectorAll('input, textarea, select')].every(node =>
+        (node as HTMLInputElement).checkValidity()),
       values: [...form.querySelectorAll('input, textarea, select')].map(node => {
         const field = node as HTMLInputElement
         return { name: field.name, type: field.type, value: field.value, checked: field.checked, disabled: field.matches(':disabled') }

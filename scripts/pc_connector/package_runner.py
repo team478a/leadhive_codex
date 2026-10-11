@@ -13,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SOURCES = (
+    "frontend/form-lab/document-snapshot.ts",
     "frontend/form-lab/public-get.ts",
     "frontend/form-lab/live-input.ts",
     "frontend/form-lab/live-runner.case.ts",
