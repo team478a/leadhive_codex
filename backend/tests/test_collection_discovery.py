@@ -330,6 +330,26 @@ def test_capture_context_does_not_change_benchmark_or_leak_between_threads():
 @pytest.mark.parametrize(
     "url,title,kind",
     [
+        (
+            "https://www.dreamnews.jp/press/1/",
+            "札幌 SNS運用代行の自社メディア始動",
+            "PORTAL_DIRECTORY",
+        ),
+        ("https://dreamnews.jp.evil.test/", "SNS運用代行", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://jobs.test/area/", "北海道札幌市のSNS運用の求人・仕事・採用", "JOB_PR"),
+        (
+            "https://publisher.test/area/",
+            "【2026年最新版】北海道・札幌市のSNS運用代行会社おすすめ ...",
+            "ARTICLE",
+        ),
+        (
+            "https://publisher.test/area/",
+            "札幌のSNS運用代行を検討中の企業・店舗へ｜依頼先の比較 ...",
+            "ARTICLE",
+        ),
+        ("https://agency.test/", "SNS運用代行｜当社おすすめプラン", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/", "SNS運用会社のおすすめプラン", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/", "採用代行｜SNS運用で応募を増やす", "OFFICIAL_SITE_CANDIDATE"),
         ("https://townwork.net/job_search/", "SNS求人", "JOB_PR"),
         ("https://baitoru.com/kw/sns/", "SNS運用求人", "JOB_PR"),
         ("https://next.rikunabi.com/job_search/", "SNS運用代行", "JOB_PR"),
