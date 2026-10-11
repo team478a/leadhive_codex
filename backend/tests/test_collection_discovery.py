@@ -353,6 +353,19 @@ def test_capture_context_does_not_change_benchmark_or_leak_between_threads():
         ("https://townwork.net/job_search/", "SNS求人", "JOB_PR"),
         ("https://baitoru.com/kw/sns/", "SNS運用求人", "JOB_PR"),
         ("https://next.rikunabi.com/job_search/", "SNS運用代行", "JOB_PR"),
+        ("https://r-agent.com/", "SNS運用代行", "JOB_PR"),
+        ("https://WWW.R-AGENT.COM/job_search/", "SNS運用代行", "JOB_PR"),
+        ("https://search.r-agent.com/job/", "SNS運用代行", "JOB_PR"),
+        (
+            "https://r-agent.com.example.test/service/sns/",
+            "SNS採用支援・求人広告運用サービス",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
+        (
+            "https://agency.test/service/job_search/",
+            "SNS採用支援・求人広告運用サービス",
+            "OFFICIAL_SITE_CANDIDATE",
+        ),
         ("https://www.townwork.net/", "求人", "JOB_PR"),
         ("https://townwork.net.evil.test/service", "SNS運用代行", "OFFICIAL_SITE_CANDIDATE"),
         ("https://agency.test/blogs/osaka/", "SNS運用代行", "ARTICLE"),
@@ -430,6 +443,7 @@ def test_known_sources_skip_goal_slots_but_articles_remain_provisional(auth, db,
     project, operation_id = setup_job(auth, db, monkeypatch, keywords=["SNS運用代行"], target=2)
     rows = [
         {"title": "SNS求人", "link": "https://townwork.net/job_search/"},
+        {"title": "SNS運用代行の転職・求人", "link": "https://www.r-agent.com/job_search/"},
         {"title": "大阪のおすすめSNS運用代行会社21社", "link": "https://publisher.test/osaka/"},
         {"title": "SNS運用代行", "link": "https://agency-one.test/service/"},
         {"title": "記事", "link": "https://publisher.test/blogs/osaka/"},
@@ -445,13 +459,15 @@ def test_known_sources_skip_goal_slots_but_articles_remain_provisional(auth, db,
     ).all()
     assert [hit.disposition for hit in hits] == [
         "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
         "SAVED",
         "SAVED",
         "DUPLICATE",
         "TARGET_LIMIT",
         "TARGET_LIMIT",
     ]
-    assert [hit.classification for hit in hits[:2]] == ["JOB_PR", "ARTICLE"]
+    assert [hit.classification for hit in hits[:3]] == ["JOB_PR", "JOB_PR", "ARTICLE"]
+    assert hits[1].snapshot["link"] == rows[1]["link"]
     assert hits[1].snapshot["title"] == rows[1]["title"]
     assert all(hit.snapshot["region"] == "大阪" for hit in hits)
     assert auth.get(f"/api/projects/{project['id']}/operations").json()[0]["status"] == "completed"
