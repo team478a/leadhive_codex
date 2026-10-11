@@ -10,7 +10,7 @@ from html import unescape
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, UnicodeDammit
 
 from app.config import settings
 from app.services import site_extraction
@@ -140,6 +140,7 @@ class PageData:
     scraped_urls: list[str] | None = None
     field_evidence: dict = dataclass_field(default_factory=dict)
     crawl_errors: list[dict] = dataclass_field(default_factory=list)
+    source_exclusion_reason: str = ""
 
 
 def is_aggregator_domain(domain: str) -> bool:
@@ -215,7 +216,12 @@ class SafeFetcher:
         self.client.close()
 
     def _request(
-        self, url: str, max_bytes: int, redirects: int = 0, robots_request: bool = False
+        self,
+        url: str,
+        max_bytes: int,
+        redirects: int = 0,
+        robots_request: bool = False,
+        allowed_content_types: tuple[str, ...] | None = None,
     ) -> FetchedPage:
         if redirects > 5:
             raise ScrapeError("リダイレクト回数が上限を超えました。")
@@ -241,7 +247,11 @@ class SafeFetcher:
                     if not location:
                         raise ScrapeError("Webサイトのリダイレクト先が不明です。")
                     return self._request(
-                        urljoin(normalized, location), max_bytes, redirects + 1, robots_request
+                        urljoin(normalized, location),
+                        max_bytes,
+                        redirects + 1,
+                        robots_request,
+                        allowed_content_types,
                     )
                 if robots_request and response.status_code == 404:
                     return FetchedPage(str(response.url), "")
@@ -252,7 +262,14 @@ class SafeFetcher:
                         f"Webサイトを取得できませんでした（HTTP {response.status_code}）。"
                     )
                 content_type = response.headers.get("content-type", "").lower()
-                if "html" not in content_type and "text/plain" not in content_type:
+                mime = content_type.split(";", 1)[0].strip()
+                if allowed_content_types is not None and mime not in allowed_content_types:
+                    raise ScrapeError("指定した描画リソースとContent-Typeが一致しません。")
+                if (
+                    allowed_content_types is None
+                    and "html" not in content_type
+                    and "text/plain" not in content_type
+                ):
                     raise ScrapeError("HTMLではないコンテンツは解析できません。")
                 declared = response.headers.get("content-length")
                 if declared and declared.isdigit() and int(declared) > max_bytes:
@@ -266,10 +283,16 @@ class SafeFetcher:
                     if size > max_bytes:
                         raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
                     chunks.append(chunk)
-                encoding = response.encoding or "utf-8"
-                return FetchedPage(
-                    str(response.url), b"".join(chunks).decode(encoding, errors="replace")
-                )
+                # httpx defaults to UTF-8 without consulting HTML charset.
+                # Respect an explicit HTTP charset, otherwise HTML metadata/BOM
+                # and byte detection, before extracting Japanese names/links.
+                charset = re.search(r"charset\s*=\s*[\"']?([^\s;\"']+)", content_type)
+                decoded = UnicodeDammit(
+                    b"".join(chunks),
+                    known_definite_encodings=[charset.group(1)] if charset else [],
+                    is_html=True,
+                ).unicode_markup
+                return FetchedPage(str(response.url), decoded if decoded is not None else "")
         except ScrapeError:
             raise
         except httpx.HTTPError as exc:
@@ -298,6 +321,19 @@ class SafeFetcher:
         if not self.robots_allowed(normalized):
             raise ScrapeError("robots.txtにより解析が許可されていません。")
         return self._request(normalized, settings.scraper_max_bytes)
+
+    def fetch_browser_resource(self, url: str, kind: str) -> FetchedPage:
+        """Explicit text assets only; preserve public URL, robots and crawl budgets."""
+        types = {
+            "script": ("application/javascript", "text/javascript", "application/x-javascript"),
+            "style": ("text/css",),
+        }
+        if kind not in types or not self.site_root:
+            raise ScrapeError("描画リソースの種類または取得元が不正です。")
+        normalized, _ = _validated_target(url)
+        if not same_site(self.site_root, normalized) or not self.robots_allowed(normalized):
+            raise ScrapeError("描画リソースの取得範囲またはrobots.txtにより拒否しました。")
+        return self._request(normalized, 500_000, allowed_content_types=types[kind])
 
 
 def _clean_url(value: str, base_url: str) -> str:
@@ -497,10 +533,39 @@ def extract_page(html: str, base_url: str) -> PageData:
     return data
 
 
-def scrape_company(url: str) -> tuple[FetchedPage, PageData]:
+def scrape_company(
+    url: str, *, excluded_domains: set[str] | None = None
+) -> tuple[FetchedPage, PageData]:
     fetcher = SafeFetcher()
     try:
         page = fetcher.fetch_html(url)
+        root_attempts = 0
+        from app.services.source_page_policy import page_reason
+
+        def source_reason(target):
+            host = (urlsplit(target.url).hostname or "").lower().rstrip(".").removeprefix("www.")
+            if host in (excluded_domains or set()) or is_aggregator_domain(host):
+                return "EXCLUDED_SOURCE_DOMAIN"
+            return page_reason(target.html, target.url)
+
+        reason = source_reason(page)
+        if reason:
+            # Recover the same-site root once; never learn a business-wide ban from an article.
+            parsed = urlsplit(page.url)
+            root_url = urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
+            if reason in {"ARTICLE_PAGE", "JOB_LISTING"} and page.url.rstrip(
+                "/"
+            ) != root_url.rstrip("/"):
+                try:
+                    root_attempts = 1
+                    root = fetcher.fetch_html(root_url)
+                    if same_site(page.url, root.url) and not source_reason(root):
+                        page = root
+                        reason = ""
+                except ScrapeError:
+                    pass
+            if reason:
+                return page, PageData(source_exclusion_reason=reason, scraped_urls=[page.url])
         fetcher.site_root = page.url
         data = extract_page(page.html, page.url)
         data.scraped_urls = [page.url]
@@ -508,7 +573,7 @@ def scrape_company(url: str) -> tuple[FetchedPage, PageData]:
         queue = discover_important_urls(page.html, page.url)
         visited = {page.url.rstrip("/")}
         count = 0
-        while queue and count < MAX_SECONDARY_PAGES:
+        while queue and count < MAX_SECONDARY_PAGES - root_attempts:
             secondary_url = queue.pop(0)
             if secondary_url.rstrip("/") in visited:
                 continue
@@ -524,6 +589,17 @@ def scrape_company(url: str) -> tuple[FetchedPage, PageData]:
             secondary_host = (
                 (urlsplit(secondary_page.url).hostname or "").lower().removeprefix("www.")
             )
+            if source_reason(secondary_page):
+                if data.contact_url.rstrip("/") in {
+                    secondary_url.rstrip("/"),
+                    secondary_page.url.rstrip("/"),
+                }:
+                    data.contact_url = ""
+                    data.field_evidence.pop("contact_url", None)
+                data.crawl_errors.append(
+                    {"requested_url": secondary_url, "reason": "NON_COMPANY_PAGE"}
+                )
+                continue
             if secondary_host != primary_host or not same_site(page.url, secondary_page.url):
                 data.crawl_errors.append(
                     {"requested_url": secondary_url, "reason": "CROSS_SITE_REDIRECT"}

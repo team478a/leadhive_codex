@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
@@ -17,7 +18,7 @@ test('bulk Human approval reserves and pauses email without sending', async ({ p
     subject: 'Company specific message', body: 'A unique approved message, never sent by this test.', sender: { name: smtp?.from_name ?? 'A2 Human', email: smtp?.from_email ?? 'sender@example.com' },
   } })
   expect(proposal.status()).toBe(201)
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: '承認済みメール予約' })
   await panel.locator('summary').filter({ hasText: fixture.recipient }).click()

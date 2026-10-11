@@ -93,8 +93,10 @@ from app.model_settings import (
     SmtpSettings,
 )
 from app.model_site_identity_review import SiteIdentityReviewEvent
+from app.model_source_exclusion import SourceDomainExclusion
 
 __all__ = [
+    "SourceDomainExclusion",
     "CollectionQueryTask",
     "CollectionSearchAttempt",
     "CollectionDiscoveryHit",

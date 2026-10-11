@@ -90,7 +90,7 @@ def test_invalid_non_company_duplicate_and_suppression(auth, db, monkeypatch):
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
-        "NON_COMPANY_SOURCE",
+        "SAVED",
         "SUPPRESSED",
         "INVALID_URL",
         "INVALID_URL",
@@ -99,7 +99,7 @@ def test_invalid_non_company_duplicate_and_suppression(auth, db, monkeypatch):
     assert hits[0].id != hits[1].id
     assert "password" not in str(hits[8].snapshot)
     assert "secret-not-a-result" not in str([h.snapshot for h in hits])
-    assert db.scalar(select(func.count()).select_from(Company)) == 1
+    assert db.scalar(select(func.count()).select_from(Company)) == 2
 
 
 def test_response_over_limit_and_immutable_snapshot(auth, db, monkeypatch):
@@ -330,16 +330,32 @@ def test_capture_context_does_not_change_benchmark_or_leak_between_threads():
 @pytest.mark.parametrize(
     "url,title,kind",
     [
+        (
+            "https://www.dreamnews.jp/press/1/",
+            "札幌 SNS運用代行の自社メディア始動",
+            "PORTAL_DIRECTORY",
+        ),
+        ("https://dreamnews.jp.evil.test/", "SNS運用代行", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://jobs.test/area/", "北海道札幌市のSNS運用の求人・仕事・採用", "JOB_PR"),
+        (
+            "https://publisher.test/area/",
+            "【2026年最新版】北海道・札幌市のSNS運用代行会社おすすめ ...",
+            "ARTICLE",
+        ),
+        (
+            "https://publisher.test/area/",
+            "札幌のSNS運用代行を検討中の企業・店舗へ｜依頼先の比較 ...",
+            "ARTICLE",
+        ),
+        ("https://agency.test/", "SNS運用代行｜当社おすすめプラン", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/", "SNS運用会社のおすすめプラン", "OFFICIAL_SITE_CANDIDATE"),
+        ("https://agency.test/", "採用代行｜SNS運用で応募を増やす", "OFFICIAL_SITE_CANDIDATE"),
         ("https://townwork.net/job_search/", "SNS求人", "JOB_PR"),
         ("https://baitoru.com/kw/sns/", "SNS運用求人", "JOB_PR"),
         ("https://next.rikunabi.com/job_search/", "SNS運用代行", "JOB_PR"),
-        (
-            "https://www.r-agent.com/job_search/area-osaka/prf-046/kw/sns/",
-            "大阪府 交通費支給 sns運用代行の転職・求人・中途採用情報",
-            "JOB_PR",
-        ),
         ("https://r-agent.com/", "SNS運用代行", "JOB_PR"),
         ("https://WWW.R-AGENT.COM/job_search/", "SNS運用代行", "JOB_PR"),
+        ("https://search.r-agent.com/job/", "SNS運用代行", "JOB_PR"),
         (
             "https://r-agent.com.example.test/service/sns/",
             "SNS採用支援・求人広告運用サービス",
@@ -420,7 +436,7 @@ def test_search_page_hints_are_shared_with_ingestion(url, title, kind):
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_non_company_hits_do_not_spend_goal_slots(auth, db, monkeypatch, fair):
+def test_known_sources_skip_goal_slots_but_articles_remain_provisional(auth, db, monkeypatch, fair):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
@@ -437,21 +453,21 @@ def test_non_company_hits_do_not_spend_goal_slots(auth, db, monkeypatch, fair):
     provider(monkeypatch, rows)
     monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
     assert worker.run_once()
-    assert set(db.scalars(select(Company.domain))) == {"agency-one.test", "agency-two.test"}
+    assert set(db.scalars(select(Company.domain))) == {"publisher.test", "agency-one.test"}
     hits = db.scalars(
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
     assert [hit.disposition for hit in hits] == [
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
-        "NON_COMPANY_SOURCE",
         "SAVED",
-        "NON_COMPANY_SOURCE",
         "SAVED",
+        "DUPLICATE",
+        "TARGET_LIMIT",
         "TARGET_LIMIT",
     ]
     assert [hit.classification for hit in hits[:3]] == ["JOB_PR", "JOB_PR", "ARTICLE"]
-    assert hits[1].snapshot["title"] == rows[1]["title"]
     assert hits[1].snapshot["link"] == rows[1]["link"]
+    assert hits[1].snapshot["title"] == rows[1]["title"]
     assert all(hit.snapshot["region"] == "大阪" for hit in hits)
     assert auth.get(f"/api/projects/{project['id']}/operations").json()[0]["status"] == "completed"

@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -20,7 +21,7 @@ test('Industry excerpts require human confirmation and never establish a match a
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
     const project = await (await page.request.get(`/api/projects/${fixture.project_id}`)).json() as { target_profile_id: string }
     const profile = await (await page.request.get(`/api/target-profiles/${project.target_profile_id}`)).json() as { profile_name: string }
-    await page.getByRole('button', { name: '◎ ターゲットプロファイル', exact: true }).click()
+    await navigateWorkspace(page, '◎ ターゲットプロファイル')
     const card = page.getByRole('article').filter({ has: page.getByRole('heading', { name: profile.profile_name, exact: true }) })
     await card.getByRole('button', { name: '編集', exact: true }).click()
     const aliases = page.getByLabel('業種確認に使う別名（1行に1業種）')
@@ -29,7 +30,7 @@ test('Industry excerpts require human confirmation and never establish a match a
     await card.getByRole('button', { name: '編集', exact: true }).click()
     await expect(aliases).toHaveValue('美容院: 美容室, ヘアサロン')
     await page.getByRole('button', { name: 'キャンセル', exact: true }).click()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('対象条件を確認・分類する', { exact: true }).click()
     await page.getByLabel('条件1の種類').selectOption('INDUSTRY')

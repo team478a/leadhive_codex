@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -34,7 +35,7 @@ test('fixture plan is visible, human approved, and excluded from dispatch contro
       },
     } })
     expect(response.status()).toBe(201)
-    await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+    await navigateWorkspace(page, '✓ 承認キュー')
     await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
     await page.getByRole('button', { name: /A2 E2E Company.*承認待ち/ }).click()
     const proposal = page.getByRole('article').filter({ has: page.getByRole('heading', { name: 'A2 E2E Company の提案内容', exact: true }) })

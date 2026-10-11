@@ -60,6 +60,10 @@ def overview_query(project_id):
         .exists()
     )
     category = case(
+        (
+            Company.do_not_contact.is_(True) & Company.exclusion_reason.startswith("営業NG："),
+            "prohibited",
+        ),
         (Company.do_not_contact.is_(True), "do_not_contact"),
         (
             or_(
@@ -118,9 +122,12 @@ def listing(
     project_access(project_id, db, user, write=False)
     base = overview_query(project_id)
     snapshot = base.subquery()
-    counts = dict(
-        db.execute(select(snapshot.c.category, func.count()).group_by(snapshot.c.category)).all()
-    )
+    counts: dict[str, int] = {
+        str(group): int(count)
+        for group, count in db.execute(
+            select(snapshot.c.category, func.count()).group_by(snapshot.c.category)
+        ).all()
+    }
     if category != "all":
         base = base.where(base.selected_columns.category == category)
     total = db.scalar(select(func.count()).select_from(base.subquery()))

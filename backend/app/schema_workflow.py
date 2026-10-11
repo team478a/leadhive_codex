@@ -66,6 +66,7 @@ class ReplyQueueItemOut(BaseModel):
 
 
 class OperationJobInput(Input):
+    region_mode: Literal["literal", "prefecture_order"] = "literal"
     target_count: int | None = Field(default=None, ge=1, le=500)
     search_request_limit: int | None = Field(default=None, ge=1, le=50, strict=True)
     condition_request_id: UUID | None = None
@@ -82,6 +83,12 @@ class OperationJobInput(Input):
 
     @model_validator(mode="after")
     def validate_operation(self):
+        if self.region_mode == "prefecture_order" and not (
+            self.operation_type == "collect_search"
+            and self.source == "serper"
+            and self.target_count is not None
+        ):
+            raise ValueError("都道府県順の検索はSerperの件数目標収集のみ対応しています。")
         if self.search_request_limit is not None and not (
             self.operation_type == "collect_search"
             and self.source == "serper"

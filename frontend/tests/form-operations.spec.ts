@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
@@ -34,7 +35,7 @@ test('Human operations prepare a new candidate and record UNKNOWN without dispat
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: 'フォーム運用確認' })
   await panel.getByRole('button', { name: '期限切れ会社の現在の内容を再準備' }).click()

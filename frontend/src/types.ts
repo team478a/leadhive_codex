@@ -185,7 +185,7 @@ export interface OutreachQueueItem {
   due_state: 'overdue' | 'today' | 'upcoming' | 'unset'
 }
 export interface OperationJob {
-  collection_progress?: { target_count: number; collected_count: number; discovered_count?: number; review_required_count?: number; no_match_count?: number; conditions_applied?: boolean; requests: number; request_budget: number; stop_reason: string | null; scheduler_version?: string; coverage_status?: string; planned_queries?: number; unsearched_queries?: number; pending_queries?: number; failed_queries?: number; capped_queries?: number; unknown_attempts?: number } | null
+  collection_progress?: { target_count: number; collected_count: number; discovered_count?: number; review_required_count?: number; no_match_count?: number; conditions_applied?: boolean; requests: number; request_budget: number; stop_reason: string | null; scheduler_version?: string; coverage_status?: string; region_mode?: string; planned_regions?: number; unsearched_regions?: number; current_region?: string | null; planned_queries?: number; unsearched_queries?: number; pending_queries?: number; failed_queries?: number; capped_queries?: number; unknown_attempts?: number } | null
   condition_request_id?: string | null
   condition_version?: number | null
   id: string; project_id: string

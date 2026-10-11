@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect, type Page } from '@playwright/test'
 
@@ -68,6 +69,13 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
 
   const formPanel = page.getByRole('heading', { name: 'フォーム事前解析' })
     .locator('xpath=ancestor::section[1]')
+  const externalCandidate = formPanel.getByRole('region', { name: '外部問い合わせ候補' })
+  await expect(externalCandidate).toContainText('窓口用途・営業可否の確認とHuman送信承認は別途必要')
+  await expect(externalCandidate).toContainText('入力・送信は行っていません')
+  await expect(externalCandidate).toContainText('取得上限により今回の対象外')
+  await expect(externalCandidate.getByRole('link')).toHaveAttribute('href', 'https://external-contact.example/entry?no=test-only')
+  await expect(externalCandidate.getByRole('link')).toHaveAttribute('rel', 'noreferrer')
+  await expect(externalCandidate.getByRole('button')).toHaveCount(0)
   await formPanel.getByText(/解析ログ（/).click()
   await expect(formPanel.getByText('取得したHTMLで問い合わせフォーム未検出', { exact: true })).toBeVisible()
   await expect(formPanel.getByText('外部埋め込みあり・表示後の確認が必要', { exact: true })).toBeVisible()
@@ -441,7 +449,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     data: { email: process.env.E2E_MEMBER_EMAIL, role: 'viewer' },
   })
   expect(memberResponse.ok()).toBeTruthy()
-  await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+  await navigateWorkspace(page, 'ログアウト')
   await login(page, process.env.E2E_MEMBER_EMAIL!, process.env.E2E_MEMBER_PASSWORD!)
   const viewerProjectCard = page.getByRole('article').filter({
     has: page.getByRole('heading', { name: projectName, exact: true }),
@@ -452,6 +460,8 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
     .locator('xpath=ancestor::section[1]')
   await expect(viewerPanel.getByText('閲覧者は解析結果を確認できます。', { exact: false })).toBeVisible()
   await expect(viewerPanel.getByRole('button', { name: '再解析' })).toBeDisabled()
+  await expect(page.getByRole('region', { name: '営業NG登録' }).getByRole('button', { name: '営業NGリストへ移す' })).toHaveCount(0)
+  await expect(page.getByRole('region', { name: 'フォーム入力の実運用記録' }).getByRole('button', { name: '未送信の入力結果を記録' })).toHaveCount(0)
   await expect(viewerPanel.getByRole('region', { name: 'フォームの確認手順' })).toHaveCount(2)
   await expect(viewerPanel.getByRole('region', { name: 'フォームの確認手順' }).first()).toContainText('営業許可を確認した意味ではありません。')
   await expect(viewerPanel.getByRole('button', { name: '優先フォームにする' })).toBeDisabled()
@@ -469,7 +479,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   await expect(viewerPanel.getByText('保存されたフォーム情報が変わりました。この確認結果は以前の情報です。', { exact: true })).toBeVisible()
   await expect(viewerPanel.getByRole('button', { name: 'このフォームだけ再解析', exact: true })).toHaveCount(0)
 
-  await page.getByRole('button', { name: 'ログアウト', exact: true }).click()
+  await navigateWorkspace(page, 'ログアウト')
   await login(page, process.env.E2E_EMAIL!, process.env.E2E_PASSWORD!)
   const deleteResponse = await page.request.delete(`/api/projects/${project.id}`)
   expect(deleteResponse.ok()).toBeTruthy()

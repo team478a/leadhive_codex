@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -15,7 +16,7 @@ test('Repeat observations and Human pair labels remain separate from collection 
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '◎ 収集結果の確認', exact: true }).click()
+    await navigateWorkspace(page, '◎ 収集結果の確認')
     const raw = page.getByRole('region', { name: 'Raw Collection Benchmark', exact: true })
     await raw.getByLabel('Benchmark地域', { exact: true }).fill('兵庫県姫路市')
     await raw.getByLabel('Benchmark業種', { exact: true }).fill('美容院')
@@ -53,7 +54,7 @@ test('Repeat observations and Human pair labels remain separate from collection 
       await expect(metrics).toContainText('Strict Precision 未測定 / null')
     }
     await page.reload()
-    await page.getByRole('button', { name: '◎ 収集結果の確認', exact: true }).click()
+    await navigateWorkspace(page, '◎ 収集結果の確認')
     await raw.getByText('検索条件・詳しい集計を見る', { exact: true }).click()
     await raw.getByLabel('Raw Benchmark', { exact: true }).selectOption(benchmark)
     await expect(stability).toContainText('UNSURE 1')

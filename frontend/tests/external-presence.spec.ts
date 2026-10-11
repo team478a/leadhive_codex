@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -18,7 +19,7 @@ test('Presence states, links and bounded search controls work without external r
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('掲載媒体・SNS・求人', { exact: true }).first().click()
     const cell = page.locator('details').filter({ has: page.getByText('掲載媒体・SNS・求人', { exact: true }) }).first()
@@ -26,7 +27,7 @@ test('Presence states, links and bounded search controls work without external r
     await expect(cell).toContainText('YouTube：調査で見つからず')
     await expect(cell).toContainText('検索上限に到達')
     await expect(cell.getByRole('link', { name: 'あり ↗' }).first()).toHaveAttribute('href', 'https://instagram.com/fixture')
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByText(/追加で調べる情報（0項目/).click()
     await expect(page.getByLabel('Instagram追加調査')).toHaveValue('AUTO')
     await page.getByLabel('Instagram追加調査').selectOption('SEARCH')

@@ -19,7 +19,7 @@ SOCIAL = {"INSTAGRAM", "X", "FACEBOOK", "YOUTUBE", "TIKTOK"}
 JOBS = {"INDEED", "KYUJIN_BOX"}
 # These are sources about providers, not the provider's own website. Keep their
 # Raw observations without creating Company records from Serper results.
-THIRD_PARTY_DOMAINS = {"web-kanji.com", "probel.jp"}
+THIRD_PARTY_DOMAINS = {"web-kanji.com", "probel.jp", "dreamnews.jp"}
 JOB_SOURCE_DOMAINS = {"townwork.net", "baitoru.com", "next.rikunabi.com", "r-agent.com"}
 ARTICLE_PATH_SEGMENTS = {"blog", "blogs", "article", "articles", "column", "columns"}
 COMPARISON_TITLE_MARKERS = {
@@ -95,8 +95,14 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
     if any(part in path.split("/") for part in ARTICLE_PATH_SEGMENTS):
         return "ARTICLE", "PATH_HINT_REQUIRES_REVIEW"
     title = snapshot.get("title") or ""
+    # Job-result pages describe vacancies, not the business's service offering.
+    # Do not reject a provider merely because its own recruitment page mentions jobs.
+    if re.search(r"の求人[・\s]+仕事[・\s]+採用", title):
+        return "JOB_PR", "TITLE_HINT_REQUIRES_REVIEW"
     if (
         any(marker in title for marker in COMPARISON_TITLE_MARKERS)
+        or re.search(r"(?:会社|企業)\s*(?:の)?\s*おすすめ(?!\s*(?:プラン|サービス))", title)
+        or re.search(r"依頼先\s*(?:の)?\s*比較", title)
         or (
             any(marker in title for marker in NUMBERED_SELECTION_MARKERS)
             and any(marker in title for marker in ("会社", "企業", "おすすめ", "比較", "厳選"))

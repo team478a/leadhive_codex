@@ -1,5 +1,5 @@
 import type { CompletionReturnContext } from './completionWorkQueueTypes'
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useState, useRef, type FormEvent } from 'react'
 import { allPages, api, ApiError, errorMessage } from './api'
 import { Field, ProfileForm, ProjectForm } from './forms'
 import { OutboundStatus } from './OutboundStatus'
@@ -51,7 +51,16 @@ const statusNames = { draft: '下書き', active: '進行中', archived: 'アー
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals' | 'raw'>(window.location.hash === '#raw' ? 'raw' : 'projects')
-  const [rawMenuOpen, setRawMenuOpen] = useState(false)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuButton = useRef<HTMLButtonElement>(null)
+  useEffect(() => {
+    if (!menuOpen) return
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { setMenuOpen(false); menuButton.current?.focus() }
+    }
+    document.addEventListener('keydown', closeOnEscape)
+    return () => document.removeEventListener('keydown', closeOnEscape)
+  }, [menuOpen])
   const [collectionProjectId, setCollectionProjectId] = useState('')
   const [replyInboundEmailId, setReplyInboundEmailId] = useState<string | null>(null)
   const [completionReturnContext, setCompletionReturnContext] = useState<CompletionReturnContext | null>(null)
@@ -131,10 +140,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
     if (projects[0]) setCollectionProjectId(projects[0].id)
   }
   return <div className="app-layout">
-    <aside className="sidebar"><div className="flex items-center justify-between gap-3"><div className="brand">⬡ LeadHive</div>{tab === "raw" && <button className="nav-item lg:hidden w-auto" aria-expanded={rawMenuOpen} aria-controls="workspace-navigation" onClick={() => setRawMenuOpen(v => !v)}>メニュー</button>}</div>
-      <p className={`nav-label ${tab === "raw" && !rawMenuOpen ? "hidden lg:block" : ""}`}>ワークスペース</p>
-      <nav id="workspace-navigation" aria-label="メインナビゲーション" className={tab === "raw" && !rawMenuOpen ? "hidden lg:block" : ""}>
-        <button className={tab === 'raw' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('raw'); setRawMenuOpen(false); setEditor(null); setNotice('') }}>◎ 収集結果の確認</button>
+    <aside className="sidebar"><div className="sidebar-header"><div className="brand">⬡ LeadHive</div><button ref={menuButton} className="mobile-menu-toggle" aria-expanded={menuOpen} aria-controls="workspace-navigation-panel" onClick={() => setMenuOpen(v => !v)}>メニュー <span aria-hidden="true">{menuOpen ? '×' : '☰'}</span></button></div>
+      <div id="workspace-navigation-panel" className={`sidebar-menu ${menuOpen ? 'flex' : 'hidden lg:flex'}`}>
+      <p className="nav-label">ワークスペース</p>
+      <nav id="workspace-navigation" aria-label="メインナビゲーション" onClick={() => { setMenuOpen(false); if (menuOpen) menuButton.current?.focus() }}>
+        <button className={tab === 'raw' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('raw'); setMenuOpen(false); setEditor(null); setNotice('') }}>◎ 収集結果の確認</button>
         <button className={tab === 'dashboard' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('dashboard'); setEditor(null); setNotice('')
         }}>⌂ ダッシュボード{unreadNotifications > 0 && ` (${unreadNotifications})`}</button>
@@ -161,10 +171,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         }}>⚙ 運用設定</button>}
         <button className="nav-item" onClick={() => setGuideOpen(true)}>？ 使い方ガイド</button>
       </nav>
-      <div className={`sidebar-footer ${tab === "raw" && !rawMenuOpen ? "hidden lg:block" : ""}`}><p className="break-all">{user.email}</p>
+      <div className="sidebar-footer"><p className="break-all">{user.email}</p>
         <button className="nav-item" disabled={busy} onClick={() => void action(async () => {
           await api('/auth/logout', 'POST'); onLogout()
         })}>ログアウト</button></div>
+      </div>
     </aside>
     <main className="workspace"><OutboundStatus /><header><p className="eyebrow">YOUR WORKSPACE</p>
       <div className="page-heading"><div><h1>{tab === 'raw' ? '収集結果の確認' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>

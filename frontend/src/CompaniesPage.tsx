@@ -5,6 +5,8 @@ import { CompanyCodexFormQueue } from './CompanyCodexFormQueue'
 import { CompanyContactsPanel } from './CompanyContactsPanel'
 import { CompanyDealsPanel } from './CompanyDealsPanel'
 import { CompanyDetailsPanel } from './CompanyDetailsPanel'
+import { CompanySalesNgAction } from './CompanySalesNgAction'
+import { CompanyFormInputTrial } from './CompanyFormInputTrial'
 import { CompanyFilters } from './CompanyFilters'
 import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
 import { CompanyFormDeliveryPanel } from './CompanyFormDeliveryPanel'
@@ -355,6 +357,15 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       setActivityNote(''); setActivities(await api<Activity[]>(`/companies/${selected.id}/activities`))
       setNotice('活動履歴を追加しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function recordInputTrial(note: string) {
+    if (!selected || readOnly || busy) return false
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const saved = await api<Activity>(`/companies/${selected.id}/activities`, 'POST', { activity_type: 'note', note })
+      setActivities(current => [saved, ...current].slice(0, 100))
+      return true
+    } catch (e) { setError(errorMessage(e)); return false } finally { setBusy(false) }
   }
   function editContact(contact: ContactPerson) {
     setEditingContactId(contact.id)
@@ -714,6 +725,21 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     try { setExperimentResults(await api<OutreachExperimentResult[]>(`/outreach-experiments/${id}/results`)) }
     catch (e) { setError(errorMessage(e)) }
   }
+  async function markSalesNg(reason: string) {
+    if (!selected || readOnly || busy || !reason.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const previous = selected.exclusion_reason.trim()
+      const updated = await api<Company>(`/companies/${selected.id}/contact-control`, 'PATCH', {
+        do_not_contact: true,
+        exclusion_reason: `営業NG：${reason.trim()}${previous ? ` / 以前の理由：${previous}` : ''}`.slice(0, 500),
+        contact_quality_status: selected.contact_quality_status,
+      })
+      setSelected(updated); setDoNotContact(true); setExclusionReason(updated.exclusion_reason)
+      setStatus(updated.status); setContactQuality(updated.contact_quality_status)
+      await reload(); setNotice('営業NGリストに登録しました。この企業には送信しません。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   async function saveContactControl() {
     if (!selected) return
     setBusy(true); setError('')
@@ -926,6 +952,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onOpen={company => void open(company)}
       onFeedbackSaved={() => { void reload().catch(e => setError(errorMessage(e))); setSelected(null); setNotice('確認結果を保存しました。送信承認は行っていません。') }}
     />
+    {selected && <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />}
+    {selected && <CompanyFormInputTrial key={`input-trial-${selected.id}`} company={selected} profiles={formProfiles} activities={activities} readOnly={readOnly} busy={busy} onSave={recordInputTrial} />}
     {selected && <CompanyDetailsPanel
       company={selected}
       values={companyEdit}

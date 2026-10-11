@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('SMTP diagnostics shows connection evidence without sending on desktop and mobile', async ({ page }) => {
@@ -8,7 +9,7 @@ test('SMTP diagnostics shows connection evidence without sending on desktop and 
   const guide = page.getByRole('dialog', { name: '3ステップで始めましょう' })
   await expect(guide).toBeVisible()
   await guide.getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '⚙ 運用設定' }).click()
+  await navigateWorkspace(page, '⚙ 運用設定')
   const panel = page.getByRole('region', { name: 'SMTP接続確認' })
   await panel.getByRole('button', { name: 'メールを送らず接続確認', exact: true }).click()
   await expect(panel.getByRole('alert')).toContainText('SMTP設定を保存してから')

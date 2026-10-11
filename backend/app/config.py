@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     session_hours: int = 12
     agent_features_enabled: bool = False
+    pc_diagnostic_transfer_enabled: bool = False
     worker_paused: bool = False
     collection_fair_scheduler_enabled: bool = False
     collection_discovery_max_operation_hits: int = Field(default=5000, ge=100, le=5000)

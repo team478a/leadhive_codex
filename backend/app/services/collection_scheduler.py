@@ -23,6 +23,7 @@ from app.services.collection_query_plan import (
     VERSION,
     plan_hash,
     plan_snapshot,
+    planned_queries,
 )
 from app.services.collection_search_policy import choose_task, successful_page
 from app.services.discovery_capture import capturing_discovery
@@ -75,7 +76,7 @@ def root_and_tasks(db, job, worker_id):
         )
     )
     if not tasks:
-        for order, keyword in enumerate(plan["snapshot"]["keywords"]):
+        for order, (keyword, region) in enumerate(planned_queries(plan["snapshot"])):
             db.add(
                 CollectionQueryTask(
                     root_operation_id=root.id,
@@ -83,7 +84,7 @@ def root_and_tasks(db, job, worker_id):
                     plan_hash=plan["hash"],
                     query_order=order,
                     keyword=keyword,
-                    region=plan["snapshot"]["region"],
+                    region=region,
                 )
             )
         db.flush()
@@ -182,6 +183,11 @@ def summarize(db, job, root, tasks, attempts, conditions, reason=None):
                 )
                 for t in tasks
             ],
+            region_mode=root.payload["query_plan"]["snapshot"].get("region_mode", "literal"),
+            planned_regions=len({t.region for t in tasks}),
+            unsearched_regions=len({t.region for t in tasks})
+            - len({t.region for t in tasks if t.last_attempt_order}),
+            current_region=next((t.region for t in tasks if t.state == "READY"), None),
         ),
     }
     return inventory
@@ -218,7 +224,13 @@ def run(db, job, payload, conditions, stopped):
                 summarize(db, job, root, tasks, attempts, conditions, reason)
                 db.commit()
                 return
-            task = choose_task(tasks, datetime.now(timezone.utc))
+            active_tasks = tasks
+            if root.payload["query_plan"]["snapshot"].get("region_mode") == "prefecture_order":
+                # Finish this prefecture (including delayed retries) before moving south.
+                ready = [t for t in tasks if t.state == "READY"]
+                region = min(ready, key=lambda t: t.query_order).region
+                active_tasks = [t for t in ready if t.region == region]
+            task = choose_task(active_tasks, datetime.now(timezone.utc))
             if task is None:
                 db.commit()
                 time.sleep(

@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -17,7 +18,7 @@ test('Human region and industry evidence updates criteria without collection or 
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('対象条件を確認・分類する', { exact: true }).click()
     await page.getByLabel('条件1の種類').selectOption('AREA')
@@ -46,7 +47,7 @@ test('Human region and industry evidence updates criteria without collection or 
     await expect(candidate.locator(':scope > summary')).toContainText('：確認待ち（')
     await expect(candidate).toContainText('確認を取り消しました・判断不能')
     await page.reload()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByText('対象条件を確認・分類する', { exact: true }).click()
     await expect(page.getByRole('region', { name: '条件判定結果' })).toContainText('第1版')

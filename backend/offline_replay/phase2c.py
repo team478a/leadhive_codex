@@ -136,6 +136,10 @@ def replay(
         "search_serper_page": search,
         "save_candidates": save,
         "canonicalize_url": canonicalize,
+        # This historical scheduler replay has no learned-domain inputs or DB.
+        # The project-memory integration is exercised in backend PostgreSQL tests.
+        "domain_key": lambda url: canonicalize(url)[1],
+        "domains": lambda db, project_id: set(),
         "is_duplicate": lambda db, project, candidate: candidate.key in inventory,
         "is_suppressed": lambda db, project, candidate: candidate.state == "EXCLUDED",
         "is_aggregator_domain": lambda domain: False,

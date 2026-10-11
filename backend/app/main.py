@@ -42,6 +42,7 @@ from app.lead_completion_routes import router as lead_completion_router
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
+from app.pc_input_routes import router as pc_input_router
 from app.preparation_routes import router as preparation_router
 from app.raw_collection_routes import router as raw_collection_router
 from app.raw_pair_routes import router as raw_pair_router
@@ -49,6 +50,7 @@ from app.routes import router
 from app.sending_window_routes import router as sending_window_router
 from app.services.approval_principals import reject_mixed_credentials
 from app.site_identity_review_routes import router as site_identity_review_router
+from app.source_exclusion_routes import router as source_exclusion_router
 
 logger = logging.getLogger("leadhive")
 
@@ -69,6 +71,8 @@ app = FastAPI(
     dependencies=[Depends(reject_mixed_credentials)],
 )
 app.include_router(raw_collection_router)
+app.include_router(source_exclusion_router)
+app.include_router(pc_input_router)
 app.include_router(sending_window_router)
 app.include_router(collection_condition_router)
 app.include_router(raw_pair_router)
