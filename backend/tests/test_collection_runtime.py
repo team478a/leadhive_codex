@@ -16,13 +16,13 @@ from tests.test_collection import FakeResponse
 from tests.test_target_collection import setup_job
 
 
-def replay(auth, db, monkeypatch, pages, *, fair, expected_saved=6):
+def replay(auth, db, monkeypatch, pages, *, fair, expected_saved=13):
     monkeypatch.setattr(settings, "outbound_enabled", False)
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
     monkeypatch.setattr(settings, "serper_api_key", "test-only-never-transmitted")
     monkeypatch.setattr(FakeResponse, "status_code", 200, raising=False)
     monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
-    project, operation_id = setup_job(auth, db, monkeypatch, target=10)
+    project, operation_id = setup_job(auth, db, monkeypatch, target=20)
     calls = []
 
     class ReplayClient:
@@ -53,7 +53,7 @@ def replay(auth, db, monkeypatch, pages, *, fair, expected_saved=6):
     assert operation.status == "completed"
     assert operation.payload["collection_progress"]["stop_reason"] == "QUERIES_EXHAUSTED"
     assert operation.payload["collection_progress"]["collected_count"] == expected_saved
-    assert calls[:2] == [1, 2]  # Filtering must not stop at the old ten saved records.
+    assert calls[:2] == [1, 2]  # Both pages must be preserved below the candidate target.
     assert len(calls) <= 50
     companies = list(db.scalars(select(Company).where(Company.project_id == UUID(project["id"]))))
     assert len(companies) == expected_saved
@@ -65,7 +65,8 @@ def replay(auth, db, monkeypatch, pages, *, fair, expected_saved=6):
     assert all(
         h.disposition != "SAVED"
         for h in hits
-        if h.classification in {"JOB_PR", "ARTICLE", "PORTAL_DIRECTORY"}
+        if h.classification in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
+        or (h.classification == "JOB_PR" and h.classification_reason == "EXTERNAL_PLATFORM")
     )
     collections = list(db.scalars(select(CollectionJob)))
     claim = operation.payload["collection_runtime"]
@@ -102,8 +103,38 @@ def synthetic_pages():
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_worker_replay_keeps_raw_but_rejects_non_company_pages(auth, db, monkeypatch, fair):
+def test_worker_replay_keeps_uncertain_articles_but_rejects_known_media(
+    auth, db, monkeypatch, fair
+):
     replay(auth, db, monkeypatch, synthetic_pages(), fair=fair)
+    articles = list(
+        db.scalars(
+            select(CollectionDiscoveryHit).where(CollectionDiscoveryHit.classification == "ARTICLE")
+        )
+    )
+    assert len(articles) == 7
+    assert all(hit.disposition == "SAVED" for hit in articles)
+    # These are provisional candidates, not Human-verified businesses.
+    companies = list(db.scalars(select(Company)))
+    assert all(company.analysis_status == "pending" for company in companies)
+
+
+@pytest.mark.parametrize("fair", [False, True])
+def test_worker_replay_defers_job_title_without_known_media_domain(auth, db, monkeypatch, fair):
+    pages = synthetic_pages()
+    pages[0][4] = {
+        "title": "北海道札幌市のSNS運用の求人・仕事・採用",
+        "link": "https://unknown-company.example.test/careers",
+    }
+    replay(auth, db, monkeypatch, pages, fair=fair)
+    hit = db.scalar(
+        select(CollectionDiscoveryHit).where(
+            CollectionDiscoveryHit.classification_reason == "TITLE_HINT_REQUIRES_REVIEW"
+        )
+    )
+    assert hit is not None
+    assert hit.classification == "JOB_PR"
+    assert hit.disposition == "SAVED"
 
 
 @pytest.mark.parametrize("fair", [False, True])
@@ -114,7 +145,10 @@ def test_private_saved_raw_worker_replay(auth, db, monkeypatch, fair):
     data = json.loads(Path(path).read_text(encoding="utf-8"))
     pages = data["pages"]
     assert [len(page) for page in pages] == [10, 10]
-    replay(auth, db, monkeypatch, pages, fair=fair, expected_saved=5)
+    assert "two_stage_expected_saved" in data, (
+        "Re-label the private fixture for the two-stage policy"
+    )
+    replay(auth, db, monkeypatch, pages, fair=fair, expected_saved=data["two_stage_expected_saved"])
 
 
 def test_fingerprint_tracks_loaded_rules_and_code_without_secrets(monkeypatch):

@@ -40,7 +40,11 @@
 
 ## テストと再実行
 
-`tests/test_collection_runtime.py` は公開可能な合成20件で従来/fair方式を常時テストする。`LEADHIVE_PRIVATE_RAW_REPLAY` にGit管理外のJSONパスを指定した場合だけ、保存済み入力も両方式でテストする。形式は `{"pages": [[{"title": "...", "link": "https://..."}], ...]}`。今回の固定入力は2ページ各10件で、保存6・除外14を期待する。
+`tests/test_collection_runtime.py` は公開可能な合成20件で従来/fair方式を常時テストする。上表は当時の判定方針による測定履歴であり、現在の二段階判定の期待値ではない。
+
+PR #65以降は未知の記事7件を暫定候補として残し、既知の求人・掲載媒体7件を除外する。合成入力では保存13・除外7となる。目標20件を設定し、2ページを取得した後のQUERIES_EXHAUSTED、Raw20件保持、記事候補のanalysis_status=pending、既知媒体の非保存を両schedulerで検証する。13件をHuman正解数として扱わない。
+
+`LEADHIVE_PRIVATE_RAW_REPLAY` にGit管理外のJSONパスを指定した場合だけ、保存済み入力も両方式でテストする。形式は `{"pages": [[{"title": "...", "link": "https://..."}], ...], "two_stage_expected_saved": 13}`（数値は例）。2ページ各10件を維持し、二段階方針に照らして入力を確認した期待保存件数を明示する。過去の保存数を自動流用せず、キー未設定は説明付きで失敗する。非公開入力の再評価は今回実施していない。
 
 CIでは非公開入力の2ケースを明示的skipする。合成テストと秘密情報非記録、loaded code/rule変更検知、claim履歴保持、旧データnull、他Project拒否は通常実行する。新モジュールはCIのmypy対象へ追加した。
 
