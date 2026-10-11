@@ -89,6 +89,7 @@ def test_resource_budget_does_not_fetch_all_assets(mock_fetch):
     assert result["status"] == "RESOURCE_REVIEW_REQUIRED"
     assert result["bundle"] is None
     assert len(result["resourceInventory"]) == 9
+    assert result["fieldDiagnostics"]["reason"] == "FORM_NOT_IN_HTML"
     assert result["pageSnapshot"]["html"] == routes["https://example.com/contact"][2]
     assert len(requests) == 2
 
