@@ -222,6 +222,7 @@ class SafeFetcher:
         redirects: int = 0,
         robots_request: bool = False,
         allowed_content_types: tuple[str, ...] | None = None,
+        compact_form_images: bool = False,
     ) -> FetchedPage:
         if redirects > 5:
             raise ScrapeError("リダイレクト回数が上限を超えました。")
@@ -252,6 +253,7 @@ class SafeFetcher:
                         redirects + 1,
                         robots_request,
                         allowed_content_types,
+                        compact_form_images,
                     )
                 if robots_request and response.status_code == 404:
                     return FetchedPage(str(response.url), "")
@@ -272,7 +274,14 @@ class SafeFetcher:
                 ):
                     raise ScrapeError("HTMLではないコンテンツは解析できません。")
                 declared = response.headers.get("content-length")
-                if declared and declared.isdigit() and int(declared) > max_bytes:
+                # Discovery may read a bounded larger document, but only raster
+                # image src data is removable. Never parse a truncated page.
+                read_limit = (
+                    max(max_bytes, min(max_bytes * 4, 8_000_000))
+                    if compact_form_images
+                    else max_bytes
+                )
+                if declared and declared.isdigit() and int(declared) > read_limit:
                     raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
                 chunks = []
                 size = 0
@@ -280,7 +289,7 @@ class SafeFetcher:
                     if time.monotonic() - self._started >= 60:
                         raise ScrapeError("Webサイト取得の時間上限に達しました。")
                     size += len(chunk)
-                    if size > max_bytes:
+                    if size > read_limit:
                         raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
                     chunks.append(chunk)
                 # httpx defaults to UTF-8 without consulting HTML charset.
@@ -292,7 +301,17 @@ class SafeFetcher:
                     known_definite_encodings=[charset.group(1)] if charset else [],
                     is_html=True,
                 ).unicode_markup
-                return FetchedPage(str(response.url), decoded if decoded is not None else "")
+                html = decoded if decoded is not None else ""
+                if compact_form_images and size > max_bytes:
+                    html = compact_discovery_images(html)
+                    if len(html.encode("utf-8")) > max_bytes:
+                        raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
+                    logger.info(
+                        "form_discovery_image_compaction received_bytes=%s retained_bytes=%s",
+                        size,
+                        len(html.encode("utf-8")),
+                    )
+                return FetchedPage(str(response.url), html)
         except ScrapeError:
             raise
         except httpx.HTTPError as exc:
@@ -334,6 +353,39 @@ class SafeFetcher:
         if not same_site(self.site_root, normalized) or not self.robots_allowed(normalized):
             raise ScrapeError("描画リソースの取得範囲またはrobots.txtにより拒否しました。")
         return self._request(normalized, 500_000, allowed_content_types=types[kind])
+
+
+def compact_discovery_images(html: str) -> str:
+    """Remove only large embedded raster image src values, not text or form data.
+
+    This representation is for discovery, never browser rendering or dispatch.
+    Scripts, styles, CAPTCHA markers, links, hidden inputs and prohibition text
+    remain intact. SVG and other executable/non-image data are not removed.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for image in soup.find_all("img"):
+        value = image.get("src")
+        if (
+            isinstance(value, str)
+            and len(value) > 4096
+            and re.fullmatch(
+                r"data:image/(?:png|jpe?g|gif|webp|avif);base64,[A-Za-z0-9+/=\s]+",
+                value,
+                re.IGNORECASE,
+            )
+        ):
+            image["src"] = "data:,"
+    return str(soup)
+
+
+class FormDiscoveryFetcher(SafeFetcher):
+    """Bounded image compaction exclusively for form discovery GETs."""
+
+    def fetch_html(self, url: str) -> FetchedPage:
+        normalized, _ = _validated_target(url)
+        if not self.robots_allowed(normalized):
+            raise ScrapeError("robots.txtにより解析が許可されていません。")
+        return self._request(normalized, settings.scraper_max_bytes, compact_form_images=True)
 
 
 def _clean_url(value: str, base_url: str) -> str:
