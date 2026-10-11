@@ -53,3 +53,24 @@ def test_package_integrity(tmp_path, change):
         [node, str(verifier)], capture_output=True, check=False, timeout=30
     )
     assert run.returncode == (0 if change is None else 1)
+
+
+def test_live_launcher_windows_powershell_syntax():
+    powershell = shutil.which("powershell.exe")
+    if not powershell:
+        pytest.skip("Windows PowerShell required")
+    script = Path(__file__).with_name("Run-Live-Input.ps1")
+    assert script.read_bytes().startswith(b"\xef\xbb\xbf")
+    literal = script.resolve().as_posix().replace("'", "''")
+    command = (
+        "$tokens=$null; $errors=$null; "
+        f"[System.Management.Automation.Language.Parser]::ParseFile('{literal}',"
+        "[ref]$tokens,[ref]$errors) | Out-Null; if ($errors.Count) { exit 1 }; exit 0"
+    )
+    result = subprocess.run(
+        [powershell, "-NoProfile", "-NonInteractive", "-Command", command],
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0

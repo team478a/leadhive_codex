@@ -1,4 +1,4 @@
-param([string]$InputFile)
+﻿param([string]$InputFile)
 $ErrorActionPreference = 'Stop'
 try {
     $liveRoot = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
