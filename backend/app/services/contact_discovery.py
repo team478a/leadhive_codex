@@ -76,6 +76,69 @@ def embedded_form_providers(html: str) -> list[str]:
     ]
 
 
+def custom_contact_containers(html: str) -> list[Tag]:
+    """Observe narrowly identified JS contact controls, never an HTTP form contract."""
+    soup = BeautifulSoup(html, "html.parser")
+    candidates: list[Tag] = []
+    for container in soup.select("div, section, fieldset, [role='form']"):
+        identity = " ".join(
+            str(container.get(key) or "") for key in ("id", "aria-label", "role")
+        ).lower()
+        if container.get("role") != "form" and not any(hint in identity for hint in HINTS):
+            continue
+        if (
+            container.name == "form"
+            or container.find_parent("form")
+            or container.select_one("form")
+        ):
+            continue
+        if any(
+            parent.has_attr("hidden")
+            or str(parent.get("aria-hidden") or "").lower() == "true"
+            or re.search(
+                r"display\s*:\s*none|visibility\s*:\s*hidden", str(parent.get("style") or ""), re.I
+            )
+            for parent in [container, *container.parents]
+            if isinstance(parent, Tag)
+        ):
+            continue
+        controls = container.select("input, textarea, select")
+        if not controls or any(control.has_attr("form") for control in controls):
+            continue
+        if container.select_one("input[type='password'], input[type='search']"):
+            continue
+        if not container.select_one("input[type='email']:not([disabled])"):
+            continue
+        if not container.select_one("textarea:not([disabled])"):
+            continue
+        buttons = container.select("button, input[type='submit'], input[type='button']")
+        if not any(
+            not button.has_attr("disabled")
+            and re.search(
+                r"送信|確認|send|submit|confirm",
+                button.get_text(" ", strip=True) + str(button.get("value") or ""),
+                re.I,
+            )
+            for button in buttons
+        ):
+            continue
+        names = [str(control.get("name") or "") for control in controls]
+        if not all(names) or len(names) != len(set(names)) or len(controls) > 100:
+            continue
+        candidates.append(container)
+        if len(candidates) > 32:
+            return []
+    # Keep the smallest explicitly identified container, not each ancestor.
+    return [
+        candidate
+        for candidate in candidates
+        if not any(
+            other is not candidate and any(parent is candidate for parent in other.parents)
+            for other in candidates
+        )
+    ]
+
+
 def is_contact_form(form: Tag) -> bool:
     """Exclude login/search/subscription forms without treating embeds as proof."""
     if form.select_one("input[type='password'], input[type='search']"):
@@ -186,8 +249,10 @@ def contact_pages(
     """
     queue: list[tuple[str, bool, int]] = []
     root_html = cache[root]
-    if BeautifulSoup(root_html, "html.parser").select_one("form") or embedded_form_providers(
-        root_html
+    if (
+        BeautifulSoup(root_html, "html.parser").select_one("form")
+        or embedded_form_providers(root_html)
+        or custom_contact_containers(root_html)
     ):
         queue.append((root, True, 0))
     if saved_contact:

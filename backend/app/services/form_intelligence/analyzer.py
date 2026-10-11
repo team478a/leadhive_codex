@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models import Company, FormAnalysisLog, FormProfile, FormProfileField, Project
 from app.services.contact_discovery import (
     contact_pages,
+    custom_contact_containers,
     embedded_form_providers,
     external_contact_links,
     is_contact_form,
@@ -448,6 +449,51 @@ def analyze_company_forms(
                 record_prohibition(page_prohibition, url)
                 page_kind = _page_kind(url, text)
                 if not any(is_contact_form(form) for form in forms):
+                    custom = custom_contact_containers(html)
+                    if len(custom) == 1:
+                        fields = parse_form_fields(custom[0])
+                        custom_reason = (
+                            "formタグのないJavaScript入力欄を検出しました。"
+                            "ブラウザ入力は未検証で、通常HTTP送信には対応していません。"
+                        )
+                        profile = _upsert_profile(
+                            db,
+                            company,
+                            url,
+                            0,
+                            form_found=True,
+                            page_kind=page_kind,
+                            fields=fields,
+                            sales_status="PROHIBITED"
+                            if "PROHIBITED" in {root_permission, page_permission}
+                            else "UNCERTAIN",
+                            captcha=_captcha_type(html),
+                            confirmation=None,
+                            duration_ms=round((time.monotonic() - page_started) * 1000),
+                            provider_name="rule",
+                            delivery_supported=False,
+                            compatibility_reason=custom_reason,
+                            action_url="",
+                        )
+                        profile.review_reason = (
+                            profile.review_reason + " " + custom_reason
+                        ).strip()[:500]
+                        profiles.append(profile)
+                        seen.add((url, 0))
+                        _log(
+                            db,
+                            company.id,
+                            "analysis_completed",
+                            profile_id=profile.id,
+                            details={
+                                "url": url,
+                                "finding": "CUSTOM_CONTACT_CONTROLS_CANDIDATE",
+                                "field_count": len(fields),
+                                "status": profile.form_status,
+                                "delivery_supported": False,
+                            },
+                        )
+                        continue
                     embeds = embedded_form_providers(html)
                     _log(
                         db,
