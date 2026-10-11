@@ -30,12 +30,14 @@ export type PocResult = {
   blockedRequests: number
   log: string[]
   viewportWidth: number | null
+  inputReadbackVerified: boolean
 }
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex')
 
 export async function installGuard(
   context: BrowserContext, allowed: Set<string>, maxMs: number, started: number,
   state: { blockedRequests: number; log: string[] },
+  phase?: { frozen: boolean },
 ) {
   const origins = new Set([...allowed].map(value => {
     const url = new URL(value)
@@ -47,7 +49,7 @@ export async function installGuard(
   await context.route('**/*', async route => {
     const request = route.request()
     requests++
-    if (requests > 20 || request.method() !== 'GET' || !allowed.has(request.url()) || performance.now() - started >= maxMs) {
+    if (phase?.frozen || requests > 20 || request.method() !== 'GET' || !allowed.has(request.url()) || performance.now() - started >= maxMs) {
       state.blockedRequests++; state.log.push('NETWORK_BLOCKED')
       await route.abort('blockedbyclient')
       return
@@ -65,7 +67,7 @@ export async function installGuard(
       await route.abort('failed')
     }
   })
-  await context.routeWebSocket('**/*', socket => { state.log.push('WEBSOCKET_BLOCKED'); socket.close() })
+  await context.routeWebSocket('**/*', socket => { state.blockedRequests++; state.log.push('WEBSOCKET_BLOCKED'); socket.close() })
 }
 
 async function controls(frame: Frame): Promise<Control[]> {
@@ -93,6 +95,7 @@ export async function runPoc(
   browser: Browser, fixture: Fixture, scenario: string,
   proposal: Proposal = anonymousProposal, maxActions = 12, maxMs = 5000,
   viewMode: 'desktop' | 'mobile' = 'desktop',
+  inputOnly = false,
 ): Promise<PocResult> {
   proposal = structuredClone(proposal)
   const started = performance.now()
@@ -105,16 +108,18 @@ export async function runPoc(
   }
   const allowed = new Set([fixture.urls[scenario], fixture.urls.usage, `${fixture.origin}/robots.txt`])
   if (scenario === 'iframe') allowed.add(fixture.urls.inner)
+  if (scenario === 'rendered') allowed.add(fixture.urls.renderScript)
   if ([...allowed].some(url => new URL(url).origin !== fixture.origin)) throw new Error('Foreign fixture URL')
   const device = devices[viewMode === 'mobile' ? 'iPhone 13' : 'Desktop Chrome']
+  const operation = inputOnly ? 'browser-input-only-poc-v1' : 'browser-preview-poc-v1'
   const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: false,
     viewport: device.viewport, userAgent: device.userAgent, deviceScaleFactor: device.deviceScaleFactor,
     isMobile: device.isMobile, hasTouch: device.hasTouch })
   const result: PocResult = {
     operationStatus: 'TECHNICAL_UNKNOWN', salesAuthorization: 'UNKNOWN', executionAllowed: false,
     confirmationReached: false, reason: 'NOT_CHECKED', controls: [], fingerprint: null,
-    payloadHash: hash({ proposal, method: 'browser-preview-poc-v1', target: fixture.urls[scenario] }),
-    actions: 0, durationMs: 0, blockedRequests: 0, log: [], viewportWidth: null,
+    payloadHash: hash({ proposal, method: operation, target: fixture.urls[scenario] }),
+    actions: 0, durationMs: 0, blockedRequests: 0, log: [], viewportWidth: null, inputReadbackVerified: false,
   }
   const remaining = () => Math.max(1, maxMs - (performance.now() - started))
   const check = () => {
@@ -123,7 +128,8 @@ export async function runPoc(
   const action = async (name: string, execute: () => Promise<unknown>) => {
     check(); result.actions++; result.log.push(name); await execute()
   }
-  await installGuard(context, allowed, maxMs, started, result)
+  const phase = { frozen: false }
+  await installGuard(context, allowed, maxMs, started, result, phase)
   context.on('page', page => {
     page.on('download', download => { result.log.push('DOWNLOAD_BLOCKED'); void download.cancel() })
     page.on('popup', popup => { result.log.push('POPUP_BLOCKED'); void popup.close() })
@@ -150,13 +156,14 @@ export async function runPoc(
     if (frames.some(frame => frame.url() !== 'about:blank' && !allowed.has(frame.url()))) throw new Error('FOREIGN_FRAME')
     for (const frame of frames) {
       const text = await frame.locator('body').innerText({ timeout: remaining() })
-      if (/営業.*お断り|勧誘.*お断り/.test(text)) {
+      if (/(?:営業|勧誘)[^。\n]{0,80}(?:お断り|禁止|ご遠慮)/.test(text.normalize('NFKC'))) {
         result.salesAuthorization = 'PROHIBITED'; result.reason = 'SALES_PROHIBITED'; return result
       }
       if (/CAPTCHA/i.test(text) || await frame.locator('.g-recaptcha, .h-captcha, [data-sitekey]').count()) {
         result.operationStatus = 'HUMAN_REQUIRED'; result.reason = 'CAPTCHA'; return result
       }
     }
+    if (result.blockedRequests) throw new Error('NETWORK_BLOCKED')
     const candidates: Frame[] = []
     for (const frame of frames) if (await frame.locator('form').count()) candidates.push(frame)
     if (candidates.length !== 1 || await candidates[0].locator('form').count() !== 1) throw new Error('FORM_AMBIGUOUS')
@@ -164,7 +171,7 @@ export async function runPoc(
     result.controls = await controls(frame)
     const structure = await formStructure(frame)
     if (new URL(structure.action).origin !== fixture.origin) throw new Error('UNSAFE_ACTION')
-    result.fingerprint = hash({ structure, controls: result.controls, frame: frame.url(), operation: 'browser-preview-poc-v1' })
+    result.fingerprint = hash({ structure, controls: result.controls, frame: frame.url(), operation })
     // Validate all fields/choices/consents before any fill. Never infer required values.
     const names = new Set<string>()
     for (const field of result.controls) {
@@ -184,6 +191,10 @@ export async function runPoc(
       } else if (field.required && !proposal.values[field.name]) throw new Error('REQUIRED_FIELD_UNKNOWN')
     }
     const filled = new Set<string>()
+    if (inputOnly) {
+      phase.frozen = true
+      result.log.push('NETWORK_FROZEN_BEFORE_INPUT')
+    }
     for (const field of result.controls) {
       if (field.type === 'hidden' || filled.has(field.name)) continue
       filled.add(field.name)
@@ -198,9 +209,42 @@ export async function runPoc(
         await action('RADIO_EXPLICIT', () => frame.locator(`[name="${field.name}"][value="${value}"]`).check({ timeout: remaining() }))
       }
       else if (proposal.values[field.name]) await action('FILL', () => locator.fill(proposal.values[field.name], { timeout: remaining() }))
+      if (inputOnly) {
+        for (const current of page.frames()) {
+          if (current.url() !== 'about:blank' && !allowed.has(current.url())) throw new Error('TARGET_CHANGED')
+          const text = await current.locator('body').innerText({ timeout: remaining() })
+          if (/(?:営業|勧誘)[^。\n]{0,80}(?:お断り|禁止|ご遠慮)/.test(text.normalize('NFKC'))) {
+            result.salesAuthorization = 'PROHIBITED'; throw new Error('SALES_PROHIBITED')
+          }
+          if (/CAPTCHA/i.test(text) || await current.locator('.g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey]').count()) {
+            result.operationStatus = 'HUMAN_REQUIRED'; throw new Error('CAPTCHA')
+          }
+        }
+        if (result.blockedRequests) throw new Error('NETWORK_BLOCKED')
+        const fingerprint = hash({ structure: await formStructure(frame), controls: await controls(frame), frame: frame.url(), operation })
+        if (fingerprint !== result.fingerprint) throw new Error('STRUCTURE_CHANGED')
+      }
     }
-    const currentFingerprint = hash({ structure: await formStructure(frame), controls: await controls(frame), frame: frame.url(), operation: 'browser-preview-poc-v1' })
+    const currentFingerprint = hash({ structure: await formStructure(frame), controls: await controls(frame), frame: frame.url(), operation })
     if (currentFingerprint !== result.fingerprint) throw new Error('STRUCTURE_CHANGED')
+    if (inputOnly) {
+      const readback = await frame.locator('form').evaluate(form => ({
+        valid: (form as HTMLFormElement).checkValidity(),
+        values: Object.fromEntries(new FormData(form as HTMLFormElement)),
+      }))
+      if (!readback.valid) throw new Error('FORM_VALIDATION_ERROR')
+      for (const name of filled) {
+        const expected = proposal.values[name] ?? proposal.selections[name]
+          ?? (proposal.consents[name]?.checked ? result.controls.find(control => control.name === name)?.options[0]?.value : undefined)
+        if (expected !== undefined && readback.values[name] !== expected) throw new Error('READBACK_MISMATCH')
+        if (proposal.consents[name]?.checked === false && name in readback.values) throw new Error('READBACK_MISMATCH')
+      }
+      if (result.blockedRequests) throw new Error('NETWORK_BLOCKED')
+      result.inputReadbackVerified = true
+      result.operationStatus = 'BROWSER_VERIFIED'; result.reason = 'FIXTURE_INPUT_VERIFIED'
+      result.log.push('STOP_BEFORE_CONFIRMATION_OR_SEND')
+      return result
+    }
     await action('PREVIEW_ONLY', () => frame.getByRole('button', { name: '入力内容を確認', exact: true }).click({ timeout: remaining() }))
     const error = await frame.getByRole('alert').innerText({ timeout: remaining() })
     if (error || await frame.locator('form :invalid').count()) throw new Error('FORM_VALIDATION_ERROR')
@@ -218,7 +262,7 @@ export async function runPoc(
   } catch (error) {
     const known = ['OPERATION_BUDGET', 'TARGET_CHANGED', 'FOREIGN_FRAME', 'FORM_AMBIGUOUS', 'UNSAFE_ACTION',
       'HUMAN_INPUT_REQUIRED', 'FIELD_AMBIGUOUS', 'CONSENT_REVIEW_REQUIRED', 'CHOICE_REVIEW_REQUIRED',
-      'REQUIRED_FIELD_UNKNOWN', 'FORM_VALIDATION_ERROR', 'READBACK_MISMATCH', 'NETWORK_BLOCKED', 'STRUCTURE_CHANGED']
+      'REQUIRED_FIELD_UNKNOWN', 'FORM_VALIDATION_ERROR', 'READBACK_MISMATCH', 'NETWORK_BLOCKED', 'STRUCTURE_CHANGED', 'SALES_PROHIBITED', 'CAPTCHA']
     result.reason = error instanceof Error && known.includes(error.message) ? error.message : 'TECHNICAL_UNKNOWN'
     result.log.push(result.reason)
   } finally {

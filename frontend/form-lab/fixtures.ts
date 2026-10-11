@@ -68,6 +68,11 @@ export async function startFixture(companyField = false): Promise<Fixture> {
     changed: form() + `<script>document.querySelector('[name=name]').addEventListener('input', () => {
       document.querySelector('textarea').required = false;
     });</script>`,
+    rendered: document('<form method="post" action="/never-send"><div id="fields"></div><button type="submit">送信</button></form><script src="./renderScript"></script>'),
+    autosave: makeForm() + `<script>document.querySelector('[name=name]').addEventListener('input', () => { fetch('/never-send', {method:'POST', body:'fixture'}).catch(() => {}); });</script>`,
+    getAutosave: makeForm() + `<script>document.querySelector('[name=name]').addEventListener('input', () => { fetch(location.href).catch(() => {}); });</script>`,
+    lateProhibited: makeForm() + `<script>document.querySelector('[name=name]').addEventListener('input', () => { const p = document.createElement('p'); p.textContent='営業目的のお問い合わせは禁止です。'; document.body.append(p); });</script>`,
+    submitOnInput: makeForm() + `<script>document.querySelector('[name=name]').addEventListener('input', () => { document.querySelector('form').submit(); });</script>`,
   }
   const server: Server = createServer((request, response) => {
     const key = request.url?.slice(prefix.length + 1)
@@ -91,6 +96,11 @@ export async function startFixture(companyField = false): Promise<Fixture> {
       return
     }
     if (request.url === '/unregistered-target') forbidden++
+    if (key === 'renderScript') {
+      response.writeHead(200, { 'Content-Type': 'application/javascript' })
+      response.end(`document.querySelector('#fields').innerHTML = ${JSON.stringify(controls)};`)
+      return
+    }
     if (key === 'iframe') {
       response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
       response.end(document(`<iframe title="問い合わせフォーム" src="${origin}${prefix}/inner"></iframe>`))
@@ -113,7 +123,7 @@ export async function startFixture(companyField = false): Promise<Fixture> {
   if (!address || typeof address === 'string') throw new Error('Loopback fixture required')
   origin = `http://127.0.0.1:${address.port}`
   const urls = Object.fromEntries(
-    [...Object.keys(pages), 'iframe', 'foreign-frame', 'redirect', 'usage'].map(key => [key, `${origin}${prefix}/${key}`]),
+    [...Object.keys(pages), 'iframe', 'foreign-frame', 'redirect', 'usage', 'renderScript'].map(key => [key, `${origin}${prefix}/${key}`]),
   )
   return {
     origin, urls, postCount: () => posts, forbiddenCount: () => forbidden,
