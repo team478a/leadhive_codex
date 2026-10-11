@@ -4,15 +4,16 @@ import { readFile } from 'node:fs/promises'
 const companyId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
 const projectId = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
 const trialId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
-async function mount(page: Page, readOnly = false, prohibited = false, restore = false) {
-  await page.route('**/harness', r => r.fulfill({ contentType: 'text/html', body: '<script type="module">import R from "/@react-refresh"; R.injectIntoGlobalHook(window); window.$RefreshReg$=()=>{}; window.$RefreshSig$=()=>type=>type; window.__vite_plugin_react_preamble_installed__=true;</script><div id="root"></div>' }))
+async function mount(page: Page, readOnly = false, prohibited = false, restore = false, delayed = false) {
+  await page.route('**/harness', r => r.fulfill({ contentType: 'text/html', body: '<meta name="viewport" content="width=device-width, initial-scale=1"><script type="module">import "/src/styles.css"; import R from "/@react-refresh"; R.injectIntoGlobalHook(window); window.$RefreshReg$=()=>{}; window.$RefreshSig$=()=>type=>type; window.__vite_plugin_react_preamble_installed__=true;</script><main style="padding:16px;max-width:900px;margin:auto"><div id="root"></div></main>' }))
   await page.goto('/harness')
-  await page.evaluate(async ({ companyId, projectId, trialId, readOnly, prohibited, restore }) => {
+  await page.evaluate(async ({ companyId, projectId, trialId, readOnly, prohibited, restore, delayed }) => {
     const rp = '/node_modules/.vite/deps/react.js', dp = '/node_modules/.vite/deps/react-dom_client.js', cp = '/src/LiveInputHandoff.tsx'
     const React = (await import(rp)).default; const { createRoot } = (await import(dp)).default; const { LiveInputHandoff } = await import(cp)
     const state = window as unknown as { saved: string[] }; state.saved = []
     const field = { required: true, label: '会社名', recommended_value: 'private fixture', options: [] }
-    createRoot(document.getElementById('root')).render(React.createElement(LiveInputHandoff, {
+    const root = createRoot(document.getElementById('root'))
+    const props = {
       company: { id: companyId, project_id: projectId }, readOnly, prohibited,
       activities: restore ? [{ id: trialId, company_id: companyId, created_at: new Date().toISOString(), note: '実ページ入力専用依頼 v1: ' + JSON.stringify({ project_id: projectId, request_hash: 'b'.repeat(64), state: 'INPUT_STARTED' }) }] : [],
       profiles: [{ id: 'profile', company_id: companyId, is_primary: true, form_url: 'https://synthetic.example/contact', fields: [
@@ -20,8 +21,13 @@ async function mount(page: Page, readOnly = false, prohibited = false, restore =
         { ...field, id: 'purpose', name: 'purpose', label: '用途', field_type: 'select', options: [{ value: 'business', label: '事業相談' }] },
         { ...field, id: 'consent', name: 'consent', label: '同意文言', field_type: 'checkbox' },
       ] }], onSave: async (note: string) => { state.saved.push(note); return true },
-    }))
-  }, { companyId, projectId, trialId, readOnly, prohibited, restore })
+    }
+    const render = () => root.render(React.createElement(LiveInputHandoff, props))
+    const profiles = props.profiles
+    if (delayed) props.profiles = []
+    ;(window as unknown as { loadProfiles: () => void }).loadProfiles = () => { props.profiles = profiles; render() }
+    render()
+  }, { companyId, projectId, trialId, readOnly, prohibited, restore, delayed })
 }
 
 test('live handoff requires explicit review, downloads private task and records metadata only', async ({ page }) => {
@@ -46,6 +52,9 @@ test('live handoff requires explicit review, downloads private task and records 
   await page.getByRole('button', { name: 'PC入力専用の依頼を保存' }).click()
   const task = JSON.parse(await readFile((await (await download).path())!, 'utf8'))
   expect(issued).toBe(true); expect(task.input.values.name).toBe('private fixture')
+  await expect(page.getByRole('button', { name: 'PC入力専用の依頼を保存' })).toHaveCount(0)
+  await expect(page.getByLabel('会社名（必須）')).toBeDisabled()
+  await expect(page.getByText(/作り直す場合は、先に入力依頼/)).toBeVisible()
   const report = { definition: 'live-form-input-only-v1', trialId, companyId, projectId, requestHash: task.requestHash,
     status: 'LIVE_INPUT_VERIFIED', reason: 'STOP_BEFORE_CONFIRMATION_OR_SEND', fieldsFilled: 3, blockedRequests: 0,
     sent: false, executionAllowed: false, approvalGranted: false, confirmationReached: false }
@@ -54,6 +63,9 @@ test('live handoff requires explicit review, downloads private task and records 
   await expect(page.getByRole('status')).toContainText('対応する未送信')
   await file.setInputFiles({ name: 'result.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(report)) })
   await expect(page.getByRole('status')).toContainText('未送信のPC報告を記録')
+  await expect(page.getByRole('article', { name: '最新の入力結果' })).toContainText('入力・読み戻し成功（未送信）')
+  await expect(page.getByRole('article', { name: '最新の入力結果' })).toContainText('入力確認項目: 3件')
+  await page.screenshot({ path: test.info().outputPath('input-result.png'), fullPage: true })
   const saved = await page.evaluate(() => (window as unknown as { saved: string[] }).saved)
   expect(saved).toHaveLength(1); expect(saved[0]).toContain('PC_REPORTED_UNVERIFIED')
   expect(saved[0]).not.toContain('private fixture'); expect(saved[0]).not.toContain(task.token)
@@ -74,4 +86,33 @@ test('reopened company accepts its existing input report without retaining ticke
   await page.getByLabel('PCの未送信結果JSON').setInputFiles({ name: 'report.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify(report)) })
   await expect(page.getByRole('status')).toContainText('未送信のPC報告を記録')
   await expect(page.getByLabel('PCの未送信結果JSON')).toHaveCount(0)
+  await expect(page.getByRole('article', { name: '最新の入力結果' })).toContainText('入力に追加の通信が必要なため停止しました。')
+})
+
+test('late form analysis shows fields without selecting the same URL again', async ({ page }) => {
+  await mount(page, false, false, false, true)
+  await expect(page.getByText('先にフォーム解析で入力項目を取得してください。')).toBeVisible()
+  await page.evaluate(() => (window as unknown as { loadProfiles: () => void }).loadProfiles())
+  await expect(page.getByLabel('会社名（必須）')).toHaveValue('private fixture')
+  await expect(page.getByLabel('入力先フォーム')).toHaveValue('profile')
+  await expect(page.getByText(/管理者による入力専用機能の有効化が必要/)).toHaveCount(0)
+})
+
+test('saved results remain readable after reopening, other company records are ignored', async ({ page }) => {
+  await mount(page)
+  await page.evaluate(async ({ companyId, projectId, trialId }) => {
+    const rp = '/node_modules/.vite/deps/react.js', dp = '/node_modules/.vite/deps/react-dom_client.js', cp = '/src/LiveInputHandoff.tsx'
+    const React = (await import(rp)).default; const { createRoot } = (await import(dp)).default; const { LiveInputHandoff } = await import(cp)
+    const host = document.createElement('div'); document.body.append(host)
+    document.getElementById('root')!.hidden = true
+    const note = '実ページ入力報告 v1: ' + JSON.stringify({ source: 'PC_REPORTED_UNVERIFIED', sent: false, status: 'TECHNICAL_UNKNOWN', reason: 'FUTURE_REASON', fieldsFilled: 0 })
+    createRoot(host).render(React.createElement(LiveInputHandoff, { company: { id: companyId, project_id: projectId }, profiles: [], readOnly: true, prohibited: false, onSave: async () => true,
+      activities: [{ id: trialId, company_id: companyId, note, created_at: '2026-10-11T12:00:00Z' },
+        { id: 'other', company_id: 'different-company', note: note.replace('FUTURE_REASON', 'NETWORK_REQUIRED'), created_at: '2026-10-12T12:00:00Z' }] }))
+  }, { companyId, projectId, trialId })
+  const result = page.getByRole('article', { name: '最新の入力結果' })
+  await expect(result).toContainText('FUTURE_REASON')
+  await expect(result).toContainText('未分類の理由')
+  await expect(result).not.toContainText('NETWORK_REQUIRED')
+  await expect(result).toContainText('送信承認を表すものではありません')
 })
