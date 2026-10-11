@@ -40,6 +40,7 @@ class InputPlan(BaseModel):
     values: dict[str, str]
     choices: dict[str, str]
     consents: dict[str, Consent]
+    autoReport: bool = False
 
     @model_validator(mode="after")
     def bounded(self):
@@ -120,7 +121,7 @@ def issue(
         "definition": "live-input-task-v1",
         "companyId": str(company.id),
         "projectId": str(company.project_id),
-        "input": plan.model_dump(),
+        "input": plan.model_dump(exclude={"autoReport"}),
     }
     request_hash = hashlib.sha256(encode(task).encode()).hexdigest()
     token = "lh_input_" + secrets.token_hex(32)
@@ -136,6 +137,7 @@ def issue(
         "issuer_id": str(user.id),
         "expires_at": expires.isoformat(),
         "state": "PENDING",
+        "auto_report": plan.autoReport,
     }
     item.note = stored(item, value)
     db.add(item)
@@ -146,18 +148,36 @@ def issue(
         "requestHash": request_hash,
         "token": token,
         "expiresAt": expires.isoformat(),
+        "autoReport": plan.autoReport,
     }
 
 
 @router.post("/live-input-trials/{trial_id}/check")
 def check(trial_id: UUID, data: Check, request: Request, db: Session = Depends(get_db)):
     enabled()
+    item, value, company = authenticate_trial(trial_id, request, db)
+    if (
+        data.requestHash != value["request_hash"]
+        or policy(db, company, value["url"]) != value["policy_hash"]
+    ):
+        raise HTTPException(409, "依頼・フォーム情報が変わりました。")
+    required = "PENDING" if data.phase == "LOAD" else "LOADED"
+    if value["state"] != required:
+        raise HTTPException(409, "この操作は実行済みまたは取り消されています。")
+    value["state"] = "LOADED" if data.phase == "LOAD" else "INPUT_STARTED"
+    item.note = stored(item, value)
+    db.commit()
+    return {"inputOnly": True, "sendAllowed": False}
+
+
+def authenticate_trial(trial_id: UUID, request: Request, db: Session):
     parts = request.headers.get("authorization", "").split()
     if (
         request.cookies
         or len(parts) != 2
         or parts[0].lower() != "bearer"
         or not parts[1].startswith("lh_input_")
+        or len(parts[1]) != 73
     ):
         raise HTTPException(401, "入力専用の接続キーが必要です。")
     item = db.scalar(select(Activity).where(Activity.id == trial_id).with_for_update())
@@ -182,19 +202,121 @@ def check(trial_id: UUID, data: Check, request: Request, db: Session = Depends(g
     except (ValueError, TypeError, KeyError):
         raise HTTPException(401, "入力依頼が失効しています。") from None
     company = company_access(item.company_id, db, issuer)
-    if (
-        str(company.project_id) != value["project_id"]
-        or data.requestHash != value["request_hash"]
-        or policy(db, company, value["url"]) != value["policy_hash"]
-    ):
+    if str(company.project_id) != value["project_id"]:
         raise HTTPException(409, "依頼・フォーム情報が変わりました。")
-    required = "PENDING" if data.phase == "LOAD" else "LOADED"
-    if value["state"] != required:
-        raise HTTPException(409, "この操作は実行済みまたは取り消されています。")
-    value["state"] = "LOADED" if data.phase == "LOAD" else "INPUT_STARTED"
+    return item, value, company
+
+
+class InputReport(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+    definition: Literal["live-form-input-only-v1"]
+    trialId: str = Field(pattern="^[a-f0-9-]{36}$")
+    companyId: str = Field(pattern="^[a-f0-9-]{36}$")
+    projectId: str = Field(pattern="^[a-f0-9-]{36}$")
+    requestHash: str = Field(pattern="^[a-f0-9]{64}$")
+    status: Literal["LIVE_INPUT_VERIFIED", "TECHNICAL_UNKNOWN", "HUMAN_REQUIRED", "BLOCKED"]
+    reason: str = Field(pattern="^[A-Z_]{3,100}$")
+    fieldsFilled: int = Field(ge=0, le=100)
+    blockedRequests: int = Field(ge=0, le=100000)
+    sent: Literal[False]
+    approvalGranted: Literal[False]
+    executionAllowed: Literal[False]
+    confirmationReached: Literal[False]
+
+    @model_validator(mode="before")
+    @classmethod
+    def unsent_only(cls, value):
+        if isinstance(value, dict) and any(
+            value.get(k) is not False
+            for k in ("sent", "approvalGranted", "executionAllowed", "confirmationReached")
+        ):
+            raise ValueError("Only unsent reports are accepted")
+        return value
+
+    @model_validator(mode="after")
+    def consistent_success(self):
+        if self.status == "LIVE_INPUT_VERIFIED" and (
+            self.reason != "STOP_BEFORE_CONFIRMATION_OR_SEND"
+            or not self.fieldsFilled
+            or self.blockedRequests
+        ):
+            raise ValueError("Inconsistent input success")
+        return self
+
+
+@router.post("/live-input-trials/{trial_id}/result")
+def receive_result(
+    trial_id: UUID, report: InputReport, request: Request, db: Session = Depends(get_db)
+):
+    enabled()
+    item, value, company = authenticate_trial(trial_id, request, db)
+    if not value.get("auto_report"):
+        raise HTTPException(403, "この依頼では結果の自動転送は許可されていません。")
+    if (
+        report.trialId != str(item.id)
+        or report.companyId != str(company.id)
+        or report.projectId != str(company.project_id)
+        or report.requestHash != value["request_hash"]
+    ):
+        raise HTTPException(409, "依頼と入力結果が一致しません。")
+    digest = hashlib.sha256(encode(report.model_dump()).encode()).hexdigest()
+    if value["state"] == "REPORTED":
+        if value.get("report_hash") == digest:
+            return {"recorded": True, "alreadyRecorded": True}
+        raise HTTPException(409, "記録済みの結果は変更できません。")
+    if value["state"] not in {"LOADED", "INPUT_STARTED"} or (
+        report.status == "LIVE_INPUT_VERIFIED" and value["state"] != "INPUT_STARTED"
+    ):
+        raise HTTPException(409, "入力依頼は未開始または取り消されています。")
+    result = Activity(
+        id=uuid4(),
+        company_id=company.id,
+        activity_type="note",
+        note="実ページ入力報告 v1: "
+        + encode(
+            {
+                "version": 1,
+                "source": "PC_REPORTED_UNVERIFIED",
+                **report.model_dump(),
+            }
+        ),
+    )
+    db.add(result)
+    value.update(state="REPORTED", report_hash=digest, result_id=str(result.id))
     item.note = stored(item, value)
     db.commit()
-    return {"inputOnly": True, "sendAllowed": False}
+    return {"recorded": True, "alreadyRecorded": False}
+
+
+@router.get("/companies/{company_id}/live-input-trials/{trial_id}/result")
+def read_result(
+    company_id: UUID,
+    trial_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    company_access(company_id, db, user, write=False)
+    item = db.get(Activity, trial_id)
+    if not item or item.company_id != company_id or not item.note.startswith(PREFIX):
+        raise HTTPException(404, "入力依頼が見つかりません。")
+    try:
+        value = json.loads(item.note[len(PREFIX) :])
+        if stored(item, value) != item.note:
+            raise ValueError()
+        result = db.get(Activity, UUID(value["result_id"])) if value.get("result_id") else None
+        if result and result.company_id == company_id:
+            report = json.loads(result.note[len("実ページ入力報告 v1: ") :])
+            validated = InputReport.model_validate(
+                {k: v for k, v in report.items() if k not in {"version", "source"}}
+            )
+            if hashlib.sha256(encode(validated.model_dump()).encode()).hexdigest() != value.get(
+                "report_hash"
+            ):
+                raise ValueError()
+            return {"report": report, "created": result.created_at.isoformat()}
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(409, "入力結果の整合性を確認できません。") from None
+    return {"report": None, "created": None}
 
 
 @router.post("/companies/{company_id}/live-input-trials/{trial_id}/revoke")

@@ -41,17 +41,21 @@ test('live handoff requires explicit review, downloads private task and records 
     const input = route.request().postDataJSON()
     expect(input.choices.purpose).toBe('business')
     expect(input.consents.consent.checked).toBe(true)
+    expect(input.autoReport).toBe(true)
     expect(input).not.toHaveProperty('confirmed')
     await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ definition: 'live-input-task-v1', trialId, companyId, projectId,
-      input, token: 'lh_input_' + 'a'.repeat(64), requestHash: 'b'.repeat(64), expiresAt: new Date(Date.now() + 900000).toISOString() }) })
+      input: { formUrl: input.formUrl, termsConfirmed: input.termsConfirmed, values: input.values, choices: input.choices, consents: input.consents },
+      autoReport: input.autoReport, token: 'lh_input_' + 'a'.repeat(64), requestHash: 'b'.repeat(64), expiresAt: new Date(Date.now() + 900000).toISOString() }) })
   })
   await page.getByLabel('用途（必須）').selectOption('business')
   await page.getByRole('checkbox', { name: /同意内容/ }).check()
+  await page.getByRole('checkbox', { name: '未送信のPC結果をLeadHiveへ自動で戻す' }).check()
   await page.getByRole('checkbox', { name: /宛先・入力内容/ }).check()
   const download = page.waitForEvent('download')
   await page.getByRole('button', { name: 'PC入力専用の依頼を保存' }).click()
   const task = JSON.parse(await readFile((await (await download).path())!, 'utf8'))
   expect(issued).toBe(true); expect(task.input.values.name).toBe('private fixture')
+  expect(task.autoReport).toBe(true)
   await expect(page.getByRole('button', { name: 'PC入力専用の依頼を保存' })).toHaveCount(0)
   await expect(page.getByLabel('会社名（必須）')).toBeDisabled()
   await expect(page.getByText(/作り直す場合は、先に入力依頼/)).toBeVisible()
@@ -115,4 +119,39 @@ test('saved results remain readable after reopening, other company records are i
   await expect(result).toContainText('未分類の理由')
   await expect(result).not.toContainText('NETWORK_REQUIRED')
   await expect(result).toContainText('送信承認を表すものではありません')
+})
+
+test('PC result refresh works on a reopened request without importing a file', async ({ page }) => {
+  await mount(page, false, false, true)
+  let reads = 0
+  await page.route(`**/api/companies/${companyId}/live-input-trials/${trialId}/result`, async route => {
+    reads++
+    expect(route.request().method()).toBe('GET')
+    await route.fulfill({ contentType: 'application/json', body: JSON.stringify({ created: new Date().toISOString(), report: reads === 1 ? null : {
+      trialId, companyId, projectId, requestHash: 'b'.repeat(64), status: 'LIVE_INPUT_VERIFIED',
+      reason: 'STOP_BEFORE_CONFIRMATION_OR_SEND', fieldsFilled: 3, source: 'PC_REPORTED_UNVERIFIED',
+      sent: false, executionAllowed: false, approvalGranted: false, confirmationReached: false,
+    } }) })
+  })
+  await page.getByRole('button', { name: 'PC結果を確認', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('まだ届いていません')
+  await page.getByRole('button', { name: 'PC結果を確認', exact: true }).click()
+  await expect(page.getByRole('article', { name: '最新の入力結果' })).toContainText('入力確認項目: 3件')
+  await expect(page.getByLabel('PCの未送信結果JSON')).toHaveCount(0)
+  expect(await page.evaluate(() => (window as unknown as { saved: string[] }).saved)).toEqual([])
+})
+
+test('result refresh rejects another company and preserves the manual fallback', async ({ page }) => {
+  await mount(page, false, false, true)
+  await page.route(`**/api/companies/${companyId}/live-input-trials/${trialId}/result`, route => route.fulfill({
+    contentType: 'application/json', body: JSON.stringify({ created: new Date().toISOString(), report: {
+      trialId, companyId: projectId, projectId, requestHash: 'b'.repeat(64), status: 'LIVE_INPUT_VERIFIED',
+      reason: 'STOP_BEFORE_CONFIRMATION_OR_SEND', fieldsFilled: 3, source: 'PC_REPORTED_UNVERIFIED',
+      sent: false, executionAllowed: false, approvalGranted: false, confirmationReached: false,
+    } }),
+  }))
+  await page.getByRole('button', { name: 'PC結果を確認', exact: true }).click()
+  await expect(page.getByRole('status')).toContainText('取得できませんでした')
+  await expect(page.getByLabel('PCの未送信結果JSON')).toBeVisible()
+  await expect(page.getByRole('article', { name: '最新の入力結果' })).toHaveCount(0)
 })

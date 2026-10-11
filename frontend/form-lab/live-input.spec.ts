@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 import { createHash } from 'node:crypto'
 import { runLiveInput } from './live-input'
-import { canonicalLive } from '../src/liveInputContract'
+import { canonicalLive, type LiveTask } from '../src/liveInputContract'
 import { publicIPv4, publicTarget, robotsPermits } from './public-get'
 
 const make = () => {
@@ -10,6 +10,30 @@ const make = () => {
   return { ...base, trialId: '33333333-3333-3333-3333-333333333333', requestHash: createHash('sha256').update(canonicalLive(base)).digest('hex'), token: 'lh_input_' + 'a'.repeat(64), expiresAt: new Date(Date.now() + 600_000).toISOString(), serverOrigin: 'https://owned.example' }
 }
 const form = '<form><label>名前<input name="name" required></label><label>メール<input type="email" name="email" required></label><label>本文<textarea name="message" required></textarea></label><button>送信</button></form>'
+
+test('automatic report returns only unsent metadata and never retries', async () => {
+  const { transferLiveResult } = await import('./live-input')
+  const task = { ...make(), autoReport: true }
+  const report = { definition: 'live-form-input-only-v1', trialId: task.trialId, companyId: task.companyId,
+    projectId: task.projectId, requestHash: task.requestHash, status: 'LIVE_INPUT_VERIFIED',
+    reason: 'STOP_BEFORE_CONFIRMATION_OR_SEND', fieldsFilled: 3, blockedRequests: 0,
+    sent: false, approvalGranted: false, executionAllowed: false, confirmationReached: false,
+    secret: task.token, values: task.input.values }
+  let calls = 0
+  const post = async (_task: LiveTask, action: string, body: Record<string, unknown>, origin: string) => {
+    calls++; expect(action).toBe('result'); expect(origin).toBe(task.serverOrigin)
+    expect(JSON.stringify(body)).not.toContain(task.token); expect(body).not.toHaveProperty('values')
+  }
+  expect(await transferLiveResult(task, report, task.serverOrigin, post)).toBe('RECORDED')
+  expect(calls).toBe(1)
+  expect(await transferLiveResult({ ...task, autoReport: false }, report, task.serverOrigin, post)).toBe('NOT_REQUESTED')
+  for (const changed of [{ sent: true }, { companyId: make().projectId }, { fieldsFilled: 0 }, { blockedRequests: 1 }, { reason: 'private free text' }])
+    expect(await transferLiveResult(task, { ...report, ...changed }, task.serverOrigin, post)).toBe('FAILED')
+  expect(calls).toBe(1)
+  expect(await transferLiveResult(task, report, task.serverOrigin, async () => { calls++; throw Error('offline') })).toBe('FAILED')
+  expect(calls).toBe(2)
+  expect(await transferLiveResult(task, report, 'https://foreign.example')).toBe('FAILED')
+})
 
 test('live pathway loads dynamic fields then freezes all traffic and stops before send', async ({ browser }) => {
   const phases: string[] = [], requests: string[] = []
