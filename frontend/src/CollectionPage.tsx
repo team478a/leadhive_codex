@@ -11,6 +11,7 @@ import { CollectionDiscovery } from './CollectionDiscovery'
 import { Field } from './forms'
 import { prefectures } from './prefectures'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
+import { SourceExclusions } from './SourceExclusions'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
@@ -207,6 +208,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
 
   return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
     <SalesPreparationPanel key={projectId} projectId={projectId} />
+    <SourceExclusions key={`sources-${projectId}`} projectId={projectId} />
     <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} onConfirmed={setConfirmedConditions} onDraftChanged={setConditionsDirty} onApplied={row => {
       setConfirmedConditions(row)
       if (source === 'csv' || source === 'url') return

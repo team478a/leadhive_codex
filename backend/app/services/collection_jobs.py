@@ -133,11 +133,20 @@ def save_candidates(
     db.scalar(
         select(Project.id).where(Project.id == job.project_id).with_for_update(key_share=True)
     )
+    from app.services.source_exclusions import domain_key, domains
+
+    remembered_sources = domains(db, job.project_id)
     for candidate in candidates:
         capture_candidate(db, job, candidate)
+        if candidate.website_url and domain_key(candidate.website_url) in remembered_sources:
+            job.excluded_count += 1
+            mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
+            continue
         if job.source == "serper" and candidate.website_url:
             kind, _ = classify_candidate(candidate)
-            if kind in {"SOCIAL", "JOB_PR", "PORTAL_DIRECTORY", "OTHER", "ARTICLE"}:
+            if kind in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"} or (
+                kind == "JOB_PR" and classify_candidate(candidate)[1] == "EXTERNAL_PLATFORM"
+            ):
                 job.excluded_count += 1
                 mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
                 continue

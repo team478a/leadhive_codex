@@ -98,7 +98,7 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
     # Job-result pages describe vacancies, not the business's service offering.
     # Do not reject a provider merely because its own recruitment page mentions jobs.
     if re.search(r"の求人[・\s]+仕事[・\s]+採用", title):
-        return "JOB_PR", "EXTERNAL_PLATFORM"
+        return "JOB_PR", "TITLE_HINT_REQUIRES_REVIEW"
     if (
         any(marker in title for marker in COMPARISON_TITLE_MARKERS)
         or re.search(r"(?:会社|企業)\s*(?:の)?\s*おすすめ(?!\s*(?:プラン|サービス))", title)

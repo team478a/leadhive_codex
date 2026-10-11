@@ -47,11 +47,12 @@ def test_gate_replay_preserves_boundary_and_raw():
     assert [r["current_ingestion_eligibility"]["state"] for r in rows] == [
         "EXCLUDED",
         "EXCLUDED",
-        "EXCLUDED",
         "CANDIDATE",
         "DUPLICATE",
+        "DUPLICATE",
     ]
-    assert rows[3]["current_ingestion_eligibility"]["state"] == "CANDIDATE"
+    assert rows[2]["current_ingestion_eligibility"]["state"] == "CANDIDATE"
+    assert rows[2]["current_ingestion_eligibility"]["classification"] == "ARTICLE"
     assert all(r["human_truth"] is None for r in rows)
     assert summary["ingestion_eligibility"]["company_saved_count"] is None
     assert summary["human_reviewed"] == 0

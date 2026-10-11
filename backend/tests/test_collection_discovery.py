@@ -90,7 +90,7 @@ def test_invalid_non_company_duplicate_and_suppression(auth, db, monkeypatch):
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
-        "NON_COMPANY_SOURCE",
+        "SAVED",
         "SUPPRESSED",
         "INVALID_URL",
         "INVALID_URL",
@@ -99,7 +99,7 @@ def test_invalid_non_company_duplicate_and_suppression(auth, db, monkeypatch):
     assert hits[0].id != hits[1].id
     assert "password" not in str(hits[8].snapshot)
     assert "secret-not-a-result" not in str([h.snapshot for h in hits])
-    assert db.scalar(select(func.count()).select_from(Company)) == 1
+    assert db.scalar(select(func.count()).select_from(Company)) == 2
 
 
 def test_response_over_limit_and_immutable_snapshot(auth, db, monkeypatch):
@@ -423,7 +423,7 @@ def test_search_page_hints_are_shared_with_ingestion(url, title, kind):
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_non_company_hits_do_not_spend_goal_slots(auth, db, monkeypatch, fair):
+def test_known_sources_skip_goal_slots_but_articles_remain_provisional(auth, db, monkeypatch, fair):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
@@ -439,16 +439,16 @@ def test_non_company_hits_do_not_spend_goal_slots(auth, db, monkeypatch, fair):
     provider(monkeypatch, rows)
     monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
     assert worker.run_once()
-    assert set(db.scalars(select(Company.domain))) == {"agency-one.test", "agency-two.test"}
+    assert set(db.scalars(select(Company.domain))) == {"publisher.test", "agency-one.test"}
     hits = db.scalars(
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
     assert [hit.disposition for hit in hits] == [
         "NON_COMPANY_SOURCE",
-        "NON_COMPANY_SOURCE",
         "SAVED",
-        "NON_COMPANY_SOURCE",
         "SAVED",
+        "DUPLICATE",
+        "TARGET_LIMIT",
         "TARGET_LIMIT",
     ]
     assert [hit.classification for hit in hits[:2]] == ["JOB_PR", "ARTICLE"]
