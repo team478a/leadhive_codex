@@ -20,6 +20,7 @@ from app.services.discovery_capture import capturing_discovery
 from app.services.external_presence import extra_searches
 from app.services.processing_usage import capture_usage, persist_usage
 from app.services.scraper import is_aggregator_domain
+from app.services.source_exclusions import domain_key, domains
 
 REQUEST_BUDGET = 50
 PAGE_SIZE = 10
@@ -58,16 +59,22 @@ def bounded_candidates(db, job, candidates, remaining):
     """Do not overshoot the goal; retain duplicate/excluded observations for ingestion."""
     selected = []
     keys: set[str | tuple[str, str]] = set()
+    remembered_sources = domains(db, job.project_id)
+
     for candidate in candidates:
         domain = canonicalize_url(candidate.website_url)[1] if candidate.website_url else ""
         if (
             is_duplicate(db, job.project_id, candidate)
+            or (candidate.website_url and domain_key(candidate.website_url) in remembered_sources)
             or is_suppressed(db, job.project_id, candidate)
             or (domain and is_aggregator_domain(domain))
             or (
                 candidate.website_url
-                and classify_candidate(candidate)[0]
-                in {"SOCIAL", "JOB_PR", "PORTAL_DIRECTORY", "OTHER", "ARTICLE"}
+                and classify_candidate(candidate)[0] in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
+            )
+            or (
+                candidate.website_url
+                and classify_candidate(candidate) == ("JOB_PR", "EXTERNAL_PLATFORM")
             )
         ):
             selected.append(candidate)

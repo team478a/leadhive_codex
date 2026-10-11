@@ -152,7 +152,8 @@ class SourcePolicy:
     def eligible(self, hit: dict[str, Any]) -> tuple[bool, str, str]:
         kind, reason = self.classify(hit)
         return (
-            kind not in {"SOCIAL", "JOB_PR", "PORTAL_DIRECTORY", "OTHER", "ARTICLE"},
+            kind not in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
+            and (kind != "JOB_PR" or reason != "EXTERNAL_PLATFORM"),
             kind,
             reason,
         )

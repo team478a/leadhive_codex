@@ -70,6 +70,15 @@ def find_duplicate(
 
 
 def analyze(db: Session, company: Company, force: bool = False) -> Company:
+    from app.services.source_exclusions import domains, excluded
+
+    if company.website_url and excluded(db, company.project_id, company.website_url):
+        company.analysis_status = "excluded"
+        company.analysis_error = "SOURCE_DOMAIN_EXCLUDED: このプロジェクトで除外した掲載媒体です。"
+        company.scraped_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(company)
+        return company
     if company.analysis_status == "completed" and not force:
         return company
     if not company.website_url:
@@ -92,7 +101,19 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
     db.commit()
     logger.info("scraper start: company_id=%s", company.id)
     try:
-        page, data = scrape_company(company.website_url)
+        remembered = domains(db, company.project_id)
+        page, data = (
+            scrape_company(company.website_url, excluded_domains=remembered)
+            if remembered
+            else scrape_company(company.website_url)
+        )
+        if data.source_exclusion_reason:
+            company.analysis_status = "excluded"
+            company.analysis_error = data.source_exclusion_reason
+            company.scraped_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(company)
+            return company
         before_hash = identity_hash(company)
         confidence, reasons = website_match(company, data)
         website_url, domain = canonicalize_url(page.url)
