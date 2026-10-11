@@ -1,0 +1,51 @@
+{
+  "task_id": "LH-D01",
+  "baseline_commit": "98bd6ae142e53d0dda857c5b1b9bcd02f652d23c",
+  "method": "saved title/link offline policy replay; no Company DB replay",
+  "arms": {
+    "A": {
+      "file_sha256": "6e4b63bfe21588b97131e478b14f70221fe224d755d5e46c2896c6f4d5a2f9b9",
+      "projected_input_sha256": "6e01c57871aa997ecf5a6ae413e34b8a95b798539c1bd48ca1c337c1226fe7c6",
+      "raw_hits": 20,
+      "before_eligible": 13,
+      "after_eligible": 13,
+      "before_classification": {
+        "OFFICIAL_SITE_CANDIDATE": 5,
+        "ARTICLE": 8,
+        "JOB_PR": 5,
+        "PORTAL_DIRECTORY": 2
+      },
+      "after_classification": {
+        "OFFICIAL_SITE_CANDIDATE": 5,
+        "ARTICLE": 8,
+        "JOB_PR": 5,
+        "PORTAL_DIRECTORY": 2
+      },
+      "changed": 0,
+      "unchanged_other_hosts": true
+    },
+    "B": {
+      "file_sha256": "3e9d97b8ab12dee233b99d92fa0fc69d2ded8af216c9406fc2e0c7361686145b",
+      "projected_input_sha256": "daffdb39ecca22939da9e14ec4c1f9f6d52094ee3305b79a2e2a35bc5dd4f325",
+      "raw_hits": 20,
+      "before_eligible": 16,
+      "after_eligible": 15,
+      "before_classification": {
+        "ARTICLE": 12,
+        "OFFICIAL_SITE_CANDIDATE": 4,
+        "JOB_PR": 3,
+        "PORTAL_DIRECTORY": 1
+      },
+      "after_classification": {
+        "ARTICLE": 12,
+        "JOB_PR": 4,
+        "OFFICIAL_SITE_CANDIDATE": 3,
+        "PORTAL_DIRECTORY": 1
+      },
+      "changed": 1,
+      "unchanged_other_hosts": true
+    }
+  },
+  "human_precision": null,
+  "external_requests": 0
+}
