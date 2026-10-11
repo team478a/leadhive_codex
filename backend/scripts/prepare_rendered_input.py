@@ -20,8 +20,19 @@ def main() -> int:
         parser.error("Use a new private output file and a bounded request file.")
     request = json.loads(args.request.read_text(encoding="utf-8"))
     allowed = {"formUrl", "termsConfirmed", "values", "choices", "consents"}
-    if not isinstance(request, dict) or set(request) != allowed:
+    if (
+        not isinstance(request, dict)
+        or not allowed.issubset(request)
+        or set(request) - allowed - {"resourceUrls"}
+    ):
         parser.error("Invalid request schema.")
+    if "resourceUrls" in request and (
+        not isinstance(request["resourceUrls"], list)
+        or len(request["resourceUrls"]) > 8
+        or not all(isinstance(value, str) for value in request["resourceUrls"])
+        or len(set(request["resourceUrls"])) != len(request["resourceUrls"])
+    ):
+        parser.error("Select at most 8 distinct resource URLs from this page.")
     if not isinstance(request["formUrl"], str) or request["termsConfirmed"] is not True:
         parser.error("A form URL and explicit terms confirmation are required.")
     for key in ("values", "choices"):
@@ -39,7 +50,9 @@ def main() -> int:
     ):
         parser.error("Invalid explicit consent.")
     try:
-        result = acquire_snapshot(request["formUrl"], terms_confirmed=True)
+        result = acquire_snapshot(
+            request["formUrl"], terms_confirmed=True, resource_urls=request.get("resourceUrls")
+        )
     except ScrapeError as exc:
         print(f"Acquisition stopped: {exc.public_message}")
         return 2

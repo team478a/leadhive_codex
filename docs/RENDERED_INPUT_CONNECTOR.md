@@ -50,6 +50,8 @@ npm run trial:rendered-form-input
 
 ## 安全境界
 
+上限超過の実データ検証後、`RESOURCE_REVIEW_REQUIRED` とprivateページ保存・リソース一覧・任意の `resourceUrls` 選択を追加した。詳細は [リソース上限診断](BOUNDED_RESOURCE_REVIEW.md) を参照。最大8件は維持し、未取得JS/CSSを必要ないと推測して入力成功にはしない。
+
 - 取得：SafeFetcherの32リクエスト・60秒上限（robots/redirect含む）、HTML500KB、各asset500KB、合計2MB、asset8件。
 - Browser：外部要求をfetchで転送せず、許可済みsnapshotを最大20回提供するだけ。service worker禁止。画像・font・mediaは取得せず省略するため見た目の完全再現は保証しない。
 - 未取得script、XHR/data取得、第三者CSS、外部iframeは停止する。必要リソースがない状態を入力成功にしない。
