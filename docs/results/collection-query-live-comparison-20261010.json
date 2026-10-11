@@ -1,0 +1,89 @@
+{
+  "date": "2026-10-10",
+  "deployed_baseline_last_verified": "40a630f3224a9192b63b6bc362e83c2a23337801",
+  "method": "live UI initiated, displayed Raw Ledger capture, one A/B run",
+  "arms": {
+    "A": {
+      "keyword": "SNS運用代行",
+      "region": "大阪府",
+      "requests": 2,
+      "raw_hits": 20,
+      "unique_raw_urls": 18,
+      "raw_repeated_url_hits": 2,
+      "ui_classification_counts": {
+        "公式サイト候補（未確認）": 5,
+        "記事候補": 8,
+        "求人・PR": 5,
+        "掲載媒体": 2
+      },
+      "saved_candidates": 5,
+      "unique_saved_domains": 5,
+      "ingestion_duplicates": 0,
+      "errors": 0,
+      "page_processing_ms": [
+        1849,
+        2309
+      ],
+      "stop_reason_ui": "検索上限に到達",
+      "human_reviewed": 0,
+      "human_precision": null
+    },
+    "B": {
+      "keyword": "\"SNS運用代行\" \"サービス\"",
+      "region": "大阪府",
+      "requests": 2,
+      "raw_hits": 20,
+      "unique_raw_urls": 20,
+      "raw_repeated_url_hits": 0,
+      "ui_classification_counts": {
+        "記事候補": 12,
+        "公式サイト候補（未確認）": 4,
+        "求人・PR": 3,
+        "掲載媒体": 1
+      },
+      "saved_candidates": 4,
+      "unique_saved_domains": 4,
+      "ingestion_duplicates": 0,
+      "errors": 0,
+      "page_processing_ms": [
+        2391,
+        2717
+      ],
+      "stop_reason_ui": "検索上限に到達",
+      "human_reviewed": 0,
+      "human_precision": null
+    }
+  },
+  "cross_arm": {
+    "shared_saved_domains": 2,
+    "B_only_saved_domains": 2,
+    "B_only_after_assistant_identified_job_page_exclusion": 1,
+    "A_only_saved_domains": 3,
+    "saved_domain_union": 7
+  },
+  "observed_issue": "one B saved candidate is a /job_search/ recruitment listing; assistant observation, not Human Truth",
+  "cost": {
+    "search_requests": 4,
+    "estimated_api_cost": null,
+    "human_review_seconds": null
+  },
+  "safety": {
+    "additional_research": false,
+    "AI_calls_started": 0,
+    "company_site_GET_started": 0,
+    "completion_jobs_started": 0,
+    "DM_jobs_started": 0,
+    "approvals_created": 0,
+    "email_sent_by_test": 0,
+    "form_sent_by_test": 0,
+    "outbound_ui": "停止中"
+  },
+  "decision": "do not adopt quoted service query as default; compare targeted recruitment-source exclusion next",
+  "limitations": [
+    "not Human Truth",
+    "single time window",
+    "displayed page processing time is not full operation latency",
+    "worker commit not independently rechecked during this run",
+    "site location versus service area unverified"
+  ]
+}
