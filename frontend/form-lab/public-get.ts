@@ -3,6 +3,7 @@ import { resolve4 } from 'node:dns/promises'
 import { BlockList, isIP } from 'node:net'
 import { request } from 'node:https'
 import { rootCertificates } from 'node:tls'
+import { documentSnapshot } from './document-snapshot'
 
 const denied = new BlockList()
 for (const [ip, mask] of [['0.0.0.0', 8], ['10.0.0.0', 8], ['100.64.0.0', 10], ['127.0.0.0', 8],
@@ -46,13 +47,14 @@ export class PublicGetter {
   readonly started = performance.now()
   count = 0
   bytes = 0
+  rawBytes = 0
   private robots: string | null = null
   private chain: Promise<unknown> = Promise.resolve()
   constructor(source: string, private maxRequests = 32,
     private io: { resolve: (host: string) => Promise<string[]>; request: typeof request } = { resolve: resolve4, request }) {
     this.source = publicTarget(source); if (!Number.isInteger(maxRequests) || maxRequests < 1 || maxRequests > 32) throw Error('GET_BUDGET')
   }
-  private async once(url: URL, robot = false): Promise<Response> {
+  private async once(url: URL, robot = false, document = false): Promise<Response> {
     if (url.origin !== this.source.origin || this.count >= this.maxRequests || performance.now() - this.started > 60_000) throw Error('GET_BUDGET')
     const deadline = 60_000 - (performance.now() - this.started)
     let timer: ReturnType<typeof setTimeout> | undefined
@@ -67,12 +69,12 @@ export class PublicGetter {
         const chunks: Buffer[] = []; let size = 0
         res.on('data', (chunk: Buffer) => {
           size += chunk.length
-          if (size > (robot ? 64_000 : 500_000) || this.bytes + size > 2_000_000) { res.destroy(Error('BYTE_BUDGET')); return }
+          this.rawBytes += chunk.length
+          if (size > (robot ? 64_000 : document ? 8_000_000 : 500_000) || this.rawBytes > 8_000_000) { res.destroy(Error('BYTE_BUDGET')); return }
           chunks.push(chunk)
         })
-        res.on('error', () => reject(Error('RESPONSE_FAILED')))
+        res.on('error', error => reject(Error(error.message === 'BYTE_BUDGET' ? 'BYTE_BUDGET' : 'RESPONSE_FAILED')))
         res.on('end', () => {
-          this.bytes += size
           try { resolve({ status: res.statusCode!, contentType: String(res.headers['content-type'] || '').toLowerCase(), body: new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)) }) }
           catch { reject(Error('UTF8_REQUIRED')) }
         })
@@ -94,11 +96,14 @@ export class PublicGetter {
         this.robots = policy.status === 404 ? '' : policy.body
       }
       if (!robotsPermits(this.robots, url.pathname + url.search)) throw Error('ROBOTS_BLOCKED')
-      const response = await this.once(url)
+      const response = await this.once(url, false, kind === 'document')
       const mime = response.contentType.split(';')[0].trim()
       const allowed = { document: ['text/html'], script: ['application/javascript', 'text/javascript', 'application/x-javascript'], stylesheet: ['text/css'] }
       if (!allowed[kind].includes(mime)) throw Error('MIME_REJECTED')
-      return { body: response.body, contentType: response.contentType }
+      const body = kind === 'document' ? documentSnapshot(response.body) : response.body
+      this.bytes += Buffer.byteLength(body)
+      if (this.bytes > 2_000_000) throw Error('BYTE_BUDGET')
+      return { body, contentType: response.contentType }
     })
     this.chain = task.catch(() => {}); return task
   }
