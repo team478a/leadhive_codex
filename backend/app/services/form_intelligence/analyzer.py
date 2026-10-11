@@ -31,7 +31,8 @@ from app.services.form_intelligence.rules import (
     recommended_option,
     sales_contact_status,
 )
-from app.services.scraper import CONTACT_HINTS, SafeFetcher, ScrapeError
+from app.services.scraper import CONTACT_HINTS, ScrapeError
+from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
 logger = logging.getLogger("leadhive")
 ANALYSIS_VERSION = "2.0"
