@@ -87,3 +87,53 @@ Desktop/Mobile UI、型チェック・lint・buildもPASS。Windows開発用ZIP�
 
 レビュー・統合後、stagingで入力専用機能を有効化し、対象URL・GET上限を固定した1社の入力専用試行を人の明示確認後に行う。
 成功数を先に約束せず、入力できなければ実際の停止理由を解消する。確認・送信は引き続き行わない。
+
+## 2026-10-11 最新main整合・入力専用準備完了
+
+PR #49統合後のmain `0e73f0ded4b7b82fd322f6defe04f9719e27bf1c` のCI成功を確認。
+既存PR #71のhead `70b66db1d177d9826fea0f94f1125ddb9514f579` を通常mergeで整合した。
+整合mergeは `2258b0d572f96312ff1d763229eb694718924c46`。
+競合なし。既存PRを維持し、rebase / force push / mainへのmergeは行っていない。
+
+この工程のゴールは新機能追加ではなく、収集フィルタ修正後のmainと既存入力専用経路を
+合わせて検証し、レビュー可能な状態にすること。送信機能の開発・有効化は含まない。
+
+### 今回の再検証
+
+| 検証 | 結果 |
+|---|---|
+| live-input / pc-input / collection-discovery / PC connector pytest | 149 PASS |
+| Desktop/Mobile live input + public GET mock Playwright | 22 PASS |
+| Desktop/Mobile依頼保存・未送信結果取込・再表示・Viewer/営業NG Playwright | 6 PASS |
+| Backend変更範囲Ruff / format / mypy / API import | PASS |
+| Frontend typecheck / lint / build | PASS（既存bundle size警告あり） |
+| 最終headの全Backend・E2E・Migration等CI | PRで結果を確認 |
+
+再現コマンド（専用 `_test` DB・本worktree/backendのPYTHONPATH/MYPYPATH）：
+
+```text
+python -m pytest backend/tests/test_live_input_trials.py backend/tests/test_pc_input_transfer.py backend/tests/test_collection_discovery.py scripts/pc_connector -q
+python -m ruff check backend/app/live_input_routes.py backend/tests/test_live_input_trials.py scripts/pc_connector
+python -m ruff format --check backend/app/live_input_routes.py backend/tests/test_live_input_trials.py scripts/pc_connector
+python -m mypy --check-untyped-defs --follow-imports=silent backend/app/live_input_routes.py
+python -c "from app.main import app; print(app.title)"
+# frontendから実行
+npx playwright test --config form-lab/playwright.config.ts live-input.spec.ts public-get.spec.ts
+npx playwright test --config form-lab/handoff-ui.config.ts live-handoff-ui.case.ts
+npm run typecheck
+npm run lint
+npm run build
+```
+
+### 判定と実運用前の残り
+
+- 営業禁止をCoreと模擬HTMLの両方で確認し、禁止の場合は入力ゼロで停止する。
+- Human権限・期限・取消・改ざん・Cookie混在を再確認する。
+- 入力後のautosave / GET / POST / submitを停止し、読み戻しで終了する。
+- 未送信PC報告は非認可の観察結果のまま。Human Approvalや送信許可へ昇格しない。
+- LIVE_FORM_INPUT_ENABLEDはdefault OFF。outbound / dispatch / クラウド設定は変更しない。
+
+ローカル模擬環境での入力専用準備は確認済み。実企業での入力成功率は未検証。
+今回の企業GET・企業入力・確認・送信・承認・本番デプロイは0。
+次の実行工程はPR #71レビュー・統合後、対象1社とGET上限を固定したstaging入力専用試行。
+その対象・クラウド有効化・実サイトアクセスは別途明示確認を得る。送信は試行対象外。
