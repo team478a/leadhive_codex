@@ -216,7 +216,12 @@ class SafeFetcher:
         self.client.close()
 
     def _request(
-        self, url: str, max_bytes: int, redirects: int = 0, robots_request: bool = False
+        self,
+        url: str,
+        max_bytes: int,
+        redirects: int = 0,
+        robots_request: bool = False,
+        allowed_content_types: tuple[str, ...] | None = None,
     ) -> FetchedPage:
         if redirects > 5:
             raise ScrapeError("リダイレクト回数が上限を超えました。")
@@ -242,7 +247,11 @@ class SafeFetcher:
                     if not location:
                         raise ScrapeError("Webサイトのリダイレクト先が不明です。")
                     return self._request(
-                        urljoin(normalized, location), max_bytes, redirects + 1, robots_request
+                        urljoin(normalized, location),
+                        max_bytes,
+                        redirects + 1,
+                        robots_request,
+                        allowed_content_types,
                     )
                 if robots_request and response.status_code == 404:
                     return FetchedPage(str(response.url), "")
@@ -253,7 +262,14 @@ class SafeFetcher:
                         f"Webサイトを取得できませんでした（HTTP {response.status_code}）。"
                     )
                 content_type = response.headers.get("content-type", "").lower()
-                if "html" not in content_type and "text/plain" not in content_type:
+                mime = content_type.split(";", 1)[0].strip()
+                if allowed_content_types is not None and mime not in allowed_content_types:
+                    raise ScrapeError("指定した描画リソースとContent-Typeが一致しません。")
+                if (
+                    allowed_content_types is None
+                    and "html" not in content_type
+                    and "text/plain" not in content_type
+                ):
                     raise ScrapeError("HTMLではないコンテンツは解析できません。")
                 declared = response.headers.get("content-length")
                 if declared and declared.isdigit() and int(declared) > max_bytes:
@@ -305,6 +321,19 @@ class SafeFetcher:
         if not self.robots_allowed(normalized):
             raise ScrapeError("robots.txtにより解析が許可されていません。")
         return self._request(normalized, settings.scraper_max_bytes)
+
+    def fetch_browser_resource(self, url: str, kind: str) -> FetchedPage:
+        """Explicit text assets only; preserve public URL, robots and crawl budgets."""
+        types = {
+            "script": ("application/javascript", "text/javascript", "application/x-javascript"),
+            "style": ("text/css",),
+        }
+        if kind not in types or not self.site_root:
+            raise ScrapeError("描画リソースの種類または取得元が不正です。")
+        normalized, _ = _validated_target(url)
+        if not same_site(self.site_root, normalized) or not self.robots_allowed(normalized):
+            raise ScrapeError("描画リソースの取得範囲またはrobots.txtにより拒否しました。")
+        return self._request(normalized, 500_000, allowed_content_types=types[kind])
 
 
 def _clean_url(value: str, base_url: str) -> str:

@@ -30,6 +30,7 @@ export type OfflineResult = {
   sent: false
 }
 export const htmlHash = (html: string) => createHash('sha256').update(html, 'utf8').digest('hex')
+export type CachedResource = { url: string; kind: 'script' | 'style'; body: string; sha256: string }
 const digest = (value: unknown) => htmlHash(JSON.stringify(value))
 const pairs = (value: Record<string, unknown>) => Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
 
@@ -47,12 +48,15 @@ async function inspect(frame: Frame) {
   }))
 }
 
-export async function runOfflineInput(browser: Browser, input: OfflineInput, mobile = false): Promise<OfflineResult> {
+export async function runOfflineInput(browser: Browser, input: OfflineInput, mobile = false,
+  resources?: CachedResource[]): Promise<OfflineResult> {
   input = structuredClone(input)
+  resources = resources === undefined ? undefined : structuredClone(resources)
   const started = performance.now()
   const result: OfflineResult = { definition: 'offline-form-input-v1', status: 'TECHNICAL_UNKNOWN', reason: 'NOT_CHECKED',
     htmlHash: htmlHash(input.html), payloadHash: digest({ sourceUrl: input.sourceUrl, htmlHash: input.expectedHtmlHash,
-      values: pairs(input.values), choices: pairs(input.choices), consents: pairs(input.consents) }),
+      values: pairs(input.values), choices: pairs(input.choices), consents: pairs(input.consents),
+      ...(resources ? { rendering: 'cached-resources-v1', resources: resources.map(r => [r.url, r.kind, r.sha256]).sort() } : {}) }),
     structureHash: null, fieldsFilled: 0, actions: 0, blockedRequests: 0, durationMs: 0,
     executionAllowed: false, approvalGranted: false, confirmationReached: false, liveFetchPerformed: false, sent: false }
   const stop = (reason: string, status: OfflineResult['status'] = 'TECHNICAL_UNKNOWN') => {
@@ -64,13 +68,59 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
   if (!['UNKNOWN', 'PROHIBITED', 'ALLOWED'].includes(input.permission)) return stop('INVALID_PERMISSION')
   if (input.permission === 'PROHIBITED') return stop('SALES_PROHIBITED', 'BLOCKED')
   if (Buffer.byteLength(input.html) > 500_000 || result.htmlHash !== input.expectedHtmlHash) return stop('SNAPSHOT_INVALID')
+  const cache = new Map<string, CachedResource>()
+  if (resources) {
+    if (source.protocol !== 'https:' || resources.length > 8) return stop('RESOURCE_SNAPSHOT_INVALID')
+    let size = Buffer.byteLength(input.html)
+    for (const resource of resources) {
+      let url: URL
+      try { url = new URL(resource.url) } catch { return stop('RESOURCE_SNAPSHOT_INVALID') }
+      if (url.origin !== source.origin || url.username || url.password || url.hash || resource.url === source.href
+        || cache.has(resource.url) || !['script', 'style'].includes(resource.kind)
+        || Buffer.byteLength(resource.body) > 500_000 || htmlHash(resource.body) !== resource.sha256) return stop('RESOURCE_SNAPSHOT_INVALID')
+      size += Buffer.byteLength(resource.body)
+      if (size > 2_000_000) return stop('RESOURCE_SNAPSHOT_INVALID')
+      cache.set(resource.url, resource)
+    }
+  }
   if (Object.keys(input.values).length + Object.keys(input.choices).length + Object.keys(input.consents).length > 100
     || Buffer.byteLength(JSON.stringify([input.values, input.choices, input.consents])) > 40_000) return stop('INPUT_BUDGET')
   const context = await browser.newContext({ serviceWorkers: 'block', acceptDownloads: false,
     viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 } })
+  if (resources) {
+    await context.exposeBinding('__leadhiveBlockedOperation', () => { result.blockedRequests++ })
+    await context.addInitScript(() => {
+      const blocked = () => { void (window as unknown as Record<string, () => Promise<void>>).__leadhiveBlockedOperation() }
+      // Prevent implicit navigation as well as blocking its eventual HTTP request.
+      for (const name of ['submit', 'requestSubmit']) Object.defineProperty(HTMLFormElement.prototype, name,
+        { configurable: false, writable: false, value: blocked })
+      document.addEventListener('submit', event => { event.preventDefault(); blocked() }, true)
+      // These transports/workers are outside the intended HTML form operation.
+      for (const name of ['RTCPeerConnection', 'webkitRTCPeerConnection', 'WebTransport', 'Worker', 'SharedWorker']) {
+        Object.defineProperty(window, name, { configurable: false, writable: false,
+          value: function () { blocked(); throw Error('Unsupported browser transport') } })
+      }
+    })
+  }
   const remaining = () => Math.max(1, 10_000 - (performance.now() - started))
-  // Abort all requests including GET resources and autosave. Do not fetch even robots.txt.
-  await context.route('**/*', async route => { result.blockedRequests++; await route.abort('blockedbyclient') })
+  let frozen = false
+  let served = 0
+  // Rendering uses only hash-checked snapshots. Never route.fetch or contact a live server.
+  await context.route('**/*', async route => {
+    const request = route.request()
+    if (resources && !frozen && request.method() === 'GET' && ++served <= 20) {
+      if (request.url() === source.href && request.resourceType() === 'document') {
+        await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: input.html }); return
+      }
+      const asset = cache.get(request.url())
+      if (asset && request.resourceType() === (asset.kind === 'script' ? 'script' : 'stylesheet')) {
+        await route.fulfill({ status: 200, contentType: asset.kind === 'script' ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8', body: asset.body }); return
+      }
+      // Decorative content is omitted, not fetched; unknown scripts/data/frames stop.
+      if (['image', 'font', 'media'].includes(request.resourceType())) { await route.abort('blockedbyclient'); return }
+    }
+    result.blockedRequests++; await route.abort('blockedbyclient')
+  })
   await context.routeWebSocket('**/*', socket => { result.blockedRequests++; socket.close() })
   context.on('page', page => {
     page.on('download', download => { result.blockedRequests++; void download.cancel() })
@@ -83,13 +133,17 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
   }
   try {
     const page = await context.newPage()
-    await action(() => page.setContent(input.html, { waitUntil: 'load', timeout: remaining() }))
-    if (page.url() !== 'about:blank') return stop('NAVIGATION_CHANGED')
+    await action(() => resources
+      ? page.goto(source.href, { waitUntil: 'load', timeout: remaining() })
+      : page.setContent(input.html, { waitUntil: 'load', timeout: remaining() }))
+    frozen = true
+    const expectedUrl = resources ? source.href : 'about:blank'
+    if (page.url() !== expectedUrl) return stop('NAVIGATION_CHANGED')
     const frames = page.frames()
-    if (frames.some(frame => !['about:blank', 'about:srcdoc'].includes(frame.url()))) return stop('EXTERNAL_FRAME')
+    if (frames.some(frame => !['about:blank', 'about:srcdoc', expectedUrl].includes(frame.url()))) return stop('EXTERNAL_FRAME')
     for (const frame of frames) {
       const text = await frame.locator('body').innerText({ timeout: remaining() })
-      if (/営業.*(?:お断り|禁止)|勧誘.*(?:お断り|禁止)/.test(text)) return stop('SALES_PROHIBITED', 'BLOCKED')
+      if (/(?:営業|勧誘)[^。\n]{0,80}(?:お断り|禁止|ご遠慮)/.test(text.normalize('NFKC'))) return stop('SALES_PROHIBITED', 'BLOCKED')
       if (/CAPTCHA/i.test(text) || await frame.locator('.g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey]').count()) return stop('CAPTCHA', 'HUMAN_REQUIRED')
     }
     if (result.blockedRequests) return stop('NETWORK_REQUIRED')
@@ -140,8 +194,14 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
       } else if (Object.hasOwn(input.values, field.name)) await action(() => locator.fill(input.values[field.name], { timeout: remaining() }))
       else continue
       result.fieldsFilled++
-      if (page.url() !== 'about:blank') return stop('NAVIGATION_CHANGED')
+      if (page.url() !== expectedUrl) return stop('NAVIGATION_CHANGED')
       if (result.blockedRequests) return stop('NETWORK_REQUIRED')
+      for (const current of page.frames()) {
+        if (!['about:blank', 'about:srcdoc', expectedUrl].includes(current.url())) return stop('EXTERNAL_FRAME')
+        const text = await current.locator('body').innerText({ timeout: remaining() })
+        if (/(?:営業|勧誘)[^。\n]{0,80}(?:お断り|禁止|ご遠慮)/.test(text.normalize('NFKC'))) return stop('SALES_PROHIBITED', 'BLOCKED')
+        if (/CAPTCHA/i.test(text) || await current.locator('.g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey]').count()) return stop('CAPTCHA', 'HUMAN_REQUIRED')
+      }
       if (digest(await inspect(frame)) !== result.structureHash) return stop('STRUCTURE_CHANGED')
     }
     const readback = await frame.locator('form').evaluate(form => ({
