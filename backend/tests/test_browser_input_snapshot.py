@@ -85,9 +85,58 @@ def test_resource_budget_does_not_fetch_all_assets(mock_fetch):
         "text/html",
         "".join(f'<script src="/{i}.js"></script>' for i in range(9)),
     )
-    with pytest.raises(ScrapeError, match="リソース数"):
-        snapshots.acquire_snapshot("https://example.com/contact", terms_confirmed=True)
+    result = snapshots.acquire_snapshot("https://example.com/contact", terms_confirmed=True)
+    assert result["status"] == "RESOURCE_REVIEW_REQUIRED"
+    assert result["bundle"] is None
+    assert len(result["resourceInventory"]) == 9
+    assert result["pageSnapshot"]["html"] == routes["https://example.com/contact"][2]
     assert len(requests) == 2
+
+
+def test_explicit_selection_keeps_budget_order_and_omissions(mock_fetch):
+    routes, requests = mock_fetch
+    routes["https://example.com/contact"] = (
+        200,
+        "text/html",
+        "".join(f'<script src="/{i}.js"></script>' for i in range(23)),
+    )
+    for i in [1, 3]:
+        routes[f"https://example.com/{i}.js"] = (200, "text/javascript", "/* fixture */")
+    result = snapshots.acquire_snapshot(
+        "https://example.com/contact",
+        terms_confirmed=True,
+        resource_urls=["https://example.com/3.js", "https://example.com/1.js"],
+    )
+    assert len(requests) == 4
+    assert result["omittedResourceCount"] == 21
+    assert len(result["resourceInventory"]) == 23
+    assert [item["url"] for item in result["bundle"]["resources"]] == [
+        "https://example.com/1.js",
+        "https://example.com/3.js",
+    ]
+
+
+@pytest.mark.parametrize(
+    "selection", [["https://foreign.example/render.js"], ["https://example.com/not-listed.js"]]
+)
+def test_selection_cannot_add_arbitrary_or_foreign_urls(mock_fetch, selection):
+    routes, requests = mock_fetch
+    routes["https://example.com/contact"] = (200, "text/html", '<script src="/render.js"></script>')
+    with pytest.raises(ScrapeError, match="選択できません"):
+        snapshots.acquire_snapshot(
+            "https://example.com/contact", terms_confirmed=True, resource_urls=selection
+        )
+    assert len(requests) == 2
+
+
+@pytest.mark.parametrize("selection", [["x"] * 2, [str(i) for i in range(9)]])
+def test_invalid_selection_rejected_before_network(mock_fetch, selection):
+    _, requests = mock_fetch
+    with pytest.raises(ScrapeError, match="不正"):
+        snapshots.acquire_snapshot(
+            "https://example.com/contact", terms_confirmed=True, resource_urls=selection
+        )
+    assert requests == []
 
 
 def test_mime_mismatch_fails_closed(mock_fetch):

@@ -30,6 +30,19 @@ test('default archive still refuses external scripts', async ({ browser }) => {
   expect((await runOfflineInput(browser, input)).reason).toBe('NETWORK_REQUIRED')
 })
 
+test('explicit resource omission is not verified input or send permission', async ({ browser }, info) => {
+  const { input, resources } = make(render)
+  input.html += '<script src="https://synthetic.example/not-selected.js"></script>'
+  input.expectedHtmlHash = htmlHash(input.html)
+  const result = await runOfflineInput(browser, input, info.project.name === 'mobile', resources)
+  expect(result.reason).toBe('NETWORK_REQUIRED')
+  expect(result.fieldsFilled).toBe(0)
+  expect(result.status).toBe('TECHNICAL_UNKNOWN')
+  expect(result.liveFetchPerformed).toBe(false)
+  expect(result.approvalGranted).toBe(false)
+  expect(result.sent).toBe(false)
+})
+
 test('snapshot tamper and foreign resources are rejected before browser use', async ({ browser }) => {
   const { input, resources } = make(render)
   for (const change of [

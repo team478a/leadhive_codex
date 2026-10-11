@@ -20,7 +20,15 @@ def _sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def acquire_snapshot(url: str, *, terms_confirmed: bool) -> dict:
+def acquire_snapshot(
+    url: str, *, terms_confirmed: bool, resource_urls: list[str] | None = None
+) -> dict:
+    if resource_urls is not None and (
+        len(resource_urls) > MAX_RESOURCES
+        or any(not isinstance(value, str) for value in resource_urls)
+        or len(set(resource_urls)) != len(resource_urls)
+    ):
+        raise ScrapeError("描画リソースの選択が不正です。")
     if terms_confirmed is not True:
         raise ScrapeError("利用条件の確認が必要です。")
     target = validate_public_url(url)
@@ -65,11 +73,32 @@ def acquire_snapshot(url: str, *, terms_confirmed: bool) -> dict:
                 # if they are required; do not substitute a successful input label.
                 continue
             urls[candidate] = "script" if node.name == "script" else "style"
-        if len(urls) > MAX_RESOURCES:
-            raise ScrapeError("描画リソース数の上限を超えました。")
+        inventory = [{"url": value, "kind": kind} for value, kind in urls.items()]
+        if resource_urls is not None:
+            if any(value not in urls for value in resource_urls):
+                raise ScrapeError("ページにない、または別サイトのリソースは選択できません。")
+            # Preserve document order; selection is not permission to execute or send.
+            selected = {value: kind for value, kind in urls.items() if value in resource_urls}
+        else:
+            selected = urls
+        if len(selected) > MAX_RESOURCES:
+            return {
+                "definition": "rendered-input-acquisition-v1",
+                "status": "RESOURCE_REVIEW_REQUIRED",
+                "reason": "RESOURCE_LIMIT",
+                "observedAt": started,
+                "getRequests": fetcher._request_count,
+                "resourceInventory": inventory,
+                "pageSnapshot": {
+                    "html": page.html,
+                    "expectedHtmlHash": _sha(page.html),
+                    "sourceUrl": page.url,
+                },
+                "bundle": None,
+            }
         resources = []
         size = len(page.html.encode("utf-8"))
-        for resource_url, kind in urls.items():
+        for resource_url, kind in selected.items():
             asset = fetcher.fetch_browser_resource(resource_url, kind)
             if asset.url != resource_url:
                 raise ScrapeError("描画リソースの転送は未対応です。")
@@ -89,6 +118,8 @@ def acquire_snapshot(url: str, *, terms_confirmed: bool) -> dict:
             "status": "SNAPSHOT_READY",
             "observedAt": started,
             "getRequests": fetcher._request_count,
+            "resourceInventory": inventory,
+            "omittedResourceCount": len(urls) - len(selected),
             "bundle": {
                 "html": page.html,
                 "expectedHtmlHash": _sha(page.html),
