@@ -11,6 +11,7 @@ from bs4 import BeautifulSoup
 
 from app.services.form_intelligence.rules import sales_contact_status
 from app.services.scraper import SafeFetcher, ScrapeError, validate_public_url
+from app.services.static_form_diagnostics import diagnose_static_form
 
 MAX_RESOURCES = 8
 MAX_BUNDLE_BYTES = 2_000_000
@@ -89,6 +90,7 @@ def acquire_snapshot(
                 "observedAt": started,
                 "getRequests": fetcher._request_count,
                 "resourceInventory": inventory,
+                "fieldDiagnostics": diagnose_static_form(page.html),
                 "pageSnapshot": {
                     "html": page.html,
                     "expectedHtmlHash": _sha(page.html),
@@ -119,6 +121,7 @@ def acquire_snapshot(
             "observedAt": started,
             "getRequests": fetcher._request_count,
             "resourceInventory": inventory,
+            "fieldDiagnostics": diagnose_static_form(page.html),
             "omittedResourceCount": len(urls) - len(selected),
             "bundle": {
                 "html": page.html,
