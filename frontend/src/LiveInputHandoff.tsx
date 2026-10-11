@@ -25,6 +25,7 @@ export function LiveInputHandoff({ company, profiles, activities = [], prohibite
   const [choices, setChoices] = useState<Record<string, string>>({})
   const [consents, setConsents] = useState<Record<string, { label: string; checked: boolean }>>({})
   const [reviewed, setReviewed] = useState(false)
+  const [autoReport, setAutoReport] = useState(false)
   const [pending, setPending] = useState(false)
   const [message, setMessage] = useState('')
   const [issuedTask, setTask] = useState<Pick<LiveTask, 'trialId' | 'requestHash'> | null>(null)
@@ -57,7 +58,7 @@ export function LiveInputHandoff({ company, profiles, activities = [], prohibite
       else plan.values[field.name] = values[field.name] ?? field.recommended_value ?? ''
     }
     try {
-      const issued = await api<Omit<LiveTask, 'serverOrigin'>>(`/companies/${company.id}/live-input-trials`, 'POST', plan)
+      const issued = await api<Omit<LiveTask, 'serverOrigin'>>(`/companies/${company.id}/live-input-trials`, 'POST', { ...plan, autoReport })
       const url = URL.createObjectURL(new Blob([JSON.stringify({ ...issued, serverOrigin: window.location.origin })], { type: 'application/json' }))
       const link = document.createElement('a'); link.href = url; link.download = `live-input-${issued.trialId}.json`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000)
       setTask({ trialId: issued.trialId, requestHash: issued.requestHash }); setReviewed(false)
@@ -70,6 +71,24 @@ export function LiveInputHandoff({ company, profiles, activities = [], prohibite
     setPending(true)
     try { await api(`/companies/${company.id}/live-input-trials/${task.trialId}/revoke`, 'POST'); setFinished([...finished, task.trialId]); setTask(null); setMessage('入力依頼を取り消しました。開始済みのローカル入力内容はPCを閉じて破棄してください。') }
     catch { setMessage('取り消しを確認できませんでした。PCで開始しないでください。') } finally { setPending(false) }
+  }
+  async function refreshResult() {
+    if (!task || pending) return
+    setPending(true); setMessage('')
+    try {
+      const response = await api<{ report: Record<string, unknown> | null; created: string | null }>(`/companies/${company.id}/live-input-trials/${task.trialId}/result`)
+      const r = response.report
+      if (!r) { setMessage('PCからの結果はまだ届いていません。PCでの実行完了後に更新してください。'); return }
+      if (r.companyId !== company.id || r.projectId !== company.project_id || r.trialId !== task.trialId || r.requestHash !== task.requestHash
+        || ['sent', 'approvalGranted', 'executionAllowed', 'confirmationReached'].some(k => r[k] !== false)
+        || r.source !== 'PC_REPORTED_UNVERIFIED' || typeof r.status !== 'string' || !Object.hasOwn(statusLabels, r.status)
+        || typeof r.reason !== 'string' || !Number.isInteger(r.fieldsFilled) || Number(r.fieldsFilled) < 0 || Number(r.fieldsFilled) > 100
+        || !response.created) throw Error()
+      setRecorded({ status: r.status, reason: r.reason, fieldsFilled: Number(r.fieldsFilled), created: response.created })
+      setFinished([...finished, task.trialId]); setTask(null)
+      setMessage('PCの未送信結果を取得しました。結果JSONを選ぶ必要はありません。')
+    } catch { setMessage('PC結果を取得できませんでした。時間をおいて更新するか、結果JSONを取り込んでください。') }
+    finally { setPending(false) }
   }
   async function record(file: File) {
     if (!task || file.size > 20_000) { setMessage('この依頼の小さい結果JSONを選択してください。'); return }
@@ -88,7 +107,7 @@ export function LiveInputHandoff({ company, profiles, activities = [], prohibite
     <h3>実フォームへ入力する（送信しない）</h3>
     <p>PCで実ページを表示し、入力前に通信を止めて入力・読み戻しを確認します。確認・送信ボタンは操作しません。</p>
     <p>内容確認 → PCで入力 → 結果確認</p>
-    <details><summary>PCでの操作手順</summary><ol className="list-decimal ml-5"><li>入力内容を確認してPC用ファイルを保存</li><li>PCの「実ページ入力専用」を起動してファイルを選択</li><li>結果JSONを選択して、この画面で結果を確認</li></ol>
+    <details><summary>PCでの操作手順</summary><ol className="list-decimal ml-5"><li>入力内容を確認してPC用ファイルを保存</li><li>PCの「実ページ入力専用」を起動してファイルを選択</li><li>自動転送を選んだ場合は「PC結果を確認」を押す。選ばなかった場合や転送できなかった場合は結果JSONを取り込む</li></ol>
       <p>スマートフォンでは準備と結果確認ができます。フォームへの入力はPCで行います。</p></details>
     {latest && <article aria-label="最新の入力結果" className="notice"><strong>{statusLabels[latest.status]}</strong>
       <p>{reasonLabels[latest.reason] ?? '未分類の理由です。担当者へ理由コードを伝えてください。'}</p>
@@ -101,8 +120,11 @@ export function LiveInputHandoff({ company, profiles, activities = [], prohibite
         : field.field_type === 'checkbox' ? <><input type="text" aria-label={`${field.name}の同意文言`} placeholder="実ページの同意文言を確認してください" value={consents[field.name]?.label ?? field.label} disabled={disabled || !!task} onChange={e => { setConsents({ ...consents, [field.name]: { checked: consents[field.name]?.checked ?? false, label: e.target.value } }); setReviewed(false) }} /><span><input type="checkbox" aria-label={`${field.name}の同意内容を確認`} checked={consents[field.name]?.checked ?? false} disabled={disabled || !!task} onChange={e => { setConsents({ ...consents, [field.name]: { label: consents[field.name]?.label ?? field.label, checked: e.target.checked } }); setReviewed(false) }} />この同意内容を確認してチェックする</span></>
           : <textarea rows={field.field_type === 'textarea' ? 5 : 2} maxLength={10000} disabled={disabled || !!task} value={values[field.name] ?? field.recommended_value ?? ''} onChange={e => { setValues({ ...values, [field.name]: e.target.value }); setReviewed(false) }} />}
     </label>)}
-    {!readOnly && !task && <><label className="field"><span><input type="checkbox" checked={reviewed} disabled={disabled} onChange={e => setReviewed(e.target.checked)} />宛先・入力内容・利用条件を確認しました。入力のみで、送信は許可しません。</span></label><button disabled={disabled || !reviewed || !fields.length} onClick={() => void prepare()}>PC入力専用の依頼を保存</button></>}
-    {task && <p className="notice">PC用ファイルは保存済みです（有効期間15分）。PCで実行して結果JSONを選択してください。作り直す場合は、先に入力依頼を取り消してください。</p>}
+    {!readOnly && !task && <><label className="field"><span><input type="checkbox" checked={autoReport} disabled={disabled} onChange={e => { setAutoReport(e.target.checked); setReviewed(false) }} />未送信のPC結果をLeadHiveへ自動で戻す</span></label>
+      <p className="muted">結果・理由・確認項目数のみを戻します。入力した文章や接続キーは報告に含めません。対応する最新版PCランナーが必要です。</p>
+      <label className="field"><span><input type="checkbox" checked={reviewed} disabled={disabled} onChange={e => setReviewed(e.target.checked)} />宛先・入力内容・利用条件を確認しました。入力のみで、送信は許可しません。</span></label><button disabled={disabled || !reviewed || !fields.length} onClick={() => void prepare()}>PC入力専用の依頼を保存</button></>}
+    {task && <p className="notice">PC用ファイルは保存済みです（有効期間15分）。PCで実行後、「PC結果を確認」を押してください。転送できなかった場合は結果JSONを取り込めます。作り直す場合は、先に入力依頼を取り消してください。</p>}
+    {task && <button disabled={pending} onClick={() => void refreshResult()}>PC結果を確認</button>}
     {task && <><button disabled={disabled} onClick={() => void revoke()}>入力依頼を取り消す</button><label className="field">PCの未送信結果JSON<input type="file" accept=".json,application/json" disabled={disabled} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) void record(f) }} /></label></>}
     {message && <p role="status">{message}</p>}
     <p className="muted">この操作では送信しません。機能が無効と表示された場合は管理者へお問い合わせください。入力内容を含むPC用ファイルは安全に保管してください。</p>

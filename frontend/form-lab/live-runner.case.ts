@@ -1,6 +1,6 @@
 import { test } from '@playwright/test'
 import { readFile, stat, writeFile } from 'node:fs/promises'
-import { runLiveInput } from './live-input'
+import { runLiveInput, transferLiveResult } from './live-input'
 test('one human-requested live form input, no confirmation or send', async ({ browser }, info) => {
   const path = process.env.LEADHIVE_LIVE_INPUT_FILE!
   if ((await stat(path)).size > 100_000) throw Error('TASK_SIZE_LIMIT')
@@ -15,5 +15,9 @@ test('one human-requested live form input, no confirmation or send', async ({ br
       fieldsFilled: 0, blockedRequests: 0, confirmationReached: false, source: 'PC_REPORTED_UNVERIFIED', sent: false, approvalGranted: false, executionAllowed: false }
   }
   await writeFile(info.outputPath('live-input-result.json'), JSON.stringify(result, null, 2), 'utf8')
+  const transfer = await transferLiveResult(task, result, process.env.LEADHIVE_LIVE_INPUT_SERVER!)
+  await writeFile(info.outputPath('result-transfer.json'), JSON.stringify({ transfer }), 'utf8')
+  console.log(transfer === 'RECORDED' ? 'Unsent result recorded in LeadHive.' : transfer === 'FAILED'
+    ? 'Result transfer not confirmed. Keep the local result JSON for manual import.' : 'Automatic transfer not requested.')
   console.log('Input-only result saved. No confirmation, approval or send.')
 })
