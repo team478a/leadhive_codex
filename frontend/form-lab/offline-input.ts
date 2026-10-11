@@ -22,6 +22,7 @@ export type OfflineResult = {
   fieldsFilled: number
   actions: number
   blockedRequests: number
+  omittedDecorativeRequests: number
   durationMs: number
   executionAllowed: false
   approvalGranted: false
@@ -34,6 +35,22 @@ export type CachedResource = { url: string; kind: 'script' | 'style'; body: stri
 export type LiveLoader = { fetch: (url: string, kind: 'script' | 'stylesheet') => Promise<{ body: string; contentType: string }>; beforeInput: () => Promise<void> }
 const digest = (value: unknown) => htmlHash(JSON.stringify(value))
 const pairs = (value: Record<string, unknown>) => Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
+
+// Omit the documented font-only endpoint locally; never fetch or trust its CSS.
+// Arbitrary stylesheets, lookalike hosts, scripts, frames and data still stop.
+export function decorativeFontStylesheet(value: string): boolean {
+  if (value.length > 2048) return false
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'https:' || url.hostname !== 'fonts.googleapis.com' || url.port
+      || url.username || url.password || url.hash || !['/css', '/css2'].includes(url.pathname)) return false
+    const families = url.searchParams.getAll('family')
+    if (!families.length || families.some(f => !/^[a-z0-9 :;,@._+|\-[\]]{1,300}$/i.test(f))) return false
+    if ([...url.searchParams.keys()].some(key => !['family', 'display'].includes(key))) return false
+    const display = url.searchParams.getAll('display')
+    return display.length <= 1 && display.every(v => ['auto', 'block', 'swap', 'fallback', 'optional'].includes(v))
+  } catch { return false }
+}
 
 async function inspect(scope: Locator) {
   return scope.evaluate(form => ({
@@ -90,8 +107,8 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
   const result: OfflineResult = { definition: 'offline-form-input-v1', status: 'TECHNICAL_UNKNOWN', reason: 'NOT_CHECKED',
     htmlHash: htmlHash(input.html), payloadHash: digest({ sourceUrl: input.sourceUrl, htmlHash: input.expectedHtmlHash,
       values: pairs(input.values), choices: pairs(input.choices), consents: pairs(input.consents),
-      ...(resources ? { rendering: 'cached-resources-v1', resources: resources.map(r => [r.url, r.kind, r.sha256]).sort() } : {}) }),
-    structureHash: null, fieldsFilled: 0, actions: 0, blockedRequests: 0, durationMs: 0,
+      ...(resources ? { rendering: 'cached-resources-v2-font-omission', resources: resources.map(r => [r.url, r.kind, r.sha256]).sort() } : {}) }),
+    structureHash: null, fieldsFilled: 0, actions: 0, blockedRequests: 0, omittedDecorativeRequests: 0, durationMs: 0,
     executionAllowed: false, approvalGranted: false, confirmationReached: false, liveFetchPerformed: false, sent: false }
   const stop = (reason: string, status: OfflineResult['status'] = 'TECHNICAL_UNKNOWN') => {
     result.reason = reason; result.status = status; result.durationMs = Math.round(performance.now() - started); return result
@@ -146,6 +163,10 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
       if (request.url() === source.href && request.resourceType() === 'document') {
         await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: input.html }); return
       }
+      if (request.resourceType() === 'stylesheet' && decorativeFontStylesheet(request.url())) {
+        result.omittedDecorativeRequests++
+        await route.fulfill({ status: 200, contentType: 'text/css', body: '' }); return
+      }
       const asset = cache.get(request.url())
       if (asset && request.resourceType() === (asset.kind === 'script' ? 'script' : 'stylesheet')) {
         await route.fulfill({ status: 200, contentType: asset.kind === 'script' ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8', body: asset.body }); return
@@ -158,7 +179,7 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
         } catch { result.blockedRequests++; await route.abort('failed'); return }
       }
       // Decorative content is omitted, not fetched; unknown scripts/data/frames stop.
-      if (['image', 'font', 'media'].includes(request.resourceType())) { await route.abort('blockedbyclient'); return }
+      if (['image', 'font', 'media'].includes(request.resourceType())) { result.omittedDecorativeRequests++; await route.abort('blockedbyclient'); return }
     }
     result.blockedRequests++; await route.abort('blockedbyclient')
   })
