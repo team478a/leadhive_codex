@@ -1,4 +1,4 @@
-/** Isolated archived-HTML input trial. No live fetch, approval or dispatch. */
+/** Isolated input trial. Default: archived HTML. Optional bounded GET loader; never dispatch. */
 import { createHash } from 'node:crypto'
 import type { Browser, Frame } from '@playwright/test'
 
@@ -31,6 +31,7 @@ export type OfflineResult = {
 }
 export const htmlHash = (html: string) => createHash('sha256').update(html, 'utf8').digest('hex')
 export type CachedResource = { url: string; kind: 'script' | 'style'; body: string; sha256: string }
+export type LiveLoader = { fetch: (url: string, kind: 'script' | 'stylesheet') => Promise<{ body: string; contentType: string }>; beforeInput: () => Promise<void> }
 const digest = (value: unknown) => htmlHash(JSON.stringify(value))
 const pairs = (value: Record<string, unknown>) => Object.entries(value).sort(([a], [b]) => a.localeCompare(b))
 
@@ -49,10 +50,11 @@ async function inspect(frame: Frame) {
 }
 
 export async function runOfflineInput(browser: Browser, input: OfflineInput, mobile = false,
-  resources?: CachedResource[]): Promise<OfflineResult> {
+  resources?: CachedResource[], live?: LiveLoader): Promise<OfflineResult> {
   input = structuredClone(input)
   resources = resources === undefined ? undefined : structuredClone(resources)
   const started = performance.now()
+  const maxMs = live ? 60_000 : 10_000
   const result: OfflineResult = { definition: 'offline-form-input-v1', status: 'TECHNICAL_UNKNOWN', reason: 'NOT_CHECKED',
     htmlHash: htmlHash(input.html), payloadHash: digest({ sourceUrl: input.sourceUrl, htmlHash: input.expectedHtmlHash,
       values: pairs(input.values), choices: pairs(input.choices), consents: pairs(input.consents),
@@ -102,19 +104,26 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
       }
     })
   }
-  const remaining = () => Math.max(1, 10_000 - (performance.now() - started))
+  const remaining = () => Math.max(1, maxMs - (performance.now() - started))
   let frozen = false
   let served = 0
-  // Rendering uses only hash-checked snapshots. Never route.fetch or contact a live server.
+  // Default rendering uses hash-checked snapshots; the explicit live loader alone may perform bounded GET. Never route.fetch.
   await context.route('**/*', async route => {
     const request = route.request()
-    if (resources && !frozen && request.method() === 'GET' && ++served <= 20) {
+    if (resources && !frozen && request.method() === 'GET' && ++served <= (live ? 100 : 20)) {
       if (request.url() === source.href && request.resourceType() === 'document') {
         await route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: input.html }); return
       }
       const asset = cache.get(request.url())
       if (asset && request.resourceType() === (asset.kind === 'script' ? 'script' : 'stylesheet')) {
         await route.fulfill({ status: 200, contentType: asset.kind === 'script' ? 'application/javascript; charset=utf-8' : 'text/css; charset=utf-8', body: asset.body }); return
+      }
+      if (live && ['script', 'stylesheet'].includes(request.resourceType()) && new URL(request.url()).origin === source.origin) {
+        try {
+          const response = await live.fetch(request.url(), request.resourceType() as 'script' | 'stylesheet')
+          if (frozen) { result.blockedRequests++; await route.abort('blockedbyclient'); return }
+          await route.fulfill({ status: 200, contentType: response.contentType, body: response.body }); return
+        } catch { result.blockedRequests++; await route.abort('failed'); return }
       }
       // Decorative content is omitted, not fetched; unknown scripts/data/frames stop.
       if (['image', 'font', 'media'].includes(request.resourceType())) { await route.abort('blockedbyclient'); return }
@@ -126,9 +135,9 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
     page.on('download', download => { result.blockedRequests++; void download.cancel() })
     page.on('popup', popup => { result.blockedRequests++; void popup.close() })
   })
-  const timer = setTimeout(() => { void context.close().catch(() => {}) }, 10_000)
+  const timer = setTimeout(() => { void context.close().catch(() => {}) }, maxMs)
   const action = async (execute: () => Promise<unknown>) => {
-    if (performance.now() - started >= 10_000 || result.actions >= 100) throw new Error('OPERATION_BUDGET')
+    if (performance.now() - started >= maxMs || result.actions >= 100) throw new Error('OPERATION_BUDGET')
     result.actions++; await execute()
   }
   try {
@@ -147,6 +156,7 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
       if (/CAPTCHA/i.test(text) || await frame.locator('.g-recaptcha, .h-captcha, .cf-turnstile, [data-sitekey]').count()) return stop('CAPTCHA', 'HUMAN_REQUIRED')
     }
     if (result.blockedRequests) return stop('NETWORK_REQUIRED')
+    if (live) await live.beforeInput()
     const candidates: Frame[] = []
     for (const frame of frames) if (await frame.locator('form').count()) candidates.push(frame)
     if (candidates.length !== 1 || await candidates[0].locator('form').count() !== 1) return stop('FORM_AMBIGUOUS')
@@ -222,6 +232,6 @@ export async function runOfflineInput(browser: Browser, input: OfflineInput, mob
     return stop('STOP_BEFORE_CONFIRMATION_OR_SEND', 'OFFLINE_INPUT_VERIFIED')
   } catch (error) {
     return stop(error instanceof Error && error.message === 'OPERATION_BUDGET' ? 'OPERATION_BUDGET'
-      : performance.now() - started >= 10_000 ? 'TIMEOUT' : 'INPUT_OPERATION_FAILED')
+      : performance.now() - started >= maxMs ? 'TIMEOUT' : 'INPUT_OPERATION_FAILED')
   } finally { clearTimeout(timer); result.durationMs = Math.round(performance.now() - started); await context.close().catch(() => {}) }
 }
