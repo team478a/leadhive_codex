@@ -62,7 +62,7 @@ for (const role of ['owner', 'viewer'] as const) {
       await expect(page.getByText('検索収集をバックグラウンド処理へ登録しました。', { exact: true })).toBeVisible()
       expect(calls.find(c => c.path.endsWith('/operations') && c.method === 'POST')?.body).toMatchObject({ operation_type: 'collect_search', target_count: 30, region: '兵庫県', keywords: profile.search_keywords })
     }
-    await page.getByRole('button', { name: '3. 結果確認', exact: true }).click()
+    await page.getByRole('button', { name: '4. 結果確認', exact: true }).click()
     const result = page.getByRole('region', { name: '収集リストの確認' })
     await expect(result).toContainText('確認候補')
     if (role === 'owner') await expect(result.getByRole('combobox', { name: '確認する収集リスト', exact: true })).toHaveValue('project-2')

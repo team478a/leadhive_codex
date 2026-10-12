@@ -92,6 +92,11 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
     })
     await page.goto('/')
     await page.getByRole('button', { name: 'このターゲットで収集へ' }).click()
+    await expect(page.getByRole('button', { name: '未解析を解析', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: '3. リスト解析', exact: true }).click()
+    await expect(page.getByLabel('解析する収集リスト')).toHaveValue(project.id)
+    await expect(page.getByRole('button', { name: '収集を開始', exact: true })).toHaveCount(0)
+    expect(posts).toBe(0)
     const idle = kind === 'web_analysis' ? '未解析を解析' : '未判定をAI判定'
     const queued = kind === 'web_analysis' ? 'Web解析 待機中…' : 'AI判定 待機中…'
     const running = kind === 'web_analysis' ? 'Web解析中…' : 'AI判定中…'
@@ -120,6 +125,10 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
     await refresh.click()
     await expect(page.getByRole('button', { name: idle, exact: true })).toBeEnabled()
     await expect(page.getByRole('button', { name: idle, exact: true })).not.toHaveClass(/analysis-active/)
+    expect(posts).toBe(1)
+    await page.getByRole('button', { name: '2. 収集開始', exact: true }).click()
+    await expect(page.getByLabel('プロジェクト', { exact: true })).toHaveValue(project.id)
+    await expect(page.getByRole('button', { name: idle, exact: true })).toHaveCount(0)
     expect(posts).toBe(1)
   })
 }
