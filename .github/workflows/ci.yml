@@ -136,7 +136,7 @@ jobs:
           python -m venv backend/.venv
           backend/.venv/bin/python -m pip install -r backend/requirements.lock
           backend/.venv/bin/python -m pip install --no-deps -e backend
-      - run: backend/.venv/bin/python -m pytest backend/tests -q
+      - run: backend/.venv/bin/python -m pytest backend/tests backend/unit_tests -q
 
   form-http-acceptance:
     runs-on: ubuntu-24.04
