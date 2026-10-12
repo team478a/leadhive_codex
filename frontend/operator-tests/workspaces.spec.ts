@@ -12,6 +12,7 @@ for (const role of ['owner', 'viewer'] as const) {
     await page.addInitScript(email => localStorage.setItem(`leadhive:onboarding:${email}`, 'dismissed'), email)
     await page.route('https://geolonia.github.io/japanese-addresses/api/ja.json', route => route.fulfill({ json: { 大阪府: ['大阪市'], 兵庫県: ['神戸市'] } }))
     await page.route('**/api/**', async route => {
+      if (new URL(route.request().url()).hostname === 'geolonia.github.io') { await route.fallback(); return }
       const path = new URL(route.request().url()).pathname
       const method = route.request().method()
       const body = method === 'POST' ? route.request().postDataJSON() : null
@@ -59,6 +60,7 @@ for (const role of ['owner', 'viewer'] as const) {
       await page.getByRole('checkbox', { name: '兵庫県', exact: true }).check()
       await page.getByRole('checkbox', { name: '大阪府', exact: true }).check()
       await expect(page.getByRole('checkbox', { name: '全国', exact: true })).not.toBeChecked()
+      await page.locator('.region-selector').screenshot({ path: info.outputPath('multiple-prefectures.png') })
       await page.getByRole('button', { name: '保存して収集へ' }).click()
       await expect(page.getByRole('heading', { name: '企業収集', level: 1 })).toBeVisible()
       await expect(page.getByLabel('プロジェクト', { exact: true })).toHaveValue('project-2')
