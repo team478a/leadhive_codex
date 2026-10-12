@@ -101,7 +101,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await expect(page.getByText('保存 1', { exact: true })).toBeVisible()
   await expect(page.getByText('重複 1', { exact: true })).toBeVisible()
   await expect(page.getByText('エラー 1', { exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '未解析を解析', exact: true })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Web解析を開始', exact: true })).toBeHidden()
   await page.getByRole('button', { name: '3. リスト解析', exact: true }).click()
   await expect(page.getByLabel('解析する収集リスト')).toHaveValue(/.+/)
   await expect(page.getByLabel('解析する収集リスト').locator('option:checked')).toContainText(projectName)
