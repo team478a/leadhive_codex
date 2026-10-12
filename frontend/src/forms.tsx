@@ -3,19 +3,20 @@ import { api, errorMessage } from './api'
 import { RegionSelector } from './RegionSelector'
 import type { Profile, ProfileInput, Project, ProjectInput } from './types'
 import { aliasText, industryAliasKey, parseAliases } from './industryAliases'
+import { TargetProfileAssistant } from './TargetProfileAssistant'
 
 export function Field({ label, children }: { label: string; children: ReactElement<{ id?: string }> }) {
   const id = useId()
   return <div className="field"><label htmlFor={id}>{label}</label>{cloneElement(children, { id })}</div>
 }
 
-export function ProjectForm({ profiles, initial, onSaved, onCancel }: {
-  profiles: Profile[]; initial?: Project; onSaved: () => Promise<void>; onCancel: () => void
+export function ProjectForm({ profiles, initial, profileId, onSaved, onCancel }: {
+  profiles: Profile[]; initial?: Project; profileId?: string; onSaved: () => Promise<void>; onCancel: () => void
 }) {
   const [value, setValue] = useState<ProjectInput>(initial ? {
     project_name: initial.project_name, target_profile_id: initial.target_profile_id,
     sales_objective: initial.sales_objective, region: initial.region, status: initial.status,
-  } : { project_name: '', target_profile_id: '', sales_objective: '', region: '全国', status: 'draft' })
+  } : { project_name: '', target_profile_id: profileId ?? '', sales_objective: profiles.find(p => p.id === profileId)?.description ?? '', region: profiles.find(p => p.id === profileId)?.default_regions.join(' / ') || '全国', status: 'draft' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {
@@ -67,8 +68,8 @@ const keywordFields = [
   ['default_regions', '標準地域'],
 ] as const
 
-export function ProfileForm({ initial, onSaved, onCancel }: {
-  initial?: Profile; onSaved: () => Promise<void>; onCancel: () => void
+export function ProfileForm({ initial, onSaved, onCancel, onCreateProject }: {
+  initial?: Profile; onSaved: () => Promise<void>; onCancel: () => void; onCreateProject?: (profileId: string) => void
 }) {
   const [value, setValue] = useState<ProfileInput>(initial ?? blankProfile)
   const [keywords, setKeywords] = useState(() => Object.fromEntries(
@@ -77,6 +78,7 @@ export function ProfileForm({ initial, onSaved, onCancel }: {
   const [aliases, setAliases] = useState(aliasText(initial?.scoring_rules[industryAliasKey]))
   const [rules, setRules] = useState(JSON.stringify(Object.fromEntries(Object.entries(initial?.scoring_rules ?? {}).filter(([key]) => key !== industryAliasKey)), null, 2))
   const [busy, setBusy] = useState(false)
+  const [startProject, setStartProject] = useState(false)
   const [error, setError] = useState('')
   async function submit(event: FormEvent) {
     event.preventDefault(); setError('')
@@ -98,8 +100,9 @@ export function ProfileForm({ initial, onSaved, onCancel }: {
     body.scoring_rules = scoring_rules
     setBusy(true)
     try {
-      await api(initial ? `/target-profiles/${initial.id}` : '/target-profiles', initial ? 'PUT' : 'POST', body)
+      const result = await api<Profile>(initial ? `/target-profiles/${initial.id}` : '/target-profiles', initial ? 'PUT' : 'POST', body)
       await onSaved()
+      if (startProject) onCreateProject?.(result.id)
     } catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
   }
@@ -108,13 +111,20 @@ export function ProfileForm({ initial, onSaved, onCancel }: {
     <p className="muted">業種ごとの検索条件と評価基準を設定します。キーワードは1行に1件入力してください。</p>
     {error && <p role="alert" className="error">{error}</p>}
     <fieldset disabled={busy}>
+      <TargetProfileAssistant onApply={(target, summary, source) => {
+        setValue({ ...value, profile_name: target.name, description: `${summary}\n確認元: ${source}\n提案理由: ${target.reason}` })
+        setKeywords({ ...keywords, search_keywords: target.search_keywords.join('\n'), positive_keywords: target.positive_keywords.join('\n'), negative_keywords: target.negative_keywords.join('\n'), exclusion_keywords: target.exclusion_keywords.join('\n') })
+      }} />
       <Field label="プロファイル名"><input required maxLength={200} value={value.profile_name}
         onChange={e => setValue({ ...value, profile_name: e.target.value })} /></Field>
       <Field label="説明"><textarea maxLength={10000} value={value.description}
         onChange={e => setValue({ ...value, description: e.target.value })} /></Field>
-      <div className="grid gap-x-6 sm:grid-cols-2">{keywordFields.map(([key, label]) =>
+      <div className="grid gap-x-6 sm:grid-cols-2">{keywordFields.filter(([key]) => key === 'search_keywords' || key === 'default_regions').map(([key, label]) =>
         <Field key={key} label={label}><textarea rows={4} value={keywords[key]}
           onChange={e => setKeywords({ ...keywords, [key]: e.target.value })} /></Field>)}</div>
+      <details><summary>詳細設定（加点・減点・除外・AI指示）</summary>
+      <div className="grid gap-x-6 sm:grid-cols-2">{keywordFields.filter(([key]) => key !== 'search_keywords' && key !== 'default_regions').map(([key, label]) =>
+        <Field key={key} label={label}><textarea rows={4} value={keywords[key]} onChange={e => setKeywords({ ...keywords, [key]: e.target.value })} /></Field>)}</div>
       <Field label="業種確認に使う別名（1行に1業種）"><textarea rows={3} maxLength={24000} placeholder="美容院: 美容室, ヘアサロン" value={aliases} onChange={e => setAliases(e.target.value)} /></Field>
       <p className="muted">例：美容院: 美容室, ヘアサロン。最大20業種、各10別名。保存済み公式サイトの確認候補にだけ使います。検索語の追加・AIスコア変更・自動一致判定は行いません。</p>
       <Field label="スコアルール（JSON）"><textarea className="font-mono" rows={8} value={rules}
@@ -123,8 +133,10 @@ export function ProfileForm({ initial, onSaved, onCancel }: {
         onChange={e => setValue({ ...value, ai_instruction: e.target.value })} /></Field>
       <label className="flex items-center gap-3"><input type="checkbox" checked={value.active}
         onChange={e => setValue({ ...value, active: e.target.checked })} />有効にする</label>
+      </details>
       <div className="actions"><button type="button" className="secondary" onClick={onCancel}>キャンセル</button>
-        <button type="submit">{busy ? '保存中…' : '保存する'}</button></div>
+        <button type="submit" onClick={() => setStartProject(false)}>{busy ? '保存中…' : '保存する'}</button>
+        {onCreateProject && <button type="submit" onClick={() => setStartProject(true)}>保存してプロジェクト作成へ</button>}</div>
     </fieldset>
   </form>
 }
