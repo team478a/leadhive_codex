@@ -184,7 +184,9 @@ def normalize(bundle: dict[str, Any], project_id: str) -> list[dict[str, Any]]:
                 "actor": actor,
                 "outcome": outcome,
                 "reason": reason,
-                "evidence": payload.get("evidence_url") or payload.get("note") or None,
+                "evidence": payload.get("evidence_url")
+                or payload.get("note")
+                or record.get("evidence_reference"),
                 "observed_at": reviewed_at,
                 "versions": {key: versions.get(key) for key in ("model", "prompt", "rule", "code")},
                 "source": source,

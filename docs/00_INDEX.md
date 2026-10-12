@@ -1,6 +1,7 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
 - [Phase 5: 運用フィードバック・隔離評価PoC](PHASE5_OPERATIONAL_FEEDBACK_LAB.md)
+- [Phase 5A: 判定版記録と所有者限定評価export](PHASE5A_FEEDBACK_PROVENANCE_EXPORT.md)
 
 - [導入・ダウンロードページと配布リンク設定](INSTALLATION_DOWNLOAD_PAGE.md)
 
