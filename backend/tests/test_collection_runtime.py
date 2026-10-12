@@ -67,6 +67,7 @@ def replay(auth, db, monkeypatch, pages, *, fair, expected_saved=13):
         for h in hits
         if h.classification in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
         or (h.classification == "JOB_PR" and h.classification_reason == "EXTERNAL_PLATFORM")
+        or (h.classification == "ARTICLE" and h.classification_reason == "AGGREGATION_TITLE")
     )
     collections = list(db.scalars(select(CollectionJob)))
     claim = operation.payload["collection_runtime"]
@@ -103,10 +104,29 @@ def synthetic_pages():
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_worker_replay_keeps_uncertain_articles_but_rejects_known_media(
-    auth, db, monkeypatch, fair
-):
-    replay(auth, db, monkeypatch, synthetic_pages(), fair=fair)
+def test_worker_replay_rejects_strong_summary_titles_and_known_media(auth, db, monkeypatch, fair):
+    replay(auth, db, monkeypatch, synthetic_pages(), fair=fair, expected_saved=6)
+    articles = list(
+        db.scalars(
+            select(CollectionDiscoveryHit).where(CollectionDiscoveryHit.classification == "ARTICLE")
+        )
+    )
+    assert len(articles) == 7
+    assert all(hit.disposition == "NON_COMPANY_SOURCE" for hit in articles)
+    assert all(hit.classification_reason == "AGGREGATION_TITLE" for hit in articles)
+    # These are provisional candidates, not Human-verified businesses.
+    companies = list(db.scalars(select(Company)))
+    assert all(company.analysis_status == "pending" for company in companies)
+
+
+@pytest.mark.parametrize("fair", [False, True])
+def test_worker_replay_still_keeps_uncertain_articles(auth, db, monkeypatch, fair):
+    pages = synthetic_pages()
+    for page in pages:
+        for row in page:
+            if "/blogs/" in row["link"]:
+                row["title"] = "企業の最新情報"
+    replay(auth, db, monkeypatch, pages, fair=fair, expected_saved=13)
     articles = list(
         db.scalars(
             select(CollectionDiscoveryHit).where(CollectionDiscoveryHit.classification == "ARTICLE")
@@ -114,9 +134,6 @@ def test_worker_replay_keeps_uncertain_articles_but_rejects_known_media(
     )
     assert len(articles) == 7
     assert all(hit.disposition == "SAVED" for hit in articles)
-    # These are provisional candidates, not Human-verified businesses.
-    companies = list(db.scalars(select(Company)))
-    assert all(company.analysis_status == "pending" for company in companies)
 
 
 @pytest.mark.parametrize("fair", [False, True])
@@ -126,7 +143,7 @@ def test_worker_replay_defers_job_title_without_known_media_domain(auth, db, mon
         "title": "北海道札幌市のSNS運用の求人・仕事・採用",
         "link": "https://unknown-company.example.test/careers",
     }
-    replay(auth, db, monkeypatch, pages, fair=fair)
+    replay(auth, db, monkeypatch, pages, fair=fair, expected_saved=7)
     hit = db.scalar(
         select(CollectionDiscoveryHit).where(
             CollectionDiscoveryHit.classification_reason == "TITLE_HINT_REQUIRES_REVIEW"
