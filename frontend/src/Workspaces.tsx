@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { allPages, errorMessage } from './api'
+import { allPages, api, errorMessage } from './api'
 import { CompanyCollectionFeedback } from './CompanyCollectionFeedback'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import type { Company, Profile, Project, ProjectMember } from './types'
@@ -37,6 +37,10 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
   const [selected, setSelected] = useState('')
   const [page, setPage] = useState(0)
   const [revision, setRevision] = useState(0)
+  const [showExcluded, setShowExcluded] = useState(false)
+  const [organizing, setOrganizing] = useState(false)
+  const [notice, setNotice] = useState('')
+  const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(true)
   const [error, setError] = useState('')
   const projectId = project?.id
@@ -50,21 +54,42 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
   }, [projectId, revision])
   const company = items.find(c => c.id === selected)
   const readOnly = !projectId || !['owner', 'editor'].includes(roles[projectId])
+  const visible = items.filter(c => showExcluded ? c.status === 'excluded' : c.status !== 'excluded')
+  async function organize() {
+    if (readOnly || busy || organizing) return
+    setOrganizing(true); setActionError(''); setNotice(''); setSelected(''); setPage(0)
+    let moved = 0; let protectedCount = 0
+    try {
+      for (let i = 0; i < items.length; i += 100) {
+        const result = await api<{ excluded_ids: string[]; protected_ids: string[] }>(`/projects/${projectId}/source-exclusions/cleanup`, 'POST', { company_ids: items.slice(i, i + 100).map(c => c.id) })
+        moved += result.excluded_ids.length; protectedCount += result.protected_ids.length
+        setNotice(`まとめサイトを整理中：${Math.min(i + 100, items.length)} / ${items.length}件`)
+      }
+      setNotice(`${moved}件を収集対象外へ移しました。人の確認・営業状況などにより${protectedCount}件を保護しました。`)
+    } catch (e) { setActionError(errorMessage(e)); setNotice(`整理済み${moved}件。途中までの結果を保存しています。`) }
+    finally { setOrganizing(false); setRevision(v => v + 1) }
+  }
   return <section aria-label="収集リストの確認">
     <div className="panel mb-5"><h2>集まった候補を確認する</h2><p>対象企業のOK・NG、問い合わせ候補の確認・URL修正を記録できます。DM準備は「営業作業」から進めます。</p>
-      {project ? <label className="field mt-3">確認する収集リスト<select value={project.id} onChange={e => onProjectSelected(e.target.value)}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label> : <p>まだ収集リストがありません。</p>}
-      <p className="mt-3">保存済み候補 {items.length}件</p>
+      {project ? <label className="field mt-3">確認する収集リスト<select disabled={organizing} value={project.id} onChange={e => { setPage(0); setSelected(''); setNotice(''); setActionError(''); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label> : <p>まだ収集リストがありません。</p>}
+      <p className="mt-3">候補 {items.filter(c => c.status !== 'excluded').length}件 / 収集対象外 {items.filter(c => c.status === 'excluded').length}件</p>
+      <div className="actions flex-wrap"><button className="secondary" disabled={readOnly || busy || organizing || !items.length} onClick={() => void organize()}>{organizing ? '整理中…' : '既知のまとめサイトを整理'}</button><button className="secondary" disabled={organizing} onClick={() => { setShowExcluded(v => !v); setPage(0); setSelected('') }}>{showExcluded ? '候補に戻る' : '収集対象外を見る'}</button></div>
+      <p className="muted text-sm">確認済みの掲載媒体だけを自動整理します。データや人の判定は削除しません。</p>
     </div>
-    {busy && <p role="status">リストを読み込み中…</p>}
+    {notice && <p role="status" className="panel">{notice}</p>}
+    {actionError && <p role="alert" className="error">{actionError}</p>}
+    {busy && !notice && <p role="status">リストを読み込み中…</p>}
     {error && <p className="error" role="alert">{error}<button className="secondary" onClick={() => setRevision(v => v + 1)}>再読み込み</button></p>}
     {!busy && !error && project && items.length === 0 && <p className="panel">候補はまだありません。収集開始画面から収集してください。</p>}
-    {items.slice(page * 20, (page + 1) * 20).map(c => <article className="panel mb-3" key={c.id}><h3>{c.company_name}</h3><p className="muted break-words">{c.address || '住所未取得'}</p>
+    {!busy && !error && items.length > 0 && visible.length === 0 && <p className="panel">{showExcluded ? '収集対象外の候補はありません。' : '通常の候補はありません。「収集対象外を見る」で移動した候補を確認できます。'}</p>}
+    {visible.slice(page * 20, (page + 1) * 20).map(c => <article className="panel mb-3" key={c.id}><h3>{c.company_name}</h3><p className="muted break-words">{c.address || '住所未取得'}</p>
       <p className="mt-2">{publicLink(c.website_url) ? <a href={publicLink(c.website_url)} target="_blank" rel="noreferrer">企業サイトを開く ↗</a> : '企業サイト未取得'} / {c.contact_url ? '問い合わせ候補あり（未確認を含む）' : '問い合わせ候補未検出'}</p>
       {(c.do_not_contact || c.status === 'excluded') && <p className="mt-2">{c.do_not_contact ? '連絡禁止' : '対象外'}</p>}
       <button className="secondary mt-3" onClick={() => setSelected(v => v === c.id ? '' : c.id)}>{selected === c.id ? '確認を閉じる' : '取得結果を確認する'}</button>
+      {selected === c.id && c.status === 'excluded' && <SourceCleanupRestore company={c} readOnly={readOnly} onSaved={() => { setSelected(''); setPage(0); setRevision(v => v + 1) }} />}
       {company?.id === c.id && <CompanyCollectionFeedback company={company} initialSubject="company" readOnly={readOnly} onSaved={() => setRevision(v => v + 1)} />}
     </article>)}
-    {items.length > 20 && <div className="actions"><button className="secondary" disabled={page === 0} onClick={() => { setPage(v => v - 1); setSelected('') }}>前の20件</button><span>{page + 1} / {Math.ceil(items.length / 20)}</span><button className="secondary" disabled={(page + 1) * 20 >= items.length} onClick={() => { setPage(v => v + 1); setSelected('') }}>次の20件</button></div>}
+    {visible.length > 20 && <div className="actions"><button className="secondary" disabled={page === 0} onClick={() => { setPage(v => v - 1); setSelected('') }}>前の20件</button><span>{page + 1} / {Math.ceil(visible.length / 20)}</span><button className="secondary" disabled={(page + 1) * 20 >= visible.length} onClick={() => { setPage(v => v + 1); setSelected('') }}>次の20件</button></div>}
   </section>
 }
 
@@ -83,4 +108,22 @@ export function SalesWorkspace({ projects, roles, initialProjectId, onNavigate, 
     {project && roles[project.id] !== 'viewer' && roles[project.id] && <SalesPreparationPanel key={project.id} projectId={project.id} />}
     {project && roles[project.id] === 'viewer' && <p className="panel">閲覧のみです。営業準備の実行は所有者・編集者へ依頼してください。</p>}
   </section>
+}
+
+function SourceCleanupRestore({ company, readOnly, onSaved }: { company: Company; readOnly: boolean; onSaved: () => void }) {
+  const [restorable, setRestorable] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const path = `/projects/${company.project_id}/source-exclusions/cleanup/${company.id}`
+  useEffect(() => {
+    let active = true
+    api<{ restorable: boolean }>(path).then(r => { if (active) setRestorable(r.restorable) }).catch(e => { if (active) setError(errorMessage(e)) })
+    return () => { active = false }
+  }, [path])
+  async function restore() {
+    setBusy(true); setError('')
+    try { await api(`${path}/restore`, 'POST', { expected_updated_at: company.updated_at }); onSaved() }
+    catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  return <div className="mt-3">{error && <p role="alert">{error}</p>}{restorable && <><p>掲載媒体のシステム判定で対象外へ移しました。戻したURLは次の自動整理でも保護します。</p><button className="secondary" disabled={busy || readOnly} onClick={() => void restore()}>自動除外を取り消して候補に戻す</button></>}</div>
 }
