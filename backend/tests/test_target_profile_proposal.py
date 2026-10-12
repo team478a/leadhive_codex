@@ -103,3 +103,48 @@ def test_null_usage_and_invalid_keywords(monkeypatch):
     client.responses.parse.return_value.output_parsed.targets[0].search_keywords = ["\nunsafe"]
     with pytest.raises(AiAnalysisError):
         service.propose(service.ProposalInput(url="https://example.test"))
+
+
+def test_customer_keywords_are_compiled_from_buyer_businesses(monkeypatch):
+    _, client, _ = dependencies(monkeypatch)
+    data = proposal_content().model_dump()
+    data["targets"][0].pop("search_keywords")
+    data["targets"][0].update(
+        name="店舗への直接販売",
+        reason="カフェと美容室が購入者となる仮説",
+        business_keywords=["カフェ", "美容室", "カフェ"],
+        positive_keywords=[],
+    )
+    client.responses.parse.return_value.output_parsed = service.BuyerProposalContent(**data)
+    result = service.propose(
+        service.ProposalInput(url="https://example.test/service", target_mode="customers")
+    )
+    assert result.targets[0].search_keywords == ["カフェ 公式サイト", "美容室 公式サイト"]
+    args = client.responses.parse.call_args.kwargs
+    assert args["text_format"] is service.BuyerProposalContent
+    assert '"target_mode": "customers"' in args["input"][1]["content"]
+    client.responses.parse.assert_called_once()
+
+
+def test_partner_mode_keeps_service_provider_keywords(monkeypatch):
+    _, client, _ = dependencies(monkeypatch)
+    result = service.propose(
+        service.ProposalInput(
+            url="https://example.test/service", target_mode="partners", sales_goal="OEM"
+        )
+    )
+    assert result.targets[0].search_keywords == ["SNS運用代行"]
+    assert client.responses.parse.call_args.kwargs["text_format"] is service.ProposalContent
+
+
+@pytest.mark.parametrize("words", [[""], ["カフェ\n美容室"], ["x" * 91]])
+def test_invalid_customer_businesses_are_not_applied(monkeypatch, words):
+    _, client, _ = dependencies(monkeypatch)
+    data = proposal_content().model_dump()
+    data["targets"][0].pop("search_keywords")
+    data["targets"][0]["business_keywords"] = words
+    client.responses.parse.return_value.output_parsed = service.BuyerProposalContent(**data)
+    with pytest.raises(AiAnalysisError):
+        service.propose(
+            service.ProposalInput(url="https://example.test/service", target_mode="customers")
+        )

@@ -15,6 +15,7 @@ export function TargetProfileAssistant({ onApply }: {
 }) {
   const [url, setUrl] = useState('')
   const [goal, setGoal] = useState('')
+  const [targetMode, setTargetMode] = useState('customers')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [proposal, setProposal] = useState<Proposal | null>(null)
@@ -31,7 +32,7 @@ export function TargetProfileAssistant({ onApply }: {
     const requestedRevision = revision.current
     setBusy(true); setError(''); setProposal(null); setApplied(false)
     try {
-      const result = await api<Proposal>('/target-profiles/propose-from-url', 'POST', { url: parsed.href, sales_goal: goal })
+      const result = await api<Proposal>('/target-profiles/propose-from-url', 'POST', { url: parsed.href, sales_goal: goal, target_mode: targetMode })
       if (requestedRevision === revision.current) { setProposal(result); setSelected(0) }
     } catch (e) { if (requestedRevision === revision.current) setError(errorMessage(e)) }
     finally { setBusy(false) }
@@ -40,7 +41,9 @@ export function TargetProfileAssistant({ onApply }: {
     <h3>URLから営業ターゲットを提案</h3>
     <p className="muted mt-2">サービスのURL → AI分析 → ターゲット選択 → 検索語を設定。手入力もできます。</p>
     <label className="field mt-3">販売したいサービスのURL<input type="url" maxLength={2000} placeholder="https://example.com/service" value={url} onChange={e => { changed(); setUrl(e.target.value) }} /></label>
-    <label className="field">営業目的（任意）<textarea maxLength={2000} rows={2} placeholder="例：OEMで販売してくれる提携先を探したい" value={goal} onChange={e => { changed(); setGoal(e.target.value) }} /></label>
+    <label className="field">探したい営業先<select value={targetMode} onChange={e => { changed(); setTargetMode(e.target.value) }}><option value="customers">サービスを使う購入者</option><option value="partners">代理店・OEM提携先</option></select></label>
+    <p className="muted text-sm">購入者は業種＋公式サイトで探します。サービスの課題や機能を検索語に混ぜません。</p>
+    <label className="field">営業目的（任意）<textarea maxLength={2000} rows={2} placeholder="例：来店・予約を増やしたいカフェに販売したい" value={goal} onChange={e => { changed(); setGoal(e.target.value) }} /></label>
     <p className="muted text-sm">指定ページの本文を保存済みキーでAIへ送ります。1回の提案で1ページ解析・AI最大1回。API費用が発生します。検索・収集・保存・送信は開始しません。</p>
     <button type="button" className="mt-3" disabled={busy || !url.trim()} onClick={() => void suggest()}>{busy ? 'サービスを分析しています…' : 'AIにターゲットを提案してもらう'}</button>
     {error && <p className="error mt-3" role="alert">{error}</p>}
