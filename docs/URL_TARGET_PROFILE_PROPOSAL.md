@@ -45,6 +45,15 @@ Desktop/Mobileの隔離Playwrightで22件成功。
 Backend Ruff/format/mypy/API import、Frontend typecheck/lint/buildを実行。
 GitHub CIはPRの最終headに対して別途確認する。
 
+### 2026-10-12 CI E2E回帰修正
+
+初回CIのpush / pull_requestは両方、業種別名とprofile CRUDのDesktop/Mobile計4件が失敗した。
+詳細設定を閉じた状態の入力欄へfillしていたことと、複製先の説明文も含めたhasTextが
+元profileと複製先を同時選択したことが原因。103件成功・3件skipの結果とは分けて扱う。
+テストにsummaryを開く操作を追加し、複製元は完全一致のheadingで選択する。
+詳細欄が最初は非表示であることも検証する。UIを常時展開する変更やforce操作で回避しない。
+修正後は専用_test DB・localhostで該当4件を再実行する。最新CIの全件成功とは区別する。
+
 本変更はPR提出まで。本番反映はマージ後にWeb/API両方が必要。
 既存Agent権限・承認・送信境界は変更しない。
 
