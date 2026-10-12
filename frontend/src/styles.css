@@ -19,6 +19,7 @@
   .badge { @apply inline-block h-fit shrink-0 rounded-full bg-[#edf2eb] px-3 py-1 text-xs font-medium text-[#45644e]; }
   .keyword { @apply rounded-md bg-[#f2f4f0] px-2.5 py-1.5 text-xs text-[#58705f]; }
   .secondary { @apply border border-[#dce3dc] bg-white text-[#315e4a] hover:bg-[#f1f5ee]; }
+  button.analysis-active, button.analysis-active:disabled { @apply border-2 border-[#235c4c] bg-white text-[#235c4c] opacity-100; }
   .danger { @apply bg-transparent px-3 text-[#a65047] hover:bg-red-50; }
   .error { @apply mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800; }
   .notice { @apply mb-5 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800; }

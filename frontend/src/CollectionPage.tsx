@@ -31,8 +31,8 @@ const aiNames = {
   failed: 'AI判定失敗', skipped: 'AI判定保留',
 }
 
-export function CollectionPage({ projects, profiles, initialProjectId, onConfigureTarget, onProjectSelected }: {
-  projects: Project[]; profiles: Profile[]; initialProjectId: string; onConfigureTarget?: () => void; onProjectSelected?: (id: string) => void
+export function CollectionPage({ projects, profiles, initialProjectId, onConfigureTarget, onProjectSelected, mode = 'collection' }: {
+  mode?: 'collection' | 'analysis'; projects: Project[]; profiles: Profile[]; initialProjectId: string; onConfigureTarget?: () => void; onProjectSelected?: (id: string) => void
 }) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
   const [source, setSource] = useState<CollectionSource>('serper')
@@ -51,6 +51,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [recordType, setRecordType] = useState('company')
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [analysisPage, setAnalysisPage] = useState(0)
   const [operations, setOperations] = useState<OperationJob[]>([])
   const [schedules, setSchedules] = useState<SearchSchedule[]>([])
   const [analytics, setAnalytics] = useState<SearchAnalytics[]>([])
@@ -60,12 +61,18 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [intervalHours, setIntervalHours] = useState(168)
   const [companyLimit, setCompanyLimit] = useState(10000)
   const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const progressPanel = useRef<HTMLDivElement>(null)
   const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
+  const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis'].includes(job.operation_type) : job.operation_type === 'collect_search')
+  const webJob = operations.find(job => job.project_id === projectId && job.operation_type === 'web_analysis' && ['queued', 'running'].includes(job.status))
+  const aiJob = operations.find(job => job.project_id === projectId && job.operation_type === 'ai_analysis' && ['queued', 'running'].includes(job.status))
+  const webBusy = analyzing || !!webJob
+  const aiBusy = aiAnalyzing || !!aiJob
   const project = projects.find(item => item.id === projectId)
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
@@ -75,18 +82,19 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const reload = useCallback(async () => {
     if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); setReviewAnalytics([]); return }
     const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics, nextPerformance, nextReviewAnalytics] = await Promise.all([
-      allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
+      mode === 'analysis' ? Promise.resolve([]) : allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
       api<OperationJob[]>(`/projects/${projectId}/operations`),
-      api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
-      api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
-      api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
-      api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`),
+      mode === 'analysis' ? Promise.resolve([]) : api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
+      mode === 'analysis' ? Promise.resolve([]) : api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
+      mode === 'analysis' ? Promise.resolve([]) : api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
+      mode === 'analysis' ? Promise.resolve([]) : api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`),
     ])
     setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations.filter(job => job.operation_type !== 'prepare_outreach')); setSchedules(nextSchedules)
     setAnalytics(nextAnalytics); setPerformance(nextPerformance); setReviewAnalytics(nextReviewAnalytics)
-  }, [projectId])
+  }, [projectId, mode])
 
+  useEffect(() => { setAnalysisPage(0) }, [projectId])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
   useEffect(() => {
     if (!operations.some(job => ['queued', 'running'].includes(job.status))) return
@@ -97,6 +105,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     if (projectRegion) setRegion(projectRegion)
     if (suggestedKeywordText) setKeywords(suggestedKeywordText)
   }, [projectId, projectRegion, suggestedKeywordText])
+
+  async function refresh() {
+    if (refreshing) return
+    setRefreshing(true); setError(''); setNotice('')
+    try { await reload(); setNotice('最新の収集・解析状況に更新しました。') }
+    catch (e) { setError(errorMessage(e)) }
+    finally { setRefreshing(false) }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setNotice('')
@@ -150,6 +166,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   }
 
   async function analyze(companyIds: string[] = []) {
+    if (webBusy) return
     setAnalyzing(true); setError(''); setNotice('')
     try {
       if (!companyIds.length) {
@@ -170,6 +187,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   }
 
   async function analyzeAi(companyIds: string[] = []) {
+    if (aiBusy) return
     setAiAnalyzing(true); setError(''); setNotice('')
     try {
       if (!companyIds.length) {
@@ -208,10 +226,20 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     <p className="muted">企業は営業プロジェクトごとに収集・保存されます。</p>{onConfigureTarget && <button className="mt-4" onClick={onConfigureTarget}>収集ターゲットを設定</button>}
   </section>
 
-  return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
-    <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
-      <h2>収集条件</h2><p className="muted">ターゲットのキーワード・地域を引き継いでいます。件数を確認して収集を開始してください。</p>
-      {(error || busyMessage || notice) && <aside aria-label="操作結果" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 max-h-[40dvh] overflow-y-auto rounded-xl border border-slate-300 bg-white p-4 shadow-xl sm:static sm:mb-4 sm:max-h-none sm:shadow-none">
+  const progress = <div className="panel scroll-mt-24" ref={progressPanel} tabIndex={-1}><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
+        <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
+        {visibleOperations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : visibleOperations.map(job =>
+            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
+            {job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
+            {job.error_message && <p className="error mb-0">{job.error_message}</p>}
+            {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
+            {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
+            {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
+          </article>)}
+      </div>
+
+  return <div className={mode === 'analysis' ? 'min-w-0 space-y-6' : 'grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]'}>
+    {(error || busyMessage || notice) && <aside aria-label="操作結果" className="xl:col-span-2 fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 max-h-[40dvh] overflow-y-auto rounded-xl border border-slate-300 bg-white p-4 shadow-xl sm:static sm:mb-4 sm:max-h-none sm:shadow-none">
         <p className={error ? 'error m-0' : 'm-0'} role={error ? 'alert' : 'status'}>{error || busyMessage || notice}</p>
         {!busyMessage && <div className="mt-3 flex flex-wrap gap-2">
           {!error && notice.includes('バックグラウンド') && <button type="button" onClick={() => {
@@ -222,6 +250,10 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <button type="button" className="secondary" onClick={() => { setError(''); setNotice('') }}>通知を閉じる</button>
         </div>}
       </aside>}
+    {mode === 'analysis' && <section className="panel"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field><p>保存済み {companies.length}社 / Web未解析 {companies.filter(c => c.website_url && ['pending', 'failed'].includes(c.analysis_status)).length}社 / AI未判定 {companies.filter(c => c.analysis_status === 'completed' && c.ai_status !== 'completed').length}社</p><p className="muted mt-2">一括処理は1回最大100社です。完了後、残りを実行できます。失敗した企業も再試行対象になります。AI判定にはAPI費用が発生します。</p></section>}
+    {mode === 'collection' && <section className="min-w-0 space-y-6">
+    <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
+      <h2>収集条件</h2><p className="muted">ターゲットのキーワード・地域を引き継いでいます。件数を確認して収集を開始してください。</p>
       {conditionsDirty && source !== 'csv' && source !== 'url' && <p role="status">対象条件に未確定の変更があります。確定するか、変更を取り消してから収集してください。</p>}
       <fieldset disabled={loading}>
         <Field label="プロジェクト"><select required value={projectId}
@@ -303,16 +335,17 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       {reviewAnalytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-2">AI判定レビュー精度</h3><p className="muted mb-3 text-sm">人手レビューを検索語ごとに集計しています。精度が低い検索語はターゲット条件の見直し候補です。</p><table><thead><tr><th>検索語</th><th>レビュー数</th><th>正しい</th><th>精度</th></tr></thead><tbody>{reviewAnalytics.map(item => <tr key={item.source_keyword}><td>{item.source_keyword}</td><td>{item.reviewed_count}</td><td>{item.correct_count}</td><td>{item.accuracy_rate}%</td></tr>)}</tbody></table></div>}
       {performance.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-2">収集精度・速度の実績</h3><p className="muted mb-3 text-sm">保存率が低い検索語、公式外が多い検索語、時間がかかる収集元を比較して、検索条件を見直せます。</p><table><thead><tr><th>収集元</th><th>検索語</th><th>実行</th><th>発見</th><th>保存</th><th>保存率</th><th>公式外率</th><th>重複</th><th>エラー</th><th>平均時間</th></tr></thead>
         <tbody>{performance.map(item => <tr key={`${item.source}:${item.keyword}`}><td>{sourceNames[item.source]}</td><td>{item.keyword || '検索語なし'}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.excluded_rate}%</td><td>{item.duplicate_count}</td><td>{item.error_count}</td><td>{(item.average_processing_ms / 1000).toFixed(1)}秒</td></tr>)}</tbody></table></div>}
-    </div></section>
+    </div></section>}
     <section className="space-y-6">
-      <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
+      {mode === 'analysis' && progress}
+      {mode === 'analysis' && <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
         <p className="muted mt-2 text-sm">Webサイトから企業情報・SNS・問い合わせ先を抽出します。</p></div>
         <div className="flex flex-wrap items-center gap-2"><span className="badge">{companies.length} 社</span>
-          <button type="button" disabled={analyzing || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
-            onClick={() => void analyze()}>{analyzing ? '解析中…' : '未解析を解析'}</button>
-          <button type="button" disabled={aiAnalyzing || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
-            onClick={() => void analyzeAi()}>{aiAnalyzing ? '判定中…' : '未判定をAI判定'}</button></div></div>
-        {companies.slice(0, 5).map(company => <article key={company.id} className="job-row">
+          <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={webBusy || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
+            onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : '未解析を解析'}</button>
+          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={aiBusy || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
+            onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : '未判定をAI判定'}</button></div></div>
+        {companies.slice(analysisPage * 20, (analysisPage + 1) * 20).map(company => <article key={company.id} className="job-row">
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong>{company.company_name}</strong>
             <span className="badge">{analysisNames[company.analysis_status]}</span>
             <span className="badge">{aiNames[company.ai_status]}</span>
@@ -331,14 +364,15 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2"><span className="badge">{sourceNames[company.source]}</span>
             {company.website_url && !['duplicate', 'excluded'].includes(company.analysis_status) &&
-              <button type="button" className="secondary" disabled={analyzing}
-                onClick={() => void analyze([company.id])}>Web解析</button>}
-            {company.analysis_status === 'completed' && <button type="button" className="secondary"
-              disabled={aiAnalyzing} onClick={() => void analyzeAi([company.id])}>AI判定</button>}</div>
+              <button type="button" className={webBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={webBusy} disabled={webBusy}
+                onClick={() => void analyze([company.id])}>{webBusy ? 'Web解析 処理中…' : 'Web解析'}</button>}
+            {company.analysis_status === 'completed' && <button type="button" className={aiBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={aiBusy}
+              disabled={aiBusy} onClick={() => void analyzeAi([company.id])}>{aiBusy ? 'AI判定 処理中…' : 'AI判定'}</button>}</div>
         </article>)}
-      </div>
-      <div className="panel"><div className="flex items-center justify-between gap-4"><h2>最近の収集ジョブ</h2>
-        <button type="button" className="secondary" disabled={loading} onClick={() => void reload()}>更新</button></div>
+        {companies.length > 20 && <div className="actions"><button className="secondary" disabled={analysisPage === 0} onClick={() => setAnalysisPage(p => p - 1)}>前の20社</button><span>{analysisPage + 1} / {Math.ceil(companies.length / 20)}</span><button className="secondary" disabled={(analysisPage + 1) * 20 >= companies.length} onClick={() => setAnalysisPage(p => p + 1)}>次の20社</button></div>}
+      </div>}
+      {mode === 'collection' && <div className="panel"><div className="flex items-center justify-between gap-4"><h2>最近の収集ジョブ</h2>
+        <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
         {jobs.length === 0 ? <p className="muted mt-4">収集履歴はまだありません。</p> : jobs.slice(0, 10).map(job =>
           <article className="job-row block" key={job.id}>
             <div className="flex justify-between gap-3"><strong>{sourceNames[job.source]}</strong>
@@ -350,18 +384,8 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
             {job.source === 'csv' && job.error_count > 0 && <button type="button" className="secondary mt-3" onClick={() => void download(`/collection-jobs/${job.id}/errors.csv`, 'csv-import-errors.csv').catch(e => setError(errorMessage(e)))}>行別エラーをダウンロード</button>}
           </article>)}
-      </div>
-      <div className="panel scroll-mt-24" ref={progressPanel} tabIndex={-1}><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
-        <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
-        {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
-            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
-            {job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
-            {job.error_message && <p className="error mb-0">{job.error_message}</p>}
-            {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
-            {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
-            {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
-          </article>)}
-      </div>
+      </div>}
+      {mode === 'collection' && progress}
     </section>
   </div>
 }

@@ -60,3 +60,75 @@ test('Collection feedback stays in the mobile viewport and links to progress', a
   await expect(feedback).toHaveCount(0)
   expect(attempts).toBe(2)
 })
+
+
+for (const kind of ['web_analysis', 'ai_analysis'] as const) {
+  test(`${kind} stays inverted while queued/running and refresh recovers from errors`, async ({ page }, info) => {
+    const email = 'operator@example.test'
+    const profile = { id: 'profile-1', profile_name: '購入者', search_keywords: ['カフェ'], active: true }
+    const project = { id: 'project-1', project_name: '収集済みリスト', target_profile_id: profile.id, region: '大阪府', status: 'active' }
+    let status = ''
+    let posts = 0
+    let failRefresh = false
+    const operation = () => ({ id: 'analysis-1', project_id: project.id, operation_type: kind, status, processed_count: 0, total_count: 2, success_count: 0, failed_count: 0, attempt_count: 0 })
+    await page.addInitScript(email => localStorage.setItem(`leadhive:onboarding:${email}`, 'dismissed'), email)
+    await page.route('**/api/**', async route => {
+      const path = new URL(route.request().url()).pathname
+      let data: unknown = []
+      if (path === '/api/auth/me') data = { id: 'operator', email, is_admin: false }
+      else if (path === '/api/target-profiles') data = [profile]
+      else if (path === '/api/projects') data = [project]
+      else if (path === '/api/dashboard') data = { total_companies: 2 }
+      else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
+      else if (path.endsWith('/members')) data = [{ email, role: 'owner' }]
+      else if (path.endsWith('/companies')) data = [{ id: 'company-1', company_name: 'カフェ', source: 'serper', website_url: 'https://example.test', analysis_status: kind === 'ai_analysis' ? 'completed' : 'pending', ai_status: 'pending' }]
+      else if (path.endsWith('/operations') && route.request().method() === 'POST') {
+        posts++; status = 'queued'; data = operation()
+      } else if (path.endsWith('/operations')) {
+        if (failRefresh) { await route.fulfill({ status: 503, json: { detail: '更新に失敗しました。' } }); return }
+        data = status ? [operation()] : []
+      }
+      await route.fulfill({ json: data })
+    })
+    await page.goto('/')
+    await page.getByRole('button', { name: 'このターゲットで収集へ' }).click()
+    await expect(page.getByRole('button', { name: '未解析を解析', exact: true })).toHaveCount(0)
+    await page.getByRole('button', { name: '3. リスト解析', exact: true }).click()
+    await expect(page.getByLabel('解析する収集リスト')).toHaveValue(project.id)
+    await expect(page.getByRole('button', { name: '収集を開始', exact: true })).toHaveCount(0)
+    expect(posts).toBe(0)
+    const idle = kind === 'web_analysis' ? '未解析を解析' : '未判定をAI判定'
+    const queued = kind === 'web_analysis' ? 'Web解析 待機中…' : 'AI判定 待機中…'
+    const running = kind === 'web_analysis' ? 'Web解析中…' : 'AI判定中…'
+    await page.getByRole('button', { name: idle, exact: true }).click()
+    const active = page.getByRole('button', { name: queued, exact: true })
+    await expect(active).toBeDisabled()
+    await expect(active).toHaveClass(/analysis-active/)
+    await expect(active).toHaveCSS('background-color', 'rgb(255, 255, 255)')
+    await expect(active).toHaveAttribute('aria-busy', 'true')
+    await page.getByRole('button', { name: '通知を閉じる', exact: true }).click()
+    await active.screenshot({ path: info.outputPath(`${kind}-active.png`) })
+    const progress = page.locator('div.panel').filter({ has: page.getByRole('heading', { name: 'バックグラウンド処理', exact: true }) })
+    const refresh = progress.getByRole('button', { name: '更新', exact: true })
+    await expect(refresh).toBeEnabled()
+    failRefresh = true
+    await refresh.click()
+    await expect(page.getByRole('alert')).toContainText('更新に失敗')
+    await expect(refresh).toBeEnabled()
+    await page.getByRole('button', { name: '通知を閉じる', exact: true }).click()
+    failRefresh = false; status = 'running'
+    await refresh.click()
+    await expect(page.getByRole('button', { name: running, exact: true })).toHaveClass(/analysis-active/)
+    await expect(page.getByRole('status')).toContainText('最新の収集・解析状況に更新')
+    await page.getByRole('button', { name: '通知を閉じる', exact: true }).click()
+    status = 'completed'
+    await refresh.click()
+    await expect(page.getByRole('button', { name: idle, exact: true })).toBeEnabled()
+    await expect(page.getByRole('button', { name: idle, exact: true })).not.toHaveClass(/analysis-active/)
+    expect(posts).toBe(1)
+    await page.getByRole('button', { name: '2. 収集開始', exact: true }).click()
+    await expect(page.getByLabel('プロジェクト', { exact: true })).toHaveValue(project.id)
+    await expect(page.getByRole('button', { name: idle, exact: true })).toHaveCount(0)
+    expect(posts).toBe(1)
+  })
+}

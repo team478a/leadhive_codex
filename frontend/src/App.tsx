@@ -54,7 +54,7 @@ type Editor = { type: 'project'; value?: Project; profileId?: string } | { type:
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'targets' | 'sales' | 'results'>(window.location.hash === '#raw' ? 'raw' : 'targets')
+  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'targets' | 'sales' | 'results' | 'analysis'>(window.location.hash === '#raw' ? 'raw' : 'targets')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -171,7 +171,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         <button className={tab === 'collection' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('collection'); setEditor(null); setNotice('')
         }}>⌕ 企業収集</button>
-        <button className={tab === 'results' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('results'); setEditor(null); setNotice('') }}>③ 収集リストの確認</button>
+        <button className={tab === 'analysis' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('analysis'); setEditor(null); setNotice('') }}>③ リスト解析</button>
+        <button className={tab === 'results' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('results'); setEditor(null); setNotice('') }}>④ 収集リストの確認</button>
         <p className="nav-label">営業作業</p>
         <button className={tab === 'sales' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('sales'); setEditor(null); setNotice('') }}>▶ 営業準備</button>
         <button className={tab === 'companies' ? 'nav-item selected' : 'nav-item'} onClick={() => {
@@ -209,8 +210,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </aside>
     <main className="workspace"><OutboundStatus /><header><p className="eyebrow">YOUR WORKSPACE</p>
-      <div className="page-heading"><div><h1>{tab === 'targets' ? '収集ターゲット設定' : tab === 'results' ? '収集リストの確認' : tab === 'sales' ? '営業準備' : tab === 'improvements' ? '改善候補' : tab === 'installation' ? '導入・ダウンロード' : tab === 'operation' ? '担当者の作業ガイド' : tab === 'raw' ? '収集結果の確認' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
-        <p className="muted">{tab === 'targets' ? '1. ターゲット設定 → 2. 収集開始 → 3. 結果確認' : tab === 'results' ? '収集した候補を確認してOK・NG・URL修正を記録。' : tab === 'sales' ? '収集したリストからDMを準備し、人の確認後に送信する。' : tab === 'improvements' ? '改善候補を確認し、理由付きで判断を記録。採用しても本番ルールは変わりません。' : tab === 'installation' ? 'クラウド版・ローカル版の使い始め方と配布リンク。' : tab === 'operation' ? '収集・入力・結果記録を、実際に使いながら進める。' : tab === 'raw' ? '候補を順番に確認して、営業対象かどうかを記録。' : tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
+      <div className="page-heading"><div><h1>{tab === 'targets' ? '収集ターゲット設定' : tab === 'analysis' ? 'リスト解析' : tab === 'results' ? '収集リストの確認' : tab === 'sales' ? '営業準備' : tab === 'improvements' ? '改善候補' : tab === 'installation' ? '導入・ダウンロード' : tab === 'operation' ? '担当者の作業ガイド' : tab === 'raw' ? '収集結果の確認' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
+        <p className="muted">{tab === 'targets' ? 'ターゲット設定 → 収集 → 解析 → 結果確認。解析は後からでもできます。' : tab === 'analysis' ? '保存済みリストを選び、後からWeb解析・AI判定。' : tab === 'results' ? '収集した候補を確認してOK・NG・URL修正を記録。' : tab === 'sales' ? '収集したリストからDMを準備し、人の確認後に送信する。' : tab === 'improvements' ? '改善候補を確認し、理由付きで判断を記録。採用しても本番ルールは変わりません。' : tab === 'installation' ? 'クラウド版・ローカル版の使い始め方と配布リンク。' : tab === 'operation' ? '収集・入力・結果記録を、実際に使いながら進める。' : tab === 'raw' ? '候補を順番に確認して、営業対象かどうかを記録。' : tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
         {!editor && (tab === 'projects' || tab === 'profiles') && <button disabled={!loaded || loading || busy} onClick={() => {
           setEditor({ type: tab === 'projects' ? 'project' : 'profile' }); setNotice('')
         }}>＋ {tab === 'projects' ? 'プロジェクトを作成' : 'プロファイルを作成'}</button>}
@@ -218,10 +219,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       {error && <div className="error" role="alert">{error}<button className="secondary ml-4" disabled={busy}
         onClick={() => void action(reload)}>再読み込み</button></div>}
       {notice && <p className="notice" role="status">{notice}</p>}
-      {!editor && ['targets', 'collection', 'results'].includes(tab) && <nav className="panel mb-5 actions" aria-label="収集の作業順">
+      {!editor && ['targets', 'collection', 'analysis', 'results'].includes(tab) && <nav className="panel mb-5 actions" aria-label="収集の作業順">
         <button className={tab === 'targets' ? '' : 'secondary'} aria-current={tab === 'targets' ? 'step' : undefined} onClick={() => setTab('targets')}>1. ターゲット設定</button>
         <button className={tab === 'collection' ? '' : 'secondary'} aria-current={tab === 'collection' ? 'step' : undefined} disabled={!canCollect} onClick={() => setTab('collection')}>2. 収集開始</button>
-        <button className={tab === 'results' ? '' : 'secondary'} aria-current={tab === 'results' ? 'step' : undefined} onClick={() => setTab('results')}>3. 結果確認</button>
+        <button className={tab === 'analysis' ? '' : 'secondary'} aria-current={tab === 'analysis' ? 'step' : undefined} disabled={!canCollect} onClick={() => setTab('analysis')}>3. リスト解析</button>
+        <button className={tab === 'results' ? '' : 'secondary'} aria-current={tab === 'results' ? 'step' : undefined} onClick={() => setTab('results')}>4. 結果確認</button>
       </nav>}
       {loading ? <p role="status">読み込み中…</p> : editor?.type === 'project' ?
         <ProjectForm key={editor.value?.id ?? 'new'} profiles={profiles} initial={editor.value} profileId={editor.profileId}
@@ -257,7 +259,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
                   }}>削除</button></>}</div></div>
             </article>)}</div>}
           {memberProject && <section className="panel mt-6" aria-label="プロジェクトメンバー"><div className="flex justify-between gap-3"><div><h2>{memberProject.project_name}のメンバー</h2><p className="muted mt-2 text-sm">編集者は操作可能、閲覧者は参照のみです。</p></div><button className="secondary" onClick={() => setMemberProject(null)}>閉じる</button></div><div className="detail-grid mt-4"><label className="field">メンバーのメール<input type="email" value={memberEmail} onChange={e => setMemberEmail(e.target.value)} /></label><label className="field">権限<select value={memberRole} onChange={e => setMemberRole(e.target.value as 'editor' | 'viewer')}><option value="editor">編集者</option><option value="viewer">閲覧者</option></select></label></div><div className="actions"><button disabled={busy || !memberEmail.trim()} onClick={() => void saveMember()}>メンバーを保存</button></div>{members.map(member => <article className="job-row" key={member.id}><div><strong>{member.email}</strong><p className="muted text-sm">{member.role === 'owner' ? '所有者' : member.role === 'editor' ? '編集者' : '閲覧者'}</p></div>{member.role !== 'owner' && <button className="danger" disabled={busy} onClick={() => void removeMember(member)}>削除</button>}</article>)}</section>}
-        </> : loaded && tab === 'collection' ? <CollectionPage onProjectSelected={setCollectionProjectId} onConfigureTarget={() => configureTarget()} projects={projects.filter(project => projectRoles[project.id] !== 'viewer')} profiles={profiles}
+        </> : loaded && (tab === 'collection' || tab === 'analysis') ? <CollectionPage key={`${tab}-${collectionProjectId}`} mode={tab === 'analysis' ? 'analysis' : 'collection'} onProjectSelected={setCollectionProjectId} onConfigureTarget={() => configureTarget()} projects={projects.filter(project => projectRoles[project.id] !== 'viewer')} profiles={profiles}
           initialProjectId={collectionProjectId} /> : loaded && tab === 'companies' ?
           <>{completionCompanyId && completionReturnContext && <section className="panel mb-4" aria-label="作業キューへの戻り先">
             <p>企業詳細の変更は必要に応じて保存してください。戻る操作で自動保存・承認・送信は行いません。</p>

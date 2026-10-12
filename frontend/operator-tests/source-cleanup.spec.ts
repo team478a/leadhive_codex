@@ -32,7 +32,7 @@ for (const role of ['owner', 'viewer'] as const) {
       await route.fulfill({ json: data })
     })
     await page.goto('/')
-    await navigateWorkspace(page, '③ 収集リストの確認')
+    await navigateWorkspace(page, '④ 収集リストの確認')
     const results = page.getByRole('region', { name: '収集リストの確認' })
     await expect(results.getByRole('heading', { name: 'Retty', exact: true })).toBeVisible()
     const organize = results.getByRole('button', { name: '既知のまとめサイトを整理' })
