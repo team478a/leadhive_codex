@@ -34,6 +34,18 @@ from app.services.email_delivery import smtp_configuration
 router = APIRouter(prefix="/api", tags=["Human approved email"])
 
 
+@router.get("/projects/{project_id}/bulk-send-preview")
+def bulk_send_preview(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.services.bulk_send_preview import preview
+
+    project_access(project_id, db, user, write=False)
+    return preview(db, project_id)
+
+
 def access(db, project_id, user, write=True):
     if write:
         db.scalar(select(Project).where(Project.id == project_id).with_for_update())

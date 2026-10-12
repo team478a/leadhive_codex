@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { allPages, api, errorMessage } from './api'
 import { CompanyCollectionFeedback } from './CompanyCollectionFeedback'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
+import { CleanListSendPanel } from './CleanListSendPanel'
 import type { Company, Profile, Project, ProjectMember } from './types'
 
 type Roles = Record<string, ProjectMember['role']>
@@ -39,6 +40,7 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
   const [revision, setRevision] = useState(0)
   const [showExcluded, setShowExcluded] = useState(false)
   const [organizing, setOrganizing] = useState(false)
+  const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState('')
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(true)
@@ -71,11 +73,13 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
   }
   return <section aria-label="収集リストの確認">
     <div className="panel mb-5"><h2>集まった候補を確認する</h2><p>対象企業のOK・NG、問い合わせ候補の確認・URL修正を記録できます。DM準備は「営業作業」から進めます。</p>
-      {project ? <label className="field mt-3">確認する収集リスト<select disabled={organizing} value={project.id} onChange={e => { setPage(0); setSelected(''); setNotice(''); setActionError(''); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label> : <p>まだ収集リストがありません。</p>}
+      {project ? <label className="field mt-3">確認する収集リスト<select disabled={organizing || sending} value={project.id} onChange={e => { setPage(0); setSelected(''); setNotice(''); setActionError(''); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label> : <p>まだ収集リストがありません。</p>}
       <p className="mt-3">候補 {items.filter(c => c.status !== 'excluded').length}件 / 収集対象外 {items.filter(c => c.status === 'excluded').length}件</p>
-      <div className="actions flex-wrap"><button className="secondary" disabled={readOnly || busy || organizing || !items.length} onClick={() => void organize()}>{organizing ? '整理中…' : '既知のまとめサイトを整理'}</button><button className="secondary" disabled={organizing} onClick={() => { setShowExcluded(v => !v); setPage(0); setSelected('') }}>{showExcluded ? '候補に戻る' : '収集対象外を見る'}</button></div>
+      <div className="actions flex-wrap"><button className="secondary" disabled={readOnly || busy || organizing || sending || !items.length} onClick={() => void organize()}>{organizing ? '整理中…' : '既知のまとめサイトを整理'}</button><button className="secondary" disabled={organizing || sending} onClick={() => { setShowExcluded(v => !v); setPage(0); setSelected('') }}>{showExcluded ? '候補に戻る' : '収集対象外を見る'}</button></div>
       <p className="muted text-sm">確認済みの掲載媒体だけを自動整理します。データや人の判定は削除しません。</p>
     </div>
+    {project && !showExcluded && !busy && !organizing && <CleanListSendPanel key={`${project.id}-${revision}`} projectId={project.id} canWrite={!readOnly} onBusyChange={setSending} />}
+    {sending && <p role="status">現在のリストの送信予約を登録しています。</p>}
     {notice && <p role="status" className="panel">{notice}</p>}
     {actionError && <p role="alert" className="error">{actionError}</p>}
     {busy && !notice && <p role="status">リストを読み込み中…</p>}
