@@ -76,6 +76,10 @@ def bounded_candidates(db, job, candidates, remaining):
                 candidate.website_url
                 and classify_candidate(candidate) == ("JOB_PR", "EXTERNAL_PLATFORM")
             )
+            or (
+                candidate.website_url
+                and classify_candidate(candidate) == ("ARTICLE", "AGGREGATION_TITLE")
+            )
         ):
             selected.append(candidate)
             continue

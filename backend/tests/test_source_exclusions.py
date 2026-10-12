@@ -11,6 +11,21 @@ from app.services.web_analysis import analyze
 from tests.test_sendability import company_fixture
 
 
+def test_summary_title_at_analysis_and_contact_wrapper():
+    assert (
+        page_reason("<title>おすすめの店7選</title>", "https://new.example/list") == "ARTICLE_PAGE"
+    )
+    assert page_reason("<title>店舗一覧｜公式サイト</title>", "https://new.example/stores") == ""
+    assert (
+        page_reason(
+            '<title>おすすめの店7選</title><form><input name="email" type="email">'
+            '<textarea name="message"></textarea></form>',
+            "https://new.example/contact",
+        )
+        == ""
+    )
+
+
 def register(auth, company, url="https://www.listing.example/list"):
     return auth.post(
         f"/api/projects/{company.project_id}/source-exclusions",

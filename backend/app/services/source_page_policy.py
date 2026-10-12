@@ -39,6 +39,6 @@ def page_reason(html: str, url: str) -> str:
         (og_type and str(og_type.get("content", "")).lower() == "article")
         or soup.select_one("article, [itemtype*='Article']")
     )
-    if kind == "ARTICLE" and is_article:
+    if kind == "ARTICLE" and (is_article or reason == "AGGREGATION_TITLE"):
         return "ARTICLE_PAGE"
     return ""
