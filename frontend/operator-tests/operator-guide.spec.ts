@@ -184,6 +184,7 @@ test('URL AI suggestion requires human apply, remains editable, then creates pro
   })
   await newProfile(page)
   await page.getByLabel('販売したいサービスのURL').fill('https://example.test/service')
+  await page.getByLabel('探したい営業先').selectOption('partners')
   await page.getByLabel('営業目的（任意）').fill('OEMパートナーを探す')
   await page.getByRole('button', { name: 'AIにターゲットを提案してもらう' }).click()
   await expect(page.getByText('SNSシステムのOEM販売', { exact: true })).toBeVisible()
@@ -204,7 +205,7 @@ test('URL AI suggestion requires human apply, remains editable, then creates pro
   await expect(page.getByLabel('ターゲットプロファイル', { exact: true })).toHaveValue('profile')
   await expect(page.getByLabel('営業目的', { exact: true })).toHaveValue(/OEMパートナーを探す/)
   expect(mutations).toEqual(['/api/target-profiles'])
-  expect(proposals).toEqual([{ url: 'https://example.test/service', sales_goal: 'OEMパートナーを探す' }])
+  expect(proposals).toEqual([{ url: 'https://example.test/service', sales_goal: 'OEMパートナーを探す', target_mode: 'partners' }])
 })
 
 test('AI errors preserve manual configuration and changed URL invalidates old proposal', async ({ page }) => {
@@ -218,5 +219,29 @@ test('AI errors preserve manual configuration and changed URL invalidates old pr
   await expect(page.getByRole('alert')).toContainText('サービス説明が不足')
   await expect(page.getByLabel('検索キーワード', { exact: true })).toHaveValue('SNS運用代行')
   await expect(page.getByLabel('プロファイル名', { exact: true })).toHaveValue('手入力条件')
+  expect(mutations).toEqual([])
+})
+
+
+test('buyer discovery is default and changing to partners invalidates the proposal', async ({ page }) => {
+  const mutations = await setup(page, 0, 'owner', false)
+  const requests: unknown[] = []
+  await page.route('**/api/target-profiles/propose-from-url', route => {
+    requests.push(route.request().postDataJSON())
+    return route.fulfill({ json: {
+      service_summary: '店舗向けサービス', source_url: 'https://example.test/service',
+      evidence_quotes: [], limitations: ['導入意欲は未確認'],
+      targets: [{ name: 'カフェ', reason: '購入者の仮説', search_keywords: ['カフェ 公式サイト'], positive_keywords: [], negative_keywords: [], exclusion_keywords: [] }],
+    } })
+  })
+  await newProfile(page)
+  await expect(page.getByLabel('探したい営業先')).toHaveValue('customers')
+  await page.getByLabel('販売したいサービスのURL').fill('https://example.test/service')
+  await page.getByRole('button', { name: 'AIにターゲットを提案してもらう' }).click()
+  await page.getByRole('button', { name: 'このターゲット案を設定へ反映' }).click()
+  await expect(page.getByLabel('検索キーワード', { exact: true })).toHaveValue('カフェ 公式サイト')
+  await page.getByLabel('探したい営業先').selectOption('partners')
+  await expect(page.getByRole('button', { name: 'このターゲット案を設定へ反映' })).toHaveCount(0)
+  expect(requests).toEqual([{ url: 'https://example.test/service', sales_goal: '', target_mode: 'customers' }])
   expect(mutations).toEqual([])
 })
