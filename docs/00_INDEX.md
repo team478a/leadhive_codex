@@ -380,5 +380,7 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 ## 担当者の実運用
 
+- [Phase 5A: フィールド評価記録](PHASE5A_FIELD_FEEDBACK.md)
+
 - [入力・結果記録の運用ガイド](OPERATOR_INPUT_WORKFLOW_GUIDE.md)
 - [UI・ガイド整備記録](OPERATOR_UI_GUIDE_REPORT.md)

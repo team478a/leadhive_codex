@@ -13,6 +13,7 @@ from app.project_access import project_access
 from app.security import current_user
 from app.services.collection_feedback import PREFIX, decode
 from app.services.feedback_provenance import digest
+from app.services.field_feedback import supplemental_records
 
 router = APIRouter(prefix="/api/projects")
 
@@ -70,6 +71,7 @@ def export_feedback(
             skipped += 1  # Merged/deleted/unbound legacy data is never silently relabeled.
             continue
         decision = value.get("decision_provenance") if value.get("subject") == "company" else None
+        field_decision = value.get("field_provenance") or {}
         snapshot = (
             decision["snapshot"]
             if decision
@@ -98,16 +100,27 @@ def export_feedback(
                 "observed_at": value["reviewed_at"],
                 "snapshot_observed_at": decision["observed_at"]
                 if decision
-                else value["reviewed_at"],
+                else field_decision.get("observed_at") or value["reviewed_at"],
                 "snapshot": snapshot,
                 "snapshot_hash": digest(snapshot),
                 "prediction": decision["prediction"] if decision else None,
                 "versions": decision["versions"]
                 if decision
-                else dict.fromkeys(("model", "prompt", "rule", "code")),
+                else field_decision.get("versions")
+                or dict.fromkeys(("model", "prompt", "rule", "code")),
                 "payload": payload,
             }
         )
+    try:
+        records.extend(supplemental_records(db, project_id, private_safe_url))
+    except OverflowError:
+        raise HTTPException(
+            413, "評価記録の出力上限を超えています。期間指定の出力が必要です。"
+        ) from None
+    except (ValueError, KeyError, TypeError):
+        raise HTTPException(409, "保存済み評価記録の整合性を確認できません。") from None
+    if len(records) > 1000:
+        raise HTTPException(413, "評価記録の出力上限を超えています。")
     response.headers["Cache-Control"] = "no-store"
     response.headers["Content-Disposition"] = (
         'attachment; filename="leadhive-feedback-private.json"'
