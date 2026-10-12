@@ -4,7 +4,7 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -82,17 +82,42 @@ def list_proposals(
     return {"items": [output(db, r) for r in rows[:100]], "truncated": len(rows) > 100}
 
 
+@router.get("/{project_id}/feedback-proposals/status")
+def workbench_status(
+    project_id: UUID,
+    response: Response,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
+):
+    project_access(project_id, db, user, write=False, owner=True)
+    response.headers["Cache-Control"] = "no-store"
+    return {
+        "enabled": settings.feedback_workbench_enabled,
+        "provenance_enabled": settings.feedback_provenance_enabled,
+        "runtime_applied": False,
+    }
+
+
+class AnalysisInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    start: AwareDatetime
+    end: AwareDatetime
+
+
 @router.post("/{project_id}/feedback-proposals/analyze")
 def analyze_saved(
     project_id: UUID,
     response: Response,
     db: Session = Depends(get_db),
     user: User = Depends(current_admin),
+    body: AnalysisInput | None = None,
 ):
     guard(project_id, db, user)
     # Serializes concurrent analysis/import without mutating Project itself.
     db.scalar(select(Project).where(Project.id == project_id).with_for_update())
-    source = export_feedback(project_id, Response(), db, user)
+    source = export_feedback(
+        project_id, Response(), db, user, **({"start": body.start, "end": body.end} if body else {})
+    )
     try:
         report = workbench(source, str(project_id))
     except (ValueError, TypeError, KeyError):
@@ -122,6 +147,7 @@ def analyze_saved(
                     "development_analysis": report["development_analysis"],
                     "sealed_evaluation_certified": False,
                     "estimated_api_cost": None,
+                    "period": source.get("period"),
                 },
             )
             db.add(proposal)
@@ -135,6 +161,7 @@ def analyze_saved(
         "unresolved_samples": report["development_analysis"]["unresolved_samples"],
         "api_calls": 0,
         "runtime_applied": False,
+        "period": source.get("period"),
     }
 
 

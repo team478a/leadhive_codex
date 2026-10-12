@@ -82,6 +82,7 @@ def test_owner_admin_boundary_flag_agent_and_other_project(auth, client, db, use
     db.add(ProjectMember(project_id=project["id"], user_id=users[1].id, role="editor"))
     db.commit()
     assert client.get(base).status_code == 404
+    assert client.get(base + "/status").status_code == 404
     assert (
         client.post(
             base + f"/{proposal['id']}/decisions",
@@ -91,6 +92,58 @@ def test_owner_admin_boundary_flag_agent_and_other_project(auth, client, db, use
     )
     monkeypatch.setattr(settings, "feedback_workbench_enabled", False)
     assert client.get(base).status_code == 404
+
+
+def test_status_is_read_only_and_owner_admin_only(auth, db, users, monkeypatch):
+    _, base, _ = setup(auth, db, users, monkeypatch)
+    count = db.scalar(select(func.count()).select_from(FeedbackProposal))
+    for enabled in (True, False):
+        monkeypatch.setattr(settings, "feedback_workbench_enabled", enabled)
+        response = auth.get(base + "/status")
+        assert response.status_code == 200
+        assert response.json() == {
+            "enabled": enabled,
+            "provenance_enabled": settings.feedback_provenance_enabled,
+            "runtime_applied": False,
+        }
+        assert response.headers["cache-control"] == "no-store"
+    assert db.scalar(select(func.count()).select_from(FeedbackProposal)) == count
+    assert auth.post(base + "/analyze").status_code == 404
+    assert auth.get(
+        base + "/status", headers={"Authorization": "Bearer agent-only-test"}
+    ).status_code in {401, 403}
+    users[0].is_admin = False
+    db.commit()
+    assert auth.get(base + "/status").status_code == 404
+
+
+def test_period_is_captured_in_proposal_and_idempotency(auth, db, users, monkeypatch):
+    project, base, _ = setup(auth, db, users, monkeypatch)
+    data = dataset()
+    for row in data["records"]:
+        row["project_id"] = project["id"]
+
+    def period_export(*_, start, end):
+        value = copy.deepcopy(data)
+        value["period"] = {
+            "start_inclusive": start.isoformat(),
+            "end_exclusive": end.isoformat(),
+        }
+        return value
+
+    monkeypatch.setattr(routes, "export_feedback", period_export)
+    params = {"start": "2026-10-12T00:00:00Z", "end": "2026-10-13T00:00:00Z"}
+    first = auth.post(base + "/analyze", json=params)
+    assert first.status_code == 200
+    assert first.json()["proposal_ids"]
+    repeat = auth.post(base + "/analyze", json=params)
+    assert repeat.json()["proposal_ids"] == first.json()["proposal_ids"]
+    items = auth.get(base).json()["items"]
+    saved = next(r for r in items if r["id"] == first.json()["proposal_ids"][0])
+    assert saved["report"]["period"] == first.json()["period"]
+    different = auth.post(base + "/analyze", json={**params, "end": "2026-10-14T00:00:00Z"})
+    assert different.status_code == 200
+    assert set(different.json()["proposal_ids"]).isdisjoint(first.json()["proposal_ids"])
 
 
 def test_regression_cannot_be_accepted_and_reason_is_required(auth, db, users, monkeypatch):
