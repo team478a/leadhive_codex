@@ -49,6 +49,7 @@ test('Text proposal needs human confirmation and applies the confirmed search fi
     expect(response.status()).toBe(202)
     const payload = response.request().postDataJSON() as { keywords: string[]; region: string; condition_version: number }
     expect(payload.keywords).toEqual(['美容院']); expect(payload.region).toBe('姫路市'); expect(payload.condition_version).toBe(1)
+    await page.getByRole('button', { name: '進捗を見る', exact: true }).click()
     await page.getByRole('button', { name: 'キャンセル', exact: true }).click()
     expect(forbidden).toEqual([])
   } finally {
