@@ -7,8 +7,8 @@ const statusName = {
   queued: '送信待ち', running: '送信中', sent: 'SMTP受付済み', failed: '失敗', cancelled: 'キャンセル済み', unknown: '結果不明・要確認', blocked: '安全条件で停止',
 }
 
-export function EmailDeliveriesPage({ projects, projectRoles }: { projects: Project[]; projectRoles: Record<string, ProjectMember['role']> }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+export function EmailDeliveriesPage({ projects, projectRoles, initialProjectId }: { projects: Project[]; projectRoles: Record<string, ProjectMember['role']>; initialProjectId?: string }) {
+  const [projectId, setProjectId] = useState(projects.some(p => p.id === initialProjectId) ? initialProjectId! : projects[0]?.id ?? '')
   const [data, setData] = useState<EmailDeliveryList | null>(null)
   const [error, setError] = useState('')
   const load = useCallback(async () => {

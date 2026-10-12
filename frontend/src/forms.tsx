@@ -10,8 +10,8 @@ export function Field({ label, children }: { label: string; children: ReactEleme
   return <div className="field"><label htmlFor={id}>{label}</label>{cloneElement(children, { id })}</div>
 }
 
-export function ProjectForm({ profiles, initial, profileId, onSaved, onCancel }: {
-  profiles: Profile[]; initial?: Project; profileId?: string; onSaved: () => Promise<void>; onCancel: () => void
+export function ProjectForm({ profiles, initial, profileId, onSaved, onCancel, collectionSetup = false }: {
+  profiles: Profile[]; initial?: Project; profileId?: string; onSaved: (project: Project) => Promise<void>; onCancel: () => void; collectionSetup?: boolean
 }) {
   const [value, setValue] = useState<ProjectInput>(initial ? {
     project_name: initial.project_name, target_profile_id: initial.target_profile_id,
@@ -22,27 +22,28 @@ export function ProjectForm({ profiles, initial, profileId, onSaved, onCancel }:
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setError('')
     try {
-      await api(initial ? `/projects/${initial.id}` : '/projects', initial ? 'PUT' : 'POST', value)
-      await onSaved()
+      const project = await api<Project>(initial ? `/projects/${initial.id}` : '/projects', initial ? 'PUT' : 'POST', value)
+      await onSaved(project)
     } catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
   }
   return <form onSubmit={submit} className="panel form-panel">
-    <h2>{initial ? 'プロジェクトを編集' : 'プロジェクトを作成'}</h2>
-    <p className="muted">ターゲットと営業目的を設定して、案件を整理しましょう。</p>
+    <h2>{collectionSetup ? '収集ターゲットを設定' : initial ? 'プロジェクトを編集' : 'プロジェクトを作成'}</h2>
+    <p className="muted">{collectionSetup ? '対象と地域を保存したら、収集開始画面へ進みます。' : 'ターゲットと営業目的を設定して、案件を整理しましょう。'}</p>
     {error && <p role="alert" className="error">{error}</p>}
     <fieldset disabled={busy}>
-      <Field label="プロジェクト名"><input required maxLength={200} value={value.project_name}
+      <Field label={collectionSetup ? '収集リスト名' : 'プロジェクト名'}><input required maxLength={200} value={value.project_name}
         onChange={e => setValue({ ...value, project_name: e.target.value })} /></Field>
-      <Field label="ターゲットプロファイル"><select required value={value.target_profile_id}
+      <Field label={collectionSetup ? '収集する対象' : 'ターゲットプロファイル'}><select required value={value.target_profile_id}
         onChange={e => { const profile = profiles.find(p => p.id === e.target.value)
           setValue({ ...value, target_profile_id: e.target.value,
+            ...(collectionSetup && !value.sales_objective ? { sales_objective: profile?.description || profile?.profile_name || '' } : {}),
             region: profile?.default_regions.join(' / ') || value.region }) }}>
         <option value="">選択してください</option>
         {profiles.filter(p => p.active || p.id === initial?.target_profile_id).map(p =>
           <option key={p.id} value={p.id}>{p.profile_name}{!p.active && '（無効）'}</option>)}
       </select></Field>
-      <Field label="営業目的"><textarea required maxLength={10000} rows={3} value={value.sales_objective}
+      <Field label={collectionSetup ? '収集の目的' : '営業目的'}><textarea required maxLength={10000} rows={3} value={value.sales_objective}
         onChange={e => setValue({ ...value, sales_objective: e.target.value })} /></Field>
       <RegionSelector value={value.region} onChange={region => setValue({ ...value, region })} />
       <div className="grid gap-5 sm:grid-cols-2">
@@ -53,7 +54,7 @@ export function ProjectForm({ profiles, initial, profileId, onSaved, onCancel }:
         </select></Field>
       </div>
       <div className="actions"><button type="button" className="secondary" onClick={onCancel}>キャンセル</button>
-        <button type="submit">{busy ? '保存中…' : '保存する'}</button></div>
+        <button type="submit">{busy ? '保存中…' : collectionSetup ? '保存して収集へ' : '保存する'}</button></div>
     </fieldset>
   </form>
 }

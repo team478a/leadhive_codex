@@ -5,8 +5,8 @@ import type { Company } from './types'
 type Feedback = { subject: string; outcome: string; reason: string; reviewed_at: string; current: boolean }
 const reasons = { wrong_company: '別会社・別店舗', wrong_industry: '対象業種ではない', article: '記事・お知らせ', recruitment: '採用専用', reservation: '予約専用', broken_link: 'リンク切れ', wrong_destination: '別の問い合わせ先', other: 'その他' }
 
-export function CompanyCollectionFeedback({ company, readOnly, onSaved }: { company: Company; readOnly: boolean; onSaved: () => void }) {
-  const [subject, setSubject] = useState<'company' | 'contact_url'>('contact_url')
+export function CompanyCollectionFeedback({ company, readOnly, onSaved, initialSubject = 'contact_url' }: { company: Company; readOnly: boolean; onSaved: () => void; initialSubject?: 'company' | 'contact_url' }) {
+  const [subject, setSubject] = useState<'company' | 'contact_url'>(initialSubject)
   const [editing, setEditing] = useState(false)
   const [url, setUrl] = useState(company.contact_url || '')
   const [reason, setReason] = useState<keyof typeof reasons>('wrong_destination')

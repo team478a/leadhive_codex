@@ -16,11 +16,11 @@ test('content is visible on arrival and menu closes after navigation', async ({ 
   await page.goto('/')
   const menu = page.getByRole('button', { name: 'メニュー', exact: true })
   const nav = page.getByRole('navigation', { name: 'メインナビゲーション' })
-  await expect(page.getByRole('heading', { name: 'プロジェクト', exact: true, level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '収集ターゲット設定', exact: true, level: 1 })).toBeVisible()
   if (info.project.name === 'mobile') {
     await expect(menu).toHaveAttribute('aria-expanded', 'false')
     await expect(nav).toBeHidden()
-    const heading = await page.getByRole('heading', { name: 'プロジェクト', exact: true, level: 1 }).boundingBox()
+    const heading = await page.getByRole('heading', { name: '収集ターゲット設定', exact: true, level: 1 }).boundingBox()
     expect(heading!.y).toBeLessThan(page.viewportSize()!.height / 2)
   } else { await expect(nav).toBeVisible(); await expect(menu).toBeHidden() }
   await navigateWorkspace(page, '◎ ターゲットプロファイル')

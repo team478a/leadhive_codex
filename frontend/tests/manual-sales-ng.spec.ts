@@ -33,7 +33,7 @@ test('Human sales NG registers exclusion, preserves quality and reasons without 
     } })
     expect(existing.ok()).toBeTruthy()
     await page.reload()
-    await expect(page.getByRole('heading', { name: `手動営業NG ${testInfo.project.name}`, exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '収集ターゲット設定', exact: true, level: 1 })).toBeVisible()
     await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(project.id)
     await page.getByTestId('company-list-item').getByRole('button', { name: '詳細', exact: true }).click()

@@ -25,7 +25,7 @@ test('Human input trial records failures without approving, sending or changing 
       do_not_contact: true, exclusion_reason: '営業NG：合成テスト', contact_quality_status: 'observed',
     } })).ok()).toBeTruthy()
     await page.reload()
-    await expect(page.getByRole('heading', { name: `入力試行 ${testInfo.project.name}`, exact: true })).toBeVisible()
+    await expect(page.getByRole('heading', { name: '収集ターゲット設定', exact: true, level: 1 })).toBeVisible()
     await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(project.id)
     await page.getByTestId('company-list-item').getByRole('button', { name: '詳細', exact: true }).click()
