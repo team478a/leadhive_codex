@@ -107,6 +107,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await expect(page.getByLabel('解析する収集リスト').locator('option:checked')).toContainText(projectName)
   await expect(page.getByRole('strong').filter({ hasText: /^example\.com$/ })).toBeVisible()
   await page.getByRole('button', { name: '2. 収集開始', exact: true }).click()
+  await page.getByLabel('収集元').selectOption('url')
   await page.getByLabel('URL（1行に1件）').fill('https://instagram.com/example-company')
   await page.getByRole('button', { name: '収集を開始' }).click()
   await expect(page.getByText('公式外 1', { exact: true })).toBeVisible()
