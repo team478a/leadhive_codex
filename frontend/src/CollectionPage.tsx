@@ -59,12 +59,17 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [intervalHours, setIntervalHours] = useState(168)
   const [companyLimit, setCompanyLimit] = useState(10000)
   const [loading, setLoading] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const progressPanel = useRef<HTMLDivElement>(null)
   const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
+  const webJob = operations.find(job => job.project_id === projectId && job.operation_type === 'web_analysis' && ['queued', 'running'].includes(job.status))
+  const aiJob = operations.find(job => job.project_id === projectId && job.operation_type === 'ai_analysis' && ['queued', 'running'].includes(job.status))
+  const webBusy = analyzing || !!webJob
+  const aiBusy = aiAnalyzing || !!aiJob
   const project = projects.find(item => item.id === projectId)
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
@@ -96,6 +101,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     if (projectRegion) setRegion(projectRegion)
     if (suggestedKeywordText) setKeywords(suggestedKeywordText)
   }, [projectId, projectRegion, suggestedKeywordText])
+
+  async function refresh() {
+    if (refreshing) return
+    setRefreshing(true); setError(''); setNotice('')
+    try { await reload(); setNotice('最新の収集・解析状況に更新しました。') }
+    catch (e) { setError(errorMessage(e)) }
+    finally { setRefreshing(false) }
+  }
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setNotice('')
@@ -149,6 +162,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   }
 
   async function analyze(companyIds: string[] = []) {
+    if (webBusy) return
     setAnalyzing(true); setError(''); setNotice('')
     try {
       if (!companyIds.length) {
@@ -169,6 +183,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   }
 
   async function analyzeAi(companyIds: string[] = []) {
+    if (aiBusy) return
     setAiAnalyzing(true); setError(''); setNotice('')
     try {
       if (!companyIds.length) {
@@ -307,10 +322,10 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
         <p className="muted mt-2 text-sm">Webサイトから企業情報・SNS・問い合わせ先を抽出します。</p></div>
         <div className="flex flex-wrap items-center gap-2"><span className="badge">{companies.length} 社</span>
-          <button type="button" disabled={analyzing || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
-            onClick={() => void analyze()}>{analyzing ? '解析中…' : '未解析を解析'}</button>
-          <button type="button" disabled={aiAnalyzing || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
-            onClick={() => void analyzeAi()}>{aiAnalyzing ? '判定中…' : '未判定をAI判定'}</button></div></div>
+          <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={webBusy || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
+            onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : '未解析を解析'}</button>
+          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={aiBusy || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
+            onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : '未判定をAI判定'}</button></div></div>
         {companies.slice(0, 5).map(company => <article key={company.id} className="job-row">
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong>{company.company_name}</strong>
             <span className="badge">{analysisNames[company.analysis_status]}</span>
@@ -330,14 +345,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           </div>
           <div className="flex shrink-0 flex-col items-end gap-2"><span className="badge">{sourceNames[company.source]}</span>
             {company.website_url && !['duplicate', 'excluded'].includes(company.analysis_status) &&
-              <button type="button" className="secondary" disabled={analyzing}
-                onClick={() => void analyze([company.id])}>Web解析</button>}
-            {company.analysis_status === 'completed' && <button type="button" className="secondary"
-              disabled={aiAnalyzing} onClick={() => void analyzeAi([company.id])}>AI判定</button>}</div>
+              <button type="button" className={webBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={webBusy} disabled={webBusy}
+                onClick={() => void analyze([company.id])}>{webBusy ? 'Web解析 処理中…' : 'Web解析'}</button>}
+            {company.analysis_status === 'completed' && <button type="button" className={aiBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={aiBusy}
+              disabled={aiBusy} onClick={() => void analyzeAi([company.id])}>{aiBusy ? 'AI判定 処理中…' : 'AI判定'}</button>}</div>
         </article>)}
       </div>
       <div className="panel"><div className="flex items-center justify-between gap-4"><h2>最近の収集ジョブ</h2>
-        <button type="button" className="secondary" disabled={loading} onClick={() => void reload()}>更新</button></div>
+        <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
         {jobs.length === 0 ? <p className="muted mt-4">収集履歴はまだありません。</p> : jobs.slice(0, 10).map(job =>
           <article className="job-row block" key={job.id}>
             <div className="flex justify-between gap-3"><strong>{sourceNames[job.source]}</strong>
@@ -351,7 +366,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           </article>)}
       </div>
       <div className="panel scroll-mt-24" ref={progressPanel} tabIndex={-1}><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
-        <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
+        <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
         {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
             <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
             {job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
