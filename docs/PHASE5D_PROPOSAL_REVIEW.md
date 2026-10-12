@@ -8,6 +8,7 @@
 隔離環境で`FEEDBACK_WORKBENCH_ENABLED=true`を設定すると管理者のサイドメニュー
 「改善候補」で、自分が所有するProjectの保存済み評価を集計できる。
 初期値はfalse。本番設定・本番DBは変更していない。OFF時はAPIが404で拒否する。
+Docker、Python package、Windows配布に既存offline_replayモジュールを含める。
 
 1. Projectを選び「保存済み評価を集計」。既存owner限定exportとPhase 5B/C比較を再利用。
 2. Human失敗件数、SYSTEM診断、比較対象・変更・改善・回帰、Before/Afterを確認。
