@@ -19,7 +19,7 @@ async function login(page: Page, email: string, password: string) {
   await page.getByLabel('パスワード').fill(password)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await dismissGuide(page)
-  await expect(page.getByRole('heading', { name: 'プロジェクト', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '収集ターゲット設定', exact: true })).toBeVisible()
 }
 
 test('Form Intelligence profiles, correction and viewer mode', async ({ page }, testInfo) => {
@@ -59,6 +59,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
 
   await page.reload()
   await dismissGuide(page)
+  await navigateWorkspace(page, '▦ プロジェクト')
   const projectCard = page.getByRole('article').filter({
     has: page.getByRole('heading', { name: projectName, exact: true }),
   })
@@ -451,6 +452,7 @@ test('Form Intelligence profiles, correction and viewer mode', async ({ page }, 
   expect(memberResponse.ok()).toBeTruthy()
   await navigateWorkspace(page, 'ログアウト')
   await login(page, process.env.E2E_MEMBER_EMAIL!, process.env.E2E_MEMBER_PASSWORD!)
+  await navigateWorkspace(page, '▦ プロジェクト')
   const viewerProjectCard = page.getByRole('article').filter({
     has: page.getByRole('heading', { name: projectName, exact: true }),
   })

@@ -10,7 +10,6 @@ import { CollectionProgress } from './CollectionProgress'
 import { CollectionDiscovery } from './CollectionDiscovery'
 import { Field } from './forms'
 import { prefectures } from './prefectures'
-import { SalesPreparationPanel } from './SalesPreparationPanel'
 import { SourceExclusions } from './SourceExclusions'
 import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
@@ -31,8 +30,8 @@ const aiNames = {
   failed: 'AI判定失敗', skipped: 'AI判定保留',
 }
 
-export function CollectionPage({ projects, profiles, initialProjectId }: {
-  projects: Project[]; profiles: Profile[]; initialProjectId: string
+export function CollectionPage({ projects, profiles, initialProjectId, onConfigureTarget, onProjectSelected }: {
+  projects: Project[]; profiles: Profile[]; initialProjectId: string; onConfigureTarget?: () => void; onProjectSelected?: (id: string) => void
 }) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
   const [source, setSource] = useState<CollectionSource>('serper')
@@ -81,7 +80,7 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
       api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
       api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`),
     ])
-    setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations); setSchedules(nextSchedules)
+    setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations.filter(job => job.operation_type !== 'prepare_outreach')); setSchedules(nextSchedules)
     setAnalytics(nextAnalytics); setPerformance(nextPerformance); setReviewAnalytics(nextReviewAnalytics)
   }, [projectId])
 
@@ -203,33 +202,18 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
 
   if (projects.length === 0) return <section className="panel empty">
     <h2>先にプロジェクトを作成してください</h2>
-    <p className="muted">企業は営業プロジェクトごとに収集・保存されます。</p>
+    <p className="muted">企業は営業プロジェクトごとに収集・保存されます。</p>{onConfigureTarget && <button className="mt-4" onClick={onConfigureTarget}>収集ターゲットを設定</button>}
   </section>
 
   return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
-    <SalesPreparationPanel key={projectId} projectId={projectId} />
-    <SourceExclusions key={`sources-${projectId}`} projectId={projectId} />
-    <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} onConfirmed={setConfirmedConditions} onDraftChanged={setConditionsDirty} onApplied={row => {
-      setConfirmedConditions(row)
-      if (source === 'csv' || source === 'url') return
-      setUseConditions(true)
-      if (source === 'serper' && row.snapshot.requested_count_explicit && row.snapshot.requested_count) setTargetCount(row.snapshot.requested_count)
-      const areas = row.snapshot.conditions.filter(c => c.type === 'AREA' && c.priority === 'MUST')
-      const industries = row.snapshot.conditions.filter(c => c.type === 'INDUSTRY' && c.priority === 'MUST')
-      if (areas.length === 1) setRegion(areas[0].value)
-      if (industries.length === 1) setKeywords(industries[0].value)
-    }} />
-    <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} companies={companies} />
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
-      <h2>収集条件</h2><p className="muted">収集元と検索条件を指定します。</p>
+      <h2>収集条件</h2><p className="muted">ターゲットのキーワード・地域を引き継いでいます。件数を確認して収集を開始してください。</p>
       {error && <p className="error" role="alert">{error}</p>}
       {notice && <p className="notice" role="status">{notice}</p>}
       {conditionsDirty && source !== 'csv' && source !== 'url' && <p role="status">対象条件に未確定の変更があります。確定するか、変更を取り消してから収集してください。</p>}
       <fieldset disabled={loading}>
-        {source !== 'csv' && source !== 'url' && <PresenceSearchControls value={presencePlan} onChange={setPresencePlan} />}
-        {source !== 'csv' && source !== 'url' && <label><input type="checkbox" checked={useConditions} disabled={confirmedConditions?.project_id !== projectId} onChange={e => setUseConditions(e.target.checked)} />確定条件を今回の収集に使う{confirmedConditions?.project_id === projectId ? `（第${confirmedConditions.version}版）` : '（先に条件を確定してください）'}<span className="muted block">必須・除外の媒体は追加調査OFFでも、上限内で確認します。未対応・上限不足は確認待ちです。</span></label>}
         <Field label="プロジェクト"><select required value={projectId}
-          onChange={e => { setProjectId(e.target.value); setUseConditions(false); setConfirmedConditions(null); setConditionsDirty(false) }}>{projects.map(item =>
+          onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value); setUseConditions(false); setConfirmedConditions(null); setConditionsDirty(false) }}>{projects.map(item =>
           <option key={item.id} value={item.id}>{item.project_name}</option>)}</select></Field>
         <Field label="収集元"><select value={source} onChange={e => {
           const next = e.target.value as CollectionSource; setSource(next); setFile(null)
@@ -267,9 +251,24 @@ export function CollectionPage({ projects, profiles, initialProjectId }: {
         </>}
         {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
+        {source !== 'csv' && source !== 'url' && <PresenceSearchControls value={presencePlan} onChange={setPresencePlan} />}
+        {source !== 'csv' && source !== 'url' && <label><input type="checkbox" checked={useConditions} disabled={confirmedConditions?.project_id !== projectId} onChange={e => setUseConditions(e.target.checked)} />確定条件を今回の収集に使う{confirmedConditions?.project_id === projectId ? `（第${confirmedConditions.version}版）` : '（先に条件を確定してください）'}<span className="muted block">必須・除外の媒体は追加調査OFFでも、上限内で確認します。未対応・上限不足は確認待ちです。</span></label>}
         <div className="actions"><button type="submit">{loading ? (['serper', 'google_places', 'gbizinfo'].includes(source) ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
       </fieldset>
     </form>
+    <SourceExclusions key={`sources-${projectId}`} projectId={projectId} />
+    <CollectionConditions key={`conditions-${projectId}`} projectId={projectId} onConfirmed={setConfirmedConditions} onDraftChanged={setConditionsDirty} onApplied={row => {
+      setConfirmedConditions(row)
+      if (source === 'csv' || source === 'url') return
+      setUseConditions(true)
+      if (source === 'serper' && row.snapshot.requested_count_explicit && row.snapshot.requested_count) setTargetCount(row.snapshot.requested_count)
+      const areas = row.snapshot.conditions.filter(c => c.type === 'AREA' && c.priority === 'MUST')
+      const industries = row.snapshot.conditions.filter(c => c.type === 'INDUSTRY' && c.priority === 'MUST')
+      if (areas.length === 1) setRegion(areas[0].value)
+      if (industries.length === 1) setKeywords(industries[0].value)
+    }} />
+    <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} companies={companies} />
+
     <div className="panel"><h2>定期収集テンプレート</h2><p className="muted mt-2 text-sm">現在の検索条件を保存し、ワーカーで定期実行します。</p>
       <Field label="テンプレート名"><input maxLength={200} value={scheduleName} onChange={e => setScheduleName(e.target.value)} /></Field>
       <div className="grid gap-4 sm:grid-cols-2"><Field label="実行間隔（時間）"><input type="number" min={1} max={720} value={intervalHours} onChange={e => setIntervalHours(Number(e.target.value))} /></Field>

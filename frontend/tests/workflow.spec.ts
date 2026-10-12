@@ -13,12 +13,12 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   const guide = page.getByRole('dialog', { name: '3ステップで始めましょう' })
   await expect(guide).toBeVisible()
-  await expect(guide.getByText('プロジェクトを作る', { exact: true })).toBeVisible()
+  await expect(guide.getByText('収集ターゲットを設定', { exact: true })).toBeVisible()
   await guide.getByRole('button', { name: 'あとで見る' }).click()
   await expect(page.getByRole('note', { name: '外部送信の運用状態' })).toContainText('外部送信は停止中')
   const deniedSend = await page.request.post('/api/admin/smtp-settings/test', { data: { recipient_email: 'blocked@example.com' } })
   expect(deniedSend.status()).toBe(503)
-  await expect(page.getByRole('heading', { name: 'プロジェクト', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '収集ターゲット設定', exact: true })).toBeVisible()
   await navigateWorkspace(page, '⚙ 運用設定')
   const smtpPanel = page.getByRole('region', { name: '運用設定' })
   const apiGuide = page.getByRole('region', { name: 'APIキー取得ガイド' })
@@ -71,6 +71,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await page.getByRole('button', { name: '保存する' }).click()
   await expect(page.getByRole('heading', { name: projectName, exact: true })).toBeVisible()
   await page.reload()
+  await navigateWorkspace(page, '▦ プロジェクト')
   await expect(page.getByText('採用支援のご提案', { exact: true })).toBeVisible()
   const projectCard = page.getByRole('article').filter({
     has: page.getByRole('heading', { name: projectName, exact: true }),
