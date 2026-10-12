@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { allPages, api, download, errorMessage, upload } from './api'
 import { PresenceSearchControls } from './ExternalPresence'
 import { defaultPresencePlan } from './externalPresenceShared'
@@ -63,6 +63,8 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
+  const progressPanel = useRef<HTMLDivElement>(null)
+  const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
   const project = projects.find(item => item.id === projectId)
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
@@ -208,8 +210,17 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   return <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(360px,.95fr)]"><section className="min-w-0 space-y-6">
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">ターゲットのキーワード・地域を引き継いでいます。件数を確認して収集を開始してください。</p>
-      {error && <p className="error" role="alert">{error}</p>}
-      {notice && <p className="notice" role="status">{notice}</p>}
+      {(error || busyMessage || notice) && <aside aria-label="操作結果" className="fixed inset-x-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-50 max-h-[40dvh] overflow-y-auto rounded-xl border border-slate-300 bg-white p-4 shadow-xl sm:static sm:mb-4 sm:max-h-none sm:shadow-none">
+        <p className={error ? 'error m-0' : 'm-0'} role={error ? 'alert' : 'status'}>{error || busyMessage || notice}</p>
+        {!busyMessage && <div className="mt-3 flex flex-wrap gap-2">
+          {!error && notice.includes('バックグラウンド') && <button type="button" onClick={() => {
+            setNotice('')
+            progressPanel.current?.scrollIntoView({ block: 'start' })
+            progressPanel.current?.focus({ preventScroll: true })
+          }}>進捗を見る</button>}
+          <button type="button" className="secondary" onClick={() => { setError(''); setNotice('') }}>通知を閉じる</button>
+        </div>}
+      </aside>}
       {conditionsDirty && source !== 'csv' && source !== 'url' && <p role="status">対象条件に未確定の変更があります。確定するか、変更を取り消してから収集してください。</p>}
       <fieldset disabled={loading}>
         <Field label="プロジェクト"><select required value={projectId}
@@ -339,7 +350,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {job.source === 'csv' && job.error_count > 0 && <button type="button" className="secondary mt-3" onClick={() => void download(`/collection-jobs/${job.id}/errors.csv`, 'csv-import-errors.csv').catch(e => setError(errorMessage(e)))}>行別エラーをダウンロード</button>}
           </article>)}
       </div>
-      <div className="panel"><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
+      <div className="panel scroll-mt-24" ref={progressPanel} tabIndex={-1}><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
         <button type="button" className="secondary" onClick={() => void reload()}>更新</button></div>
         {operations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : operations.map(job =>
             <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>

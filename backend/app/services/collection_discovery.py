@@ -19,7 +19,15 @@ SOCIAL = {"INSTAGRAM", "X", "FACEBOOK", "YOUTUBE", "TIKTOK"}
 JOBS = {"INDEED", "KYUJIN_BOX"}
 # These are sources about providers, not the provider's own website. Keep their
 # Raw observations without creating Company records from Serper results.
-THIRD_PARTY_DOMAINS = {"web-kanji.com", "probel.jp", "dreamnews.jp"}
+THIRD_PARTY_DOMAINS = {
+    "web-kanji.com",
+    "probel.jp",
+    "dreamnews.jp",
+    "lemon8-app.com",
+    "livejapan.com",
+    "gurumeguide.cpay.jp",
+    "travelbook.co.jp",
+}
 JOB_SOURCE_DOMAINS = {"townwork.net", "baitoru.com", "next.rikunabi.com", "r-agent.com"}
 ARTICLE_PATH_SEGMENTS = {"blog", "blogs", "article", "articles", "column", "columns"}
 COMPARISON_TITLE_MARKERS = {

@@ -507,3 +507,56 @@ def test_unknown_summary_pages_do_not_consume_goal_or_ban_provider_domain(
     company = db.scalar(select(Company))
     assert company.domain == "store.example"
     assert company.website_url == "https://store.example"
+
+
+@pytest.mark.parametrize(
+    "domain", ["lemon8-app.com", "livejapan.com", "gurumeguide.cpay.jp", "travelbook.co.jp"]
+)
+def test_restaurant_media_domain_boundaries(domain):
+    for host in (domain, "www." + domain, "listing." + domain):
+        assert classify_hit({"link": f"https://{host}/", "title": "店舗情報"}) == (
+            "PORTAL_DIRECTORY",
+            "EXTERNAL_PLATFORM",
+        )
+    assert classify_hit({"link": f"https://{domain}.example.test/"})[0] == (
+        "OFFICIAL_SITE_CANDIDATE"
+    )
+    assert classify_hit({"link": f"https://restaurant.test/?ref={domain}"})[0] == (
+        "OFFICIAL_SITE_CANDIDATE"
+    )
+    assert classify_hit({"link": "https://cpay.jp/"})[0] == "OFFICIAL_SITE_CANDIDATE"
+
+
+@pytest.mark.parametrize("fair", [False, True])
+def test_restaurant_media_keep_raw_without_consuming_company_goal(auth, db, monkeypatch, fair):
+    from app import worker
+
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
+    _, operation_id = setup_job(auth, db, monkeypatch, keywords=["飲食店"], target=1)
+    rows = [
+        {"title": "大阪でおすすめの焼肉店7選", "link": "https://lemon8-app.com/list"},
+        {"title": "大阪近郊の焼肉レストラン一覧", "link": "https://livejapan.com/list"},
+        {"title": "大阪府の和食おすすめランキング", "link": "https://gurumeguide.cpay.jp/"},
+        {"title": "おすすめのお店20選", "link": "https://travelbook.co.jp/list"},
+        {"title": "当店おすすめプラン", "link": "https://restaurant.test/"},
+        {"title": "超過候補", "link": "https://another-restaurant.test/"},
+    ]
+    provider(monkeypatch, rows)
+    monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
+    assert worker.run_once()
+    assert list(db.scalars(select(Company.domain))) == ["restaurant.test"]
+    hits = db.scalars(
+        select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
+    ).all()
+    assert [hit.disposition for hit in hits] == ["NON_COMPANY_SOURCE"] * 4 + [
+        "SAVED",
+        "TARGET_LIMIT",
+    ]
+    assert [hit.snapshot["link"] for hit in hits] == [row["link"] for row in rows]
+    assert all(hit.company_id is None for hit in hits[:4])
+    assert all(hit.classification == "PORTAL_DIRECTORY" for hit in hits[:4])
+    job = db.scalar(
+        select(CollectionJob).where(CollectionJob.operation_job_id == UUID(operation_id))
+    )
+    assert job.saved_count == 1
+    assert job.excluded_count == 4

@@ -56,3 +56,9 @@ DB変更・Migration・UI変更なし。マージ後はAPIとcollection-worker�
 初回の全Backend CIでは、旧仕様の「会社比較13選」7記事を保持するruntime再現試験4件が失敗した。
 強いまとめタイトルを除外する今回の仕様へ期待値を更新し、一般的な企業情報記事7件は
 引き続き保持する独立の対照ケースを追加した。Raw20件・通常/fair双方・未知求人の暫定保持を維持する。
+
+最新main `03a0dee54e9d82a7c6480accedf0bd608d51d13e`（PR #93/#94統合）をmergeして整合。
+同じテストファイル末尾への追加が競合したため、既知媒体の境界・枠非消費テストと、
+未知まとめページ・公式トップ保持テストを両方残した。履歴の書換え・force pushなし。
+統合後の関連Backend + 全offline suiteは273成功、private Raw未提供の2件スキップ。
+変更範囲mypy、Ruff、format、API import、diff check成功。
