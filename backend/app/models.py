@@ -46,7 +46,12 @@ from app.model_external_presence import (
     ExternalPresenceEvidence,
     ExternalPresenceSearch,
 )
-from app.model_feedback_review import FeedbackProposal, FeedbackProposalDecision
+from app.model_feedback_review import (
+    FeedbackEvaluation,
+    FeedbackEvaluationNote,
+    FeedbackProposal,
+    FeedbackProposalDecision,
+)
 from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
 from app.model_form_observation_job import FormObservationJobEvent
@@ -99,6 +104,8 @@ from app.model_source_exclusion import SourceDomainExclusion
 __all__ = [
     "FeedbackProposal",
     "FeedbackProposalDecision",
+    "FeedbackEvaluation",
+    "FeedbackEvaluationNote",
     "SourceDomainExclusion",
     "CollectionQueryTask",
     "CollectionSearchAttempt",

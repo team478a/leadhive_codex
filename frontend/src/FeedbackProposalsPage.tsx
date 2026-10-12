@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import type { Project } from './types'
+import { EvaluationHistoryPanel } from './EvaluationHistoryPanel'
 
 type State = 'ACCEPTED' | 'REJECTED' | 'DEFERRED'
 type Metrics = { collection_precision: number | null; official_site_accuracy: number | null; contact_discovery_rate: number | null; misclassification_rate: number | null }
@@ -67,6 +68,7 @@ export function FeedbackProposalsPage({ projects }: { projects: Project[] }) {
     {notice && <p role="status">{notice}</p>}
     {!busy && !error && items.length === 0 && <p className="panel mt-5">改善候補はありません。運用で評価を記録してから集計してください。</p>}
     {truncated && <p>最新100件を表示しています。全件の表示には未対応です。</p>}
+    <EvaluationHistoryPanel key={project} project={project} />
     {items.map(item => { const c = item.report.comparison; return <article className="panel mt-5" key={item.id}>
       <h2>{patterns[c.proposal.pattern] || c.proposal.pattern}</h2>
       <p>{states[item.state]} · 判断版 {item.version} · {statuses[c.status] || c.status}</p>

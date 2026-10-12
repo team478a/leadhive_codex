@@ -52,3 +52,44 @@ class FeedbackProposalDecision(Base):
     actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
     restored_from: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FeedbackEvaluation(Base):
+    """Immutable aggregate checkpoint and optional fixed comparison."""
+
+    __tablename__ = "feedback_evaluations"
+    __table_args__ = (UniqueConstraint("project_id", "record_key"),)
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    project_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    record_key: Mapped[str] = mapped_column(String(64))
+    report: Mapped[dict] = mapped_column(JSONB)
+    comparison: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    previous_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("feedback_evaluations.id"))
+    created_by: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FeedbackEvaluationNote(Base):
+    """Authenticated operator explanation, not a new Human Truth label."""
+
+    __tablename__ = "feedback_evaluation_notes"
+    __table_args__ = (
+        UniqueConstraint("evaluation_id", "version"),
+        CheckConstraint("version > 0", name="ck_feedback_evaluation_note_version"),
+        CheckConstraint(
+            "reason IN ('INSUFFICIENT_EVALUATION', 'COHORT_CHANGED', 'NO_MEASURED_GAIN', "
+            "'REGRESSION', 'NOT_APPLIED', 'OTHER')",
+            name="ck_feedback_evaluation_note_reason",
+        ),
+    )
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    evaluation_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("feedback_evaluations.id", ondelete="CASCADE"), index=True
+    )
+    version: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(String(40))
+    note: Mapped[str] = mapped_column(Text)
+    actor_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

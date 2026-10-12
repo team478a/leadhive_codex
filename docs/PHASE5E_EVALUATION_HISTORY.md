@@ -1,5 +1,8 @@
 # Phase 5E：継続評価の隔離PoC
 
+後続の管理画面実装は[PHASE5E_EVALUATION_ADMIN_HISTORY.md](PHASE5E_EVALUATION_ADMIN_HISTORY.md)を参照。
+以下はPR #87時点のCLI PoCの範囲・制限を記録する。
+
 基準：main `d6d1a6ac95c3c2fd52a7ffedf21a20665d626040`（PR #86統合済み）。
 作業ブランチ：`codex/phase5e-evaluation-history`。
 
