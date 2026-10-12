@@ -21,6 +21,7 @@ test('Admin reviews research proposals, restores decisions and sees unavailable 
     else if (path === '/api/projects') data = [{ id: 'project-1', project_name: '評価用Project', status: 'active', region: '全国' }]
     else if (path.endsWith('/members')) data = [{ email: 'admin@example.test', role: 'owner' }]
     else if (path === '/api/dashboard') data = { total_companies: 0 }
+    else if (path.endsWith('/feedback-evaluations')) data = { items: [], truncated: false }
     else if (path.endsWith('/feedback-proposals')) data = { items: empty ? [] : [item()], truncated: false }
     else if (path.endsWith('/analyze')) { empty = false; data = { event_count: 3, unresolved_samples: 1 } }
     else if (path.endsWith('/decisions') || path.endsWith('/restore')) {
