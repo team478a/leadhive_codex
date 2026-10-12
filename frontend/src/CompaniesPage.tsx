@@ -6,6 +6,7 @@ import { CompanyContactsPanel } from './CompanyContactsPanel'
 import { CompanyDealsPanel } from './CompanyDealsPanel'
 import { CompanyDetailsPanel } from './CompanyDetailsPanel'
 import { CompanySalesNgAction } from './CompanySalesNgAction'
+import { OperatorListHint } from './OperatorGuide'
 import { CompanyFormInputTrial } from './CompanyFormInputTrial'
 import { CompanyFilters } from './CompanyFilters'
 import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
@@ -822,6 +823,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   }
   if (projects.length === 0) return <section className="panel empty"><h2>先にプロジェクトを作成してください</h2></section>
   return <>
+    <OperatorListHint />
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     <CompanyFilters
       projects={projects}
@@ -834,106 +836,6 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onDownload={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}
     />
     {projectId && <FormReadinessPanel key={projectId} projectId={projectId} onOpen={async id => { await open(await api<Company>(`/companies/${id}`)) }} />}
-    <DealPipelinePanel pipeline={dealPipeline} />
-    <CompanyEmailCampaignsPanel
-      selectedCount={checked.length}
-      templates={outreachTemplates}
-      campaigns={emailCampaigns}
-      name={emailCampaignName}
-      templateId={emailCampaignTemplateId}
-      followupDays={emailCampaignFollowupDays}
-      confirmed={emailCampaignConfirmed}
-      busy={busy}
-      onNameChange={setEmailCampaignName}
-      onTemplateChange={setEmailCampaignTemplateId}
-      onFollowupDaysChange={setEmailCampaignFollowupDays}
-      onConfirmedChange={setEmailCampaignConfirmed}
-      onCreate={() => void createEmailCampaign()}
-      onChangeCampaign={(campaign, action) => void changeEmailCampaign(campaign, action)}
-    />
-    <CompanyCodexFormQueue items={formCodexTasks} busy={busy} onCopy={task => void copyBatchCodexTask(task)} onUpdate={(task, status) => void updateFormCodexTask(task, status)} />
-    <CompanyFormBatchesPanel selectedCount={checked.length} templates={outreachTemplates} templateId={formBatchTemplateId} batches={formBatches} confirmed={formBatchConfirmed} busy={busy} onTemplateChange={setFormBatchTemplateId} onConfirmedChange={setFormBatchConfirmed} onCreate={() => void createFormBatch()} onExecute={batch => void executeFormBatch(batch)} onCancel={batch => void cancelFormBatch(batch)} onRetry={itemId => void retryFormBatchItem(itemId)} />
-    <CompanyReplyQueuePanel
-      items={replyQueue}
-      target={replyTarget}
-      outcome={replyOutcome}
-      note={replyNote}
-      followup={replyFollowup}
-      busy={busy}
-      onStart={startReply}
-      onOutcomeChange={setReplyOutcome}
-      onNoteChange={setReplyNote}
-      onFollowupChange={setReplyFollowup}
-      onRecord={() => void recordReplyResponse()}
-      onCancel={() => setReplyTarget(null)}
-    />
-    <CompanyFollowupTasksPanel
-      items={followupTasks}
-      target={followupTarget}
-      action={followupAction}
-      note={followupTaskNote}
-      scheduledAt={followupTaskDate}
-      busy={busy}
-      onStart={startFollowupTask}
-      onActionChange={setFollowupAction}
-      onNoteChange={setFollowupTaskNote}
-      onScheduledAtChange={setFollowupTaskDate}
-      onResolve={() => void resolveFollowupTask()}
-      onCancel={() => setFollowupTarget(null)}
-    />
-    <CompanyOutreachQueuePanel
-      items={outreachQueue}
-      target={outreachTarget}
-      channel={outreachChannel}
-      outcome={outreachOutcome}
-      note={outreachNote}
-      followup={outreachFollowup}
-      busy={busy}
-      onStart={startOutreach}
-      onChannelChange={setOutreachChannel}
-      onOutcomeChange={setOutreachOutcome}
-      onNoteChange={setOutreachNote}
-      onFollowupChange={setOutreachFollowup}
-      onRecord={() => void recordOutreach()}
-      onCancel={() => setOutreachTarget(null)}
-    />
-    <CompanySavedFiltersPanel
-      items={savedFilters}
-      currentFilters={filters}
-      filterName={filterName}
-      editingId={editingFilterId}
-      editingName={editingFilterName}
-      busy={busy}
-      onFilterNameChange={setFilterName}
-      onEditingNameChange={setEditingFilterName}
-      onSave={() => void saveFilter()}
-      onApply={nextFilters => { setDraft(nextFilters); setFilters(nextFilters); setPage(0) }}
-      onOverwrite={item => void updateFilter(item, item.name, filters)}
-      onStartRename={item => { setEditingFilterId(item.id); setEditingFilterName(item.name) }}
-      onCancelRename={() => setEditingFilterId('')}
-      onRename={item => void updateFilter(item, editingFilterName, item.filters)}
-      onDelete={item => void deleteFilter(item.id)}
-    />
-    <AssigneeAnalyticsPanel items={assigneeAnalytics} />
-    <CompanyQualityPanels
-      quality={quality}
-      staleDays={staleDays}
-      busy={busy}
-      refreshSchedule={refreshSchedule}
-      refreshInterval={refreshInterval}
-      refreshStaleDays={refreshStaleDays}
-      refreshBatchLimit={refreshBatchLimit}
-      duplicates={duplicates}
-      onStaleDaysChange={setStaleDays}
-      onReanalyze={() => void reanalyzeQuality()}
-      onRefreshIntervalChange={setRefreshInterval}
-      onRefreshStaleDaysChange={setRefreshStaleDays}
-      onRefreshBatchLimitChange={setRefreshBatchLimit}
-      onSaveRefreshSchedule={active => void saveRefreshSchedule(active)}
-      onRunRefreshSchedule={() => void runRefreshSchedule()}
-      onDeleteRefreshSchedule={() => void deleteRefreshSchedule()}
-      onMerge={(primary, duplicate) => void mergeCompanies(primary, duplicate)}
-    />
     <CompanyList
       companies={companies}
       total={total}
@@ -1117,5 +1019,106 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onActivityNoteChange={setActivityNote}
       onAdd={() => void addActivity()}
     />}
+    <div className="section-heading mt-7"><h2>配信・追客・管理</h2><span className="muted">必要なときだけ利用</span></div>
+    <DealPipelinePanel pipeline={dealPipeline} />
+    <CompanyEmailCampaignsPanel
+      selectedCount={checked.length}
+      templates={outreachTemplates}
+      campaigns={emailCampaigns}
+      name={emailCampaignName}
+      templateId={emailCampaignTemplateId}
+      followupDays={emailCampaignFollowupDays}
+      confirmed={emailCampaignConfirmed}
+      busy={busy}
+      onNameChange={setEmailCampaignName}
+      onTemplateChange={setEmailCampaignTemplateId}
+      onFollowupDaysChange={setEmailCampaignFollowupDays}
+      onConfirmedChange={setEmailCampaignConfirmed}
+      onCreate={() => void createEmailCampaign()}
+      onChangeCampaign={(campaign, action) => void changeEmailCampaign(campaign, action)}
+    />
+    <CompanyCodexFormQueue items={formCodexTasks} busy={busy} onCopy={task => void copyBatchCodexTask(task)} onUpdate={(task, status) => void updateFormCodexTask(task, status)} />
+    <CompanyFormBatchesPanel selectedCount={checked.length} templates={outreachTemplates} templateId={formBatchTemplateId} batches={formBatches} confirmed={formBatchConfirmed} busy={busy} onTemplateChange={setFormBatchTemplateId} onConfirmedChange={setFormBatchConfirmed} onCreate={() => void createFormBatch()} onExecute={batch => void executeFormBatch(batch)} onCancel={batch => void cancelFormBatch(batch)} onRetry={itemId => void retryFormBatchItem(itemId)} />
+    <CompanyReplyQueuePanel
+      items={replyQueue}
+      target={replyTarget}
+      outcome={replyOutcome}
+      note={replyNote}
+      followup={replyFollowup}
+      busy={busy}
+      onStart={startReply}
+      onOutcomeChange={setReplyOutcome}
+      onNoteChange={setReplyNote}
+      onFollowupChange={setReplyFollowup}
+      onRecord={() => void recordReplyResponse()}
+      onCancel={() => setReplyTarget(null)}
+    />
+    <CompanyFollowupTasksPanel
+      items={followupTasks}
+      target={followupTarget}
+      action={followupAction}
+      note={followupTaskNote}
+      scheduledAt={followupTaskDate}
+      busy={busy}
+      onStart={startFollowupTask}
+      onActionChange={setFollowupAction}
+      onNoteChange={setFollowupTaskNote}
+      onScheduledAtChange={setFollowupTaskDate}
+      onResolve={() => void resolveFollowupTask()}
+      onCancel={() => setFollowupTarget(null)}
+    />
+    <CompanyOutreachQueuePanel
+      items={outreachQueue}
+      target={outreachTarget}
+      channel={outreachChannel}
+      outcome={outreachOutcome}
+      note={outreachNote}
+      followup={outreachFollowup}
+      busy={busy}
+      onStart={startOutreach}
+      onChannelChange={setOutreachChannel}
+      onOutcomeChange={setOutreachOutcome}
+      onNoteChange={setOutreachNote}
+      onFollowupChange={setOutreachFollowup}
+      onRecord={() => void recordOutreach()}
+      onCancel={() => setOutreachTarget(null)}
+    />
+    <CompanySavedFiltersPanel
+      items={savedFilters}
+      currentFilters={filters}
+      filterName={filterName}
+      editingId={editingFilterId}
+      editingName={editingFilterName}
+      busy={busy}
+      onFilterNameChange={setFilterName}
+      onEditingNameChange={setEditingFilterName}
+      onSave={() => void saveFilter()}
+      onApply={nextFilters => { setDraft(nextFilters); setFilters(nextFilters); setPage(0) }}
+      onOverwrite={item => void updateFilter(item, item.name, filters)}
+      onStartRename={item => { setEditingFilterId(item.id); setEditingFilterName(item.name) }}
+      onCancelRename={() => setEditingFilterId('')}
+      onRename={item => void updateFilter(item, editingFilterName, item.filters)}
+      onDelete={item => void deleteFilter(item.id)}
+    />
+    <AssigneeAnalyticsPanel items={assigneeAnalytics} />
+    <CompanyQualityPanels
+      quality={quality}
+      staleDays={staleDays}
+      busy={busy}
+      refreshSchedule={refreshSchedule}
+      refreshInterval={refreshInterval}
+      refreshStaleDays={refreshStaleDays}
+      refreshBatchLimit={refreshBatchLimit}
+      duplicates={duplicates}
+      onStaleDaysChange={setStaleDays}
+      onReanalyze={() => void reanalyzeQuality()}
+      onRefreshIntervalChange={setRefreshInterval}
+      onRefreshStaleDaysChange={setRefreshStaleDays}
+      onRefreshBatchLimitChange={setRefreshBatchLimit}
+      onSaveRefreshSchedule={active => void saveRefreshSchedule(active)}
+      onRunRefreshSchedule={() => void runRefreshSchedule()}
+      onDeleteRefreshSchedule={() => void deleteRefreshSchedule()}
+      onMerge={(primary, duplicate) => void mergeCompanies(primary, duplicate)}
+    />
   </>
 }
