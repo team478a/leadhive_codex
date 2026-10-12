@@ -11,6 +11,7 @@ import { RawCollectionBenchmarkPage } from './RawCollectionBenchmarkPage'
 import { EmailDeliveriesPage } from './EmailDeliveriesPage'
 import { OnboardingGuide } from './OnboardingGuide'
 import { OperatorGuide, type OperatorDestination } from './OperatorGuide'
+import { InstallationGuide } from './InstallationGuide'
 import { SmtpSettingsPage } from './SmtpSettingsPage'
 import type { Dashboard, Notification, Profile, Project, ProjectMember, User } from './types'
 
@@ -51,7 +52,7 @@ type Editor = { type: 'project'; value?: Project } | { type: 'profile'; value?: 
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals' | 'raw' | 'operation'>(window.location.hash === '#raw' ? 'raw' : 'projects')
+  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals' | 'raw' | 'operation' | 'installation'>(window.location.hash === '#raw' ? 'raw' : 'projects')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -175,6 +176,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         {user.is_admin && <button className={tab === 'settings' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('settings'); setEditor(null); setNotice('')
         }}>⚙ 運用設定</button>}
+        <button className={tab === 'installation' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('installation'); setEditor(null); setNotice('') }}>↓ 導入・ダウンロード</button>
         <button className="nav-item" onClick={() => setGuideOpen(true)}>？ 使い方ガイド</button>
       </nav>
       <div className="sidebar-footer"><p className="break-all">{user.email}</p>
@@ -184,8 +186,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </aside>
     <main className="workspace"><OutboundStatus /><header><p className="eyebrow">YOUR WORKSPACE</p>
-      <div className="page-heading"><div><h1>{tab === 'operation' ? '担当者の作業ガイド' : tab === 'raw' ? '収集結果の確認' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
-        <p className="muted">{tab === 'operation' ? '収集・入力・結果記録を、実際に使いながら進める。' : tab === 'raw' ? '候補を順番に確認して、営業対象かどうかを記録。' : tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
+      <div className="page-heading"><div><h1>{tab === 'installation' ? '導入・ダウンロード' : tab === 'operation' ? '担当者の作業ガイド' : tab === 'raw' ? '収集結果の確認' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
+        <p className="muted">{tab === 'installation' ? 'クラウド版・ローカル版の使い始め方と配布リンク。' : tab === 'operation' ? '収集・入力・結果記録を、実際に使いながら進める。' : tab === 'raw' ? '候補を順番に確認して、営業対象かどうかを記録。' : tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
         {!editor && (tab === 'projects' || tab === 'profiles') && <button disabled={!loaded || loading || busy} onClick={() => {
           setEditor({ type: tab === 'projects' ? 'project' : 'profile' }); setNotice('')
         }}>＋ {tab === 'projects' ? 'プロジェクトを作成' : 'プロファイルを作成'}</button>}
@@ -197,7 +199,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         <ProjectForm key={editor.value?.id ?? 'new'} profiles={profiles} initial={editor.value}
           onSaved={saved} onCancel={() => setEditor(null)} /> : editor?.type === 'profile' ?
         <ProfileForm key={editor.value?.id ?? 'new'} initial={editor.value} onSaved={saved}
-          onCancel={() => setEditor(null)} /> : loaded && tab === 'operation' ? <OperatorGuide projects={projects} projectRoles={projectRoles} onNavigate={navigateForOperator} onCreateProject={openProjectCreator} /> : loaded && tab === 'projects' ? <>
+          onCancel={() => setEditor(null)} /> : loaded && tab === 'installation' ? <InstallationGuide onGuide={() => setTab('operation')} /> : loaded && tab === 'operation' ? <OperatorGuide projects={projects} projectRoles={projectRoles} onNavigate={navigateForOperator} onCreateProject={openProjectCreator} /> : loaded && tab === 'projects' ? <>
           <section className="panel mb-5"><h2>担当者が使いながら確認する</h2><p className="muted mt-2">収集・入力・結果記録の手順と、止まったときの対応を確認できます。</p><button className="secondary mt-3" onClick={() => setTab('operation')}>担当者の作業ガイドを開く</button></section>
           <div className="section-heading"><h2>すべてのプロジェクト</h2><span className="badge">{projects.length} 件</span></div>
           {projects.length === 0 ? <section className="panel empty"><div className="empty-icon">▦</div>

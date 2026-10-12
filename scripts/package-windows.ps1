@@ -86,6 +86,7 @@ $directoryPrefixes = @(
     "backend/app/",
     "backend/migrations/",
     "frontend/src/",
+    "frontend/public/",
     "scripts/windows/"
 )
 
