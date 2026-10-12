@@ -228,7 +228,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             placeholder={source === 'url' ? 'https://example.com' : '検索キーワード'} />
         </Field>}
         {(['serper', 'google_places', 'gbizinfo'].includes(source)) && <div className="grid gap-5 sm:grid-cols-2">
-          {source === 'serper' ? <RegionSelector value={region} onChange={setRegion} /> : <Field label="都道府県"><select required value={region} onChange={e => setRegion(e.target.value)}>
+          {source === 'serper' ? <RegionSelector value={region} onChange={setRegion} includeMunicipalities={false} /> : <Field label="都道府県"><select required value={region} onChange={e => setRegion(e.target.value)}>
             <option value="全国">全国</option>
             {prefectures.map(prefecture => <option key={prefecture} value={prefecture}>{prefecture}</option>)}
             {region !== '全国' && !prefectures.some(prefecture => prefecture === region) && <option value={region}>{region}（プロジェクトの地域）</option>}
