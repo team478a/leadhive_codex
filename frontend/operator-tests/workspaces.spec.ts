@@ -21,6 +21,7 @@ for (const role of ['owner', 'viewer'] as const) {
       if (path === '/api/auth/me') data = { id: 'operator', email, is_admin: false }
       else if (path === '/api/dashboard') data = { total_companies: 1 }
       else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
+      else if (path.endsWith('/bulk-send-preview')) data = { items: [], skipped: {}, email_enabled: false, form_enabled: false }
       else if (path === '/api/target-profiles') data = [profile]
       else if (path === '/api/projects' && method === 'POST') {
         const created = { ...body, id: 'project-2' } as typeof projects[number]
@@ -86,7 +87,8 @@ for (const role of ['owner', 'viewer'] as const) {
     await expect(result.getByRole('combobox', { name: '確認する項目' })).toHaveValue('company')
     await result.getByRole('combobox', { name: '確認する項目' }).selectOption('contact_url')
     await expect(result).toContainText('問い合わせ候補を開く')
-    await expect(result.getByRole('button', { name: /送信|承認|DM/ })).toHaveCount(0)
+    await expect(result.getByRole('button', { name: /Human承認|DM準備/ })).toHaveCount(0)
+    await expect(result.getByRole('button', { name: '承認済み0件を一括送信開始' })).toBeDisabled()
     if (role === 'viewer') await expect(result.getByRole('button', { name: 'OKを記録' })).toHaveCount(0)
     await result.screenshot({ path: info.outputPath('collection-results.png') })
     await navigateWorkspace(page, '▶ 営業準備')
