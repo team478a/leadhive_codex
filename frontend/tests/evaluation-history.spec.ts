@@ -17,6 +17,7 @@ test('Admin records immutable evaluations, compares nulls, explains and reloads 
     else if (path === '/api/projects') data = [{ id: 'project', project_name: '合成評価Project', status: 'active', region: '全国' }]
     else if (path.endsWith('/members')) data = [{ email: 'admin@example.test', role: 'owner' }]
     else if (path === '/api/dashboard') data = { total_companies: 0 }
+    else if (path.endsWith('/feedback-proposals/status')) data = { enabled: true, runtime_applied: false }
     else if (path.endsWith('/feedback-proposals')) data = { items: [], truncated: false }
     else if (path.endsWith('/feedback-evaluations')) {
       if (method === 'GET') data = { items: evaluations, truncated: false }

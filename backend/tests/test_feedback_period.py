@@ -106,6 +106,13 @@ def test_large_history_filters_event_time_before_limit_and_evaluation_save(
     assert saved.status_code == 200
     assert saved.json()["report"]["review_events"] == 2
     assert saved.json()["report"]["runtime_applied"] is False
+    analyzed = auth.post(base + "/feedback-proposals/analyze", json=PARAMS)
+    assert analyzed.status_code == 200
+    assert analyzed.json()["event_count"] == 2
+    assert analyzed.json()["period"] == exported["period"]
+    assert analyzed.json()["api_calls"] == 0 and analyzed.json()["runtime_applied"] is False
+    assert auth.post(base + "/feedback-proposals/analyze").status_code == 413
+    assert db.scalar(select(func.count()).select_from(Activity)) == count
 
 
 def test_field_history_and_non_events_do_not_consume_period_limit(auth, db):
@@ -212,9 +219,10 @@ def test_unknown_times_fail_closed_not_partial_success(auth, db, users, monkeypa
     monkeypatch.setattr(settings, "feedback_workbench_enabled", True)
     assert auth.post(base + "/feedback-evaluations", json=PARAMS).status_code == 409
     assert db.scalar(select(func.count()).select_from(FeedbackEvaluation)) == 0
+    assert auth.post(base + "/feedback-proposals/analyze", json=PARAMS).status_code == 409
 
 
-def test_combined_limit_and_invalid_period_and_owner_boundary(auth, client, db, users):
+def test_combined_limit_and_invalid_period_and_owner_boundary(auth, client, db, users, monkeypatch):
     _, company = make_company(auth, db)
     db.add_all([collection(company, users[0].id, START.isoformat()) for _ in range(500)])
     diagnostics = [diagnostic(company, START.isoformat()) for _ in range(501)]
@@ -222,6 +230,19 @@ def test_combined_limit_and_invalid_period_and_owner_boundary(auth, client, db, 
     db.commit()
     path = f"/api/projects/{company.project_id}/feedback-export"
     assert auth.get(path, params=PARAMS).status_code == 413
+    users[0].is_admin = True
+    db.commit()
+    with monkeypatch.context() as context:
+        context.setattr(settings, "feedback_workbench_enabled", True)
+        analysis_path = f"/api/projects/{company.project_id}/feedback-proposals/analyze"
+        assert auth.post(analysis_path, json=PARAMS).status_code == 413
+        for invalid in [
+            {"start": START.isoformat()},
+            {**PARAMS, "end": START.isoformat()},
+            {**PARAMS, "start": "2026-10-12T00:00:00"},
+            {**PARAMS, "project_id": str(company.project_id)},
+        ]:
+            assert auth.post(analysis_path, json=invalid).status_code == 422
     db.delete(diagnostics[-1])  # Synthetic fixture only; production export remains read-only.
     db.commit()
     exact_limit = auth.get(path, params=PARAMS)
