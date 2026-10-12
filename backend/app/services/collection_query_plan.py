@@ -33,6 +33,11 @@ def plan_snapshot(payload):
     # Omit the default so hashes of existing jobs remain unchanged.
     if payload.get("region_mode") == "prefecture_order":
         snapshot["region_mode"] = "prefecture_order"
+        from app.services.scraper import PREFECTURES
+
+        parts = [part.strip() for part in payload["region"].split("/")]
+        if len(parts) > 1 and all(part in PREFECTURES for part in parts):
+            snapshot["selected_prefectures"] = [area for area in PREFECTURES if area in parts]
     return snapshot
 
 
@@ -44,6 +49,8 @@ def planned_queries(snapshot):
         if snapshot.get("region_mode") == "prefecture_order" and snapshot["region"] == "全国"
         else (snapshot["region"],)
     )
+    if snapshot.get("region_mode") == "prefecture_order" and snapshot.get("selected_prefectures"):
+        regions = tuple(snapshot["selected_prefectures"])
     return [(keyword, region) for region in regions for keyword in snapshot["keywords"]]
 
 

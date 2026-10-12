@@ -31,9 +31,15 @@ function parseGuidedRegion(value: string) {
   return { prefecture: isPrefecture ? prefecture : '', municipality, guided: isPrefecture && isSingleRegion }
 }
 
+function selectedPrefectures(value: string) {
+  const parts = value.split(/\s*\/\s*/).filter(Boolean)
+  return parts.length && parts.every(part => prefectures.some(prefecture => prefecture === part)) ? parts : []
+}
+
 export function RegionSelector({ value, onChange }: { value: string; onChange: (value: string) => void }) {
   const initial = parseGuidedRegion(value)
   const [manual, setManual] = useState(!initial.guided)
+  const [multiple, setMultiple] = useState(selectedPrefectures(value).length > 1)
   const [municipalities, setMunicipalities] = useState<MunicipalityData | null>(null)
   const [municipalityError, setMunicipalityError] = useState(false)
   const parsed = parseGuidedRegion(value)
@@ -49,7 +55,8 @@ export function RegionSelector({ value, onChange }: { value: string; onChange: (
   }, [])
 
   useEffect(() => {
-    if (!parseGuidedRegion(value).guided) setManual(true)
+    if (selectedPrefectures(value).length > 1) { setMultiple(true); setManual(false) }
+    else if (!parseGuidedRegion(value).guided) setManual(true)
   }, [value])
 
   if (manual) {
@@ -59,7 +66,7 @@ export function RegionSelector({ value, onChange }: { value: string; onChange: (
           placeholder="例：大阪府 / 兵庫県" />
       </label>
       <div className="region-helper"><span>複数地域は「 / 」で区切って入力できます。</span>
-        <button type="button" className="guide-link" onClick={() => { setManual(false); onChange('全国') }}>選択式に戻す</button></div>
+        <button type="button" className="guide-link" onClick={() => { setManual(false); setMultiple(false); onChange('全国') }}>選択式に戻す</button></div>
     </div>
   }
 
@@ -69,6 +76,26 @@ export function RegionSelector({ value, onChange }: { value: string; onChange: (
   }
   function setMunicipality(municipality: string) {
     onChange(municipality ? `${parsed.prefecture} / ${municipality}` : parsed.prefecture)
+  }
+
+  if (multiple) {
+    const selected = selectedPrefectures(value)
+    return <div className="region-selector">
+      <fieldset><legend className="font-bold">都道府県（複数選択）</legend>
+        <label className="checkbox-row min-h-11"><input type="checkbox" checked={value === '全国'} onChange={() => onChange('全国')} />全国</label>
+        <div className="grid max-h-72 grid-cols-2 gap-1 overflow-y-auto rounded-lg border p-2" aria-label="都道府県の選択肢">
+          {prefectures.map(prefecture => <label key={prefecture} className="checkbox-row min-h-11">
+            <input type="checkbox" checked={selected.includes(prefecture)} onChange={event => {
+              const next = prefectures.filter(area => area === prefecture ? event.target.checked : selected.includes(area))
+              onChange(next.join(' / ') || '全国')
+            }} />{prefecture}
+          </label>)}
+        </div>
+      </fieldset>
+      <p className="muted text-sm mt-2">選択地域：<strong>{value}</strong>。複数選択時は都道府県全体が対象です。すべて解除すると全国になります。</p>
+      <div className="region-helper"><button type="button" className="guide-link" onClick={() => { setMultiple(false); onChange(selected[0] || '全国') }}>単一地域・市区町村を選択</button>
+        <button type="button" className="guide-link" onClick={() => setManual(true)}>自由入力</button></div>
+    </div>
   }
 
   return <div className="region-selector">
@@ -90,6 +117,7 @@ export function RegionSelector({ value, onChange }: { value: string; onChange: (
       </label>
     </div>
     <div className="region-helper"><span>選択地域：<strong>{value}</strong></span>
+      <button type="button" className="guide-link" onClick={() => { setMultiple(true); onChange(parsed.prefecture || '全国') }}>都道府県を複数選択</button>
       <button type="button" className="guide-link" onClick={() => setManual(true)}>複数地域・自由入力</button></div>
     {municipalityError && <p className="muted mt-2 text-xs">市区町村候補を取得できないため、手入力へ切り替えました。</p>}
   </div>
