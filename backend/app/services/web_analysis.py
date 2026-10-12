@@ -169,6 +169,10 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             company.analysis_error = ""
             company.duplicate_of_id = None
         company.scraped_at = datetime.now(timezone.utc)
+        if company.analysis_status == "completed":
+            from app.services.field_feedback import capture_web
+
+            capture_web(db, company)
         db.commit()
         db.refresh(company)
         logger.info("scraper end: company_id=%s status=%s", company.id, company.analysis_status)

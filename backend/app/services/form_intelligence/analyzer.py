@@ -296,6 +296,9 @@ def _upsert_profile(
                 **{key: value for key, value in item.items() if key != "element_id"},
             )
         )
+    from app.services.field_feedback import capture_form
+
+    capture_form(db, company, profile)
     return profile
 
 
