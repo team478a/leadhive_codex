@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { navigateWorkspace } from '../tests/navigation'
 
 async function setup(page: Page, count = 2, role = 'editor', openGuide = true, archivedCount = 0) {
   const mutations: string[] = []
@@ -29,6 +30,7 @@ async function setup(page: Page, count = 2, role = 'editor', openGuide = true, a
     await route.fulfill({ json: body })
   })
   await page.goto('/')
+  await navigateWorkspace(page, '▦ プロジェクト')
   await expect(page.getByRole('button', { name: '担当者の作業ガイドを開く' })).toBeVisible()
   if (openGuide) {
     await page.getByRole('button', { name: '担当者の作業ガイドを開く' }).click()
@@ -41,7 +43,7 @@ test('explicit project selection, safe guidance, navigation preserves project an
   const mutations = await setup(page)
   await expect(page.getByRole('button', { name: '企業一覧へ', exact: true })).toBeDisabled()
   await page.getByLabel('作業するプロジェクト').selectOption('project-1')
-  await expect(page.getByRole('button', { name: '企業収集へ' })).toBeEnabled()
+  await expect(page.getByRole('button', { name: '収集ターゲット設定へ' })).toBeEnabled()
   await expect(page.getByText('入力成功は送信成功や承認済みを意味しません。', { exact: false })).toBeVisible()
   await page.getByText('PCでの操作手順', { exact: true }).click()
   await expect(page.getByText(/Start-Live-Input.cmd/)).toBeVisible()
@@ -108,7 +110,7 @@ test('link load failure preserves instructions and can retry', async ({ page }) 
 
 test('viewer can navigate to results but not start collection', async ({ page }) => {
   const mutations = await setup(page, 1, 'viewer')
-  await expect(page.getByRole('button', { name: '企業収集へ' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '収集ターゲット設定へ' })).toBeEnabled()
   await expect(page.getByRole('button', { name: '企業一覧へ', exact: true })).toBeEnabled()
   await expect(page.getByText(/閲覧のみです/)).toBeVisible()
   expect(mutations).toEqual([])
@@ -133,6 +135,7 @@ test('archived projects are hidden by default, can be read and do not trigger wr
   await page.locator('article').filter({ has: page.getByRole('heading', { name: '担当プロジェクト1', exact: true }) }).getByRole('button', { name: '企業一覧', exact: true }).click()
   await expect(page.getByRole('combobox', { name: 'プロジェクト', exact: true })).toHaveValue('project-0')
   await page.reload()
+  await navigateWorkspace(page, '▦ プロジェクト')
   await expect(page.getByRole('heading', { name: '担当プロジェクト1', exact: true })).toHaveCount(0)
   expect(mutations).toEqual([])
 })
@@ -143,7 +146,7 @@ test('all archived shows an empty operational list and excludes archives from wo
   await page.screenshot({ path: test.info().outputPath('archives-hidden.png'), fullPage: true })
   await page.getByRole('button', { name: '担当者の作業ガイドを開く' }).click()
   await expect(page.getByRole('button', { name: 'プロジェクトを作る', exact: true })).toBeVisible()
-  await expect(page.getByRole('button', { name: '企業収集へ' })).toBeDisabled()
+  await expect(page.getByRole('button', { name: '収集ターゲット設定へ' })).toBeEnabled()
   expect(mutations).toEqual([])
 })
 

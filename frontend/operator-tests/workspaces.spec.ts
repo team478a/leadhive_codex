@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { navigateWorkspace } from './navigation'
+import { navigateWorkspace } from '../tests/navigation'
 
 for (const role of ['owner', 'viewer'] as const) {
   test(`Collection and sales work stay separate for ${role}`, async ({ page }, info) => {
@@ -28,6 +28,8 @@ for (const role of ['owner', 'viewer'] as const) {
       else if (path.endsWith('/members')) data = [{ email, role }]
       else if (path === '/api/form-adapter-preparation-status' || path === '/api/cf7-candidate-preparation-status') data = { enabled: false }
       else if (path.endsWith('/company-list')) data = { items: [] }
+      else if (path.endsWith('/form-operations')) data = { counts: {}, total: 0, items: [] }
+      else if (path === '/api/form-dispatch-limits') data = null
       else if (path.endsWith('/companies')) data = [{ id: 'company-1', company_name: '確認候補', address: '大阪府', website_url: 'https://candidate.example/', contact_url: 'https://candidate.example/contact', updated_at: '2026-10-12T00:00:00Z', analysis_status: 'pending', ai_status: 'pending' }]
       else if (path.endsWith('/collection-feedback')) data = { items: [] }
       else if (path.endsWith('/operations') && method === 'POST') data = { id: 'operation-1', status: 'queued' }
@@ -77,7 +79,7 @@ for (const role of ['owner', 'viewer'] as const) {
     if (role === 'owner') {
       await expect(sales.getByRole('combobox', { name: '営業するプロジェクト', exact: true })).toHaveValue('project-2')
       await sales.getByRole('button', { name: '承認キューへ', exact: true }).click()
-      await expect(page.getByLabel('承認プロジェクト')).toHaveValue('project-2')
+      await expect(page.getByLabel('承認プロジェクト')).toHaveValue('project-2').catch(e => { throw new Error(errors.join('; ') || String(e)) })
     } else await expect(page.getByRole('region', { name: '営業準備', exact: true })).toHaveCount(0)
     expect(calls.filter(c => c.method === 'POST' && !['/api/projects', '/api/projects/project-2/operations'].includes(c.path))).toEqual([])
     expect(errors).toEqual([])
