@@ -6,7 +6,8 @@ import time
 from pathlib import Path
 
 from offline_replay.cli import deny_network, protect_private_output, write_once
-from offline_replay.feedback import compare
+from offline_replay.feedback import compare, normalize
+from offline_replay.improvement import packet, workbench
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -15,6 +16,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--project", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--checkout", type=Path, required=True)
+    parser.add_argument("--workbench", action="store_true")
+    parser.add_argument("--packet-output", type=Path)
+    parser.add_argument("--advice", type=Path)
     args = parser.parse_args(argv)
     try:
         with deny_network():
@@ -24,10 +28,29 @@ def main(argv: list[str] | None = None) -> int:
                 raise ValueError("Input size limit")
             protect_private_output(args.input, args.checkout)
             bundle = json.loads(args.input.read_text(encoding="utf-8-sig"))
+            if (args.packet_output or args.advice) and not args.workbench:
+                raise ValueError("Workbench required")
+            advice = None
+            if args.advice:
+                protect_private_output(args.advice, args.checkout)
+                protect_private_output(args.output, args.checkout)
+                if args.advice.stat().st_size > 65536:
+                    raise ValueError("Advice size limit")
+                advice = json.loads(args.advice.read_text(encoding="utf-8-sig"))
+            if args.packet_output:
+                paths = [args.input.resolve(), args.output.resolve(), args.packet_output.resolve()]
+                if len(set(paths)) != 3 or args.packet_output.exists():
+                    raise ValueError("Distinct packet output required")
             start = time.perf_counter()
-            report = compare(bundle, args.project)
+            report = (
+                workbench(bundle, args.project, advice=advice)
+                if args.workbench
+                else compare(bundle, args.project)
+            )
             report["offline_lab_seconds"] = time.perf_counter() - start
-            # Aggregate only: no IDs, URLs, evidence, prompt text or raw values.
+            if args.packet_output:
+                write_once(args.packet_output, packet(normalize(bundle, args.project)))
+            # Core metrics omit company identifiers; optional advice requires private output.
             write_once(args.output, report)
     except (ValueError, TypeError, KeyError, OSError, RuntimeError):
         parser.exit(2, "Feedback lab stopped. Check private input and project scope.\n")
