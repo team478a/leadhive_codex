@@ -16,6 +16,7 @@ from app.services.ai import (
     get_ai_provider,
     rank_for_score,
 )
+from app.services.feedback_provenance import record_decision
 
 logger = logging.getLogger("leadhive")
 AiUsageCallback = Callable[[UUID, str, str, str, AiUsage], None]
@@ -96,7 +97,8 @@ def analyze_company_ai(
     provider = None
     try:
         provider = get_ai_provider()
-        result = provider.analyze(context_for(company, project, profile))
+        context = context_for(company, project, profile)
+        result = provider.analyze(context)
         rank = rank_for_score(result.score, profile.scoring_rules)
         company.score = result.score
         company.rank = rank
@@ -112,6 +114,8 @@ def analyze_company_ai(
         company.ai_provider = provider.name
         company.ai_model = provider.model
         company.ai_analyzed_at = datetime.now(timezone.utc)
+        if settings.feedback_provenance_enabled:
+            record_decision(db, company, context, result, provider)
         db.commit()
         db.refresh(company)
         notify_usage(usage_callback, company.id, provider, "completed")

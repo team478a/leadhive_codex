@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     session_hours: int = 12
     agent_features_enabled: bool = False
+    feedback_provenance_enabled: bool = False
     pc_diagnostic_transfer_enabled: bool = False
     live_form_input_enabled: bool = False
     worker_paused: bool = False

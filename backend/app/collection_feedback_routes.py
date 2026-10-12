@@ -16,6 +16,7 @@ from app.project_access import company_access
 from app.schema_core import CompanyOut
 from app.security import current_user
 from app.services.collection_feedback import PREFIX, apply_feedback, decode
+from app.services.feedback_provenance import bound_decision
 
 router = APIRouter(prefix="/api/companies")
 
@@ -85,6 +86,7 @@ def record_feedback(
     if company.updated_at != body.expected_updated_at:
         raise HTTPException(409, "企業情報が変更されました。再読込して確認してください。")
     before = company.contact_url
+    decision = bound_decision(db, company) if body.subject == "company" else None
     apply_feedback(company, body.subject, body.outcome, body.corrected_url)
     now = datetime.now(timezone.utc)
     event = {
@@ -102,6 +104,7 @@ def record_feedback(
         "after_contact_url": company.contact_url,
         "expected_updated_at": body.expected_updated_at.isoformat(),
         "after_updated_at": now.isoformat(),
+        "decision_provenance": decision,
     }
     company.updated_at = now
     db.add(
