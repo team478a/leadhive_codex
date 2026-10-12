@@ -1,5 +1,7 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
+- [導入・ダウンロードページと配布リンク設定](INSTALLATION_DOWNLOAD_PAGE.md)
+
 - [クラウド/ローカルの導入方法・会社別提供方針](DEPLOYMENT_OPTIONS.md)
 
 - [クラウド本体＋PC側Codex連携：読取コネクター](CLOUD_PC_CODEX_CONNECTOR.md)

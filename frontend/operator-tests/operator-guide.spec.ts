@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test'
 
-async function setup(page: Page, count = 2, role = 'editor') {
+async function setup(page: Page, count = 2, role = 'editor', openGuide = true) {
   const mutations: string[] = []
   const projects = Array.from({ length: count }, (_, index) => ({ id: `project-${index}`, project_name: `担当プロジェクト${index + 1}`, region: '大阪府', status: 'draft', sales_objective: '公開情報だけで提案', target_profile_id: 'profile' }))
   await page.addInitScript(() => localStorage.setItem('leadhive:onboarding:operator@example.test', 'dismissed'))
@@ -19,8 +19,11 @@ async function setup(page: Page, count = 2, role = 'editor') {
     await route.fulfill({ json: body })
   })
   await page.goto('/')
-  await page.getByRole('button', { name: '担当者の作業ガイドを開く' }).click()
-  await expect(page.getByRole('heading', { name: '今日の作業を始める' })).toBeVisible()
+  await expect(page.getByRole('button', { name: '担当者の作業ガイドを開く' })).toBeVisible()
+  if (openGuide) {
+    await page.getByRole('button', { name: '担当者の作業ガイドを開く' }).click()
+    await expect(page.getByRole('heading', { name: '今日の作業を始める' })).toBeVisible()
+  }
   return mutations
 }
 
@@ -41,6 +44,56 @@ test('explicit project selection, safe guidance, navigation preserves project an
   await expect(list).toBeVisible()
   expect(await list.evaluate(element => !!(element.compareDocumentPosition([...document.querySelectorAll('h2')].find(item => item.textContent === '配信・追客・管理')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
   expect(mutations).toEqual([])
+})
+
+async function openInstallation(page: Page) {
+  const menu = page.getByRole('button', { name: /メニュー/ })
+  if (await menu.isVisible()) await menu.click()
+  await page.getByRole('button', { name: '↓ 導入・ダウンロード' }).click()
+  await expect(page.getByRole('heading', { name: '利用する場所を選ぶ' })).toBeVisible()
+}
+
+test('installation page has safe unavailable downloads, mobile navigation and no writes', async ({ page }) => {
+  const mutations = await setup(page, 2, 'viewer', false)
+  await openInstallation(page)
+  await expect(page.getByText('配布リンクは準備中です。管理者に配布ファイルを確認してください。')).toHaveCount(2)
+  await expect(page.getByRole('link', { name: 'クラウド版を開く ↗' })).toHaveCount(0)
+  await expect(page.getByText(/http:\/\/localhost:8787/)).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: test.info().outputPath('installation.png'), fullPage: true })
+  await page.getByRole('button', { name: '担当者の作業ガイドへ' }).click()
+  await expect(page.getByRole('heading', { name: '今日の作業を始める' })).toBeVisible()
+  expect(mutations).toEqual([])
+})
+
+test('configured downloads are distinct and unsafe links are not rendered', async ({ page }) => {
+  await page.route('**/installation-links.json', route => route.fulfill({ json: {
+    cloud: { url: 'https://cloud.example.test/' },
+    local: { url: 'https://downloads.example.test/local.zip', version: 'test-1', sha256: 'a'.repeat(64) },
+    pc_input: { url: 'javascript:alert(1)' },
+  } }))
+  const mutations = await setup(page, 2, 'editor', false)
+  await openInstallation(page)
+  await expect(page.getByRole('link', { name: 'ローカル版をダウンロード ↗' })).toHaveAttribute('href', 'https://downloads.example.test/local.zip')
+  await expect(page.getByRole('link', { name: 'クラウド版を開く ↗' })).toHaveAttribute('href', 'https://cloud.example.test/')
+  await expect(page.getByRole('link', { name: 'PC入力専用ツールをダウンロード ↗' })).toHaveCount(0)
+  await page.getByText('ファイル確認用 SHA-256').click()
+  await expect(page.locator('code')).toContainText('a'.repeat(64))
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  expect(mutations).toEqual([])
+})
+
+test('link load failure preserves instructions and can retry', async ({ page }) => {
+  let failed = true
+  await page.route('**/installation-links.json', route => failed
+    ? route.fulfill({ status: 503, body: 'unavailable' })
+    : route.fulfill({ json: { pc_input: { url: 'https://downloads.example.test/input.zip' } } }))
+  await setup(page, 2, 'editor', false)
+  await openInstallation(page)
+  await expect(page.getByText(/配布リンクを読み込めませんでした/)).toBeVisible()
+  failed = false
+  await page.getByRole('button', { name: '再読み込み', exact: true }).click()
+  await expect(page.getByRole('link', { name: 'PC入力専用ツールをダウンロード ↗' })).toHaveAttribute('href', 'https://downloads.example.test/input.zip')
 })
 
 test('viewer can navigate to results but not start collection', async ({ page }) => {
