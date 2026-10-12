@@ -4,10 +4,11 @@ import json
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.config import settings
 from app.models import Activity, SiteIdentityReviewEvent
+from app.services.feedback_period import contains, event_time, payload, selection
 from app.services.feedback_provenance import digest
 from app.services.lead_identity import identity_hash
 
@@ -141,17 +142,36 @@ def capture_form(db, company, profile):
     )
 
 
-def supplemental_records(db, project_id, safe_url):
+def supplemental_records(db, project_id, safe_url, *, period=None):
     """Legacy site roots/predictions remain unknown; never join to current mutable URLs."""
     from app.models import Company
 
-    rows = db.execute(
+    review_query = select(SiteIdentityReviewEvent).where(
+        SiteIdentityReviewEvent.project_id == project_id
+    )
+    if period:
+        review_query = review_query.where(
+            SiteIdentityReviewEvent.created_at >= period[0],
+            SiteIdentityReviewEvent.created_at < period[1],
+        )
+    reviews = db.scalars(
+        review_query.order_by(SiteIdentityReviewEvent.created_at, SiteIdentityReviewEvent.id).limit(
+            1001
+        )
+    ).all()
+    if len(reviews) > 1000:
+        raise OverflowError("Export limit exceeded")
+    query = (
         select(Activity, Company)
         .join(Company, Company.id == Activity.company_id)
         .where(Company.project_id == project_id, Activity.note.startswith(PREFIX))
-        .order_by(Activity.created_at, Activity.id)
-        .limit(1001)
-    ).all()
+    )
+    value_sql = payload(Activity.note, PREFIX)
+    if period:
+        # WEB_DECISION and SITE_REVIEW companions are not standalone evaluation events.
+        query = query.where(or_(value_sql.is_(None), value_sql["kind"].astext == "FORM_DIAGNOSTIC"))
+        query = query.where(selection(event_time(value_sql, "observed_at"), period))
+    rows = db.execute(query.order_by(Activity.created_at, Activity.id).limit(1001)).all()
     if len(rows) > 1000:
         raise OverflowError("Export limit exceeded")
     companions = {}
@@ -163,6 +183,8 @@ def supplemental_records(db, project_id, safe_url):
         if value.get("kind") == "SITE_REVIEW":
             companions[value["review_id"]] = value
         elif value.get("kind") == "FORM_DIAGNOSTIC":
+            if not contains(value.get("observed_at"), period):
+                raise ValueError("Invalid captured diagnostic time")
             if value.get("snapshot_hash") != digest(value["snapshot"]):
                 raise ValueError("Diagnostic integrity mismatch")
             snapshot = dict(value["snapshot"])
@@ -190,12 +212,33 @@ def supplemental_records(db, project_id, safe_url):
                     "estimated_cost": None,
                 }
             )
-    reviews = db.scalars(
-        select(SiteIdentityReviewEvent)
-        .where(SiteIdentityReviewEvent.project_id == project_id)
-        .order_by(SiteIdentityReviewEvent.created_at, SiteIdentityReviewEvent.id)
-        .limit(1001)
-    ).all()
+    if period and reviews:
+        # A companion can be inserted later than the Human review; select by review ID,
+        # not by Activity.created_at, and never substitute today's mutable Company URL.
+        companion_query = (
+            select(Activity, Company)
+            .join(Company, Company.id == Activity.company_id)
+            .where(
+                Company.project_id == project_id,
+                Activity.note.startswith(PREFIX),
+                value_sql["kind"].astext == "SITE_REVIEW",
+                value_sql["review_id"].astext.in_([str(r.id) for r in reviews]),
+            )
+            .order_by(Activity.created_at, Activity.id)
+            .limit(1001)
+        )
+        companions_rows = db.execute(companion_query).all()
+        if len(companions_rows) > 1000:
+            raise OverflowError("Companion limit exceeded")
+        for activity, company in companions_rows:
+            value = json.loads(activity.note[len(PREFIX) :])
+            if value.get("project_id") == str(project_id) and value.get("company_id") == str(
+                company.id
+            ):
+                key = value["review_id"]
+                if key in companions:
+                    raise ValueError("Ambiguous review companion")
+                companions[key] = value
     if len(reviews) + len(records) > 1000:
         raise OverflowError("Export limit exceeded")
     for row in reviews:

@@ -102,7 +102,7 @@ def save_evaluation(
         )
         if previous is None:
             raise HTTPException(404, "比較する評価履歴が見つかりません。")
-    source = export_feedback(project_id, Response(), db, user)
+    source = export_feedback(project_id, Response(), db, user, start=body.start, end=body.end)
     try:
         report = checkpoint(
             source, str(project_id), start=body.start.isoformat(), end=body.end.isoformat()

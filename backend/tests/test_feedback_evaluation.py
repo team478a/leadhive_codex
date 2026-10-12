@@ -25,7 +25,7 @@ def setup(auth, db, users, monkeypatch):
     data = dataset()
     for record in data["records"]:
         record["project_id"] = project["id"]
-    monkeypatch.setattr(routes, "export_feedback", lambda *_: copy.deepcopy(data))
+    monkeypatch.setattr(routes, "export_feedback", lambda *_, **__: copy.deepcopy(data))
     return project, f"/api/projects/{project['id']}/feedback-evaluations", data
 
 
