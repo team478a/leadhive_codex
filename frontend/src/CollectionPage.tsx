@@ -250,7 +250,13 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <button type="button" className="secondary" onClick={() => { setError(''); setNotice('') }}>通知を閉じる</button>
         </div>}
       </aside>}
-    {mode === 'analysis' && <section className="panel"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field><p>保存済み {companies.length}社 / Web未解析 {companies.filter(c => c.website_url && ['pending', 'failed'].includes(c.analysis_status)).length}社 / AI未判定 {companies.filter(c => c.analysis_status === 'completed' && c.ai_status !== 'completed').length}社</p><p className="muted mt-2">一括処理は1回最大100社です。完了後、残りを実行できます。失敗した企業も再試行対象になります。AI判定にはAPI費用が発生します。</p></section>}
+    {mode === 'analysis' && <section className="panel" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field><p>保存済み {companies.length}社 / Web未解析 {companies.filter(c => c.website_url && ['pending', 'failed'].includes(c.analysis_status)).length}社 / AI未判定 {companies.filter(c => c.analysis_status === 'completed' && c.ai_status !== 'completed').length}社</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={webBusy || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
+            onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : 'Web解析を開始'}</button>
+          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={aiBusy || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
+            onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : 'AI判定を開始'}</button>
+      </div><p className="muted mt-3 text-sm">① Web解析で企業情報・問い合わせ先を取得 → ② 完了後にAI判定で営業対象かを評価します。</p><p className="muted mt-2">一括処理は1回最大100社です。完了後、残りを実行できます。失敗した企業も再試行対象になります。AI判定にはAPI費用が発生します。</p></section>}
     {mode === 'collection' && <section className="min-w-0 space-y-6">
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">ターゲットのキーワード・地域を引き継いでいます。件数を確認して収集を開始してください。</p>
@@ -340,11 +346,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       {mode === 'analysis' && progress}
       {mode === 'analysis' && <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
         <p className="muted mt-2 text-sm">Webサイトから企業情報・SNS・問い合わせ先を抽出します。</p></div>
-        <div className="flex flex-wrap items-center gap-2"><span className="badge">{companies.length} 社</span>
-          <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={webBusy || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
-            onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : '未解析を解析'}</button>
-          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={aiBusy || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
-            onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : '未判定をAI判定'}</button></div></div>
+        </div>
         {companies.slice(analysisPage * 20, (analysisPage + 1) * 20).map(company => <article key={company.id} className="job-row">
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong>{company.company_name}</strong>
             <span className="badge">{analysisNames[company.analysis_status]}</span>
