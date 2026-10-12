@@ -84,6 +84,7 @@ $fixedFiles = @(
 $directoryPrefixes = @(
     ".agents/skills/leadhive-form-submit/",
     "backend/app/",
+    "backend/offline_replay/",
     "backend/migrations/",
     "frontend/src/",
     "frontend/public/",

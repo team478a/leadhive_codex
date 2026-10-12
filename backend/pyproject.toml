@@ -19,7 +19,7 @@ dependencies = [
 dev = ["httpx2>=2.13,<3", "pytest>=8,<10", "ruff>=0.11,<1"]
 
 [tool.setuptools.packages.find]
-include = ["app*"]
+include = ["app*", "offline_replay*"]
 
 [tool.setuptools.package-data]
 app = ["benchmark_baselines.json"]
