@@ -1,0 +1,146 @@
+{
+  "schema_version": "feedback-lab-v1",
+  "dataset_kind": "SYNTHETIC",
+  "input_hash": "fa2b767283bf3355c21686ee23b17c3bd65f205fc859eb37aa53882b9bf3b457",
+  "event_count": 2,
+  "development_entities": 1,
+  "evaluation_entities": 1,
+  "unknown_version_events": 2,
+  "analysis": {
+    "patterns": [
+      {
+        "pattern": "CONTACT_URL_MISIDENTIFIED",
+        "failed_samples": 1,
+        "affected_entities": 1
+      }
+    ],
+    "unresolved_samples": 0,
+    "diagnostics_not_human_truth": 0
+  },
+  "comparisons": [
+    {
+      "proposal": {
+        "id": "7042564b63ba52a665acef8241d4fe2aa3cbd072e57e17f2166c635006205904",
+        "generator": "DETERMINISTIC_POC",
+        "pattern": "CONTACT_URL_MISIDENTIFIED",
+        "feature": "saved_contact_candidate",
+        "status": "PROPOSED",
+        "requires_admin": true,
+        "execution_allowed": false
+      },
+      "before": {
+        "counts": {
+          "target": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "contact_url": {
+            "evaluated": 1,
+            "exact_matches": 0
+          },
+          "discovery": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "official_url": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "form_analysis": {
+            "evaluated": 0,
+            "exact_matches": 0
+          }
+        },
+        "judged_samples": 1,
+        "paired_samples": 1,
+        "collection_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": 0.0,
+        "misclassification_rate": 1.0,
+        "production_processing_seconds": null,
+        "api_cost": null
+      },
+      "after": {
+        "counts": {
+          "target": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "contact_url": {
+            "evaluated": 1,
+            "exact_matches": 1
+          },
+          "discovery": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "official_url": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "form_analysis": {
+            "evaluated": 0,
+            "exact_matches": 0
+          }
+        },
+        "judged_samples": 1,
+        "paired_samples": 1,
+        "collection_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": 1.0,
+        "misclassification_rate": 0.0,
+        "production_processing_seconds": null,
+        "api_cost": null
+      },
+      "regressions": 0,
+      "adoption": "HUMAN_REVIEW_REQUIRED"
+    }
+  ],
+  "baseline": {
+    "counts": {
+      "target": {
+        "evaluated": 0,
+        "exact_matches": 0
+      },
+      "contact_url": {
+        "evaluated": 1,
+        "exact_matches": 0
+      },
+      "discovery": {
+        "evaluated": 0,
+        "exact_matches": 0
+      },
+      "official_url": {
+        "evaluated": 0,
+        "exact_matches": 0
+      },
+      "form_analysis": {
+        "evaluated": 0,
+        "exact_matches": 0
+      }
+    },
+    "judged_samples": 1,
+    "paired_samples": 1,
+    "collection_precision": null,
+    "official_site_accuracy": null,
+    "contact_discovery_rate": 0.0,
+    "misclassification_rate": 1.0,
+    "production_processing_seconds": null,
+    "api_cost": null
+  },
+  "execution_allowed": false,
+  "auto_adopt": false,
+  "baseline_commit": "3fc95c22a644c47ec88ea14919e9e8f9a2e6ee56",
+  "runner_source_hashes": {
+    "feedback.py": "61f3cb7909298dde3ffe26c276812622f9fa0f747b495014468ac592d252f97e",
+    "feedback_cli.py": "e663fd022dbc52a20eaf22ed5b1d75547cf76393e8e38f20076d1e07e9314a09"
+  },
+  "safety": {
+    "external_requests": 0,
+    "ai_calls": 0,
+    "db_writes": 0,
+    "approvals": 0,
+    "emails_sent": 0,
+    "forms_sent": 0
+  }
+}

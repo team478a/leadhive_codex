@@ -56,4 +56,3 @@ export function TargetProfileAssistant({ onApply }: {
     </div>}
   </section>
 }
-

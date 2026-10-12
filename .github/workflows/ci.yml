@@ -72,6 +72,7 @@ jobs:
           backend/.venv/bin/python -m pip install mypy==2.4.0
       - run: |
           backend/.venv/bin/python -m ruff check backend
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/feedback_provenance.py backend/app/feedback_export_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/target_profile_proposal.py backend/app/profile_proposal_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/scraper.py backend/app/services/browser_input_snapshot.py backend/app/services/static_form_diagnostics.py backend/scripts/prepare_rendered_input.py backend/scripts/diagnose_stored_form.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/pc_input_routes.py backend/app/live_input_routes.py
