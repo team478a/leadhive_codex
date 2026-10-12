@@ -153,7 +153,8 @@ class SourcePolicy:
         kind, reason = self.classify(hit)
         return (
             kind not in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
-            and (kind != "JOB_PR" or reason != "EXTERNAL_PLATFORM"),
+            and (kind != "JOB_PR" or reason != "EXTERNAL_PLATFORM")
+            and (kind != "ARTICLE" or reason != "AGGREGATION_TITLE"),
             kind,
             reason,
         )

@@ -92,9 +92,35 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
     path = urlsplit(url).path.lower()
     if path.endswith((".pdf", ".jpg", ".png")):
         return "OTHER", "NON_HTML_CANDIDATE"
+    title = snapshot.get("title") or ""
+    # Match combinations, not isolated industry/job/blog words. Reject this
+    # result page only; a provider's own domain may also publish list articles.
+    own_offering = re.search(
+        r"(?:当社|弊社|自社|当店|当院)|(?:おすすめ|人気|厳選).{0,8}"
+        r"(?:プラン|メニュー|自社サービス)|(?:支援|導入|対応)実績|"
+        r"(?:比較|まとめ)サイト(?:の)?(?:制作|開発|構築|運営支援)|ランキング(?:改善|向上|対策)",
+        title,
+    )
+    if not own_offering and (
+        (
+            re.search(r"[0-9０-９]+\s*選", title)
+            and re.search(r"おすすめ|オススメ|お勧め|厳選|比較|ランキング|人気", title)
+        )
+        or (
+            re.search(
+                r"(?:会社|企業|業者)\s*[0-9０-９]+\s*社(?!\s*(?:を|に|へ|の)?\s*(?:支援|導入|対応|実績))",
+                title,
+            )
+            and re.search(r"おすすめ|オススメ|厳選|比較|ランキング", title)
+        )
+        or re.search(r"(?:周辺|近郊|エリア別).{0,40}(?:一覧|ランキング)", title)
+        or re.search(r"(?:おすすめ|オススメ|人気|厳選).{0,40}ランキング", title)
+        or re.search(r"(?:比較|口コミ|評判).{0,12}ランキング|(?:まとめ|比較)サイト", title)
+        or re.search(r"(?:おすすめ|厳選).{0,40}(?:編集部|まとめ記事)", title)
+    ):
+        return "ARTICLE", "AGGREGATION_TITLE"
     if any(part in path.split("/") for part in ARTICLE_PATH_SEGMENTS):
         return "ARTICLE", "PATH_HINT_REQUIRES_REVIEW"
-    title = snapshot.get("title") or ""
     # Job-result pages describe vacancies, not the business's service offering.
     # Do not reject a provider merely because its own recruitment page mentions jobs.
     if re.search(r"の求人[・\s]+仕事[・\s]+採用", title):

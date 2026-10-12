@@ -436,7 +436,9 @@ def test_search_page_hints_are_shared_with_ingestion(url, title, kind):
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_known_sources_skip_goal_slots_but_articles_remain_provisional(auth, db, monkeypatch, fair):
+def test_known_sources_and_strong_lists_skip_goal_slots_but_unknown_articles_remain(
+    auth, db, monkeypatch, fair
+):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
@@ -460,9 +462,9 @@ def test_known_sources_skip_goal_slots_but_articles_remain_provisional(auth, db,
     assert [hit.disposition for hit in hits] == [
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
         "SAVED",
         "SAVED",
-        "DUPLICATE",
         "TARGET_LIMIT",
         "TARGET_LIMIT",
     ]
@@ -471,3 +473,37 @@ def test_known_sources_skip_goal_slots_but_articles_remain_provisional(auth, db,
     assert hits[1].snapshot["title"] == rows[1]["title"]
     assert all(hit.snapshot["region"] == "大阪" for hit in hits)
     assert auth.get(f"/api/projects/{project['id']}/operations").json()[0]["status"] == "completed"
+
+
+@pytest.mark.parametrize("fair", [False, True])
+def test_unknown_summary_pages_do_not_consume_goal_or_ban_provider_domain(
+    auth, db, monkeypatch, fair
+):
+    from app import worker
+
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
+    project, operation_id = setup_job(auth, db, monkeypatch, keywords=["店舗"], target=1)
+    rows = [
+        {"title": "大阪のおすすめ店7選", "link": "https://store.example/blog/selection"},
+        {"title": "近郊の店舗一覧", "link": "https://directory.example/area"},
+        {"title": "店舗公式サイト｜おすすめプラン", "link": "https://store.example/"},
+        {"title": "超過候補", "link": "https://next.example/"},
+    ]
+    provider(monkeypatch, rows)
+    monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
+    assert worker.run_once()
+    hits = db.scalars(
+        select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
+    ).all()
+    assert [h.disposition for h in hits] == [
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
+        "SAVED",
+        "TARGET_LIMIT",
+    ]
+    assert len(hits) == len(rows)
+    assert hits[0].classification_reason == "AGGREGATION_TITLE"
+    assert hits[0].snapshot["link"] == rows[0]["link"]
+    company = db.scalar(select(Company))
+    assert company.domain == "store.example"
+    assert company.website_url == "https://store.example"
