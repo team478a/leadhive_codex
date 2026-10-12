@@ -27,6 +27,11 @@ THIRD_PARTY_DOMAINS = {
     "livejapan.com",
     "gurumeguide.cpay.jp",
     "travelbook.co.jp",
+    "retty.me",
+    "jalan.net",
+    "tabiiro.jp",
+    "precious.jp",
+    "kit-press.com",
 }
 JOB_SOURCE_DOMAINS = {"townwork.net", "baitoru.com", "next.rikunabi.com", "r-agent.com"}
 ARTICLE_PATH_SEGMENTS = {"blog", "blogs", "article", "articles", "column", "columns"}
@@ -123,6 +128,7 @@ def classify_hit(snapshot: dict) -> tuple[str, str]:
         )
         or re.search(r"(?:周辺|近郊|エリア別).{0,40}(?:一覧|ランキング)", title)
         or re.search(r"(?:おすすめ|オススメ|人気|厳選).{0,40}ランキング", title)
+        or re.search(r"ランキング\s*(?:TOP|トップ)\s*[0-9０-９]+", title, re.IGNORECASE)
         or re.search(r"(?:比較|口コミ|評判).{0,12}ランキング|(?:まとめ|比較)サイト", title)
         or re.search(r"(?:おすすめ|厳選).{0,40}(?:編集部|まとめ記事)", title)
     ):

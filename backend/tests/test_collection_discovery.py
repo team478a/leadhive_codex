@@ -560,3 +560,49 @@ def test_restaurant_media_keep_raw_without_consuming_company_goal(auth, db, monk
     )
     assert job.saved_count == 1
     assert job.excluded_count == 4
+
+
+@pytest.mark.parametrize(
+    "domain", ["retty.me", "jalan.net", "tabiiro.jp", "precious.jp", "kit-press.com"]
+)
+def test_additional_media_domain_boundaries(domain):
+    for host in (domain, "www." + domain, "listing." + domain):
+        assert classify_hit({"link": f"https://{host}/", "title": "店舗情報"}) == (
+            "PORTAL_DIRECTORY",
+            "EXTERNAL_PLATFORM",
+        )
+    assert classify_hit({"link": f"https://{domain}.example.test/"})[0] == "OFFICIAL_SITE_CANDIDATE"
+    assert (
+        classify_hit({"link": f"https://restaurant.test/?ref={domain}"})[0]
+        == "OFFICIAL_SITE_CANDIDATE"
+    )
+
+
+@pytest.mark.parametrize("fair", [False, True])
+def test_additional_media_keep_raw_and_do_not_consume_goal(auth, db, monkeypatch, fair):
+    from app import worker
+
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
+    _, operation_id = setup_job(auth, db, monkeypatch, keywords=["飲食店"], target=1)
+    domains = ["retty.me", "jalan.net", "tabiiro.jp", "precious.jp", "kit-press.com"]
+    rows = [{"title": "店舗情報", "link": f"https://{host}/"} for host in domains]
+    rows += [
+        {"title": "大阪市のイタリアンランキングTOP10", "link": "https://unknown.test/list"},
+        {"title": "当店のイタリアン", "link": "https://restaurant.test/"},
+        {"title": "超過候補", "link": "https://another.test/"},
+    ]
+    provider(monkeypatch, rows)
+    monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
+    assert worker.run_once()
+    assert list(db.scalars(select(Company.domain))) == ["restaurant.test"]
+    hits = db.scalars(
+        select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
+    ).all()
+    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 6 + ["SAVED", "TARGET_LIMIT"]
+    assert [h.snapshot["link"] for h in hits] == [row["link"] for row in rows]
+    assert all(h.company_id is None for h in hits[:6])
+    job = db.scalar(
+        select(CollectionJob).where(CollectionJob.operation_job_id == UUID(operation_id))
+    )
+    assert job.saved_count == 1
+    assert job.excluded_count == 6

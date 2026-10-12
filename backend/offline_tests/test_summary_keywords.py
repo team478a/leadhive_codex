@@ -53,3 +53,37 @@ def test_title_keyword_policy_on_unknown_domains(title, excluded):
             assert eligible is not excluded
             if excluded:
                 assert (kind, reason) == ("ARTICLE", "AGGREGATION_TITLE")
+
+
+@pytest.mark.parametrize(
+    "title,excluded",
+    [
+        ("大阪市中央区のイタリアン・イタリア料理ランキングTOP10 - じゃらんnet", True),
+        ("大阪府のイタリアンおすすめグルメランキング トップ50", True),
+        ("業者ランキングtop１０", True),
+        ("検索ランキングTOP10を目指す当社のサービス", False),
+        ("検索ランキング改善サービス", False),
+        ("大阪のイタリアンで季節の味覚とワインを愉しむ", False),
+    ],
+)
+def test_ranking_top_titles(title, excluded):
+    test_title_keyword_policy_on_unknown_domains(title, excluded)
+
+
+@pytest.mark.parametrize(
+    "domain", ["retty.me", "jalan.net", "tabiiro.jp", "precious.jp", "kit-press.com"]
+)
+def test_additional_media_replay_boundaries(domain):
+    sources = [
+        (ROOT / f"app/services/{name}.py").read_text(encoding="utf-8")
+        for name in ("collection", "scraper", "presence_platforms", "collection_discovery")
+    ]
+    with deny_network():
+        policy = SourcePolicy(*sources)
+        for host in (domain, "www." + domain, "listing." + domain):
+            assert policy.eligible({"link": f"https://{host}/", "title": "店舗情報"}) == (
+                False,
+                "PORTAL_DIRECTORY",
+                "EXTERNAL_PLATFORM",
+            )
+        assert policy.eligible({"link": f"https://{domain}.example.test/", "title": "店舗情報"})[0]
