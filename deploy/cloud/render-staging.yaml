@@ -32,6 +32,10 @@ services:
         value: "true"
       - key: AGENT_FEATURES_ENABLED
         value: "false"
+      - key: FEEDBACK_WORKBENCH_ENABLED
+        value: "false"
+      - key: FEEDBACK_PROVENANCE_ENABLED
+        value: "false"
       - key: OUTBOUND_ENABLED
         value: "false"
       - key: WORKER_PAUSED
