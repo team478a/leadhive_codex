@@ -78,3 +78,15 @@ GitHub CIは最終headのPRチェックを別途確認する。Frontendは未変
 期間指定・pagination、管理画面、AI改善提案API、設定適用・rollback・継続評価。
 次は公式サイト・問い合わせURL・フォーム診断のprovenance/出力を追加し、その後5B/Cに進む。
 本PRはレビュー提出まで。mainマージ、設定有効化、デプロイは行わない。
+
+## 2026-10-12 最新mainとの整合
+
+#83は#82の作業ブランチへ`8717a28d001cea43418d285c20c92457e5144050`で統合済み。
+#81統合後のmain `e5d881b9cdf6ec808117829815fd67f18affbe02`を通常mergeで取り込み、
+CI設定の競合を解消した。判定版・exportとURLからのAI提案の両方のmypy対象を維持する。
+API routerは両方登録し、共有履歴の書換えは行わない。
+
+統合状態で関連Backend34件、offline78件、Ruff、format（520ファイル）、
+両機能4モジュールのmypy、API import、git diff --checkが成功。
+#81最終headのGitHub CIはE2Eを含め成功済み。統合後headのCIは別途確認する。
+本番データ変更、実API利用、送信、mainへのマージ、デプロイは実施していない。

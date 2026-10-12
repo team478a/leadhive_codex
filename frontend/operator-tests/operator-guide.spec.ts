@@ -3,6 +3,7 @@ import { test, expect, type Page } from '@playwright/test'
 async function setup(page: Page, count = 2, role = 'editor', openGuide = true, archivedCount = 0) {
   const mutations: string[] = []
   const projects = Array.from({ length: count }, (_, index) => ({ id: `project-${index}`, project_name: `担当プロジェクト${index + 1}`, region: '大阪府', status: index < archivedCount ? 'archived' : 'draft', sales_objective: '公開情報だけで提案', target_profile_id: 'profile' }))
+  let profile = { id: 'profile', profile_name: '確認用プロファイル', active: true, default_regions: ['大阪府'], search_keywords: [], positive_keywords: [], negative_keywords: [], exclusion_keywords: [], description: '', scoring_rules: {}, ai_instruction: '' }
   await page.addInitScript(() => localStorage.setItem('leadhive:onboarding:operator@example.test', 'dismissed'))
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
@@ -15,7 +16,10 @@ async function setup(page: Page, count = 2, role = 'editor', openGuide = true, a
     }
     if (path === '/api/auth/me') body = { id: 'operator', email: 'operator@example.test', is_admin: false }
     else if (path === '/api/projects') body = projects
-    else if (path === '/api/target-profiles') body = [{ id: 'profile', profile_name: '確認用プロファイル', active: true, default_regions: ['大阪府'] }]
+    else if (path === '/api/target-profiles') {
+      if (route.request().method() === 'POST') profile = { ...route.request().postDataJSON(), id: 'profile' }
+      body = route.request().method() === 'POST' ? profile : [profile]
+    }
     else if (path.endsWith('/members')) body = [{ email: 'operator@example.test', role }]
     else if (path === '/api/dashboard') body = { total_companies: 10 }
     else if (path === '/api/outreach-execution-status') body = { outbound_enabled: false }
@@ -155,4 +159,61 @@ test('owner restores an archived project using existing status editor', async ({
   await expect(page.getByRole('heading', { name: '担当プロジェクト1', exact: true })).toBeVisible()
   await expect(page.getByText('進行中', { exact: true })).toBeVisible()
   expect(mutations).toEqual(['/api/projects/project-0'])
+})
+
+async function newProfile(page: Page) {
+  await page.getByRole('button', { name: 'URLから営業条件を作る', exact: true }).click()
+}
+
+test('URL AI suggestion requires human apply, remains editable, then creates project with selected profile', async ({ page }) => {
+  const mutations = await setup(page, 0, 'owner', false)
+  const proposals: unknown[] = []
+  await page.route('**/api/target-profiles/propose-from-url', route => {
+    proposals.push(route.request().postDataJSON())
+    return route.fulfill({ json: {
+      service_summary: 'SNSシステムのOEM販売', source_url: 'https://example.test/service',
+      evidence_quotes: ['公開されたサービス説明'], limitations: ['価格は未確認'],
+      targets: [
+        { name: '直接購入者', reason: '購入の仮説', search_keywords: ['美容院'], positive_keywords: [], negative_keywords: [], exclusion_keywords: [] },
+        { name: 'OEM提携先', reason: '販売パートナーの仮説', search_keywords: ['SNS運用代行', 'Instagram運用代行'], positive_keywords: ['OEM'], negative_keywords: [], exclusion_keywords: ['求人媒体'] },
+      ],
+    } })
+  })
+  await newProfile(page)
+  await page.getByLabel('販売したいサービスのURL').fill('https://example.test/service')
+  await page.getByLabel('営業目的（任意）').fill('OEMパートナーを探す')
+  await page.getByRole('button', { name: 'AIにターゲットを提案してもらう' }).click()
+  await expect(page.getByText('SNSシステムのOEM販売', { exact: true })).toBeVisible()
+  await expect(page.getByLabel('プロファイル名', { exact: true })).toHaveValue('')
+  expect(mutations).toEqual([])
+  await page.getByRole('radio', { name: /OEM提携先/ }).check()
+  await page.getByRole('button', { name: 'このターゲット案を設定へ反映' }).click()
+  await expect(page.getByLabel('プロファイル名', { exact: true })).toHaveValue('OEM提携先')
+  await expect(page.getByLabel('検索キーワード', { exact: true })).toHaveValue('SNS運用代行\nInstagram運用代行')
+  await page.getByLabel('検索キーワード', { exact: true }).fill('SNS運用代行\nSNSマーケティング')
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: test.info().outputPath('ai-target-proposal.png'), fullPage: true })
+  await page.getByLabel('販売したいサービスのURL').fill('https://example.test/other')
+  await expect(page.getByRole('button', { name: 'このターゲット案を設定へ反映' })).toHaveCount(0)
+  await expect(page.getByLabel('検索キーワード', { exact: true })).toHaveValue('SNS運用代行\nSNSマーケティング')
+  await page.getByRole('button', { name: '保存してプロジェクト作成へ' }).click()
+  await expect(page.getByRole('heading', { name: 'プロジェクトを作成', exact: true })).toBeVisible()
+  await expect(page.getByLabel('ターゲットプロファイル', { exact: true })).toHaveValue('profile')
+  await expect(page.getByLabel('営業目的', { exact: true })).toHaveValue(/OEMパートナーを探す/)
+  expect(mutations).toEqual(['/api/target-profiles'])
+  expect(proposals).toEqual([{ url: 'https://example.test/service', sales_goal: 'OEMパートナーを探す' }])
+})
+
+test('AI errors preserve manual configuration and changed URL invalidates old proposal', async ({ page }) => {
+  const mutations = await setup(page, 0, 'owner', false)
+  await page.route('**/api/target-profiles/propose-from-url', route => route.fulfill({ status: 422, json: { detail: 'サービス説明が不足しています。' } }))
+  await newProfile(page)
+  await page.getByLabel('プロファイル名', { exact: true }).fill('手入力条件')
+  await page.getByLabel('検索キーワード', { exact: true }).fill('SNS運用代行')
+  await page.getByLabel('販売したいサービスのURL').fill('https://example.test/service')
+  await page.getByRole('button', { name: 'AIにターゲットを提案してもらう' }).click()
+  await expect(page.getByRole('alert')).toContainText('サービス説明が不足')
+  await expect(page.getByLabel('検索キーワード', { exact: true })).toHaveValue('SNS運用代行')
+  await expect(page.getByLabel('プロファイル名', { exact: true })).toHaveValue('手入力条件')
+  expect(mutations).toEqual([])
 })

@@ -48,7 +48,7 @@ function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: str
   </main>
 }
 
-type Editor = { type: 'project'; value?: Project } | { type: 'profile'; value?: Profile } | null
+type Editor = { type: 'project'; value?: Project; profileId?: string } | { type: 'profile'; value?: Profile } | null
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
@@ -200,11 +200,11 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         onClick={() => void action(reload)}>再読み込み</button></div>}
       {notice && <p className="notice" role="status">{notice}</p>}
       {loading ? <p role="status">読み込み中…</p> : editor?.type === 'project' ?
-        <ProjectForm key={editor.value?.id ?? 'new'} profiles={profiles} initial={editor.value}
+        <ProjectForm key={editor.value?.id ?? 'new'} profiles={profiles} initial={editor.value} profileId={editor.profileId}
           onSaved={saved} onCancel={() => setEditor(null)} /> : editor?.type === 'profile' ?
-        <ProfileForm key={editor.value?.id ?? 'new'} initial={editor.value} onSaved={saved}
+        <ProfileForm key={editor.value?.id ?? 'new'} initial={editor.value} onSaved={saved} onCreateProject={profileId => { setTab('projects'); setEditor({ type: 'project', profileId }) }}
           onCancel={() => setEditor(null)} /> : loaded && tab === 'installation' ? <InstallationGuide onGuide={() => setTab('operation')} /> : loaded && tab === 'operation' ? <OperatorGuide projects={currentProjects} projectRoles={projectRoles} onNavigate={navigateForOperator} onCreateProject={openProjectCreator} /> : loaded && tab === 'projects' ? <>
-          <section className="panel mb-5"><h2>担当者が使いながら確認する</h2><p className="muted mt-2">収集・入力・結果記録の手順と、止まったときの対応を確認できます。</p><button className="secondary mt-3" onClick={() => setTab('operation')}>担当者の作業ガイドを開く</button></section>
+          <section className="panel mb-5"><h2>サービスURLから営業を準備する</h2><p className="muted mt-2">URLを入力し、AIのターゲット・検索語案を確認して収集条件を作れます。</p><div className="mt-3 flex flex-wrap gap-3"><button disabled={busy} onClick={() => { setTab('profiles'); setEditor({ type: 'profile' }); setNotice('') }}>URLから営業条件を作る</button><button className="secondary" onClick={() => setTab('operation')}>担当者の作業ガイドを開く</button></div></section>
           <div className="section-heading"><h2>{showArchivedProjects ? 'すべてのプロジェクト' : '運用中のプロジェクト'}</h2><span className="badge">{visibleProjects.length} 件</span></div>
           <label className="mb-4 flex items-center gap-2"><input type="checkbox" checked={showArchivedProjects} onChange={event => setShowArchivedProjects(event.target.checked)} />アーカイブを表示（{archivedCount}件）</label>
           <p className="muted mb-4">検証や終了した案件は「編集」からアーカイブできます。企業データ・履歴は残り、ステータスを戻すと通常一覧へ戻せます。</p>

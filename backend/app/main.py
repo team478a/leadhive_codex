@@ -46,6 +46,7 @@ from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
 from app.pc_input_routes import router as pc_input_router
 from app.preparation_routes import router as preparation_router
+from app.profile_proposal_routes import router as profile_proposal_router
 from app.raw_collection_routes import router as raw_collection_router
 from app.raw_pair_routes import router as raw_pair_router
 from app.routes import router
@@ -157,6 +158,7 @@ async def internal_error(request: Request, exc: Exception):
 
 app.include_router(external_presence_router)
 app.include_router(router)
+app.include_router(profile_proposal_router)
 app.include_router(admin_router)
 app.include_router(collection_router)
 app.include_router(campaign_router)
