@@ -69,6 +69,10 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   const [completionCompanyId, setCompletionCompanyId] = useState<string | null>(null)
   const [followupCompanyId, setFollowupCompanyId] = useState<string | null>(null)
   const [projects, setProjects] = useState<Project[]>([])
+  const [showArchivedProjects, setShowArchivedProjects] = useState(false)
+  const currentProjects = projects.filter(project => project.status !== 'archived')
+  const archivedCount = projects.length - currentProjects.length
+  const visibleProjects = showArchivedProjects ? projects : currentProjects
   const [profiles, setProfiles] = useState<Profile[]>([])
   const [editor, setEditor] = useState<Editor>(null)
   const [error, setError] = useState('')
@@ -199,13 +203,15 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         <ProjectForm key={editor.value?.id ?? 'new'} profiles={profiles} initial={editor.value}
           onSaved={saved} onCancel={() => setEditor(null)} /> : editor?.type === 'profile' ?
         <ProfileForm key={editor.value?.id ?? 'new'} initial={editor.value} onSaved={saved}
-          onCancel={() => setEditor(null)} /> : loaded && tab === 'installation' ? <InstallationGuide onGuide={() => setTab('operation')} /> : loaded && tab === 'operation' ? <OperatorGuide projects={projects} projectRoles={projectRoles} onNavigate={navigateForOperator} onCreateProject={openProjectCreator} /> : loaded && tab === 'projects' ? <>
+          onCancel={() => setEditor(null)} /> : loaded && tab === 'installation' ? <InstallationGuide onGuide={() => setTab('operation')} /> : loaded && tab === 'operation' ? <OperatorGuide projects={currentProjects} projectRoles={projectRoles} onNavigate={navigateForOperator} onCreateProject={openProjectCreator} /> : loaded && tab === 'projects' ? <>
           <section className="panel mb-5"><h2>担当者が使いながら確認する</h2><p className="muted mt-2">収集・入力・結果記録の手順と、止まったときの対応を確認できます。</p><button className="secondary mt-3" onClick={() => setTab('operation')}>担当者の作業ガイドを開く</button></section>
-          <div className="section-heading"><h2>すべてのプロジェクト</h2><span className="badge">{projects.length} 件</span></div>
-          {projects.length === 0 ? <section className="panel empty"><div className="empty-icon">▦</div>
-            <h2>最初のプロジェクトを作成しましょう</h2><p className="muted">標準プロファイルを選び、案件名・提案内容・地域を入力するだけで始められます。</p>
+          <div className="section-heading"><h2>{showArchivedProjects ? 'すべてのプロジェクト' : '運用中のプロジェクト'}</h2><span className="badge">{visibleProjects.length} 件</span></div>
+          <label className="mb-4 flex items-center gap-2"><input type="checkbox" checked={showArchivedProjects} onChange={event => setShowArchivedProjects(event.target.checked)} />アーカイブを表示（{archivedCount}件）</label>
+          <p className="muted mb-4">検証や終了した案件は「編集」からアーカイブできます。企業データ・履歴は残り、ステータスを戻すと通常一覧へ戻せます。</p>
+          {visibleProjects.length === 0 ? <section className="panel empty"><div className="empty-icon">▦</div>
+            <h2>{archivedCount ? '運用中のプロジェクトはありません' : '最初のプロジェクトを作成しましょう'}</h2><p className="muted">標準プロファイルを選び、案件名・提案内容・地域を入力するだけで始められます。{archivedCount > 0 && '過去の案件は「アーカイブを表示」で確認できます。'}</p>
             <div className="mt-6 flex flex-wrap justify-center gap-3"><button onClick={() => setEditor({ type: 'project' })}>プロジェクトを作る</button><button className="secondary" onClick={() => setGuideOpen(true)}>使い方を見る</button></div></section> :
-            <div className="grid gap-5 xl:grid-cols-2">{projects.map(project => <article className="panel" key={project.id}>
+            <div className="grid gap-5 xl:grid-cols-2">{visibleProjects.map(project => <article className="panel" key={project.id}>
               <div className="flex justify-between gap-3"><h2>{project.project_name}</h2><span className="badge">{statusNames[project.status]}</span></div>
               <p className="muted mt-3">{profiles.find(p => p.id === project.target_profile_id)?.profile_name ?? 'プロファイル'}</p>
               <p className="my-5 whitespace-pre-wrap">{project.sales_objective}</p>

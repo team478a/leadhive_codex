@@ -1,15 +1,21 @@
 import { test, expect, type Page } from '@playwright/test'
 
-async function setup(page: Page, count = 2, role = 'editor', openGuide = true) {
+async function setup(page: Page, count = 2, role = 'editor', openGuide = true, archivedCount = 0) {
   const mutations: string[] = []
-  const projects = Array.from({ length: count }, (_, index) => ({ id: `project-${index}`, project_name: `担当プロジェクト${index + 1}`, region: '大阪府', status: 'draft', sales_objective: '公開情報だけで提案', target_profile_id: 'profile' }))
+  const projects = Array.from({ length: count }, (_, index) => ({ id: `project-${index}`, project_name: `担当プロジェクト${index + 1}`, region: '大阪府', status: index < archivedCount ? 'archived' : 'draft', sales_objective: '公開情報だけで提案', target_profile_id: 'profile' }))
   await page.addInitScript(() => localStorage.setItem('leadhive:onboarding:operator@example.test', 'dismissed'))
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
     if (route.request().method() !== 'GET') mutations.push(path)
     let body: unknown = []
+    if (path.startsWith('/api/projects/') && route.request().method() === 'PUT') {
+      const project = projects.find(item => path === `/api/projects/${item.id}`)!
+      Object.assign(project, route.request().postDataJSON())
+      body = project
+    }
     if (path === '/api/auth/me') body = { id: 'operator', email: 'operator@example.test', is_admin: false }
     else if (path === '/api/projects') body = projects
+    else if (path === '/api/target-profiles') body = [{ id: 'profile', profile_name: '確認用プロファイル', active: true, default_regions: ['大阪府'] }]
     else if (path.endsWith('/members')) body = [{ email: 'operator@example.test', role }]
     else if (path === '/api/dashboard') body = { total_companies: 10 }
     else if (path === '/api/outreach-execution-status') body = { outbound_enabled: false }
@@ -110,4 +116,43 @@ test('empty projects and mobile layout offer next action without overflow', asyn
   await expect(page.getByRole('button', { name: '企業一覧へ', exact: true })).toBeDisabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
   await page.screenshot({ path: test.info().outputPath('guide-empty.png'), fullPage: true })
+})
+
+test('archived projects are hidden by default, can be read and do not trigger writes', async ({ page }) => {
+  const mutations = await setup(page, 2, 'viewer', false, 1)
+  await expect(page.getByRole('heading', { name: '担当プロジェクト1', exact: true })).toHaveCount(0)
+  await expect(page.getByRole('heading', { name: '担当プロジェクト2', exact: true })).toBeVisible()
+  await page.getByRole('checkbox', { name: 'アーカイブを表示（1件）' }).check()
+  await expect(page.getByRole('heading', { name: '担当プロジェクト1', exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+  await page.screenshot({ path: test.info().outputPath('archives-visible.png'), fullPage: true })
+  await page.locator('article').filter({ has: page.getByRole('heading', { name: '担当プロジェクト1', exact: true }) }).getByRole('button', { name: '企業一覧', exact: true }).click()
+  await expect(page.getByRole('combobox', { name: 'プロジェクト', exact: true })).toHaveValue('project-0')
+  await page.reload()
+  await expect(page.getByRole('heading', { name: '担当プロジェクト1', exact: true })).toHaveCount(0)
+  expect(mutations).toEqual([])
+})
+
+test('all archived shows an empty operational list and excludes archives from work guide', async ({ page }) => {
+  const mutations = await setup(page, 2, 'editor', false, 2)
+  await expect(page.getByRole('heading', { name: '運用中のプロジェクトはありません' })).toBeVisible()
+  await page.screenshot({ path: test.info().outputPath('archives-hidden.png'), fullPage: true })
+  await page.getByRole('button', { name: '担当者の作業ガイドを開く' }).click()
+  await expect(page.getByRole('button', { name: 'プロジェクトを作る', exact: true })).toBeVisible()
+  await expect(page.getByRole('button', { name: '企業収集へ' })).toBeDisabled()
+  expect(mutations).toEqual([])
+})
+
+test('owner restores an archived project using existing status editor', async ({ page }) => {
+  const mutations = await setup(page, 1, 'owner', false, 1)
+  await page.getByRole('checkbox', { name: 'アーカイブを表示（1件）' }).check()
+  await page.getByRole('button', { name: '編集', exact: true }).click()
+  await expect(page.getByLabel('営業目的', { exact: true })).toHaveValue('公開情報だけで提案')
+  await page.getByLabel('ステータス', { exact: true }).selectOption('active')
+  await page.getByRole('button', { name: '保存する', exact: true }).click()
+  await expect(page.getByText('保存しました。', { exact: true })).toBeVisible()
+  await page.getByRole('checkbox', { name: 'アーカイブを表示（0件）' }).uncheck()
+  await expect(page.getByRole('heading', { name: '担当プロジェクト1', exact: true })).toBeVisible()
+  await expect(page.getByText('進行中', { exact: true })).toBeVisible()
+  expect(mutations).toEqual(['/api/projects/project-0'])
 })
