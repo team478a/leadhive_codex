@@ -33,7 +33,7 @@ export function OnboardingGuide({
         <div>
           <p className="eyebrow">QUICK START</p>
           <h2 id="guide-title">3ステップで始めましょう</h2>
-          <p className="muted mt-2">まずは企業を1社登録するところまで進めれば、LeadHiveの基本操作を確認できます。</p>
+          <p className="muted mt-2">登録済みの候補があれば企業一覧から再開できます。日々の作業はメニューの「担当者の作業ガイド」で確認できます。</p>
         </div>
         <button type="button" className="guide-close" aria-label="使い方ガイドを閉じる" onClick={onClose}>×</button>
       </div>
@@ -50,14 +50,14 @@ export function OnboardingGuide({
           <span className="guide-step-number">{hasCompanies ? '✓' : '2'}</span>
           <div>
             <div className="guide-step-title"><strong>企業を集める</strong>{hasCompanies && <span className="badge">完了</span>}</div>
-            <p className="muted">最初は会社URLを1件貼る方法が簡単です。検索やCSV取込も利用できます。</p>
+            <p className="muted">キーワード・都道府県・目標件数で検索するか、URL・CSVを取り込みます。</p>
           </div>
         </li>
         <li className={hasCompanies ? 'guide-step current' : 'guide-step'}>
           <span className="guide-step-number">3</span>
           <div>
             <div className="guide-step-title"><strong>企業一覧で確認する</strong></div>
-            <p className="muted">企業情報・連絡先・優先度を確認し、営業対象を決めます。</p>
+            <p className="muted">企業の詳細で問い合わせ先・営業NGを確認し、入力を試した結果を記録します。入力試行では送信しません。</p>
           </div>
         </li>
       </ol>

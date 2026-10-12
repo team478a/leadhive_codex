@@ -276,11 +276,14 @@ jobs:
           npm run test:form-browser-poc
           node form-lab/summarize.mjs test-results/form-browser-poc/report.json test-results/form-browser-poc/summary.json
           npx playwright test --config form-lab/handoff-ui.config.ts
+          npx playwright test --config operator-guide.config.ts
       - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: localhost-form-browser-poc
-          path: frontend/test-results/form-browser-poc
+          path: |
+            frontend/test-results/form-browser-poc
+            frontend/test-results/operator-guide
 
   windows-package:
     runs-on: windows-latest

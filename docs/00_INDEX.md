@@ -372,3 +372,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [COLLECTION_QUERY_SCHEDULER.md](COLLECTION_QUERY_SCHEDULER.md): 工程2・公平な検索配分、停滞2回、永続予算、再開と部分結果
 
 - [COLLECTION_SITE_EXTRACTION.md](COLLECTION_SITE_EXTRACTION.md): 工程3・企業情報の根拠、公式照合、段階的問い合わせ探索と取得診断
+
+## 担当者の実運用
+
+- [入力・結果記録の運用ガイド](OPERATOR_INPUT_WORKFLOW_GUIDE.md)
+- [UI・ガイド整備記録](OPERATOR_UI_GUIDE_REPORT.md)
