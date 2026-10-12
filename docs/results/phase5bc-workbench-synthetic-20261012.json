@@ -1,0 +1,153 @@
+{
+  "schema_version": "improvement-workbench-v1",
+  "dataset_kind": "SYNTHETIC",
+  "input_hash": "934d7a87f8f3dd04027c6a9ff74176c62443275293724dc83276ce767f86f2ef",
+  "event_count": 2,
+  "development_analysis": {
+    "patterns": [
+      {
+        "pattern": "CONTACT_URL_MISIDENTIFIED",
+        "failed_samples": 1,
+        "affected_entities": 1
+      }
+    ],
+    "unresolved_samples": 0,
+    "diagnostics_not_human_truth": 0
+  },
+  "development_diagnostic_states": {},
+  "baseline": {
+    "counts": {
+      "contact_url": {
+        "evaluated": 1,
+        "exact_matches": 0
+      },
+      "official_url": {
+        "evaluated": 0,
+        "exact_matches": 0
+      },
+      "form_analysis": {
+        "evaluated": 0,
+        "exact_matches": 0
+      },
+      "target": {
+        "evaluated": 0,
+        "exact_matches": 0
+      },
+      "discovery": {
+        "evaluated": 0,
+        "exact_matches": 0
+      }
+    },
+    "judged_samples": 1,
+    "paired_samples": 1,
+    "collection_precision": null,
+    "official_site_accuracy": null,
+    "contact_discovery_rate": 0.0,
+    "misclassification_rate": 1.0,
+    "production_processing_seconds": null,
+    "api_cost": null
+  },
+  "comparisons": [
+    {
+      "proposal": {
+        "id": "7042564b63ba52a665acef8241d4fe2aa3cbd072e57e17f2166c635006205904",
+        "pattern": "CONTACT_URL_MISIDENTIFIED",
+        "failed_samples": 1,
+        "affected_entities": 1,
+        "feature": "saved_contact_candidate",
+        "runner": "SAVED_CANDIDATE_PROJECTION",
+        "requires_admin": true,
+        "execution_allowed": false
+      },
+      "status": "EVALUATED",
+      "evaluation_applicable_samples": 1,
+      "evaluation_eligible_samples": 1,
+      "changed_samples": 1,
+      "improved_samples": 1,
+      "regressions": 0,
+      "before": {
+        "counts": {
+          "contact_url": {
+            "evaluated": 1,
+            "exact_matches": 0
+          },
+          "official_url": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "form_analysis": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "target": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "discovery": {
+            "evaluated": 0,
+            "exact_matches": 0
+          }
+        },
+        "judged_samples": 1,
+        "paired_samples": 1,
+        "collection_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": 0.0,
+        "misclassification_rate": 1.0,
+        "production_processing_seconds": null,
+        "api_cost": null
+      },
+      "after": {
+        "counts": {
+          "contact_url": {
+            "evaluated": 1,
+            "exact_matches": 1
+          },
+          "official_url": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "form_analysis": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "target": {
+            "evaluated": 0,
+            "exact_matches": 0
+          },
+          "discovery": {
+            "evaluated": 0,
+            "exact_matches": 0
+          }
+        },
+        "judged_samples": 1,
+        "paired_samples": 1,
+        "collection_precision": null,
+        "official_site_accuracy": null,
+        "contact_discovery_rate": 1.0,
+        "misclassification_rate": 0.0,
+        "production_processing_seconds": null,
+        "api_cost": null
+      },
+      "adoption": "HUMAN_REVIEW_REQUIRED"
+    }
+  ],
+  "recommendations": [],
+  "recommendation_truth": "UNVERIFIED_HYPOTHESIS",
+  "identity_grouping": "UNVERIFIED",
+  "sealed_evaluation_certified": false,
+  "coverage": null,
+  "human_review_seconds": null,
+  "estimated_api_cost": null,
+  "auto_adopt": false,
+  "execution_allowed": false,
+  "basis_commit": "c1413fac90cd0843de1ac03e12b56542ae04c2c9",
+  "validation": {
+    "related_and_offline_passed": 111,
+    "live_api_calls": 0,
+    "email_sent": 0,
+    "form_sent": 0,
+    "approvals": 0,
+    "production_changes": 0
+  }
+}

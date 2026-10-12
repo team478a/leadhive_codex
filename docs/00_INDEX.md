@@ -380,6 +380,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 ## 担当者の実運用
 
+- [Phase 5B/C: 改善候補と隔離比較PoC](PHASE5BC_IMPROVEMENT_WORKBENCH.md)
+
 - [Phase 5A: フィールド評価記録](PHASE5A_FIELD_FEEDBACK.md)
 
 - [入力・結果記録の運用ガイド](OPERATOR_INPUT_WORKFLOW_GUIDE.md)
