@@ -31,6 +31,7 @@ test('Confirmed criteria can be attached to a queued collection without running 
     expect(response.status()).toBe(202)
     const data = await response.json() as { condition_request_id: string; condition_version: number }
     expect(data.condition_request_id).toBeTruthy(); expect(data.condition_version).toBe(1)
+    await page.getByRole('button', { name: '進捗を見る', exact: true }).click()
     await page.getByText('この収集の条件判定', { exact: true }).click()
     await expect(page.getByText('この収集の保存済み候補はありません。', { exact: true })).toBeVisible()
     const jobReport = page.locator('details[data-condition-results]').filter({ has: page.getByText('この収集の条件判定', { exact: true }) })
