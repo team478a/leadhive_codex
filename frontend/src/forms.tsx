@@ -1,4 +1,4 @@
-import { cloneElement, useId, useState, type FormEvent, type ReactElement } from 'react'
+import { cloneElement, useEffect, useId, useRef, useState, type FormEvent, type ReactElement } from 'react'
 import { api, errorMessage } from './api'
 import { RegionSelector } from './RegionSelector'
 import type { Profile, ProfileInput, Project, ProjectInput } from './types'
@@ -81,6 +81,12 @@ export function ProfileForm({ initial, onSaved, onCancel, onCreateProject }: {
   const [busy, setBusy] = useState(false)
   const [startProject, setStartProject] = useState(false)
   const [error, setError] = useState('')
+  const errorRef = useRef<HTMLParagraphElement>(null)
+  useEffect(() => {
+    if (!error) return
+    errorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    errorRef.current?.focus({ preventScroll: true })
+  }, [error])
   async function submit(event: FormEvent) {
     event.preventDefault(); setError('')
     let scoring_rules: Record<string, unknown>
@@ -110,7 +116,7 @@ export function ProfileForm({ initial, onSaved, onCancel, onCreateProject }: {
   return <form className="panel form-panel" onSubmit={submit}>
     <h2>{initial ? 'プロファイルを編集' : 'プロファイルを作成'}</h2>
     <p className="muted">業種ごとの検索条件と評価基準を設定します。キーワードは1行に1件入力してください。</p>
-    {error && <p role="alert" className="error">{error}</p>}
+    {error && <p ref={errorRef} tabIndex={-1} role="alert" className="error">{error}</p>}
     <fieldset disabled={busy}>
       <TargetProfileAssistant onApply={(target, summary, source) => {
         setValue({ ...value, profile_name: target.name, description: `${summary}\n確認元: ${source}\n提案理由: ${target.reason}` })
