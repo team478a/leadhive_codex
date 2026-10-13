@@ -47,6 +47,40 @@ test('collection progress and recent jobs stay visible when an optional report e
   expect(requestedCompanyList).toHaveLength(0)
 })
 
+test('background refresh identifies the endpoint when its network request fails', async ({ page }) => {
+  const email = 'operator@example.test'
+  const profile = { id: 'profile-1', profile_name: 'SNS運用', search_keywords: ['SNS運用代行'], active: true }
+  const project = { id: 'project-1', project_name: '大阪リスト', target_profile_id: profile.id, region: '大阪府', status: 'active' }
+  let failOperations = false
+  await page.addInitScript(email => localStorage.setItem(`leadhive:onboarding:${email}`, 'dismissed'), email)
+  await page.route('**/api/**', async route => {
+    const path = new URL(route.request().url()).pathname
+    if (failOperations && path.endsWith('/operations')) { await route.abort('failed'); return }
+    let data: unknown = []
+    if (path === '/api/auth/me') data = { id: 'operator', email, is_admin: false }
+    else if (path === '/api/target-profiles') data = [profile]
+    else if (path === '/api/projects') data = [project]
+    else if (path === '/api/dashboard') data = { total_companies: 0 }
+    else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
+    else if (path.endsWith('/members')) data = [{ email, role: 'owner' }]
+    else if (path.endsWith('/company-analysis-summary')) data = {
+      saved: 0, webCompleted: 0, webPending: 0, webFailed: 0, aiCompleted: 0, aiPending: 0,
+    }
+    else if (path.endsWith('/collection-jobs')) data = []
+    else if (path.endsWith('/search-schedules') || path.endsWith('/search-analytics')
+      || path.endsWith('/collection-performance') || path.endsWith('/ai-review-analytics')) data = []
+    await route.fulfill({ json: data })
+  })
+
+  await page.goto('/')
+  await page.getByRole('button', { name: 'このターゲットで収集へ' }).click()
+  const progress = page.locator('.panel').filter({ has: page.getByRole('heading', { name: 'バックグラウンド処理', exact: true }) })
+  await expect(progress).toBeVisible()
+  failOperations = true
+  await progress.getByRole('button', { name: '更新', exact: true }).click()
+  await expect(page.getByRole('alert')).toContainText('GET /projects/:project/operations')
+})
+
 test('collection results load one server page at a time and retain exact category totals', async ({ page }, info) => {
   const email = 'operator@example.test'
   const profile = { id: 'profile-1', profile_name: 'SNS運用', search_keywords: ['SNS運用代行'], active: true }
