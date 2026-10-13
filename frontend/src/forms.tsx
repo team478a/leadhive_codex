@@ -8,7 +8,7 @@ import { TargetProfileAssistant } from './TargetProfileAssistant'
 export function Field({ label, children, required }: { label: string; children: ReactElement<{ id?: string; required?: boolean }>; required?: boolean }) {
   const id = useId()
   const isRequired = required ?? Boolean(children.props.required)
-  return <div className="field"><label htmlFor={id}>{label}{isRequired && <><span aria-hidden="true" className="ml-1 font-bold text-red-700">＊</span><span className="sr-only">（必須）</span></>}</label>{cloneElement(children, { id })}</div>
+  return <div className="field"><label className={isRequired ? 'required-label' : undefined} htmlFor={id}>{label}</label>{cloneElement(children, { id })}</div>
 }
 
 export function ProjectForm({ profiles, initial, profileId, onSaved, onCancel, collectionSetup = false }: {
