@@ -218,6 +218,46 @@ def test_auto_continue_stops_at_explicit_total_budget(auth, db, monkeypatch):
     assert queued == 0
 
 
+def test_auto_continue_repeats_until_goal_across_prefecture_cursor(auth, db, monkeypatch):
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)
+    project = make_project(auth)
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    response = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json=dict(
+            operation_type="collect_search",
+            source="serper",
+            keywords=[f"q{i}" for i in range(20)],
+            region="北海道/青森県/岩手県",
+            region_mode="prefecture_order",
+            target_count=51,
+            search_request_limit=101,
+            auto_continue=True,
+        ),
+    )
+    assert response.status_code == 202
+    first_id = response.json()["id"]
+    calls = []
+
+    def search(keyword, region, _size, page):
+        calls.append((keyword, region, page))
+        return [candidate(f"candidate-{len(calls)}")]
+
+    monkeypatch.setattr(scheduler, "search_serper_page", search)
+    worker.run_once()
+    first = result(auth, first_id)
+    assert first["collection_progress"]["stop_reason"] == "AUTO_CONTINUING"
+    second_id = first["collection_progress"]["next_operation_id"]
+
+    worker.run_once()
+    second = result(auth, second_id)
+    assert second["status"] == "completed"
+    assert second["collection_progress"]["collected_count"] == 51
+    assert second["collection_progress"]["total_requests"] == 51
+    assert second["collection_progress"]["stop_reason"] == "TARGET_REACHED"
+    assert len(calls) == 51
+
+
 @pytest.mark.parametrize("state", ["REVIEW_REQUIRED", "NO_MATCH"])
 def test_unconfirmed_growth_reaches_page_cap(auth, db, monkeypatch, state):
     _, job_id = setup(auth, db, monkeypatch)

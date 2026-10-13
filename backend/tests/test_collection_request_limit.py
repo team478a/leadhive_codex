@@ -69,6 +69,43 @@ def test_invalid_limit_rejected(value):
         )
 
 
+def test_large_target_and_overnight_budget_are_supported():
+    operation = OperationJobInput(
+        operation_type="collect_search",
+        source="serper",
+        keywords=["SNS運用"],
+        region="全国",
+        region_mode="prefecture_order",
+        target_count=10000,
+        search_request_limit=5000,
+        auto_continue=True,
+    )
+    assert operation.target_count == 10000
+    assert operation.search_request_limit == 5000
+
+    with pytest.raises(ValidationError):
+        OperationJobInput(
+            operation_type="collect_search",
+            source="serper",
+            keywords=["SNS運用"],
+            region="全国",
+            target_count=10001,
+            search_request_limit=5000,
+            auto_continue=True,
+        )
+
+    with pytest.raises(ValidationError):
+        OperationJobInput(
+            operation_type="collect_search",
+            source="serper",
+            keywords=["SNS運用"],
+            region="全国",
+            target_count=10000,
+            search_request_limit=5001,
+            auto_continue=True,
+        )
+
+
 @pytest.mark.parametrize(
     "changes",
     [
