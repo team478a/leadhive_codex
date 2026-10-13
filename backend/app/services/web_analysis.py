@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app.models import Company
@@ -100,6 +101,7 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
     company.analysis_error = ""
     db.commit()
     logger.info("scraper start: company_id=%s", company.id)
+    phase = "fetch"
     try:
         remembered = domains(db, company.project_id)
         page, data = (
@@ -107,6 +109,7 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             if remembered
             else scrape_company(company.website_url)
         )
+        phase = "normalize"
         if data.source_exclusion_reason:
             company.analysis_status = "excluded"
             company.analysis_error = data.source_exclusion_reason
@@ -136,6 +139,7 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             else (data.company_name or company.company_name)
         )
         address = company.address if "address" in protected else (data.address or company.address)
+        phase = "duplicate_check"
         duplicate = find_duplicate(db, company, website_url, domain, name, address)
         if duplicate:
             company.analysis_status = "duplicate"
@@ -173,6 +177,7 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             from app.services.field_feedback import capture_web
 
             capture_web(db, company)
+        phase = "save"
         db.commit()
         db.refresh(company)
         logger.info("scraper end: company_id=%s status=%s", company.id, company.analysis_status)
@@ -195,9 +200,29 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
         assert current is not None
         company = current
         company.analysis_status = "failed"
-        company.analysis_error = "Webサイト解析中にエラーが発生しました。"
+        if isinstance(exc, DataError):
+            company.analysis_error = (
+                "Webサイト解析中にデータ形式エラーが発生しました。"
+                "再解析しても続く場合は管理者にお問い合わせください。"
+            )
+            original = exc.orig
+            sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+            logger.error(
+                "scraper error: company_id=%s type=%s phase=%s sqlstate=%s",
+                company.id,
+                type(exc).__name__,
+                phase,
+                sqlstate or "unknown",
+            )
+        else:
+            company.analysis_error = "Webサイト解析中にエラーが発生しました。"
+            logger.error(
+                "scraper error: company_id=%s type=%s phase=%s",
+                company.id,
+                type(exc).__name__,
+                phase,
+            )
         company.scraped_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(company)
-        logger.error("scraper error: company_id=%s type=%s", company.id, type(exc).__name__)
         return company

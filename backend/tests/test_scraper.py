@@ -2,6 +2,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
+from sqlalchemy.exc import DataError
 
 from app.models import Company
 from app.services import scraper, web_analysis
@@ -295,6 +296,23 @@ def test_analysis_failure_missing_url_and_aggregator(auth, db, monkeypatch):
     result = auth.post(f"/api/companies/{failing['id']}/analyze", json={}).json()
     assert result["analysis_status"] == "failed"
     assert result["analysis_error"] == "接続できません。"
+
+
+def test_analysis_data_error_has_safe_diagnostics(auth, monkeypatch, caplog):
+    project = make_project(auth)
+    company = add_url(auth, project["id"], "https://data-error.example")
+
+    def fail(url):
+        raise DataError("insert", {"private": "do-not-log"}, Exception("invalid value"))
+
+    monkeypatch.setattr(web_analysis, "scrape_company", fail)
+    with caplog.at_level("ERROR", logger="leadhive"):
+        result = auth.post(f"/api/companies/{company['id']}/analyze", json={}).json()
+
+    assert result["analysis_status"] == "failed"
+    assert "データ形式エラー" in result["analysis_error"]
+    assert "type=DataError phase=fetch sqlstate=unknown" in caplog.text
+    assert "do-not-log" not in caplog.text
 
 
 def test_analysis_marks_redirected_domain_duplicate(auth, monkeypatch):
