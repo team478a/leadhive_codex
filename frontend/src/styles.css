@@ -25,6 +25,12 @@
   .notice { @apply mb-5 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800; }
   .field { @apply mb-5 flex flex-col gap-2 text-sm font-medium; }
   .actions { @apply mt-7 flex justify-end gap-3 border-t border-[#e6eae4] pt-5; }
+  .flow-steps { @apply grid list-none gap-3 p-0 md:grid-cols-2; }
+  .flow-steps li { @apply flex min-w-0 flex-col items-start gap-2 rounded-lg border border-[#e0e6df] bg-[#fafbf9] p-4; }
+  .flow-steps li strong { @apply text-[#235c4c]; }
+  .flow-steps li span { @apply text-sm leading-relaxed text-[#65776f]; }
+  .send-count { @apply rounded-lg bg-emerald-50 p-3 font-semibold text-emerald-900; }
+  .send-empty { @apply rounded-lg border border-[#e0e6df] bg-[#fafbf9] p-4; }
   @media (max-width: 639px) {
     .actions { @apply flex-col items-stretch; }
     .actions > button { @apply min-h-11 w-full whitespace-normal; }

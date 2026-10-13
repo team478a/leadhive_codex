@@ -8,8 +8,9 @@ interface Preview {
 }
 interface Chunk { channel: 'email' | 'form'; items: ApprovalProposal[]; key: string; done: boolean }
 
-export function CleanListSendPanel({ projectId, canWrite, onBusyChange }: {
+export function CleanListSendPanel({ projectId, canWrite, onBusyChange, onNavigate }: {
   projectId: string; canWrite: boolean; onBusyChange: (busy: boolean) => void
+  onNavigate: (destination: 'approvals' | 'deliveries') => void
 }) {
   const [preview, setPreview] = useState<Preview | null>(null)
   const [busy, setBusy] = useState(false)
@@ -76,23 +77,24 @@ export function CleanListSendPanel({ projectId, canWrite, onBusyChange }: {
       setNotice(`${count}件の予約を確認しました。未完了の予約は同じ予約キーで再試行します。接続エラーでも予約済みの場合があります。`)
     } finally { locked.current = false; setBusy(false); onBusyChange(false) }
   }
-  return <section className="panel mb-5 space-y-3" aria-label="クリーニング済みリストの一括送信">
-    <h2>クリーニング済みリストから送信</h2>
-    <p>営業NG・まとめサイトを除外し、人が宛先・文面を承認した企業だけを一括送信します。未承認は承認キューで確認してください。</p>
-    {preview && <p>送信対象：メール {emails}件 / フォーム {forms}件（リスト全体）</p>}
+  return <section id="clean-list-send-panel" className="panel mb-5 space-y-3 scroll-mt-4" aria-label="クリーニング済みリストの一括送信">
+    <h2>3. 承認済みの内容を一括送信</h2>
+    <p>営業NG・まとめサイトを除外します。人が承認した宛先と文面だけが対象です。</p>
+    {preview && <p className="send-count">今回送信する内容：メール {emails}件 / フォーム {forms}件</p>}
     {preview && Object.entries(preview.skipped ?? {}).map(([reason, n]) => <p className="muted text-sm" key={reason}>{reason}：{n}件</p>)}
-    <p className="muted text-sm">メールは24時間500件・1時間60件以内で、SMTPの上限も適用します。フォームは運用設定の共通上限に従います。確認画面・CAPTCHAなどの特殊フォームは対象外です。</p>
+    <p className="muted text-sm">ボタンを押すと送信を開始します。メールは上限に沿って順次送信されます。確認画面・CAPTCHAなど追加確認が必要なフォームは送信対象に入りません。</p>
     {preview && !enabled && <p role="alert">連絡方法の送信が停止中です。管理者へ設定の確認を依頼してください。</p>}
     {error && <p role="alert" className="error">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {!preview && !error && !notice && <p aria-live="polite">送信対象を確認中…</p>}
     <div className="actions flex-wrap">
       <button disabled={!canWrite || busy || !preview || !enabled || !(emails + forms)} onClick={() => void start()}>
-        {busy ? '送信予約を登録中…' : retry ? '未完了の予約を再試行' : `承認済み${emails + forms}件を一括送信開始`}
+        {busy ? '送信を開始しています…' : retry ? '未完了分の送信を再開' : `${emails + forms}件の送信を開始`}
       </button>
       <button className="secondary" disabled={busy || retry} onClick={() => void reload()}>送信対象を更新</button>
     </div>
-    {preview && !emails && !forms && <p>送信できる承認済み文面はありません。「営業準備」で文面を作成し、「承認キュー」で宛先・文面を承認してください。</p>}
+    {preview && !emails && !forms && <div className="send-empty"><strong>まだ送信できる内容がありません</strong><p>文面を準備し、宛先と文面を確認・承認すると、ここに送信対象が表示されます。</p><div className="actions"><button className="secondary" disabled={busy} onClick={() => onNavigate('approvals')}>承認待ちを確認する</button></div></div>}
+    {!!preview?.items?.length && <button className="secondary" disabled={busy} onClick={() => onNavigate('deliveries')}>送信結果を見る</button>}
     {!!preview?.items?.length && <details><summary>送信対象の宛先・文面を見る</summary>
       {preview.items.map(i => <article key={i.id} className="mt-3 break-words"><h3>{i.company_name}</h3><p>{i.channel === 'email' ? i.recipient : i.form_url}</p><p>{i.subject}</p><p className="whitespace-pre-wrap">{i.body}</p></article>)}
     </details>}

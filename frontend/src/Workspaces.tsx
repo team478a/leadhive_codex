@@ -40,7 +40,6 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
   const [revision, setRevision] = useState(0)
   const [showExcluded, setShowExcluded] = useState(false)
   const [organizing, setOrganizing] = useState(false)
-  const [sending, setSending] = useState(false)
   const [notice, setNotice] = useState('')
   const [actionError, setActionError] = useState('')
   const [busy, setBusy] = useState(true)
@@ -72,14 +71,12 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
     finally { setOrganizing(false); setRevision(v => v + 1) }
   }
   return <section aria-label="収集リストの確認">
-    <div className="panel mb-5"><h2>集まった候補を確認する</h2><p>対象企業のOK・NG、問い合わせ候補の確認・URL修正を記録できます。DM準備は「営業作業」から進めます。</p>
-      {project ? <label className="field mt-3">確認する収集リスト<select disabled={organizing || sending} value={project.id} onChange={e => { setPage(0); setSelected(''); setNotice(''); setActionError(''); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label> : <p>まだ収集リストがありません。</p>}
+    <div className="panel mb-5"><h2>集まった候補を確認する</h2><p>対象企業のOK・NG、問い合わせ候補の確認・URL修正を記録できます。文面準備から送信までは「送信の準備・実行」にまとまっています。</p>
+      {project ? <label className="field mt-3">確認する収集リスト<select disabled={organizing} value={project.id} onChange={e => { setPage(0); setSelected(''); setNotice(''); setActionError(''); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label> : <p>まだ収集リストがありません。</p>}
       <p className="mt-3">候補 {items.filter(c => c.status !== 'excluded').length}件 / 収集対象外 {items.filter(c => c.status === 'excluded').length}件</p>
-      <div className="actions flex-wrap"><button className="secondary" disabled={readOnly || busy || organizing || sending || !items.length} onClick={() => void organize()}>{organizing ? '整理中…' : '既知のまとめサイトを整理'}</button><button className="secondary" disabled={organizing || sending} onClick={() => { setShowExcluded(v => !v); setPage(0); setSelected('') }}>{showExcluded ? '候補に戻る' : '収集対象外を見る'}</button></div>
+      <div className="actions flex-wrap"><button className="secondary" disabled={readOnly || busy || organizing || !items.length} onClick={() => void organize()}>{organizing ? '整理中…' : '既知のまとめサイトを整理'}</button><button className="secondary" disabled={organizing} onClick={() => { setShowExcluded(v => !v); setPage(0); setSelected('') }}>{showExcluded ? '候補に戻る' : '収集対象外を見る'}</button></div>
       <p className="muted text-sm">確認済みの掲載媒体だけを自動整理します。データや人の判定は削除しません。</p>
     </div>
-    {project && !showExcluded && !busy && !organizing && <CleanListSendPanel key={`${project.id}-${revision}`} projectId={project.id} canWrite={!readOnly} onBusyChange={setSending} />}
-    {sending && <p role="status">現在のリストの送信予約を登録しています。</p>}
     {notice && <p role="status" className="panel">{notice}</p>}
     {actionError && <p role="alert" className="error">{actionError}</p>}
     {busy && !notice && <p role="status">リストを読み込み中…</p>}
@@ -102,14 +99,20 @@ export function SalesWorkspace({ projects, roles, initialProjectId, onNavigate, 
   onNavigate: (destination: 'companies' | 'approvals' | 'deliveries', id: string) => void
 }) {
   const [selected, setSelected] = useState(initialProjectId || projects[0]?.id || '')
+  const [sending, setSending] = useState(false)
   const project = projects.find(p => p.id === selected) || projects[0]
   return <section aria-label="営業作業">
-    <div className="panel mb-5"><h2>集めたリストを使って営業する</h2><p className="mt-2">問い合わせ先の確認 → DM準備 → 人の承認 → 送信結果の確認を行います。</p>
-      {project ? <><label className="field mt-4">営業するプロジェクト<select value={project.id} onChange={e => { setSelected(e.target.value); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label>
-        <div className="actions"><button onClick={() => onNavigate('companies', project.id)}>企業一覧・DM準備へ</button><button className="secondary" onClick={() => onNavigate('approvals', project.id)}>承認キューへ</button><button className="secondary" onClick={() => onNavigate('deliveries', project.id)}>配信結果を見る</button></div>
+    <div className="panel mb-5"><h2>送信までの流れ</h2><p className="mt-2">この画面で準備と送信を進めます。宛先・文面の確認と承認は人が行います。</p>
+      {project ? <><label className="field mt-4">対象プロジェクト<select disabled={sending} value={project.id} onChange={e => { setSelected(e.target.value); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label>
+        <ol className="flow-steps mt-4">
+          <li><strong>1. 文面を準備</strong><span>企業一覧から対象企業を選び、DMを作成します。</span><button className="secondary" disabled={sending} onClick={() => onNavigate('companies', project.id)}>企業一覧・DM準備へ</button></li>
+          <li><strong>2. 内容を確認・承認</strong><span>宛先と文面を確認し、承認キューで承認します。</span><button className="secondary" disabled={sending} onClick={() => onNavigate('approvals', project.id)}>承認キューを開く</button></li>
+          <li><strong>3. 送信を開始</strong><span>承認済みの内容だけを一括送信します。</span><button className="secondary" disabled={sending} onClick={() => document.getElementById('clean-list-send-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>一括送信へ</button></li>
+          <li><strong>4. 結果を確認</strong><span>予約状況・送信結果を確認します。</span><button className="secondary" disabled={sending} onClick={() => onNavigate('deliveries', project.id)}>配信結果を見る</button></li>
+        </ol>
       </> : <p className="mt-3">収集ターゲットを設定し、リストを収集してから営業作業を始めてください。</p>}
     </div>
-    {project && roles[project.id] !== 'viewer' && roles[project.id] && <SalesPreparationPanel key={project.id} projectId={project.id} />}
+    {project && roles[project.id] !== 'viewer' && roles[project.id] && <><SalesPreparationPanel key={project.id} projectId={project.id} /><CleanListSendPanel key={`send-${project.id}`} projectId={project.id} canWrite onBusyChange={setSending} onNavigate={destination => onNavigate(destination, project.id)} /></>}
     {project && roles[project.id] === 'viewer' && <p className="panel">閲覧のみです。営業準備の実行は所有者・編集者へ依頼してください。</p>}
   </section>
 }
