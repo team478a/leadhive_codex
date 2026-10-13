@@ -8,6 +8,7 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    field_validator,
     model_validator,
 )
 
@@ -143,6 +144,12 @@ class OperationJobOut(BaseModel):
     collection_runtime_history: list[dict] = Field(
         default_factory=list, validation_alias=AliasPath("payload", "collection_runtime_history")
     )
+
+    @field_validator("collection_runtime_history", mode="before")
+    @classmethod
+    def keep_recent_runtime_history(cls, value):
+        return value[-5:] if isinstance(value, list) else []
+
     id: UUID
     condition_request_id: UUID | None = None
     condition_version: int | None = None

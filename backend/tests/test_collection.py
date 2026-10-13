@@ -177,6 +177,10 @@ def test_url_collection_counts_and_project_scope(auth, db):
     assert len(companies) == 1
     assert companies[0]["domain"] == "example.com"
     assert companies[0]["website_url"] == "https://www.example.com"
+    summary = auth.get(f"/api/projects/{project['id']}/company-analysis-summary")
+    assert summary.status_code == 200
+    assert summary.json()["saved"] == 1
+    assert summary.json()["webPending"] == 1
     assert auth.get(f"/api/projects/{project['id']}/collection-jobs").json()[0]["id"] == job["id"]
     assert auth.get(f"/api/collection-jobs/{job['id']}").status_code == 200
     assert db.scalar(select(func.count()).select_from(Company)) == 1

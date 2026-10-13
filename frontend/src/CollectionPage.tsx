@@ -12,7 +12,7 @@ import { Field } from './forms'
 import { prefectures } from './prefectures'
 import { RegionSelector } from './RegionSelector'
 import { SourceExclusions } from './SourceExclusions'
-import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
+import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CompanyPage, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places', gbizinfo: 'gBizINFO（法人情報）',
@@ -30,6 +30,8 @@ const aiNames = {
   pending: 'AI未判定', running: 'AI判定中', completed: 'AI判定済み',
   failed: 'AI判定失敗', skipped: 'AI判定保留',
 }
+type CompanyAnalysisSummary = { saved: number; webCompleted: number; webPending: number; webFailed: number; aiCompleted: number; aiPending: number }
+const emptyAnalysisSummary: CompanyAnalysisSummary = { saved: 0, webCompleted: 0, webPending: 0, webFailed: 0, aiCompleted: 0, aiPending: 0 }
 
 export function CollectionPage({ projects, profiles, initialProjectId, onConfigureTarget, onProjectSelected, mode = 'collection' }: {
   mode?: 'collection' | 'analysis'; projects: Project[]; profiles: Profile[]; initialProjectId: string; onConfigureTarget?: () => void; onProjectSelected?: (id: string) => void
@@ -52,6 +54,9 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [recordType, setRecordType] = useState('company')
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
+  const [analysisSummary, setAnalysisSummary] = useState(emptyAnalysisSummary)
+  const [analysisTotal, setAnalysisTotal] = useState(0)
+  const [dataLoading, setDataLoading] = useState(true)
   const [analysisPage, setAnalysisPage] = useState(0)
   const [operations, setOperations] = useState<OperationJob[]>([])
   const [schedules, setSchedules] = useState<SearchSchedule[]>([])
@@ -69,6 +74,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const progressPanel = useRef<HTMLDivElement>(null)
+  const hadActiveOperations = useRef(false)
   const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
   const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis'].includes(job.operation_type) : job.operation_type === 'collect_search')
   const collectionRunning = visibleOperations.some(job => ['queued', 'running'].includes(job.status))
@@ -82,38 +88,53 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const project = projects.find(item => item.id === projectId)
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
-  const analysisCounts = {
-    saved: companies.length,
-    webCompleted: companies.filter(company => company.analysis_status === 'completed').length,
-    webPending: companies.filter(company => company.website_url && company.analysis_status === 'pending').length,
-    webFailed: companies.filter(company => company.analysis_status === 'failed').length,
-    aiCompleted: companies.filter(company => company.ai_status === 'completed').length,
-    aiPending: companies.filter(company => company.analysis_status === 'completed' && company.ai_status !== 'completed').length,
-  }
+  const analysisCounts = analysisSummary
   const suggestedKeywords = useMemo(() => profile?.search_keywords ?? [], [profile])
   const suggestedKeywordText = suggestedKeywords.join('\n')
 
-  const reload = useCallback(async () => {
-    if (!projectId) { setJobs([]); setCompanies([]); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); setReviewAnalytics([]); return }
+  const reload = useCallback(async (progressOnly = false) => {
+    if (!projectId) { setJobs([]); setCompanies([]); setAnalysisSummary(emptyAnalysisSummary); setAnalysisTotal(0); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); setReviewAnalytics([]); setDataLoading(false); return }
+    if (!progressOnly && mode === 'analysis') setDataLoading(true)
+    if (mode === 'analysis' || progressOnly) {
+      const [nextSummary, nextOperations] = await Promise.all([
+        api<CompanyAnalysisSummary>(`/projects/${projectId}/company-analysis-summary`),
+        api<OperationJob[]>(`/projects/${projectId}/operations?limit=20`),
+      ])
+      setAnalysisSummary(nextSummary)
+      setOperations(nextOperations.filter(job => job.operation_type !== 'prepare_outreach'))
+      if (mode === 'analysis' && !progressOnly) {
+        const nextPage = await api<CompanyPage>(`/projects/${projectId}/company-list?offset=${analysisPage * 20}&limit=20`)
+        setCompanies(nextPage.items); setAnalysisTotal(nextPage.total)
+      }
+      setDataLoading(false)
+      return
+    }
     const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics, nextPerformance, nextReviewAnalytics] = await Promise.all([
-      mode === 'analysis' ? Promise.resolve([]) : allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
+      allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
-      api<OperationJob[]>(`/projects/${projectId}/operations?limit=100`),
-      mode === 'analysis' ? Promise.resolve([]) : api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
-      mode === 'analysis' ? Promise.resolve([]) : api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
-      mode === 'analysis' ? Promise.resolve([]) : api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
-      mode === 'analysis' ? Promise.resolve([]) : api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`),
+      api<OperationJob[]>(`/projects/${projectId}/operations?limit=20`),
+      api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
+      api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
+      api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
+      api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`),
     ])
     setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations.filter(job => job.operation_type !== 'prepare_outreach')); setSchedules(nextSchedules)
     setAnalytics(nextAnalytics); setPerformance(nextPerformance); setReviewAnalytics(nextReviewAnalytics)
-  }, [projectId, mode])
+    setAnalysisSummary(await api<CompanyAnalysisSummary>(`/projects/${projectId}/company-analysis-summary`))
+    setDataLoading(false)
+  }, [projectId, mode, analysisPage])
 
   useEffect(() => { setAnalysisPage(0) }, [projectId])
-  useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
+  useEffect(() => { reload().catch(e => { setDataLoading(false); setError(errorMessage(e)) }) }, [reload])
   useEffect(() => {
     if (!operations.some(job => ['queued', 'running'].includes(job.status))) return
-    const timer = window.setInterval(() => void reload().catch(e => setError(errorMessage(e))), 2000)
+    const timer = window.setInterval(() => void reload(true).catch(e => setError(errorMessage(e))), 5000)
     return () => window.clearInterval(timer)
+  }, [operations, reload])
+  useEffect(() => {
+    const active = operations.some(job => ['queued', 'running'].includes(job.status))
+    if (hadActiveOperations.current && !active) void reload().catch(e => setError(errorMessage(e)))
+    hadActiveOperations.current = active
   }, [operations, reload])
   useEffect(() => {
     if (projectRegion) setRegion(projectRegion)
@@ -261,9 +282,9 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
-            {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
+            {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
             {job.operation_type === 'collect_search' && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED' && !!job.collection_progress.pending_queries && <button type="button" className="secondary" disabled={!!continuingJobId} onClick={() => void continueCollection(job.id)}>{continuingJobId === job.id ? '登録中…' : '続きから収集'}</button>}
-            {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
+            {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>再実行</button>}
           </article>)}
       </div>
 
@@ -279,14 +300,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <button type="button" className="secondary" onClick={() => { setError(''); setNotice('') }}>通知を閉じる</button>
         </div>}
       </aside>}
-    {mode === 'analysis' && <section className="panel" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
-      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="解析状況">
+    {mode === 'analysis' && <section className="panel" role="region" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
+      {dataLoading ? <p className="muted mt-4" role="status">保存済み企業と解析状況を読み込んでいます…</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="解析状況">
         {([['保存済み', analysisCounts.saved], ['Web解析済み', analysisCounts.webCompleted], ['Web未解析', analysisCounts.webPending], ['Web解析失敗', analysisCounts.webFailed], ['AI判定済み', analysisCounts.aiCompleted], ['AI未判定', analysisCounts.aiPending]] as const).map(([label, count]) => <div className="metric" key={label}><span>{label}</span><strong>{count}社</strong></div>)}
-      </div>
+      </div>}
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={webBusy || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
+          <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={dataLoading || webBusy || analysisCounts.webPending + analysisCounts.webFailed === 0}
             onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : 'Web解析を開始'}</button>
-          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={aiBusy || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
+          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={dataLoading || aiBusy || analysisCounts.aiPending === 0}
             onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : 'AI判定を開始'}</button>
       </div><p className="muted mt-3 text-sm">① Web解析で企業情報・問い合わせ先を取得 → ② 完了後にAI判定で営業対象かを評価します。</p><p className="muted mt-2">100社ごとに処理し、残りがあれば自動で続きます。画面を閉じても処理は継続します。失敗した企業は、完了後に再実行できます。AI判定にはAPI費用が発生します。</p></section>}
     {mode === 'collection' && <section className="min-w-0 space-y-6">
@@ -369,14 +390,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       {schedules.map(schedule => <article className="job-row block" key={schedule.id}><div className="flex justify-between gap-3"><strong>{schedule.name}</strong><span className="badge">{schedule.active ? '有効' : '停止中'}</span></div>
         <p className="muted my-2 text-sm">{schedule.keywords.join(' / ')}・{schedule.interval_hours}時間ごと・上限{schedule.company_limit}社</p>
         <p className="muted text-sm">次回 {new Date(schedule.next_run_at).toLocaleString('ja-JP')}</p>{schedule.last_error && <p className="error mt-2 mb-0">{schedule.last_error}</p>}
-        <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}/run`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>今すぐ実行</button>
+        <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}/run`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>今すぐ実行</button>
           <button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}`, 'PUT', {
             name: schedule.name, source: schedule.source, keywords: schedule.keywords,
             region: schedule.region, max_results: schedule.max_results,
             interval_hours: schedule.interval_hours, company_limit: schedule.company_limit,
             active: !schedule.active,
-          }).then(reload).catch(e => setError(errorMessage(e)))}>{schedule.active ? '停止' : '再開'}</button>
-          <button type="button" className="danger" onClick={() => void api(`/search-schedules/${schedule.id}`, 'DELETE').then(reload).catch(e => setError(errorMessage(e)))}>削除</button></div>
+          }).then(() => reload()).catch(e => setError(errorMessage(e)))}>{schedule.active ? '停止' : '再開'}</button>
+          <button type="button" className="danger" onClick={() => void api(`/search-schedules/${schedule.id}`, 'DELETE').then(() => reload()).catch(e => setError(errorMessage(e)))}>削除</button></div>
       </article>)}
       {analytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-3">テンプレート別成果</h3><table><thead><tr><th>テンプレート</th><th>検索数</th><th>発見</th><th>保存</th><th>保存率</th><th>重複率</th><th>公式外</th><th>エラー</th></tr></thead>
         <tbody>{analytics.map(item => <tr key={item.schedule_id}><td>{item.name}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.duplicate_rate}%</td><td>{item.excluded_count}</td><td>{item.error_count}</td></tr>)}</tbody></table></div>}
@@ -389,7 +410,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       {mode === 'analysis' && <div className="panel"><div className="flex flex-wrap items-center justify-between gap-4"><div><h2>保存済み企業</h2>
         <p className="muted mt-2 text-sm">Webサイトから企業情報・SNS・問い合わせ先を抽出します。</p></div>
         </div>
-        {companies.slice(analysisPage * 20, (analysisPage + 1) * 20).map(company => <article key={company.id} className="job-row">
+        {companies.map(company => <article key={company.id} className="job-row">
           <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><strong>{company.company_name}</strong>
             <span className="badge">{analysisNames[company.analysis_status]}</span>
             <span className="badge">{aiNames[company.ai_status]}</span>
@@ -413,7 +434,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {company.analysis_status === 'completed' && <button type="button" className={aiBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={aiBusy}
               disabled={aiBusy} onClick={() => void analyzeAi([company.id])}>{aiBusy ? 'AI判定 処理中…' : 'AI判定'}</button>}</div>
         </article>)}
-        {companies.length > 20 && <div className="actions"><button className="secondary" disabled={analysisPage === 0} onClick={() => setAnalysisPage(p => p - 1)}>前の20社</button><span>{analysisPage + 1} / {Math.ceil(companies.length / 20)}</span><button className="secondary" disabled={(analysisPage + 1) * 20 >= companies.length} onClick={() => setAnalysisPage(p => p + 1)}>次の20社</button></div>}
+        {analysisTotal > 20 && <div className="actions"><button className="secondary" disabled={analysisPage === 0} onClick={() => setAnalysisPage(p => p - 1)}>前の20社</button><span>{analysisPage + 1} / {Math.ceil(analysisTotal / 20)}</span><button className="secondary" disabled={(analysisPage + 1) * 20 >= analysisTotal} onClick={() => setAnalysisPage(p => p + 1)}>次の20社</button></div>}
       </div>}
       {mode === 'collection' && <div className="panel"><div className="flex items-center justify-between gap-4"><h2>最近の収集ジョブ</h2>
         <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
