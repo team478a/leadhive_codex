@@ -95,7 +95,7 @@ for (const role of ['owner', 'viewer'] as const) {
     const sales = page.getByRole('region', { name: '営業作業', exact: true })
     await expect(sales).toContainText('DM準備')
     if (role === 'owner') {
-      await expect(sales.getByRole('combobox', { name: '営業するプロジェクト', exact: true })).toHaveValue('project-2')
+      await expect(sales.getByRole('combobox', { name: '対象プロジェクト', exact: true })).toHaveValue('project-2')
       await expect(sales.getByRole('heading', { name: '送信までの流れ' })).toBeVisible()
       await expect(sales.getByRole('region', { name: 'クリーニング済みリストの一括送信' })).toBeVisible()
       await expect(sales.getByRole('button', { name: '0件の送信を開始' })).toBeDisabled()

@@ -90,7 +90,12 @@ test('Lost response keeps the email reservation key instead of recreating the re
 for (const option of [{ viewer: true }, { stopped: true }]) {
   test(`Does not reserve for ${JSON.stringify(option)}`, async ({ page }) => {
     const { panel, requests } = await setup(page, option)
-    await expect(panel.getByRole('button', { name: '2件の送信を開始' })).toBeDisabled()
+    if (option.viewer) {
+      await expect(panel).toHaveCount(0)
+      await expect(page.getByText('閲覧のみです。営業準備の実行は所有者・編集者へ依頼してください。')).toBeVisible()
+    } else {
+      await expect(panel.getByRole('button', { name: '2件の送信を開始' })).toBeDisabled()
+    }
     expect(requests).toEqual([])
   })
 }
