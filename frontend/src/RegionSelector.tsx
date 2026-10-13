@@ -62,7 +62,7 @@ export function RegionSelector({ value, onChange, includeMunicipalities = true }
 
   if (manual) {
     return <div className="region-selector">
-      <label className="field">地域（複数・自由入力）
+      <label className="field required-label">地域（複数・自由入力）
         <input required maxLength={500} value={value} onChange={event => onChange(event.target.value)}
           placeholder="例：大阪府 / 兵庫県" />
       </label>
@@ -82,7 +82,7 @@ export function RegionSelector({ value, onChange, includeMunicipalities = true }
   if (multiple) {
     const selected = selectedPrefectures(value)
     return <div className="region-selector">
-      <fieldset><legend className="font-bold">都道府県（複数選択）</legend>
+      <fieldset><legend className="font-bold required-label">都道府県（複数選択）</legend>
         <label className="checkbox-row min-h-11"><input type="checkbox" checked={value === '全国'} onChange={() => onChange('全国')} />全国</label>
         <div className="grid max-h-72 grid-cols-2 gap-1 overflow-y-auto rounded-lg border p-2" aria-label="都道府県の選択肢">
           {prefectures.map(prefecture => <label key={prefecture} className="checkbox-row min-h-11">
@@ -101,7 +101,7 @@ export function RegionSelector({ value, onChange, includeMunicipalities = true }
 
   return <div className="region-selector">
     <div className="region-fields">
-      <label className="field">都道府県
+      <label className="field required-label">都道府県
         <select value={includeMunicipalities ? parsed.prefecture : value === '全国' ? '' : value} onChange={event => setPrefecture(event.target.value)}>
           <option value="">全国</option>
           {prefectures.map(prefecture => <option value={prefecture} key={prefecture}>{prefecture}</option>)}
