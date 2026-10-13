@@ -712,16 +712,40 @@ def selected_companies(db, job: OperationJob, ai: bool) -> list[Company]:
     return list(db.scalars(query.order_by(Company.created_at).limit(100)).all())
 
 
+def next_analysis_batch(db, job: OperationJob, ai: bool) -> list[Company]:
+    """Select only untouched records for automatic follow-up batches."""
+    query = select(Company).where(Company.project_id == job.project_id)
+    if ai:
+        query = query.where(
+            Company.analysis_status == "completed",
+            Company.ai_status == "pending",
+        )
+    else:
+        query = query.where(
+            Company.website_url.is_not(None),
+            Company.analysis_status == "pending",
+        )
+    return list(db.scalars(query.order_by(Company.created_at, Company.id).limit(100)).all())
+
+
 def run_web(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     companies = selected_companies(db, job, False)
     job.total_count = len(companies)
     db.commit()
-    for company in companies:
-        if stop_requested(db, job, worker_id):
+    while companies:
+        for company in companies:
+            if stop_requested(db, job, worker_id):
+                return
+            result = analyze(db, company, job.payload.get("force", False))
+            if not progress(db, job, worker_id, result.analysis_status == "completed"):
+                return
+        # Explicitly selected company IDs are a bounded one-off operation.
+        if job.payload.get("company_ids") or job.payload.get("force"):
             return
-        result = analyze(db, company, job.payload.get("force", False))
-        if not progress(db, job, worker_id, result.analysis_status == "completed"):
-            return
+        companies = next_analysis_batch(db, job, False)
+        if companies:
+            job.total_count += len(companies)
+            db.commit()
 
 
 def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
@@ -730,12 +754,21 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     companies = selected_companies(db, job, True)
     job.total_count = len(companies)
     db.commit()
-    for company in companies:
-        if stop_requested(db, job, worker_id):
+    while companies:
+        for company in companies:
+            if stop_requested(db, job, worker_id):
+                return
+            result = analyze_company_ai(
+                db, company, project, profile, job.payload.get("force", False)
+            )
+            if not progress(db, job, worker_id, result.ai_status == "completed"):
+                return
+        if job.payload.get("company_ids") or job.payload.get("force"):
             return
-        result = analyze_company_ai(db, company, project, profile, job.payload.get("force", False))
-        if not progress(db, job, worker_id, result.ai_status == "completed"):
-            return
+        companies = next_analysis_batch(db, job, True)
+        if companies:
+            job.total_count += len(companies)
+            db.commit()
 
 
 def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
