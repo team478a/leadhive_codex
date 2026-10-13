@@ -22,10 +22,12 @@ def markup(image_size=2_050_000):
     )
 
 
-def fetch(monkeypatch, html, *, compact=True, declared=True):
+def fetch(monkeypatch, html, *, compact=True, declared=True, fetcher_class=None):
     monkeypatch.setattr(scraper, "_validated_target", lambda url: (url, "example.com"))
     monkeypatch.setattr(scraper.time, "sleep", lambda _: None)
-    f = scraper.FormDiscoveryFetcher() if compact else scraper.SafeFetcher()
+    if fetcher_class is None:
+        fetcher_class = scraper.FormDiscoveryFetcher if compact else scraper.SafeFetcher
+    f = fetcher_class()
     f.client.close()
     calls = []
 
@@ -62,6 +64,21 @@ def test_large_image_preserves_footer_form_and_prohibition(monkeypatch, declared
     )
     assert before.script == after.script
     assert sales_contact_status(after.get_text(" ", strip=True), True)[0] == "PROHIBITED"
+
+
+def test_service_proposal_fetcher_compacts_large_embedded_images(monkeypatch):
+    original = markup()
+    page, calls = fetch(
+        monkeypatch,
+        original,
+        fetcher_class=scraper.ServiceProposalFetcher,
+    )
+    assert len(page.html.encode()) < 2_000_000
+    assert calls == [("GET", "https://example.com/robots.txt"), ("GET", "https://example.com/")]
+    parsed = BeautifulSoup(page.html, "html.parser")
+    assert parsed.img["src"] == "data:,"
+    assert parsed.p.get_text(" ", strip=True) == "営業目的のお問い合わせはお断りします"
+    assert parsed.a["href"] == "/contact"
 
 
 def test_standard_fetcher_keeps_original_size_guard(monkeypatch):
