@@ -46,3 +46,47 @@ test('collection progress and recent jobs stay visible when an optional report e
   await expect(page.getByText('12 / 100 件（成功 12・失敗 0・試行 1）')).toBeVisible()
   expect(requestedCompanyList).toHaveLength(0)
 })
+
+test('collection results load one server page at a time and retain exact category totals', async ({ page }, info) => {
+  const email = 'operator@example.test'
+  const profile = { id: 'profile-1', profile_name: 'SNS運用', search_keywords: ['SNS運用代行'], active: true }
+  const project = { id: 'project-1', project_name: '大阪リスト', target_profile_id: profile.id, region: '大阪府', status: 'active' }
+  const companyListRequests: string[] = []
+  await page.addInitScript(email => localStorage.setItem(`leadhive:onboarding:${email}`, 'dismissed'), email)
+  await page.route('**/api/**', async route => {
+    const url = new URL(route.request().url())
+    const path = url.pathname
+    let data: unknown = []
+    if (path === '/api/auth/me') data = { id: 'operator', email, is_admin: false }
+    else if (path === '/api/target-profiles') data = [profile]
+    else if (path === '/api/projects') data = [project]
+    else if (path === '/api/dashboard') data = { total_companies: 37 }
+    else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
+    else if (path.endsWith('/members')) data = [{ email, role: 'owner' }]
+    else if (path.endsWith('/company-list')) {
+      companyListRequests.push(`${url.searchParams.get('offset')}:${url.searchParams.get('limit')}`)
+      const excluded = url.searchParams.get('status') === 'excluded'
+      const countOnly = url.searchParams.get('limit') === '1'
+      const offset = Number(url.searchParams.get('offset') || 0)
+      const items = countOnly ? [] : [{
+        id: excluded ? 'excluded-1' : `candidate-${offset}`, project_id: project.id,
+        company_name: excluded ? '対象外企業' : `候補${offset + 1}`, status: excluded ? 'excluded' : 'unreviewed',
+        source: 'serper', address: '大阪府大阪市', website_url: 'https://example.test',
+      }]
+      data = { items, total: excluded ? 2 : 35, offset, limit: Number(url.searchParams.get('limit') || 20) }
+    }
+    await route.fulfill({ json: data })
+  })
+
+  await page.goto('/')
+  if (info.project.name === 'mobile') await page.getByRole('button', { name: /メニュー/ }).click()
+  await page.getByRole('button', { name: '④ 収集リストの確認', exact: true }).click()
+  await expect(page.getByText('候補 35件 / 収集対象外 2件')).toBeVisible()
+  await expect(page.getByRole('heading', { name: '候補1' })).toBeVisible()
+  await expect(page.getByText('1 / 2', { exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '次の20件' }).click()
+  await expect(page.getByRole('heading', { name: '候補21' })).toBeVisible()
+  expect(companyListRequests).toContain('0:20')
+  expect(companyListRequests).toContain('20:20')
+  expect(companyListRequests.every(request => request.endsWith(':20') || request.endsWith(':1'))).toBeTruthy()
+})

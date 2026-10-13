@@ -117,6 +117,10 @@ def list_company_details(
         "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
     ]
     | None = None,
+    exclude_status: Literal[
+        "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
+    ]
+    | None = None,
     source: Literal["serper", "google_places", "gbizinfo", "url", "csv"] | None = None,
     keyword: str | None = Query(None, max_length=200),
     assignee: str | None = Query(None, max_length=200),
@@ -129,6 +133,8 @@ def list_company_details(
     query = company_query(
         project_id, rank, min_score, region, status, source, keyword, assignee, followup, sort
     )
+    if exclude_status:
+        query = query.where(Company.status != exclude_status)
     total = db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
     items = db.scalars(query.offset(offset).limit(limit)).all()
     return CompanyPageOut(items=items, total=total, offset=offset, limit=limit)
