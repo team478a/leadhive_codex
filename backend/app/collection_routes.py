@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -37,6 +37,43 @@ from app.services.collection_jobs import fail_job, save_candidates, start_job
 from app.services.processing_usage import measured_search
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/projects/{project_id}/company-analysis-summary")
+def company_analysis_summary(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    counts = db.execute(
+        select(
+            func.count(Company.id),
+            func.count(Company.id).filter(Company.analysis_status == "completed"),
+            func.count(Company.id).filter(
+                Company.website_url.is_not(None),
+                Company.website_url != "",
+                Company.analysis_status == "pending",
+            ),
+            func.count(Company.id).filter(
+                Company.website_url.is_not(None),
+                Company.website_url != "",
+                Company.analysis_status == "failed",
+            ),
+            func.count(Company.id).filter(Company.ai_status == "completed"),
+            func.count(Company.id).filter(
+                Company.analysis_status == "completed", Company.ai_status != "completed"
+            ),
+        ).where(Company.project_id == project_id)
+    ).one()
+    return {
+        "saved": counts[0],
+        "webCompleted": counts[1],
+        "webPending": counts[2],
+        "webFailed": counts[3],
+        "aiCompleted": counts[4],
+        "aiPending": counts[5],
+    }
 
 
 def owned_project(project_id: UUID, db: Session, user: User, *, write: bool = True) -> Project:
