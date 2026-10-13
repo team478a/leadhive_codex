@@ -44,8 +44,8 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
   const [targetCount, setTargetCount] = useState(100)
-  const [searchRequestLimit, setSearchRequestLimit] = useState(50)
-  const [autoContinue, setAutoContinue] = useState(false)
+  const [searchRequestLimit, setSearchRequestLimit] = useState(1000)
+  const [autoContinue, setAutoContinue] = useState(true)
   const [file, setFile] = useState<File | null>(null)
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
@@ -62,6 +62,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [intervalHours, setIntervalHours] = useState(168)
   const [companyLimit, setCompanyLimit] = useState(10000)
   const [loading, setLoading] = useState(false)
+  const [continuingJobId, setContinuingJobId] = useState('')
   const [refreshing, setRefreshing] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
@@ -70,6 +71,10 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const progressPanel = useRef<HTMLDivElement>(null)
   const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
   const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis'].includes(job.operation_type) : job.operation_type === 'collect_search')
+  const collectionRunning = visibleOperations.some(job => ['queued', 'running'].includes(job.status))
+  const resumableJob = !collectionRunning ? visibleOperations.find(job => job.operation_type === 'collect_search'
+    && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED'
+    && !!job.collection_progress.pending_queries) : undefined
   const webJob = operations.find(job => job.project_id === projectId && job.operation_type === 'web_analysis' && ['queued', 'running'].includes(job.status))
   const aiJob = operations.find(job => job.project_id === projectId && job.operation_type === 'ai_analysis' && ['queued', 'running'].includes(job.status))
   const webBusy = analyzing || !!webJob
@@ -85,7 +90,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics, nextPerformance, nextReviewAnalytics] = await Promise.all([
       mode === 'analysis' ? Promise.resolve([]) : allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
       allPages<Company>(`/projects/${projectId}/companies`),
-      api<OperationJob[]>(`/projects/${projectId}/operations`),
+      api<OperationJob[]>(`/projects/${projectId}/operations?limit=100`),
       mode === 'analysis' ? Promise.resolve([]) : api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
       mode === 'analysis' ? Promise.resolve([]) : api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
       mode === 'analysis' ? Promise.resolve([]) : api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
@@ -113,6 +118,20 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     try { await reload(); setNotice('最新の収集・解析状況に更新しました。') }
     catch (e) { setError(errorMessage(e)) }
     finally { setRefreshing(false) }
+  }
+
+  async function continueCollection(jobId: string) {
+    setContinuingJobId(jobId); setError(''); setNotice('')
+    try {
+      await api(`/operations/${jobId}/continue`, 'POST')
+      await reload()
+      setNotice('続きの収集を登録しました。バックグラウンド処理で進捗を確認できます。')
+      window.setTimeout(() => {
+        progressPanel.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+        progressPanel.current?.focus({ preventScroll: true })
+      }, 0)
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setContinuingJobId('') }
   }
 
   async function submit(event: FormEvent) {
@@ -235,7 +254,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
-            {job.operation_type === 'collect_search' && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED' && !!job.collection_progress.pending_queries && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/continue`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>続きから収集</button>}
+            {job.operation_type === 'collect_search' && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED' && !!job.collection_progress.pending_queries && <button type="button" className="secondary" disabled={!!continuingJobId} onClick={() => void continueCollection(job.id)}>{continuingJobId === job.id ? '登録中…' : '続きから収集'}</button>}
             {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
           </article>)}
       </div>
@@ -260,6 +279,11 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : 'AI判定を開始'}</button>
       </div><p className="muted mt-3 text-sm">① Web解析で企業情報・問い合わせ先を取得 → ② 完了後にAI判定で営業対象かを評価します。</p><p className="muted mt-2">一括処理は1回最大100社です。完了後、残りを実行できます。失敗した企業も再試行対象になります。AI判定にはAPI費用が発生します。</p></section>}
     {mode === 'collection' && <section className="min-w-0 space-y-6">
+    {resumableJob && <div className="panel border-2 border-amber-300 bg-amber-50" role="region" aria-label="収集の続き"><h2>収集の続きがあります</h2>
+      <p className="mt-2">目標 {resumableJob.collection_progress?.collected_count ?? 0} / {resumableJob.collection_progress?.target_count ?? 0} 件。検索上限で一時停止しました。
+        {resumableJob.collection_progress?.current_region && ` 次は${resumableJob.collection_progress.current_region}から巡回します。`}</p>
+      <button type="button" disabled={!!continuingJobId} onClick={() => void continueCollection(resumableJob.id)}>{continuingJobId === resumableJob.id ? '続きの収集を登録中…' : '続きから収集を再開'}</button>
+      <p className="muted mb-0 mt-2 text-sm">自動継続が有効なら、ここでの手動操作は不要です。</p></div>}
     <form className="panel form-panel min-w-0 max-w-none" onSubmit={submit}>
       <h2>収集条件</h2><p className="muted">ターゲットのキーワード・地域を引き継いでいます。件数を確認して収集を開始してください。</p>
       {conditionsDirty && source !== 'csv' && source !== 'url' && <p role="status">対象条件に未確定の変更があります。確定するか、変更を取り消してから収集してください。</p>}
@@ -284,15 +308,15 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {prefectures.map(prefecture => <option key={prefecture} value={prefecture}>{prefecture}</option>)}
             {region !== '全国' && !prefectures.some(prefecture => prefecture === region) && <option value={region}>{region}（プロジェクトの地域）</option>}
           </select></Field>}
-          {source === 'serper' ? <Field label="収集する新規候補数"><input type="number" min={1} max={500} required value={targetCount}
+          {source === 'serper' ? <Field label="収集する新規候補数（目標）"><input type="number" min={1} max={10000} required value={targetCount}
             onChange={e => setTargetCount(Number(e.target.value))} /></Field> : <Field label="キーワードごとの最大件数"><input type="number" min={1}
             max={source === 'google_places' ? 60 : 100} value={maxResults}
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>}
         </div>}
         {source === 'serper' && <>
           <section aria-label="検索の組み合わせ" className="muted text-sm">
-            <p>{region === '全国' ? '全国は北海道 → 青森県 → 岩手県 → … → 沖縄県の順に検索します。県内のキーワード検索が終了したら次の県へ進みます。' : `${region}と各キーワードを組み合わせて検索します。`}</p>
-            <p>目標件数・検索上限に達すると途中で停止します。全国のすべての県を必ず検索する設定ではありません。</p>
+          <p>{region === '全国' ? '全国は各キーワードに都道府県名を足して検索します。北海道から沖縄県へ、県内の検索語を巡回して次の県へ進みます。' : `${region}と各キーワードを組み合わせて検索します。`}</p>
+            <p>目標件数に届く前に検索候補を調べ終えた場合や、総検索上限に達した場合は停止します。</p>
             <details><summary>検索キーワードと地域の組み合わせを確認</summary><ul>
               {(region === '全国' ? prefectures : region.split(/\s*\/\s*/).every(area => prefectures.some(prefecture => prefecture === area)) ? region.split(/\s*\/\s*/) : [region]).map(area => <li key={area}>{keywords.split('\n').map(value => value.trim()).filter(Boolean).map(keyword => `${keyword} ${area}`).join(' / ') || `キーワード未入力 ${area}`}</li>)}
             </ul></details>
@@ -300,11 +324,11 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <label className="checkbox-row"><input type="checkbox" checked={autoContinue} disabled={loading} onChange={event => {
             const enabled = event.target.checked
             setAutoContinue(enabled)
-            setSearchRequestLimit(enabled ? 250 : Math.min(searchRequestLimit, 50))
-          }} />50回に達したら、検索カーソルを引き継いで自動継続する</label>
-          <Field label={autoContinue ? '自動継続する検索の総上限' : '一次収集の検索回数上限'}><input type="number" min={autoContinue ? 50 : 1} max={autoContinue ? 500 : 50} required value={searchRequestLimit}
+            setSearchRequestLimit(enabled ? Math.max(searchRequestLimit, 1000) : Math.min(searchRequestLimit, 50))
+          }} />目標件数まで50回ごとに自動で続きを実行する（おすすめ）</label>
+          <Field label={autoContinue ? '検索の総上限（安全上限）' : '今回の検索回数上限'}><input type="number" min={autoContinue ? 50 : 1} max={autoContinue ? 5000 : 50} required value={searchRequestLimit}
             onChange={event => setSearchRequestLimit(Number(event.target.value))} disabled={loading} /></Field>
-          <p className="muted text-sm">目標件数まで収集します。重複・対象外は目標件数に含めません。{autoContinue ? `最大${searchRequestLimit}回まで、50回ごとに次のジョブへ自動で引き継ぎます。` : `検索は全検索語・ページ・再試行を合わせて最大${searchRequestLimit}回で停止します。`}検索API費用が発生します。追加調査は別の上限です。少量検証では追加調査をOFFにしてください。保存候補の所在地・営業適性は別途確認が必要です。</p>
+          <p className="muted text-sm">目標件数は最大10,000社です。検索1ジョブは最大50回で区切りますが、自動継続をONにすると総上限{searchRequestLimit}回まで次のジョブへ引き継ぎます。重複・対象外は目標件数に含めません。総上限に達したときは収集画面上部の「続きから収集を再開」から再開できます。検索API費用が発生します。追加調査は別の上限です。</p>
         </>}
         {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}

@@ -252,7 +252,7 @@ def test_cancelled_job_does_not_search(auth, db, monkeypatch):
     "changes",
     [
         {"target_count": 0},
-        {"target_count": 501},
+        {"target_count": 10001},
         {"source": "google_places"},
         {"source": "gbizinfo"},
         {"operation_type": "web_analysis", "source": None, "keywords": [], "region": ""},
