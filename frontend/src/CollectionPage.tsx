@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
-import { allPages, api, download, errorMessage, upload } from './api'
+import { api, download, errorMessage, upload } from './api'
 import { PresenceSearchControls } from './ExternalPresence'
 import { defaultPresencePlan } from './externalPresenceShared'
 import { PresenceEvidenceQueue } from './PresenceEvidenceQueue'
@@ -95,33 +95,41 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const reload = useCallback(async (progressOnly = false) => {
     if (!projectId) { setJobs([]); setCompanies([]); setAnalysisSummary(emptyAnalysisSummary); setAnalysisTotal(0); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); setReviewAnalytics([]); setDataLoading(false); return }
     if (!progressOnly && mode === 'analysis') setDataLoading(true)
-    if (mode === 'analysis' || progressOnly) {
-      const [nextSummary, nextOperations] = await Promise.all([
-        api<CompanyAnalysisSummary>(`/projects/${projectId}/company-analysis-summary`),
-        api<OperationJob[]>(`/projects/${projectId}/operations?limit=20`),
-      ])
-      setAnalysisSummary(nextSummary)
-      setOperations(nextOperations.filter(job => job.operation_type !== 'prepare_outreach'))
-      if (mode === 'analysis' && !progressOnly) {
-        const nextPage = await api<CompanyPage>(`/projects/${projectId}/company-list?offset=${analysisPage * 20}&limit=20`)
+    const coreLoads: Promise<unknown>[] = [
+      api<OperationJob[]>(`/projects/${projectId}/operations?limit=20`).then(next => {
+        setOperations(next.filter(job => job.operation_type !== 'prepare_outreach'))
+      }),
+    ]
+    if (mode === 'analysis' || mode === 'collection') {
+      coreLoads.push(api<CompanyAnalysisSummary>(`/projects/${projectId}/company-analysis-summary`).then(setAnalysisSummary))
+    }
+    if (mode === 'analysis' && !progressOnly) {
+      coreLoads.push(api<CompanyPage>(`/projects/${projectId}/company-list?offset=${analysisPage * 20}&limit=20`).then(nextPage => {
         setCompanies(nextPage.items); setAnalysisTotal(nextPage.total)
-      }
-      setDataLoading(false)
+      }))
+    }
+    if (mode === 'collection' && !progressOnly) {
+      // The screen shows recent jobs only. Loading every historical job/company
+      // before rendering progress can turn one refresh into hundreds of requests.
+      coreLoads.push(api<CollectionJob[]>(`/projects/${projectId}/collection-jobs?offset=0&limit=50`).then(setJobs))
+    }
+    const coreResults = await Promise.allSettled(coreLoads)
+    const coreFailure = coreResults.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (mode === 'analysis' || progressOnly) {
+      if (coreFailure) throw coreFailure.reason
       return
     }
-    const [nextJobs, nextCompanies, nextOperations, nextSchedules, nextAnalytics, nextPerformance, nextReviewAnalytics] = await Promise.all([
-      allPages<CollectionJob>(`/projects/${projectId}/collection-jobs`),
-      allPages<Company>(`/projects/${projectId}/companies`),
-      api<OperationJob[]>(`/projects/${projectId}/operations?limit=20`),
-      api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`),
-      api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`),
-      api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`),
-      api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`),
-    ])
-    setJobs(nextJobs); setCompanies(nextCompanies); setOperations(nextOperations.filter(job => job.operation_type !== 'prepare_outreach')); setSchedules(nextSchedules)
-    setAnalytics(nextAnalytics); setPerformance(nextPerformance); setReviewAnalytics(nextReviewAnalytics)
-    setAnalysisSummary(await api<CompanyAnalysisSummary>(`/projects/${projectId}/company-analysis-summary`))
-    setDataLoading(false)
+
+    const serviceLoads = [
+      api<SearchSchedule[]>(`/projects/${projectId}/search-schedules`).then(setSchedules),
+      api<SearchAnalytics[]>(`/projects/${projectId}/search-analytics`).then(setAnalytics),
+      api<CollectionPerformance[]>(`/projects/${projectId}/collection-performance`).then(setPerformance),
+      api<AiReviewAnalytics[]>(`/projects/${projectId}/ai-review-analytics`).then(setReviewAnalytics),
+    ]
+    const serviceResults = await Promise.allSettled(serviceLoads)
+    const serviceFailure = serviceResults.find((result): result is PromiseRejectedResult => result.status === 'rejected')
+    if (coreFailure) throw coreFailure.reason
+    if (serviceFailure) throw serviceFailure.reason
   }, [projectId, mode, analysisPage])
 
   useEffect(() => { setAnalysisPage(0) }, [projectId])
@@ -380,7 +388,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       if (areas.length === 1) setRegion(areas[0].value)
       if (industries.length === 1) setKeywords(industries[0].value)
     }} />
-    <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} companies={companies} />
+    <PresenceEvidenceQueue key={`presence-${projectId}`} projectId={projectId} />
 
     <div className="panel"><h2>定期収集テンプレート</h2><p className="muted mt-2 text-sm">現在の検索条件を保存し、ワーカーで定期実行します。</p>
       <Field label="テンプレート名"><input maxLength={200} value={scheduleName} onChange={e => setScheduleName(e.target.value)} /></Field>
