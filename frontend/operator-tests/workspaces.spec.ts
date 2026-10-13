@@ -29,7 +29,10 @@ for (const role of ['owner', 'viewer'] as const) {
       } else if (path === '/api/projects') data = projects
       else if (path.endsWith('/members')) data = [{ email, role }]
       else if (path === '/api/form-adapter-preparation-status' || path === '/api/cf7-candidate-preparation-status') data = { enabled: false }
-      else if (path.endsWith('/company-list')) data = { items: [] }
+      else if (path.endsWith('/company-list')) data = {
+        items: [{ id: 'company-1', project_id: 'project-2', company_name: '確認候補', address: '大阪府', website_url: 'https://candidate.example/', contact_url: 'https://candidate.example/contact', updated_at: '2026-10-12T00:00:00Z', analysis_status: 'pending', ai_status: 'pending' }],
+        total: 1,
+      }
       else if (path.endsWith('/form-operations')) data = { counts: {}, total: 0, items: [] }
       else if (path === '/api/form-dispatch-limits') data = null
       else if (path.endsWith('/companies')) data = [{ id: 'company-1', company_name: '確認候補', address: '大阪府', website_url: 'https://candidate.example/', contact_url: 'https://candidate.example/contact', updated_at: '2026-10-12T00:00:00Z', analysis_status: 'pending', ai_status: 'pending' }]
