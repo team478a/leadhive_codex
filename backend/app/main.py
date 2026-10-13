@@ -59,6 +59,69 @@ from app.source_exclusion_routes import router as source_exclusion_router
 
 logger = logging.getLogger("leadhive")
 
+_VALIDATION_FIELD_LABELS = {
+    "profile_name": "プロファイル名",
+    "description": "説明",
+    "search_keywords": "検索キーワード",
+    "positive_keywords": "加点キーワード",
+    "negative_keywords": "減点キーワード",
+    "exclusion_keywords": "除外キーワード",
+    "scoring_rules": "スコアルール",
+    "ai_instruction": "AIへの指示",
+    "default_regions": "標準地域",
+    "project_name": "プロジェクト名",
+    "target_profile_id": "ターゲットプロファイル",
+    "sales_objective": "営業目的",
+    "region": "地域",
+    "status": "ステータス",
+    "keywords": "検索キーワード",
+    "max_results": "収集件数",
+    "target_count": "収集件数",
+    "search_request_limit": "検索回数",
+    "url": "URL",
+    "sales_goal": "営業目的",
+    "target_mode": "営業先の種類",
+}
+_VALIDATION_MESSAGES = {
+    "missing": "必須項目です。",
+    "string_too_short": "文字数が不足しています。",
+    "string_too_long": "文字数が上限を超えています。",
+    "too_short": "入力件数が不足しています。",
+    "too_long": "入力件数が上限を超えています。",
+    "uuid_parsing": "有効な対象を選択してください。",
+    "enum": "選択肢から選んでください。",
+    "json_invalid": "有効なJSON形式で入力してください。",
+    "extra_forbidden": "想定外の項目が含まれています。",
+    "string_type": "文字列で入力してください。",
+    "int_parsing": "数値で入力してください。",
+    "int_type": "数値で入力してください。",
+    "bool_parsing": "有効／無効を選択してください。",
+    "bool_type": "有効／無効を選択してください。",
+    "value_error": "入力値を確認してください。",
+}
+
+
+def validation_issues(errors: list[dict]) -> list[dict[str, str]]:
+    """Return safe field labels and reasons without echoing submitted values."""
+    issues: list[dict[str, str]] = []
+    for error in errors:
+        location = error.get("loc", ())
+        field = next(
+            (
+                part
+                for part in reversed(location)
+                if isinstance(part, str) and part in _VALIDATION_FIELD_LABELS
+            ),
+            None,
+        )
+        issue = {
+            "field": _VALIDATION_FIELD_LABELS.get(field, "入力項目"),
+            "message": _VALIDATION_MESSAGES.get(error.get("type"), "入力内容を確認してください。"),
+        }
+        if issue not in issues:
+            issues.append(issue)
+    return issues or [{"field": "入力項目", "message": "入力内容を確認してください。"}]
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -139,7 +202,13 @@ async def protect_browser_requests(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
     # Do not echo submitted passwords or arbitrary input through validation responses.
-    return JSONResponse(status_code=422, content={"detail": "入力内容を確認してください。"})
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "入力内容を確認してください。",
+            "issues": validation_issues(exc.errors()),
+        },
+    )
 
 
 @app.exception_handler(IntegrityError)

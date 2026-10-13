@@ -1,5 +1,17 @@
 export class ApiError extends Error {
-  constructor(public status: number, message: string) { super(message) }
+  constructor(public status: number, message: string, public fields: string[] = []) { super(message) }
+}
+
+function responseError(status: number, data: { detail?: unknown; issues?: unknown }, fallback: string) {
+  const message = typeof data.detail === 'string' ? data.detail : fallback
+  const issues = Array.isArray(data.issues)
+    ? data.issues.filter((issue): issue is { field: string; message: string } =>
+      Boolean(issue) && typeof issue === 'object'
+      && typeof issue.field === 'string' && typeof issue.message === 'string')
+    : []
+  const fields = [...new Set(issues.map(issue => issue.field))]
+  const reasons = issues.map(issue => `${issue.field}: ${issue.message}`)
+  return new ApiError(status, reasons.length ? `${message} ${reasons.join(' ')}` : message, fields)
 }
 
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
@@ -18,8 +30,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
     if (response.status === 401 && path !== '/auth/login') {
       window.dispatchEvent(new Event('session-expired'))
     }
-    throw new ApiError(response.status,
-      typeof data.detail === 'string' ? data.detail : '処理に失敗しました。時間をおいて再度お試しください。')
+    throw responseError(response.status, data, '処理に失敗しました。時間をおいて再度お試しください。')
   }
   return response.status === 204 ? undefined as T : response.json()
 }
@@ -34,8 +45,7 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
     if (response.status === 401) window.dispatchEvent(new Event('session-expired'))
-    throw new ApiError(response.status,
-      typeof data.detail === 'string' ? data.detail : 'アップロードに失敗しました。')
+    throw responseError(response.status, data, 'アップロードに失敗しました。')
   }
   return response.json()
 }
@@ -45,8 +55,7 @@ export async function download(path: string, filename: string) {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
     if (response.status === 401) window.dispatchEvent(new Event('session-expired'))
-    throw new ApiError(response.status,
-      typeof data.detail === 'string' ? data.detail : 'ダウンロードに失敗しました。')
+    throw responseError(response.status, data, 'ダウンロードに失敗しました。')
   }
   const url = URL.createObjectURL(await response.blob())
   const anchor = document.createElement('a')
