@@ -849,11 +849,46 @@ def run_once() -> bool:
             }[job.operation_type](db, job, worker_id)
             db.refresh(job)
             if job.status == "running" and job.worker_id == worker_id:
-                job.status = "completed" if job.failed_count == 0 else "failed"
-                job.error_message = "" if job.failed_count == 0 else "一部の処理に失敗しました。"
+                job.status = (
+                    "cancelled"
+                    if job.cancel_requested
+                    else ("completed" if job.failed_count == 0 else "failed")
+                )
+                job.error_message = (
+                    ""
+                    if job.status == "completed"
+                    else (
+                        "キャンセルされました。"
+                        if job.status == "cancelled"
+                        else "一部の処理に失敗しました。"
+                    )
+                )
                 job.worker_id = None
                 job.lease_expires_at = None
                 job.finished_at = datetime.now(timezone.utc)
+                progress_state = (job.payload or {}).get("collection_progress") or {}
+                chain = (job.payload or {}).get("collection_chain") or {}
+                if (
+                    job.status == "completed"
+                    and job.operation_type == "collect_search"
+                    and chain.get("auto_continue")
+                    and progress_state.get("stop_reason") == "REQUEST_BUDGET_REACHED"
+                    and progress_state.get("pending_queries", 0) > 0
+                    and progress_state.get("total_requests", 0)
+                    < chain.get("total_request_budget", 0)
+                ):
+                    from app.services.collection_continuation import enqueue_continuation
+
+                    continuation = enqueue_continuation(db, job, automatic=True)
+                    if continuation:
+                        job.payload = {
+                            **job.payload,
+                            "collection_progress": {
+                                **progress_state,
+                                "stop_reason": "AUTO_CONTINUING",
+                                "next_operation_id": str(continuation.id),
+                            },
+                        }
                 db.commit()
         except Exception as exc:
             db.rollback()

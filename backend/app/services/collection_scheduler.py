@@ -76,27 +76,64 @@ def root_and_tasks(db, job, worker_id):
         )
     )
     if not tasks:
-        for order, (keyword, region) in enumerate(planned_queries(plan["snapshot"])):
-            db.add(
-                CollectionQueryTask(
-                    root_operation_id=root.id,
-                    project_id=job.project_id,
-                    plan_hash=plan["hash"],
-                    query_order=order,
-                    keyword=keyword,
-                    region=region,
+        resume_from = job.payload.get("resume_from_root_id")
+        previous_tasks = []
+        if resume_from:
+            previous_tasks = list(
+                db.scalars(
+                    select(CollectionQueryTask)
+                    .where(CollectionQueryTask.root_operation_id == UUID(resume_from))
+                    .order_by(CollectionQueryTask.query_order)
                 )
             )
-        db.flush()
-        tasks = list(
-            db.scalars(
-                select(CollectionQueryTask)
-                .where(
-                    CollectionQueryTask.root_operation_id == root.id,
+        if previous_tasks:
+            for previous in previous_tasks:
+                db.add(
+                    CollectionQueryTask(
+                        root_operation_id=root.id,
+                        project_id=job.project_id,
+                        plan_hash=plan["hash"],
+                        query_order=previous.query_order,
+                        keyword=previous.keyword,
+                        region=previous.region,
+                        next_page=previous.next_page,
+                        stagnant_pages=previous.stagnant_pages,
+                        state=previous.state,
+                        stop_reason=previous.stop_reason,
+                        last_attempt_order=previous.last_attempt_order,
+                        not_before=previous.not_before,
+                    )
                 )
-                .order_by(CollectionQueryTask.query_order)
+            db.flush()
+            tasks = list(
+                db.scalars(
+                    select(CollectionQueryTask)
+                    .where(CollectionQueryTask.root_operation_id == root.id)
+                    .order_by(CollectionQueryTask.query_order)
+                )
             )
-        )
+        else:
+            for order, (keyword, region) in enumerate(planned_queries(plan["snapshot"])):
+                db.add(
+                    CollectionQueryTask(
+                        root_operation_id=root.id,
+                        project_id=job.project_id,
+                        plan_hash=plan["hash"],
+                        query_order=order,
+                        keyword=keyword,
+                        region=region,
+                    )
+                )
+            db.flush()
+            tasks = list(
+                db.scalars(
+                    select(CollectionQueryTask)
+                    .where(
+                        CollectionQueryTask.root_operation_id == root.id,
+                    )
+                    .order_by(CollectionQueryTask.query_order)
+                )
+            )
     attempts = list(
         db.scalars(
             select(CollectionSearchAttempt)
@@ -137,7 +174,9 @@ def fail_attempt(
 
 def summarize(db, job, root, tasks, attempts, conditions, reason=None):
     # Scope all retries through recorded attempt parents, not mutable Raw hits.
-    ids = sorted({str(root.id), str(job.id)} | {str(a.operation_job_id) for a in attempts})
+    chain = dict(job.payload.get("collection_chain") or {})
+    root_ids = sorted(set(chain.get("root_ids", [])) | {str(root.id)})
+    ids = sorted(set(root_ids) | {str(job.id)} | {str(a.operation_job_id) for a in attempts})
     job.payload = {**job.payload, "collection_progress": {"operation_ids": ids}}
     inventory = target_collection.collection_inventory(db, job, conditions)
     successes = sum(a.state == "SUCCEEDED" for a in attempts)
@@ -147,6 +186,8 @@ def summarize(db, job, root, tasks, attempts, conditions, reason=None):
     job.failed_count = failed_queries
     pending = sum(t.state == "READY" for t in tasks)
     capped = sum(t.stop_reason == "QUERY_PAGE_LIMIT" for t in tasks)
+    total_requests = int(chain.get("total_requests", 0)) + len(attempts)
+    segment_budget = min(REQUEST_BUDGET, root.payload["query_plan"]["snapshot"]["request_budget"])
     job.payload = {
         **job.payload,
         "collection_progress": dict(
@@ -159,9 +200,20 @@ def summarize(db, job, root, tasks, attempts, conditions, reason=None):
             no_match_count=sum(v == "NO_MATCH" for v in inventory.values()),
             conditions_applied=bool(conditions),
             requests=len(attempts),
-            request_budget=min(
-                REQUEST_BUDGET, root.payload["query_plan"]["snapshot"]["request_budget"]
+            total_requests=total_requests,
+            request_budget=segment_budget,
+            total_request_budget=(
+                int(
+                    chain.get("total_request_budget")
+                    or root.payload["query_plan"]["snapshot"].get(
+                        "total_request_budget", segment_budget
+                    )
+                )
+                if chain.get("auto_continue") or chain.get("continuation_count")
+                else None
             ),
+            continuation_count=int(chain.get("continuation_count", 0)),
+            continued_from=job.payload.get("resume_from_root_id"),
             stop_reason=reason,
             coverage_status="PARTIAL"
             if pending or failed_queries or capped

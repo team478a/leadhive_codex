@@ -1,5 +1,6 @@
 """Offline provider fixtures exercising the actual persisted runner and worker."""
 
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from uuid import UUID, uuid4
 
@@ -13,7 +14,7 @@ from app.models import CollectionQueryTask, CollectionSearchAttempt, Company, Op
 from app.services import collection_scheduler as scheduler
 from app.services import target_collection
 from app.services.collection import ExternalServiceError
-from tests.test_target_collection import candidate, result, setup_job
+from tests.test_target_collection import candidate, make_project, result, setup_job
 
 
 def setup(auth, db, monkeypatch, **kwargs):
@@ -122,6 +123,99 @@ def test_global_budget_fairness_and_page_cap(auth, db, monkeypatch):
     assert state["pending_queries"] == 20
     assert state["stop_reason"] == "REQUEST_BUDGET_REACHED"
     assert state["coverage_status"] == "PARTIAL"
+
+
+def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)
+    project = make_project(auth)
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    response = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json=dict(
+            operation_type="collect_search",
+            source="serper",
+            keywords=[f"q{i}" for i in range(20)],
+            region="北海道/青森県/岩手県",
+            region_mode="prefecture_order",
+            target_count=500,
+            search_request_limit=50,
+        ),
+    )
+    assert response.status_code == 202
+    job_id = response.json()["id"]
+    monkeypatch.setattr(scheduler, "search_serper_page", lambda k, r, n, p: [candidate(f"{k}-{p}")])
+    worker.run_once()
+    parent = result(auth, job_id)
+    assert parent["collection_progress"]["stop_reason"] == "REQUEST_BUDGET_REACHED"
+    assert parent["collection_progress"]["unsearched_queries"] == 40
+    first_pages = {
+        (task.keyword, task.region): task.next_page
+        for task in db.scalars(
+            select(CollectionQueryTask).where(CollectionQueryTask.root_operation_id == UUID(job_id))
+        )
+    }
+
+    resumed = auth.post(f"/api/operations/{job_id}/continue")
+    assert resumed.status_code == 202
+    child_id = resumed.json()["id"]
+    worker.run_once()
+    child = result(auth, child_id)
+    assert child["collection_progress"]["requests"] == 50
+    assert child["collection_progress"]["total_requests"] == 100
+    assert child["collection_progress"]["collected_count"] == 100
+    assert child["collection_progress"]["continued_from"] == job_id
+    child_attempts = list(
+        db.scalars(
+            select(CollectionSearchAttempt).where(
+                CollectionSearchAttempt.operation_job_id == UUID(child_id)
+            )
+        )
+    )
+    child_tasks_by_id = {task.id: task for task in db.scalars(select(CollectionQueryTask))}
+    pages_by_query = {}
+    for attempt in child_attempts:
+        task = child_tasks_by_id[attempt.task_id]
+        pages_by_query.setdefault((task.keyword, task.region), []).append(attempt.page)
+    assert all(
+        sorted(pages) == list(range(first_pages[query], first_pages[query] + len(pages)))
+        for query, pages in pages_by_query.items()
+    )
+
+
+def test_auto_continue_stops_at_explicit_total_budget(auth, db, monkeypatch):
+    monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)
+    project = make_project(auth)
+    response = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json=dict(
+            operation_type="collect_search",
+            source="serper",
+            keywords=[f"q{i}" for i in range(20)],
+            region="北海道/青森県/岩手県",
+            region_mode="prefecture_order",
+            target_count=500,
+            search_request_limit=51,
+            auto_continue=True,
+        ),
+    )
+    assert response.status_code == 202
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    first_id = response.json()["id"]
+    monkeypatch.setattr(scheduler, "search_serper_page", lambda k, r, n, p: [candidate(f"{k}-{p}")])
+    worker.run_once()
+    first = result(auth, first_id)
+    assert first["collection_progress"]["stop_reason"] == "AUTO_CONTINUING"
+    child_id = first["collection_progress"]["next_operation_id"]
+    worker.run_once()
+    child = result(auth, child_id)
+    assert child["collection_progress"]["requests"] == 1
+    assert child["collection_progress"]["total_requests"] == 51
+    assert child["collection_progress"]["total_request_budget"] == 51
+    assert child["collection_progress"]["stop_reason"] == "REQUEST_BUDGET_REACHED"
+    queued = db.scalar(
+        select(func.count()).select_from(OperationJob).where(OperationJob.status == "queued")
+    )
+    assert queued == 0
 
 
 @pytest.mark.parametrize("state", ["REVIEW_REQUIRED", "NO_MATCH"])
