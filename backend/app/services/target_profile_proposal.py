@@ -10,7 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field, HttpUrl, field_validator
 
 from app.config import settings
 from app.services.ai import AiAnalysisError
-from app.services.scraper import SafeFetcher, extract_page
+from app.services.scraper import ServiceProposalFetcher, extract_page
 
 
 class ProposalInput(BaseModel):
@@ -96,7 +96,7 @@ evidence_quotesは本文に存在する短い原文のみ。不足情報はlimit
 def propose(body: ProposalInput) -> ProposalOutput:
     if not settings.openai_api_key:
         raise AiAnalysisError("運用設定にOpenAI APIキーを保存してください。")
-    fetcher = SafeFetcher()
+    fetcher = ServiceProposalFetcher()
     try:
         page = fetcher.fetch_html(str(body.url))
     finally:

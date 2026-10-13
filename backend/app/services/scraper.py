@@ -378,14 +378,22 @@ def compact_discovery_images(html: str) -> str:
     return str(soup)
 
 
-class FormDiscoveryFetcher(SafeFetcher):
-    """Bounded image compaction exclusively for form discovery GETs."""
+class ImageCompactingFetcher(SafeFetcher):
+    """Bounded raster-image compaction for page analysis workflows."""
 
     def fetch_html(self, url: str) -> FetchedPage:
         normalized, _ = _validated_target(url)
         if not self.robots_allowed(normalized):
             raise ScrapeError("robots.txtにより解析が許可されていません。")
         return self._request(normalized, settings.scraper_max_bytes, compact_form_images=True)
+
+
+class FormDiscoveryFetcher(ImageCompactingFetcher):
+    """Compatibility name for existing form-discovery call sites."""
+
+
+class ServiceProposalFetcher(ImageCompactingFetcher):
+    """Fetch service pages for editable target proposals within bounded limits."""
 
 
 def _clean_url(value: str, base_url: str) -> str:

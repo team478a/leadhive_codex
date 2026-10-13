@@ -34,7 +34,7 @@ def dependencies(monkeypatch):
         "https://example.test/service",
         "<html><body>" + "SNS運用システムの販売。" * 15 + "</body></html>",
     )
-    monkeypatch.setattr(service, "SafeFetcher", lambda: fetcher)
+    monkeypatch.setattr(service, "ServiceProposalFetcher", lambda: fetcher)
     client = Mock()
     client.responses.parse.return_value = SimpleNamespace(
         output_parsed=proposal_content(), usage=SimpleNamespace(input_tokens=120, output_tokens=80)
@@ -64,7 +64,7 @@ def test_one_page_one_ai_evidence_and_no_retry(monkeypatch):
 def test_missing_key_does_not_fetch(monkeypatch):
     monkeypatch.setattr(service.settings, "openai_api_key", "")
     fetch = Mock()
-    monkeypatch.setattr(service, "SafeFetcher", fetch)
+    monkeypatch.setattr(service, "ServiceProposalFetcher", fetch)
     with pytest.raises(AiAnalysisError):
         service.propose(service.ProposalInput(url="https://example.test"))
     fetch.assert_not_called()
