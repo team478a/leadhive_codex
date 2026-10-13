@@ -362,6 +362,14 @@ def enqueue_operation(
         mode="json",
         exclude={"operation_type", "condition_request_id", "condition_version", "condition_hash"},
     )
+    if body.auto_continue:
+        payload["collection_chain"] = {
+            "root_ids": [],
+            "total_requests": 0,
+            "total_request_budget": body.search_request_limit or 50,
+            "auto_continue": True,
+            "continuation_count": 0,
+        }
     if body.condition_request_id:
         from app.schema_collection_conditions import CollectionCondition
         from app.services.condition_collection import binding, merged_plan
@@ -389,6 +397,32 @@ def enqueue_operation(
     from app.services.collection_query_plan import stamp_plan
 
     stamp_plan(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/operations/{job_id}/continue", response_model=OperationJobOut, status_code=202)
+def continue_collection(
+    job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    source = owned_operation(job_id, db, user)
+    if source.status != "completed" or source.operation_type != "collect_search":
+        raise HTTPException(409, "完了した検索収集だけ続きから再開できます。")
+    progress = (source.payload or {}).get("collection_progress") or {}
+    can_continue = (
+        progress.get("stop_reason") == "REQUEST_BUDGET_REACHED"
+        and progress.get("pending_queries")
+    )
+    if not can_continue:
+        raise HTTPException(409, "続きから収集できる未検索項目がありません。")
+    from app.services.collection_continuation import enqueue_continuation
+
+    job = enqueue_continuation(db, source, automatic=False)
+    if job is None:
+        raise HTTPException(
+            409, "続きの収集を登録できません。実行中の収集がないか確認してください。"
+        )
     db.commit()
     db.refresh(job)
     return job

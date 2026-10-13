@@ -45,6 +45,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [maxResults, setMaxResults] = useState(20)
   const [targetCount, setTargetCount] = useState(100)
   const [searchRequestLimit, setSearchRequestLimit] = useState(50)
+  const [autoContinue, setAutoContinue] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null)
   const [csvMapping, setCsvMapping] = useState<Record<string, string>>({})
@@ -140,7 +141,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
           ...(source === 'serper' ? { region_mode: 'prefecture_order' } : {}),
           presence_search: presencePlan,
-          ...(source === 'serper' ? { target_count: targetCount, search_request_limit: searchRequestLimit } : {}),
+          ...(source === 'serper' ? { target_count: targetCount, search_request_limit: searchRequestLimit, auto_continue: autoContinue } : {}),
           ...(useConditions && confirmedConditions ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
         })
         await reload()
@@ -234,6 +235,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
+            {job.operation_type === 'collect_search' && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED' && !!job.collection_progress.pending_queries && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/continue`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>続きから収集</button>}
             {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(reload).catch(e => setError(errorMessage(e)))}>再実行</button>}
           </article>)}
       </div>
@@ -295,9 +297,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
               {(region === '全国' ? prefectures : region.split(/\s*\/\s*/).every(area => prefectures.some(prefecture => prefecture === area)) ? region.split(/\s*\/\s*/) : [region]).map(area => <li key={area}>{keywords.split('\n').map(value => value.trim()).filter(Boolean).map(keyword => `${keyword} ${area}`).join(' / ') || `キーワード未入力 ${area}`}</li>)}
             </ul></details>
           </section>
-          <Field label="一次収集の検索回数上限"><input type="number" min={1} max={50} required value={searchRequestLimit}
+          <label className="checkbox-row"><input type="checkbox" checked={autoContinue} disabled={loading} onChange={event => {
+            const enabled = event.target.checked
+            setAutoContinue(enabled)
+            setSearchRequestLimit(enabled ? 250 : Math.min(searchRequestLimit, 50))
+          }} />50回に達したら、検索カーソルを引き継いで自動継続する</label>
+          <Field label={autoContinue ? '自動継続する検索の総上限' : '一次収集の検索回数上限'}><input type="number" min={autoContinue ? 50 : 1} max={autoContinue ? 500 : 50} required value={searchRequestLimit}
             onChange={event => setSearchRequestLimit(Number(event.target.value))} disabled={loading} /></Field>
-          <p className="muted text-sm">目標件数まで収集します。重複・対象外は目標件数に含めません。一次収集の検索は全検索語・ページ・再試行を合わせて最大{searchRequestLimit}回で停止します。追加調査は別の上限です。少量検証では追加調査をOFFにしてください。保存候補の所在地・営業適性は別途確認が必要です。</p>
+          <p className="muted text-sm">目標件数まで収集します。重複・対象外は目標件数に含めません。{autoContinue ? `最大${searchRequestLimit}回まで、50回ごとに次のジョブへ自動で引き継ぎます。` : `検索は全検索語・ページ・再試行を合わせて最大${searchRequestLimit}回で停止します。`}検索API費用が発生します。追加調査は別の上限です。少量検証では追加調査をOFFにしてください。保存候補の所在地・営業適性は別途確認が必要です。</p>
         </>}
         {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}

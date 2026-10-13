@@ -23,13 +23,19 @@ def plan_snapshot(payload):
         "condition_binding": payload.get("condition_binding"),
         "presence_search": payload.get("presence_search"),
         "request_budget": min(
-            REQUEST_BUDGET, payload.get("search_request_limit") or REQUEST_BUDGET
+            REQUEST_BUDGET,
+            payload.get("segment_request_limit")
+            or payload.get("search_request_limit")
+            or REQUEST_BUDGET,
         ),
         "page_size": PAGE_SIZE,
         "max_pages": MAX_PAGES,
         "max_page_attempts": MAX_PAGE_ATTEMPTS,
         "stagnant_pages": STAGNANT_PAGES,
     }
+    if payload.get("auto_continue"):
+        snapshot["auto_continue"] = True
+        snapshot["total_request_budget"] = payload.get("search_request_limit") or REQUEST_BUDGET
     # Omit the default so hashes of existing jobs remain unchanged.
     if payload.get("region_mode") == "prefecture_order":
         snapshot["region_mode"] = "prefecture_order"

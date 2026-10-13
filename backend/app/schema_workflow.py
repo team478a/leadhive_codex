@@ -68,7 +68,8 @@ class ReplyQueueItemOut(BaseModel):
 class OperationJobInput(Input):
     region_mode: Literal["literal", "prefecture_order"] = "literal"
     target_count: int | None = Field(default=None, ge=1, le=500)
-    search_request_limit: int | None = Field(default=None, ge=1, le=50, strict=True)
+    search_request_limit: int | None = Field(default=None, ge=1, le=500, strict=True)
+    auto_continue: bool = False
     condition_request_id: UUID | None = None
     condition_version: int | None = Field(default=None, ge=1)
     condition_hash: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
@@ -95,6 +96,19 @@ class OperationJobInput(Input):
             and self.target_count is not None
         ):
             raise ValueError("検索回数の上限はSerperの件数目標収集のみ指定できます。")
+        if (
+            self.search_request_limit is not None
+            and self.search_request_limit > 50
+            and not self.auto_continue
+        ):
+            raise ValueError("50回を超える検索には自動継続を有効にしてください。")
+        if self.auto_continue and not (
+            self.operation_type == "collect_search"
+            and self.source == "serper"
+            and self.target_count is not None
+            and self.search_request_limit is not None
+        ):
+            raise ValueError("自動継続は上限を指定したSerperの件数目標収集のみ対応しています。")
         binding = (self.condition_request_id, self.condition_version, self.condition_hash)
         if any(v is not None for v in binding) and not all(v is not None for v in binding):
             raise ValueError("条件ID・版・hashをすべて指定してください。")
@@ -112,6 +126,7 @@ class OperationJobInput(Input):
             or self.region
             or self.presence_search
             or self.condition_request_id
+            or self.auto_continue
         ):
             raise ValueError("Analysis operations do not accept search conditions")
         return self
