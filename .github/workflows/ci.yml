@@ -110,23 +110,18 @@ jobs:
 
   backend-tests:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
-        image: public.ecr.aws/docker/library/postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
       TEST_DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -141,18 +136,6 @@ jobs:
   form-http-acceptance:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    services:
-      postgres:
-        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
-        image: public.ecr.aws/docker/library/postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_form_http_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_form_http_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_form_http_test
       TEST_DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_form_http_test
@@ -163,6 +146,13 @@ jobs:
       AGENT_FEATURES_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_form_http_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -177,22 +167,17 @@ jobs:
 
   migration-validation:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
-        image: public.ecr.aws/docker/library/postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -227,23 +212,18 @@ jobs:
 
   e2e:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        # Docker Official Image mirror avoids Docker Hub shared-runner pull limits.
-        image: public.ecr.aws/docker/library/postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
       TEST_DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'

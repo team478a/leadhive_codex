@@ -42,7 +42,7 @@ async function setup(page: Page, options: { viewer?: boolean; stopped?: boolean;
     await route.fulfill({ json: data })
   })
   await page.goto('/')
-  await navigateWorkspace(page, '④ 収集リストの確認')
+  await navigateWorkspace(page, '▶ 送信の準備・実行')
   return { panel: page.getByRole('region', { name: 'クリーニング済みリストの一括送信' }), requests }
 }
 
@@ -51,19 +51,19 @@ test('One click reserves both approved channels without approving or sending fro
   await expect(panel).toContainText('メール 1件 / フォーム 1件')
   await panel.screenshot({ path: info.outputPath('bulk-send-ready.png') })
   expect(requests).toEqual([])
-  await panel.getByRole('button', { name: '承認済み2件を一括送信開始' }).click()
+  await panel.getByRole('button', { name: '2件の送信を開始' }).click()
   await expect(panel.getByRole('status')).toContainText('2件の送信予約が完了')
   expect(requests.map(r => r.path)).toEqual(['/api/projects/project-1/approved-email-batches', '/api/projects/project-1/approved-form-dispatches'])
   expect(requests[0].body.items).toEqual([{ request_id: 'approval-0', expected_hash: 'hash-0', expected_version: 1 }])
-  await expect(panel.getByRole('button', { name: '承認済み0件を一括送信開始' })).toBeDisabled()
+  await expect(panel.getByRole('button', { name: '0件の送信を開始' })).toBeDisabled()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 })
 
 test('Partial failure retries only the unfinished channel with the same key', async ({ page }) => {
   const { panel, requests } = await setup(page, { partial: true })
-  await panel.getByRole('button', { name: '承認済み2件を一括送信開始' }).click()
+  await panel.getByRole('button', { name: '2件の送信を開始' }).click()
   await expect(panel.getByRole('alert')).toContainText('営業NGへ変更')
-  await panel.getByRole('button', { name: '未完了の予約を再試行' }).click()
+  await panel.getByRole('button', { name: '未完了分の送信を再開' }).click()
   await expect(panel.getByRole('status')).toContainText('2件の送信予約が完了')
   expect(requests).toHaveLength(3)
   expect(requests[1].body.idempotency_key).toBe(requests[2].body.idempotency_key)
@@ -72,16 +72,16 @@ test('Partial failure retries only the unfinished channel with the same key', as
 
 test('Full list exceeds one page and splits forms at the existing 100 item limit', async ({ page }) => {
   const { panel, requests } = await setup(page, { large: true })
-  await panel.getByRole('button', { name: '承認済み201件を一括送信開始' }).click()
+  await panel.getByRole('button', { name: '201件の送信を開始' }).click()
   await expect(panel.getByRole('status')).toContainText('201件の送信予約が完了')
   expect(requests.map(r => r.body.items.length)).toEqual([1, 100, 100])
 })
 
 test('Lost response keeps the email reservation key instead of recreating the request', async ({ page }) => {
   const { panel, requests } = await setup(page, { disconnected: true })
-  await panel.getByRole('button', { name: '承認済み2件を一括送信開始' }).click()
+  await panel.getByRole('button', { name: '2件の送信を開始' }).click()
   await expect(panel.getByRole('alert')).toContainText('接続できません')
-  await panel.getByRole('button', { name: '未完了の予約を再試行' }).click()
+  await panel.getByRole('button', { name: '未完了分の送信を再開' }).click()
   await expect(panel.getByRole('status')).toContainText('2件の送信予約が完了')
   expect(requests[0].body).toEqual(requests[1].body)
   expect(requests).toHaveLength(3)
@@ -90,7 +90,12 @@ test('Lost response keeps the email reservation key instead of recreating the re
 for (const option of [{ viewer: true }, { stopped: true }]) {
   test(`Does not reserve for ${JSON.stringify(option)}`, async ({ page }) => {
     const { panel, requests } = await setup(page, option)
-    await expect(panel.getByRole('button', { name: '承認済み2件を一括送信開始' })).toBeDisabled()
+    if (option.viewer) {
+      await expect(panel).toHaveCount(0)
+      await expect(page.getByText('閲覧のみです。営業準備の実行は所有者・編集者へ依頼してください。')).toBeVisible()
+    } else {
+      await expect(panel.getByRole('button', { name: '2件の送信を開始' })).toBeDisabled()
+    }
     expect(requests).toEqual([])
   })
 }

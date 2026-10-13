@@ -162,9 +162,17 @@ Company・URL・連絡先を新規公開成果物へ転記しない。
 `docker pull postgres:16`でDocker Hubの匿名pull制限に達して停止した。
 PR側の再実行でも同じ障害を確認した。テスト失敗とは区別する。
 
-CIの4つのPostgreSQL serviceのみを`public.ecr.aws/docker/library/postgres:16`へ変更。
+当初、CIの4つのPostgreSQL serviceのみを`public.ecr.aws/docker/library/postgres:16`へ変更。
 [Docker公式のECR Public配布案内](https://www.docker.com/blog/news-from-aws-reinvent-docker-official-images-on-amazon-ecr-public/)
 に基づくDocker Official Imageの配布先であり、ローカルの`docker manifest inspect`で
 Linux amd64を含むPostgreSQL 16のmanifestが取得できることを確認した。
 DB名、health check、テスト、migration検証、送信設定は変更しない。
 実際のテスト成否は変更後のGitHub Actionsで確認する。
+
+## CIのECR Public転送量制限（2026-10-13）
+
+PR #102のE2Eで、PostgreSQLのテスト開始前にECR Publicが`toomanyrequests: Data limit exceeded`を返した。
+ECR参照を再試行するだけでは解消しないため、backend-tests、form-http-acceptance、
+migration-validation、e2eの4 jobをUbuntu runner上のPostgreSQL 16へ切り替えた。
+各jobは独立したテスト専用DBを作成し、接続URLとテスト用認証情報を維持する。
+本番DB・送信設定・アプリケーションコードには影響しない。変更後のGitHub Actionsで起動と検証を確認する。
