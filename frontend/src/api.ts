@@ -14,6 +14,14 @@ function responseError(status: number, data: { detail?: unknown; issues?: unknow
   return new ApiError(status, reasons.length ? `${message} ${reasons.join(' ')}` : message, fields)
 }
 
+function networkError(method: string, path: string) {
+  const safePath = path.split('?')[0]
+    .replace(/\/projects\/[^/]+/g, '/projects/:project')
+    .replace(/\/companies\/[^/]+/g, '/companies/:company')
+    .replace(/\/operations\/[^/]+/g, '/operations/:operation')
+  return new ApiError(0, `接続できません（${method} ${safePath}）。ネットワークを確認して再試行してください。`)
+}
+
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   let response: Response
   try {
@@ -23,7 +31,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
       body: body === undefined ? undefined : JSON.stringify(body),
     })
   } catch {
-    throw new ApiError(0, '接続できません。APIの起動とネットワークを確認してください。')
+    throw networkError(method, path)
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
@@ -40,7 +48,7 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
   try {
     response = await fetch(`/api${path}`, { method: 'POST', credentials: 'include', body: form })
   } catch {
-    throw new ApiError(0, '接続できません。APIの起動とネットワークを確認してください。')
+    throw networkError('POST', path)
   }
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
