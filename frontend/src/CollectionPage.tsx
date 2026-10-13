@@ -82,6 +82,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const project = projects.find(item => item.id === projectId)
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
+  const analysisCounts = {
+    saved: companies.length,
+    webCompleted: companies.filter(company => company.analysis_status === 'completed').length,
+    webPending: companies.filter(company => company.website_url && company.analysis_status === 'pending').length,
+    webFailed: companies.filter(company => company.analysis_status === 'failed').length,
+    aiCompleted: companies.filter(company => company.ai_status === 'completed').length,
+    aiPending: companies.filter(company => company.analysis_status === 'completed' && company.ai_status !== 'completed').length,
+  }
   const suggestedKeywords = useMemo(() => profile?.search_keywords ?? [], [profile])
   const suggestedKeywordText = suggestedKeywords.join('\n')
 
@@ -271,13 +279,16 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <button type="button" className="secondary" onClick={() => { setError(''); setNotice('') }}>通知を閉じる</button>
         </div>}
       </aside>}
-    {mode === 'analysis' && <section className="panel" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field><p>保存済み {companies.length}社 / Web未解析 {companies.filter(c => c.website_url && ['pending', 'failed'].includes(c.analysis_status)).length}社 / AI未判定 {companies.filter(c => c.analysis_status === 'completed' && c.ai_status !== 'completed').length}社</p>
+    {mode === 'analysis' && <section className="panel" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
+      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="解析状況">
+        {([['保存済み', analysisCounts.saved], ['Web解析済み', analysisCounts.webCompleted], ['Web未解析', analysisCounts.webPending], ['Web解析失敗', analysisCounts.webFailed], ['AI判定済み', analysisCounts.aiCompleted], ['AI未判定', analysisCounts.aiPending]] as const).map(([label, count]) => <div className="metric" key={label}><span>{label}</span><strong>{count}社</strong></div>)}
+      </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={webBusy || !companies.some(item => item.website_url && ['pending', 'failed'].includes(item.analysis_status))}
             onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : 'Web解析を開始'}</button>
           <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={aiBusy || !companies.some(item => item.analysis_status === 'completed' && item.ai_status !== 'completed')}
             onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : 'AI判定を開始'}</button>
-      </div><p className="muted mt-3 text-sm">① Web解析で企業情報・問い合わせ先を取得 → ② 完了後にAI判定で営業対象かを評価します。</p><p className="muted mt-2">一括処理は1回最大100社です。完了後、残りを実行できます。失敗した企業も再試行対象になります。AI判定にはAPI費用が発生します。</p></section>}
+      </div><p className="muted mt-3 text-sm">① Web解析で企業情報・問い合わせ先を取得 → ② 完了後にAI判定で営業対象かを評価します。</p><p className="muted mt-2">100社ごとに処理し、残りがあれば自動で続きます。画面を閉じても処理は継続します。失敗した企業は、完了後に再実行できます。AI判定にはAPI費用が発生します。</p></section>}
     {mode === 'collection' && <section className="min-w-0 space-y-6">
     {resumableJob && <div className="panel border-2 border-amber-300 bg-amber-50" role="region" aria-label="収集の続き"><h2>収集の続きがあります</h2>
       <p className="mt-2">目標 {resumableJob.collection_progress?.collected_count ?? 0} / {resumableJob.collection_progress?.target_count ?? 0} 件。検索上限で一時停止しました。
