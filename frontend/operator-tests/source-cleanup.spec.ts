@@ -19,7 +19,11 @@ for (const role of ['owner', 'viewer'] as const) {
       else if (path.endsWith('/members')) data = [{ email, role }]
       else if (path === '/api/dashboard') data = { total_companies: 1 }
       else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
-      else if (path.endsWith('/companies')) data = [company]
+      else if (path.endsWith('/company-list')) {
+        const excluded = new URL(route.request().url()).searchParams.get('status') === 'excluded'
+        const visible = company.status === 'excluded' ? excluded : !excluded
+        data = { items: visible ? [company] : [], total: visible ? 1 : 0 }
+      } else if (path.endsWith('/companies')) data = [company]
       else if (path.endsWith('/source-exclusions/cleanup') && method === 'POST') {
         if (failCleanup) { await route.fulfill({ status: 503, json: { detail: '整理テストエラー' } }); return }
         expect(route.request().postDataJSON()).toEqual({ company_ids: ['media-1'] })

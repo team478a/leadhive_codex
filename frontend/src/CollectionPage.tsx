@@ -115,7 +115,12 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     }
     const coreResults = await Promise.allSettled(coreLoads)
     const coreFailure = coreResults.find((result): result is PromiseRejectedResult => result.status === 'rejected')
-    if (mode === 'analysis' || progressOnly) {
+    if (mode === 'analysis') {
+      if (coreFailure) throw coreFailure.reason
+      setDataLoading(false)
+      return
+    }
+    if (progressOnly) {
       if (coreFailure) throw coreFailure.reason
       return
     }
