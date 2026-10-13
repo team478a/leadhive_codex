@@ -300,7 +300,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <button type="button" className="secondary" onClick={() => { setError(''); setNotice('') }}>通知を閉じる</button>
         </div>}
       </aside>}
-    {mode === 'analysis' && <section className="panel" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
+    {mode === 'analysis' && <section className="panel" role="region" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
       {dataLoading ? <p className="muted mt-4" role="status">保存済み企業と解析状況を読み込んでいます…</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="解析状況">
         {([['保存済み', analysisCounts.saved], ['Web解析済み', analysisCounts.webCompleted], ['Web未解析', analysisCounts.webPending], ['Web解析失敗', analysisCounts.webFailed], ['AI判定済み', analysisCounts.aiCompleted], ['AI未判定', analysisCounts.aiPending]] as const).map(([label, count]) => <div className="metric" key={label}><span>{label}</span><strong>{count}社</strong></div>)}
       </div>}

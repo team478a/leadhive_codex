@@ -81,6 +81,11 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
       else if (path === '/api/dashboard') data = { total_companies: 2 }
       else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
       else if (path.endsWith('/members')) data = [{ email, role: 'owner' }]
+      else if (path.endsWith('/company-analysis-summary')) data = {
+        saved: 1, webCompleted: 0, webPending: kind === 'web_analysis' ? 1 : 0,
+        webFailed: 0, aiCompleted: 0, aiPending: 1,
+      }
+      else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', company_name: 'カフェ', source: 'serper', website_url: 'https://example.test', analysis_status: kind === 'ai_analysis' ? 'completed' : 'pending', ai_status: 'pending' }], total: 1 }
       else if (path.endsWith('/companies')) data = [{ id: 'company-1', company_name: 'カフェ', source: 'serper', website_url: 'https://example.test', analysis_status: kind === 'ai_analysis' ? 'completed' : 'pending', ai_status: 'pending' }]
       else if (path.endsWith('/operations') && route.request().method() === 'POST') {
         posts++; status = 'queued'; data = operation()
@@ -94,6 +99,7 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
     await page.getByRole('button', { name: 'このターゲットで収集へ' }).click()
     await expect(page.getByRole('button', { name: 'Web解析を開始', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: '3. リスト解析', exact: true }).click()
+    await expect(page.getByRole('heading', { name: '収集済みリストを後から解析' })).toBeVisible()
     await expect(page.getByLabel('解析する収集リスト')).toHaveValue(project.id)
     await expect(page.getByRole('button', { name: '収集を開始', exact: true })).toHaveCount(0)
     expect(posts).toBe(0)
