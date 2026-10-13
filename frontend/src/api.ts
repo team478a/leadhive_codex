@@ -2,12 +2,16 @@ export class ApiError extends Error {
   constructor(public status: number, message: string, public fields: string[] = []) { super(message) }
 }
 
-function responseError(status: number, data: { detail?: unknown; fields?: unknown }, fallback: string) {
+function responseError(status: number, data: { detail?: unknown; issues?: unknown }, fallback: string) {
   const message = typeof data.detail === 'string' ? data.detail : fallback
-  const fields = Array.isArray(data.fields)
-    ? [...new Set(data.fields.filter((field): field is string => typeof field === 'string'))]
+  const issues = Array.isArray(data.issues)
+    ? data.issues.filter((issue): issue is { field: string; message: string } =>
+      Boolean(issue) && typeof issue === 'object'
+      && typeof issue.field === 'string' && typeof issue.message === 'string')
     : []
-  return new ApiError(status, fields.length ? `${message} 該当項目: ${fields.join('、')}` : message, fields)
+  const fields = [...new Set(issues.map(issue => issue.field))]
+  const reasons = issues.map(issue => `${issue.field}: ${issue.message}`)
+  return new ApiError(status, reasons.length ? `${message} ${reasons.join(' ')}` : message, fields)
 }
 
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {

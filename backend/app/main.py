@@ -82,24 +82,45 @@ _VALIDATION_FIELD_LABELS = {
     "sales_goal": "営業目的",
     "target_mode": "営業先の種類",
 }
+_VALIDATION_MESSAGES = {
+    "missing": "必須項目です。",
+    "string_too_short": "文字数が不足しています。",
+    "string_too_long": "文字数が上限を超えています。",
+    "too_short": "入力件数が不足しています。",
+    "too_long": "入力件数が上限を超えています。",
+    "uuid_parsing": "有効な対象を選択してください。",
+    "enum": "選択肢から選んでください。",
+    "json_invalid": "有効なJSON形式で入力してください。",
+    "extra_forbidden": "想定外の項目が含まれています。",
+    "string_type": "文字列で入力してください。",
+    "int_parsing": "数値で入力してください。",
+    "int_type": "数値で入力してください。",
+    "bool_parsing": "有効／無効を選択してください。",
+    "bool_type": "有効／無効を選択してください。",
+    "value_error": "入力値を確認してください。",
+}
 
 
-def validation_field_labels(errors: list[dict]) -> list[str]:
-    """Return safe, user-facing field labels without echoing submitted values."""
-    labels: list[str] = []
+def validation_issues(errors: list[dict]) -> list[dict[str, str]]:
+    """Return safe field labels and reasons without echoing submitted values."""
+    issues: list[dict[str, str]] = []
     for error in errors:
         location = error.get("loc", ())
-        label = next(
+        field = next(
             (
-                _VALIDATION_FIELD_LABELS[part]
+                part
                 for part in reversed(location)
                 if isinstance(part, str) and part in _VALIDATION_FIELD_LABELS
             ),
-            "入力項目",
+            None,
         )
-        if label not in labels:
-            labels.append(label)
-    return labels or ["入力項目"]
+        issue = {
+            "field": _VALIDATION_FIELD_LABELS.get(field, "入力項目"),
+            "message": _VALIDATION_MESSAGES.get(error.get("type"), "入力内容を確認してください。"),
+        }
+        if issue not in issues:
+            issues.append(issue)
+    return issues or [{"field": "入力項目", "message": "入力内容を確認してください。"}]
 
 
 @asynccontextmanager
@@ -185,7 +206,7 @@ async def validation_error(request: Request, exc: RequestValidationError):
         status_code=422,
         content={
             "detail": "入力内容を確認してください。",
-            "fields": validation_field_labels(exc.errors()),
+            "issues": validation_issues(exc.errors()),
         },
     )
 
