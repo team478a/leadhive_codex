@@ -59,6 +59,48 @@ from app.source_exclusion_routes import router as source_exclusion_router
 
 logger = logging.getLogger("leadhive")
 
+_VALIDATION_FIELD_LABELS = {
+    "profile_name": "プロファイル名",
+    "description": "説明",
+    "search_keywords": "検索キーワード",
+    "positive_keywords": "加点キーワード",
+    "negative_keywords": "減点キーワード",
+    "exclusion_keywords": "除外キーワード",
+    "scoring_rules": "スコアルール",
+    "ai_instruction": "AIへの指示",
+    "default_regions": "標準地域",
+    "project_name": "プロジェクト名",
+    "target_profile_id": "ターゲットプロファイル",
+    "sales_objective": "営業目的",
+    "region": "地域",
+    "status": "ステータス",
+    "keywords": "検索キーワード",
+    "max_results": "収集件数",
+    "target_count": "収集件数",
+    "search_request_limit": "検索回数",
+    "url": "URL",
+    "sales_goal": "営業目的",
+    "target_mode": "営業先の種類",
+}
+
+
+def validation_field_labels(errors: list[dict]) -> list[str]:
+    """Return safe, user-facing field labels without echoing submitted values."""
+    labels: list[str] = []
+    for error in errors:
+        location = error.get("loc", ())
+        label = next(
+            (
+                _VALIDATION_FIELD_LABELS[part]
+                for part in reversed(location)
+                if isinstance(part, str) and part in _VALIDATION_FIELD_LABELS
+            ),
+            "入力項目",
+        )
+        if label not in labels:
+            labels.append(label)
+    return labels or ["入力項目"]
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -139,7 +181,13 @@ async def protect_browser_requests(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
     # Do not echo submitted passwords or arbitrary input through validation responses.
-    return JSONResponse(status_code=422, content={"detail": "入力内容を確認してください。"})
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "入力内容を確認してください。",
+            "fields": validation_field_labels(exc.errors()),
+        },
+    )
 
 
 @app.exception_handler(IntegrityError)
