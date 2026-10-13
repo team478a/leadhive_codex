@@ -410,9 +410,8 @@ def continue_collection(
     if source.status != "completed" or source.operation_type != "collect_search":
         raise HTTPException(409, "完了した検索収集だけ続きから再開できます。")
     progress = (source.payload or {}).get("collection_progress") or {}
-    can_continue = (
-        progress.get("stop_reason") == "REQUEST_BUDGET_REACHED"
-        and progress.get("pending_queries")
+    can_continue = progress.get("stop_reason") == "REQUEST_BUDGET_REACHED" and progress.get(
+        "pending_queries"
     )
     if not can_continue:
         raise HTTPException(409, "続きから収集できる未検索項目がありません。")

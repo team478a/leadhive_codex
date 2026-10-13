@@ -187,9 +187,7 @@ def summarize(db, job, root, tasks, attempts, conditions, reason=None):
     pending = sum(t.state == "READY" for t in tasks)
     capped = sum(t.stop_reason == "QUERY_PAGE_LIMIT" for t in tasks)
     total_requests = int(chain.get("total_requests", 0)) + len(attempts)
-    segment_budget = min(
-        REQUEST_BUDGET, root.payload["query_plan"]["snapshot"]["request_budget"]
-    )
+    segment_budget = min(REQUEST_BUDGET, root.payload["query_plan"]["snapshot"]["request_budget"])
     job.payload = {
         **job.payload,
         "collection_progress": dict(

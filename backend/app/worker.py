@@ -849,13 +849,19 @@ def run_once() -> bool:
             }[job.operation_type](db, job, worker_id)
             db.refresh(job)
             if job.status == "running" and job.worker_id == worker_id:
-                job.status = "cancelled" if job.cancel_requested else (
-                    "completed" if job.failed_count == 0 else "failed"
+                job.status = (
+                    "cancelled"
+                    if job.cancel_requested
+                    else ("completed" if job.failed_count == 0 else "failed")
                 )
-                job.error_message = "" if job.status == "completed" else (
-                    "キャンセルされました。"
-                    if job.status == "cancelled"
-                    else "一部の処理に失敗しました。"
+                job.error_message = (
+                    ""
+                    if job.status == "completed"
+                    else (
+                        "キャンセルされました。"
+                        if job.status == "cancelled"
+                        else "一部の処理に失敗しました。"
+                    )
                 )
                 job.worker_id = None
                 job.lease_expires_at = None

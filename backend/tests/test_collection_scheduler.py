@@ -132,8 +132,12 @@ def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
         json=dict(
-            operation_type="collect_search", source="serper", keywords=[f"q{i}" for i in range(20)],
-            region="北海道/青森県/岩手県", region_mode="prefecture_order", target_count=500,
+            operation_type="collect_search",
+            source="serper",
+            keywords=[f"q{i}" for i in range(20)],
+            region="北海道/青森県/岩手県",
+            region_mode="prefecture_order",
+            target_count=500,
             search_request_limit=50,
         ),
     )
@@ -147,9 +151,7 @@ def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
     first_pages = {
         (task.keyword, task.region): task.next_page
         for task in db.scalars(
-            select(CollectionQueryTask).where(
-                CollectionQueryTask.root_operation_id == UUID(job_id)
-            )
+            select(CollectionQueryTask).where(CollectionQueryTask.root_operation_id == UUID(job_id))
         )
     }
 
@@ -169,9 +171,7 @@ def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
             )
         )
     )
-    child_tasks_by_id = {
-        task.id: task for task in db.scalars(select(CollectionQueryTask))
-    }
+    child_tasks_by_id = {task.id: task for task in db.scalars(select(CollectionQueryTask))}
     pages_by_query = {}
     for attempt in child_attempts:
         task = child_tasks_by_id[attempt.task_id]
@@ -188,9 +188,14 @@ def test_auto_continue_stops_at_explicit_total_budget(auth, db, monkeypatch):
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
         json=dict(
-            operation_type="collect_search", source="serper", keywords=[f"q{i}" for i in range(20)],
-            region="北海道/青森県/岩手県", region_mode="prefecture_order", target_count=500,
-            search_request_limit=51, auto_continue=True,
+            operation_type="collect_search",
+            source="serper",
+            keywords=[f"q{i}" for i in range(20)],
+            region="北海道/青森県/岩手県",
+            region_mode="prefecture_order",
+            target_count=500,
+            search_request_limit=51,
+            auto_continue=True,
         ),
     )
     assert response.status_code == 202
