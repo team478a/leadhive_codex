@@ -133,9 +133,10 @@ def listing(
             select(snapshot.c.category, func.count()).group_by(snapshot.c.category)
         ).all()
     }
-    analyzed_count = db.scalar(
-        select(func.count()).select_from(snapshot).where(snapshot.c.analyzed.is_(True))
-    ) or 0
+    analyzed_count = (
+        db.scalar(select(func.count()).select_from(snapshot).where(snapshot.c.analyzed.is_(True)))
+        or 0
+    )
     if category != "all":
         base = base.where(base.selected_columns.category == category)
     total = db.scalar(select(func.count()).select_from(base.subquery()))
