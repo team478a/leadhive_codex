@@ -3,13 +3,15 @@ import { api } from './api'
 import { DmPreparationPanel } from './DmPreparationPanel'
 import { SendabilityPanel } from './SendabilityPanel'
 import { SiteIdentityReview } from './SiteIdentityReview'
+import { CollectionSiteHint } from './CollectionSiteHint'
+import type { SiteHint } from './CollectionSiteHint'
 import type { IdentityReview, IdentityTarget } from './SiteIdentityReview'
 
 type Inventory = {
   identity_target: IdentityTarget
   expected_identity_hash: string; identity_confirmation_source: string | null; human_identity_review: IdentityReview
   identity_status: string; official_site_confidence: string; can_refresh: boolean; candidate_destination_count: number
-  observations: { id: string; source: string; identity_status: string; identity_reasons: string[]; applied_fields: string[]; allowed_usage: string }[]
+  observations: { id: string; source: string; identity_status: string; identity_reasons: string[]; applied_fields: string[]; allowed_usage: string; facts: { site_discovery?: SiteHint } }[]
   destinations: { id: string; type: string; destination: string; shared: boolean; linked_lead_count: number; current: boolean }[]
 }
 const labels: Record<string, string> = { CONFIRMED: '照合済み', PROBABLE: '候補一致', REVIEW_REQUIRED: '要確認', DIFFERENT: '別対象' }
@@ -39,7 +41,7 @@ export function LeadCompletionEvidence({ companyId, projectId, updatedAt }: { co
     {error && <p role="alert">{error}</p>}
     <ul>{data.destinations.map(item => <li key={item.id} className="break-all">{item.type}：{item.destination} — {item.current ? '現在の候補' : '登録内容変更・要更新'}{item.shared ? ` / 共通窓口（${item.linked_lead_count}件）` : ''} / 用途・送信可否は未確認</li>)}</ul>
     {data.destinations.length === 0 && <p>保存済みの窓口候補はありません。候補整理後に表示します。</p>}
-    <ul>{data.observations.map(item => <li key={item.id}>{item.source}：{labels[item.identity_status] ?? '未確認'} / 補完 {item.applied_fields.length}項目{item.allowed_usage === 'REVIEW_REQUIRED' ? ' / 利用条件要確認' : ''}</li>)}</ul>
+    <ul>{data.observations.map(item => <li key={item.id}>{item.source}：{labels[item.identity_status] ?? '未確認'} / 補完 {item.applied_fields.length}項目{item.allowed_usage === 'REVIEW_REQUIRED' ? ' / 利用条件要確認' : ''}{item.facts.site_discovery && <CollectionSiteHint hint={item.facts.site_discovery} />}</li>)}</ul>
     <p className="muted">照合根拠の種別：{data.identity_confirmation_source === 'AUTOMATIC_RULE' ? '自動ルール照合' : data.identity_confirmation_source === 'HUMAN_OBSERVED' ? 'Humanの公開情報確認' : '未確認'}</p>
     <SiteIdentityReview key={`${companyId}:${data.expected_identity_hash}`} companyId={companyId} digest={data.expected_identity_hash} target={data.identity_target} review={data.human_identity_review} canReview={data.can_refresh} onSaved={() => setReload(v => v + 1)} />
     <SendabilityPanel companyId={companyId} updatedAt={updatedAt} inventoryRevision={reload} onAssessmentChanged={() => setReload(v => v + 1)} />

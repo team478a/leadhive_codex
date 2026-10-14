@@ -13,6 +13,7 @@ from app.config import settings
 from app.services.discovery_capture import capture_serper
 from app.services.processing_usage import measured_request
 from app.services.raw_capture import capture
+from app.services.site_discovery import assess_search_url
 
 logger = logging.getLogger("leadhive")
 
@@ -52,6 +53,7 @@ class Candidate:
     presence_urls: list[str] = field(default_factory=list)
     search_excerpt: str = ""
     discovery_hit_id: UUID | None = field(default=None, compare=False)
+    site_discovery: dict = field(default_factory=dict, compare=False)
 
 
 def canonicalize_url(value: str) -> tuple[str, str]:
@@ -238,12 +240,33 @@ def search_serper_page(keyword: str, region: str, max_results: int, page: int) -
             normalized, domain = canonicalize_url(url)
         except ValueError:
             continue
+        discovery = assess_search_url(normalized)
+        # Existing classifier decisions must remain authoritative: only route a
+        # path-only article hint after it has passed the aggregation-title filters.
+        from app.services.collection_discovery import classify_hit
+
+        classification, reason = classify_hit({"link": normalized, "title": title})
+        article_owner = (
+            discovery["kind"] == "ARTICLE_OWNER_REVIEW"
+            and classification == "ARTICLE"
+            and reason == "PATH_HINT_REQUIRES_REVIEW"
+        )
+        if not article_owner and discovery["kind"] == "ARTICLE_OWNER_REVIEW":
+            discovery = {
+                **discovery,
+                "kind": "ARTICLE_RESULT_REVIEW",
+                "homepage_candidate": "",
+            }
         candidates.append(
             Candidate(
-                company_name=(title.strip() or domain)[:500],
-                website_url=normalized,
+                # A title from an article describes that page, not necessarily its publisher.
+                # Start with the host as a low-confidence label and retain the article URL.
+                company_name=(domain if article_owner else title.strip() or domain)[:500],
+                website_url=discovery["homepage_candidate"] if article_owner else normalized,
+                reference_url=normalized if article_owner else "",
                 search_excerpt=str(item.get("snippet") or "")[:2000],
                 discovery_hit_id=hit_ids.get(position),
+                site_discovery=discovery,
             )
         )
     return candidates

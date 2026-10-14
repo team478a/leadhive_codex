@@ -138,6 +138,10 @@ def save_candidates(
     remembered_sources = domains(db, job.project_id)
     for candidate in candidates:
         capture_candidate(db, job, candidate)
+        if candidate.site_discovery.get("kind") == "REFERENCE_DOCUMENT":
+            job.excluded_count += 1
+            mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
+            continue
         if candidate.website_url and domain_key(candidate.website_url) in remembered_sources:
             job.excluded_count += 1
             mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
