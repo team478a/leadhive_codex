@@ -85,6 +85,7 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
         saved: 1, webCompleted: 0, webPending: kind === 'web_analysis' ? 1 : 0,
         webFailed: 0, aiCompleted: 0, aiPending: 1,
       }
+      else if (path.endsWith('/form-readiness')) data = { counts: { unanalyzed: 0 }, company_total: 1 }
       else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', company_name: 'カフェ', source: 'serper', website_url: 'https://example.test', analysis_status: kind === 'ai_analysis' ? 'completed' : 'pending', ai_status: 'pending' }], total: 1 }
       else if (path.endsWith('/companies')) data = [{ id: 'company-1', company_name: 'カフェ', source: 'serper', website_url: 'https://example.test', analysis_status: kind === 'ai_analysis' ? 'completed' : 'pending', ai_status: 'pending' }]
       else if (path.endsWith('/operations') && route.request().method() === 'POST') {

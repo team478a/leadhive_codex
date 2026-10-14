@@ -672,6 +672,46 @@ def test_bulk_form_intelligence_job(auth, db, monkeypatch):
     assert job.status == "completed" and job.success_count == 1
 
 
+def test_project_form_analysis_job_continues_in_bounded_batches(auth, db, monkeypatch):
+    project, first = make_company(auth, db)
+    first.analysis_status = "completed"
+    first.website_url = "https://form-intelligence.example"
+    second = Company(
+        project_id=first.project_id,
+        company_name="次の会社",
+        source="url",
+        analysis_status="completed",
+        website_url="https://second-form-intelligence.example",
+    )
+    db.add(second)
+    db.commit()
+    batches = [[first], [second], []]
+    analyzed_ids = []
+    response = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json={"operation_type": "form_intelligence", "company_ids": [], "force": False},
+    )
+    assert response.status_code == 202
+    job = db.get(OperationJob, response.json()["id"])
+
+    def next_batch(_db, _project_id, _force=False):
+        return batches.pop(0)
+
+    def analyze_company(_db, company, _force):
+        analyzed_ids.append(company.id)
+        return [SimpleNamespace(form_status="READY")]
+
+    monkeypatch.setattr(worker, "next_form_analysis_batch", next_batch)
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: 0)
+    monkeypatch.setattr(worker, "analyze_company_forms", analyze_company)
+    assert worker.run_once()
+    db.refresh(job)
+    assert job.status == "completed"
+    assert job.total_count == 2 and job.processed_count == 2
+    assert analyzed_ids == [first.id, second.id]
+
+
 def test_review_reason_is_saved_for_browser_only_form(auth, db, monkeypatch):
     _, company = make_company(auth, db)
     install_pages(
