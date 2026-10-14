@@ -15,8 +15,10 @@ from app.models import (
     Company,
     EmailCampaign,
     EmailDelivery,
+    FormAnalysisLog,
     FormDeliveryBatch,
     FormDeliveryBatchItem,
+    FormProfile,
     Notification,
     OperationJob,
     OutreachDraftApproval,
@@ -813,22 +815,70 @@ def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     db.commit()
 
 
+def next_form_analysis_batch(
+    db, project_id: uuid.UUID, force: bool = False
+) -> list[Company]:
+    query = select(Company).where(
+        Company.project_id == project_id,
+        Company.analysis_status == "completed",
+        Company.website_url.is_not(None),
+    )
+    if not force:
+        has_profile = select(FormProfile.id).where(FormProfile.company_id == Company.id).exists()
+        has_unanalyzed_profile = (
+            select(FormProfile.id)
+            .where(
+                FormProfile.company_id == Company.id,
+                FormProfile.form_status == "UNANALYZED",
+                FormProfile.last_analyzed_at.is_(None),
+            )
+            .exists()
+        )
+        has_terminal_log = (
+            select(FormAnalysisLog.id)
+            .where(
+                FormAnalysisLog.company_id == Company.id,
+                FormAnalysisLog.event_type.in_(
+                    ("analysis_completed", "analysis_failed")
+                ),
+            )
+            .exists()
+        )
+        query = query.where(
+            ~has_terminal_log,
+            or_(~has_profile, has_unanalyzed_profile),
+        )
+    return list(db.scalars(query.order_by(Company.created_at, Company.id).limit(100)).all())
+
+
 def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])][:100]
-    companies = db.scalars(
-        select(Company)
-        .where(Company.project_id == job.project_id, Company.id.in_(company_ids))
-        .order_by(Company.created_at, Company.id)
-    ).all()
+    if company_ids:
+        companies = db.scalars(
+            select(Company)
+            .where(Company.project_id == job.project_id, Company.id.in_(company_ids))
+            .order_by(Company.created_at, Company.id)
+        ).all()
+    else:
+        companies = next_form_analysis_batch(
+            db, job.project_id, bool(job.payload.get("force"))
+        )
     job.total_count = len(companies)
     db.commit()
-    for company in companies:
-        if stop_requested(db, job, worker_id):
+    while companies:
+        for company in companies:
+            if stop_requested(db, job, worker_id):
+                return
+            profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
+            success = bool(profiles) and any(profile.form_status != "ERROR" for profile in profiles)
+            if not progress(db, job, worker_id, success):
+                return
+        if company_ids or job.payload.get("force"):
             return
-        profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
-        success = bool(profiles) and any(profile.form_status != "ERROR" for profile in profiles)
-        if not progress(db, job, worker_id, success):
-            return
+        companies = next_form_analysis_batch(db, job.project_id)
+        if companies:
+            job.total_count += len(companies)
+            db.commit()
 
 
 def run_once() -> bool:

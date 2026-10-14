@@ -31,6 +31,7 @@ const aiNames = {
   failed: 'AI判定失敗', skipped: 'AI判定保留',
 }
 type CompanyAnalysisSummary = { saved: number; webCompleted: number; webPending: number; webFailed: number; aiCompleted: number; aiPending: number }
+type FormAnalysisSummary = { counts: Record<string, number>; company_total: number }
 const emptyAnalysisSummary: CompanyAnalysisSummary = { saved: 0, webCompleted: 0, webPending: 0, webFailed: 0, aiCompleted: 0, aiPending: 0 }
 
 export function CollectionPage({ projects, profiles, initialProjectId, onConfigureTarget, onProjectSelected, mode = 'collection' }: {
@@ -55,6 +56,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [jobs, setJobs] = useState<CollectionJob[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
   const [analysisSummary, setAnalysisSummary] = useState(emptyAnalysisSummary)
+  const [formAnalysisSummary, setFormAnalysisSummary] = useState<FormAnalysisSummary | null>(null)
   const [analysisTotal, setAnalysisTotal] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
   const [analysisPage, setAnalysisPage] = useState(0)
@@ -71,20 +73,23 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [refreshing, setRefreshing] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
   const [aiAnalyzing, setAiAnalyzing] = useState(false)
+  const [formAnalyzing, setFormAnalyzing] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const progressPanel = useRef<HTMLDivElement>(null)
   const hadActiveOperations = useRef(false)
   const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
-  const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis'].includes(job.operation_type) : job.operation_type === 'collect_search')
+  const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis', 'form_intelligence'].includes(job.operation_type) : job.operation_type === 'collect_search')
   const collectionRunning = visibleOperations.some(job => ['queued', 'running'].includes(job.status))
   const resumableJob = !collectionRunning ? visibleOperations.find(job => job.operation_type === 'collect_search'
     && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED'
     && !!job.collection_progress.pending_queries) : undefined
   const webJob = operations.find(job => job.project_id === projectId && job.operation_type === 'web_analysis' && ['queued', 'running'].includes(job.status))
   const aiJob = operations.find(job => job.project_id === projectId && job.operation_type === 'ai_analysis' && ['queued', 'running'].includes(job.status))
+  const formJob = operations.find(job => job.project_id === projectId && job.operation_type === 'form_intelligence' && ['queued', 'running'].includes(job.status))
   const webBusy = analyzing || !!webJob
   const aiBusy = aiAnalyzing || !!aiJob
+  const formBusy = formAnalyzing || !!formJob
   const project = projects.find(item => item.id === projectId)
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
@@ -107,6 +112,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       coreLoads.push(api<CompanyPage>(`/projects/${projectId}/company-list?offset=${analysisPage * 20}&limit=20`).then(nextPage => {
         setCompanies(nextPage.items); setAnalysisTotal(nextPage.total)
       }))
+      coreLoads.push(api<FormAnalysisSummary>(`/projects/${projectId}/form-readiness?category=all&limit=1&offset=0`).then(setFormAnalysisSummary))
     }
     if (mode === 'collection' && !progressOnly) {
       // The screen shows recent jobs only. Loading every historical job/company
@@ -269,6 +275,18 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     finally { setAiAnalyzing(false) }
   }
 
+  async function analyzeForms() {
+    setFormAnalyzing(true); setError(''); setNotice('')
+    try {
+      await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
+        operation_type: 'form_intelligence', company_ids: [], force: false,
+      })
+      await reload()
+      setNotice('Web解析済みでフォーム未解析の企業を、100社ずつバックグラウンド解析に登録しました。')
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setFormAnalyzing(false) }
+  }
+
   async function createSchedule() {
     setError(''); setNotice('')
     try {
@@ -291,7 +309,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const progress = <div className="panel scroll-mt-24" ref={progressPanel} tabIndex={-1}><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
         <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
         {visibleOperations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : visibleOperations.map(job =>
-            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
+            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : job.operation_type === 'form_intelligence' ? 'フォーム解析' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
             {job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
@@ -313,16 +331,25 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <button type="button" className="secondary" onClick={() => { setError(''); setNotice('') }}>通知を閉じる</button>
         </div>}
       </aside>}
-    {mode === 'analysis' && <section className="panel" role="region" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得とAI判定を実行します。送信は行いません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
-      {dataLoading ? <p className="muted mt-4" role="status">保存済み企業と解析状況を読み込んでいます…</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6" aria-label="解析状況">
-        {([['保存済み', analysisCounts.saved], ['Web解析済み', analysisCounts.webCompleted], ['Web未解析', analysisCounts.webPending], ['Web解析失敗', analysisCounts.webFailed], ['AI判定済み', analysisCounts.aiCompleted], ['AI未判定', analysisCounts.aiPending]] as const).map(([label, count]) => <div className="metric" key={label}><span>{label}</span><strong>{count}社</strong></div>)}
+    {mode === 'analysis' && <section className="panel" role="region" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得・AI判定・フォーム解析を行います。解析だけでは送信されません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
+      {dataLoading ? <p className="muted mt-4" role="status">保存済み企業と解析状況を読み込んでいます…</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7" aria-label="解析状況">
+        {([['保存済み', analysisCounts.saved], ['Web解析済み', analysisCounts.webCompleted], ['Web未解析', analysisCounts.webPending], ['Web解析失敗', analysisCounts.webFailed], ['AI判定済み', analysisCounts.aiCompleted], ['AI未判定', analysisCounts.aiPending], ['フォーム未解析', formAnalysisSummary?.counts.unanalyzed ?? 0]] as const).map(([label, count]) => <div className="metric" key={label}><span>{label}</span><strong>{count}社</strong></div>)}
       </div>}
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={dataLoading || webBusy || analysisCounts.webPending + analysisCounts.webFailed === 0}
             onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : 'Web解析を開始'}</button>
           <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={dataLoading || aiBusy || analysisCounts.aiPending === 0}
             onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : 'AI判定を開始'}</button>
-      </div><p className="muted mt-3 text-sm">① Web解析で企業情報・問い合わせ先を取得 → ② 完了後にAI判定で営業対象かを評価します。</p><p className="muted mt-2">100社ごとに処理し、残りがあれば自動で続きます。画面を閉じても処理は継続します。失敗した企業は、完了後に再実行できます。AI判定にはAPI費用が発生します。</p></section>}
+          <button type="button" className={formBusy ? 'analysis-active' : undefined} aria-busy={formBusy}
+            disabled={dataLoading || formBusy || analysisCounts.webCompleted === 0 || (formAnalysisSummary?.counts.unanalyzed ?? 0) === 0}
+            onClick={() => void analyzeForms()}>{formBusy ? (formJob?.status === 'queued' ? 'フォーム解析 待機中…' : 'フォーム解析中…') : 'フォーム解析を開始'}</button>
+      </div>
+      <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-label="各解析の目的">
+        <article className="rounded border p-3"><strong>1. Web解析</strong><p className="muted mb-0 mt-2 text-sm">公式サイトから事業内容・連絡先を取得します。AI判定とフォーム解析の基礎情報になります。</p></article>
+        <article className="rounded border p-3"><strong>2. AI判定</strong><p className="muted mb-0 mt-2 text-sm">取得した情報を営業目的と照らし、対象としての優先度と判定理由を整理します。先にWeb解析を行ってください。</p></article>
+        <article className="rounded border p-3"><strong>3. フォーム解析</strong><p className="muted mb-0 mt-2 text-sm">Web解析済み企業の問い合わせ先・入力項目・営業禁止表示・CAPTCHAを確認し、送信準備に使います。送信操作は行いません。</p></article>
+      </div>
+      <p className="muted mt-3">各処理は100社ずつバックグラウンドで続き、画面を閉じても継続します。失敗した企業は完了後に再実行できます。AI判定にはAPI費用が発生します。</p></section>}
     {mode === 'collection' && <section className="min-w-0 space-y-6">
     {resumableJob && <div className="panel border-2 border-amber-300 bg-amber-50" role="region" aria-label="収集の続き"><h2>収集の続きがあります</h2>
       <p className="mt-2">目標 {resumableJob.collection_progress?.collected_count ?? 0} / {resumableJob.collection_progress?.target_count ?? 0} 件。検索上限で一時停止しました。
