@@ -45,6 +45,13 @@ test('stored form overview filters, paginates and does not authorize sending', a
     await panel.getByRole('combobox', { name: 'フォーム集計の表示対象', exact: true }).selectOption(category)
     await expect(panel.getByText(text, { exact: false })).toBeVisible()
   }
+  await page.setViewportSize({ width: 390, height: 844 })
+  await panel.getByRole('combobox', { name: 'フォーム集計の表示対象', exact: true }).selectOption('all')
+  const detailButton = panel.getByRole('button', { name: '集計テスト会社の企業詳細を確認' })
+  await detailButton.click()
+  const companyDetails = page.getByRole('region', { name: '企業詳細', exact: true })
+  await expect(companyDetails).toBeVisible()
+  await expect(companyDetails).toBeInViewport()
   expect(writes).toEqual([])
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
 })

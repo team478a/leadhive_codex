@@ -76,6 +76,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
   const [selected, setSelected] = useState<Company | null>(null)
+  const companyDetailsRef = useRef<HTMLDivElement>(null)
+  const selectedCompanyId = selected?.id
   const [companyEdit, setCompanyEdit] = useState<Record<string, string>>({})
   const [protectedFields, setProtectedFields] = useState<string[]>([])
   const [doNotContact, setDoNotContact] = useState(false)
@@ -177,6 +179,14 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     }
   }, [projectId, query, staleDays])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
+  useEffect(() => {
+    if (!selectedCompanyId) return
+    const frame = window.requestAnimationFrame(() => {
+      companyDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      companyDetailsRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [selectedCompanyId])
   useEffect(() => {
     if (
       initialReplyInboundEmailId
@@ -856,7 +866,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     />
     {selected && <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />}
     {selected && <CompanyFormInputTrial key={`input-trial-${selected.id}`} company={selected} profiles={formProfiles} activities={activities} readOnly={readOnly} busy={busy} onSave={recordInputTrial} />}
-    {selected && <CompanyDetailsPanel
+    {selected && <div ref={companyDetailsRef} className="scroll-mt-6" tabIndex={-1} aria-label="企業詳細">
+    <CompanyDetailsPanel
       company={selected}
       values={companyEdit}
       protectedFields={protectedFields}
@@ -879,7 +890,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onSaveContactControl={() => void saveContactControl()}
       onSaveStatus={() => void save()}
       onClose={() => setSelected(null)}
-    />}
+    />
+    </div>}
     {selected && <CompanyFormIntelligencePanel
       company={selected}
       profiles={formProfiles}
