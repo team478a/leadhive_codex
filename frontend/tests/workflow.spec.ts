@@ -105,6 +105,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await page.getByRole('button', { name: '3. リスト解析', exact: true }).click()
   await expect(page.getByLabel('解析する収集リスト')).toHaveValue(/.+/)
   await expect(page.getByLabel('解析する収集リスト').locator('option:checked')).toContainText(projectName)
+  await expect(page.getByLabel('解析状況').getByText('フォーム解析済み', { exact: true })).toBeVisible()
   await expect(page.getByRole('strong').filter({ hasText: /^example\.com$/ })).toBeVisible()
   await page.getByRole('button', { name: '2. 収集開始', exact: true }).click()
   await page.getByLabel('収集元').selectOption('url')
