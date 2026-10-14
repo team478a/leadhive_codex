@@ -21,6 +21,8 @@ class TwoStageServer:
         self.tokens: dict[str, tuple[str, str, str, dict[str, str], datetime]] = {}
         self.accepted = 0
         self.lock = threading.Lock()
+        self.response_held = threading.Event()
+        self.response_release = threading.Event()
         lab = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -28,12 +30,19 @@ class TwoStageServer:
                 pass
 
             def reply(self, data, status=200):
+                if mode == "hold_" + self.path.lstrip("/"):
+                    lab.response_held.set()
+                    if not lab.response_release.wait(timeout=30):
+                        return
                 body = json.dumps(data).encode()
                 self.send_response(status)
                 self.send_header("Content-Type", "application/json")
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
-                self.wfile.write(body)
+                try:
+                    self.wfile.write(body)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass  # Expected only when a test kills the waiting client.
 
             def do_GET(self):
                 if self.path != "/contact":
@@ -150,6 +159,7 @@ class TwoStageServer:
         return self
 
     def __exit__(self, *args):
+        self.response_release.set()
         self.server.shutdown()
         self.server.server_close()
         self.thread.join(timeout=5)
@@ -183,10 +193,11 @@ class PinnedTwoStageTransport(httpx.BaseTransport):
 
 
 class TwoStageTransport:
-    def __init__(self, port, after_confirm=None, before_post=None):
+    def __init__(self, port, after_confirm=None, before_post=None, timeout=0.5):
         self.port = port
         self.after_confirm = after_confirm
         self.before_post = before_post
+        self.timeout = timeout
 
     def request(self, plan, attempt, stage, token=None):
         if self.before_post:
@@ -199,7 +210,7 @@ class TwoStageTransport:
             transport=PinnedTwoStageTransport(self.port),
             trust_env=False,
             follow_redirects=False,
-            timeout=0.5,
+            timeout=self.timeout,
         ) as client:
             if stage == "confirm":
                 observed = client.get(execution.form_url).json()
