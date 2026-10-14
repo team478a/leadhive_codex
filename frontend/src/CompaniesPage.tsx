@@ -76,6 +76,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
   const [selected, setSelected] = useState<Company | null>(null)
+  const companyDetailsRef = useRef<HTMLDivElement>(null)
+  const selectedCompanyId = selected?.id
   const [companyEdit, setCompanyEdit] = useState<Record<string, string>>({})
   const [protectedFields, setProtectedFields] = useState<string[]>([])
   const [doNotContact, setDoNotContact] = useState(false)
@@ -177,6 +179,14 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     }
   }, [projectId, query, staleDays])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
+  useEffect(() => {
+    if (!selectedCompanyId) return
+    const frame = window.requestAnimationFrame(() => {
+      companyDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      companyDetailsRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [selectedCompanyId])
   useEffect(() => {
     if (
       initialReplyInboundEmailId
@@ -854,7 +864,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onOpen={company => void open(company)}
       onFeedbackSaved={() => { void reload().catch(e => setError(errorMessage(e))); setSelected(null); setNotice('確認結果を保存しました。送信承認は行っていません。') }}
     />
-    {selected && <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />}
+    {selected && <div ref={companyDetailsRef} className="scroll-mt-6" tabIndex={-1} aria-label="選択した企業の詳細">
+    <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />
     {selected && <CompanyFormInputTrial key={`input-trial-${selected.id}`} company={selected} profiles={formProfiles} activities={activities} readOnly={readOnly} busy={busy} onSave={recordInputTrial} />}
     {selected && <CompanyDetailsPanel
       company={selected}
@@ -1019,6 +1030,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onActivityNoteChange={setActivityNote}
       onAdd={() => void addActivity()}
     />}
+    </div>}
     <div className="section-heading mt-7"><h2>配信・追客・管理</h2><span className="muted">必要なときだけ利用</span></div>
     <DealPipelinePanel pipeline={dealPipeline} />
     <CompanyEmailCampaignsPanel
