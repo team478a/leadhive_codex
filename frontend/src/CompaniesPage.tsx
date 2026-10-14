@@ -864,10 +864,10 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onOpen={company => void open(company)}
       onFeedbackSaved={() => { void reload().catch(e => setError(errorMessage(e))); setSelected(null); setNotice('確認結果を保存しました。送信承認は行っていません。') }}
     />
-    {selected && <div ref={companyDetailsRef} className="scroll-mt-6" tabIndex={-1} aria-label="選択した企業の詳細">
-    <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />
+    {selected && <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />}
     {selected && <CompanyFormInputTrial key={`input-trial-${selected.id}`} company={selected} profiles={formProfiles} activities={activities} readOnly={readOnly} busy={busy} onSave={recordInputTrial} />}
-    {selected && <CompanyDetailsPanel
+    {selected && <div ref={companyDetailsRef} className="scroll-mt-6" tabIndex={-1} aria-label="企業詳細">
+    <CompanyDetailsPanel
       company={selected}
       values={companyEdit}
       protectedFields={protectedFields}
@@ -890,7 +890,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onSaveContactControl={() => void saveContactControl()}
       onSaveStatus={() => void save()}
       onClose={() => setSelected(null)}
-    />}
+    />
+    </div>}
     {selected && <CompanyFormIntelligencePanel
       company={selected}
       profiles={formProfiles}
@@ -1030,7 +1031,6 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onActivityNoteChange={setActivityNote}
       onAdd={() => void addActivity()}
     />}
-    </div>}
     <div className="section-heading mt-7"><h2>配信・追客・管理</h2><span className="muted">必要なときだけ利用</span></div>
     <DealPipelinePanel pipeline={dealPipeline} />
     <CompanyEmailCampaignsPanel
