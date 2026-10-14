@@ -241,7 +241,22 @@ def search_serper_page(keyword: str, region: str, max_results: int, page: int) -
         except ValueError:
             continue
         discovery = assess_search_url(normalized)
-        article_owner = discovery["kind"] == "ARTICLE_OWNER_REVIEW"
+        # Existing classifier decisions must remain authoritative: only route a
+        # path-only article hint after it has passed the aggregation-title filters.
+        from app.services.collection_discovery import classify_hit
+
+        classification, reason = classify_hit({"link": normalized, "title": title})
+        article_owner = (
+            discovery["kind"] == "ARTICLE_OWNER_REVIEW"
+            and classification == "ARTICLE"
+            and reason == "PATH_HINT_REQUIRES_REVIEW"
+        )
+        if not article_owner and discovery["kind"] == "ARTICLE_OWNER_REVIEW":
+            discovery = {
+                **discovery,
+                "kind": "ARTICLE_RESULT_REVIEW",
+                "homepage_candidate": "",
+            }
         candidates.append(
             Candidate(
                 # A title from an article describes that page, not necessarily its publisher.

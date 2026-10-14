@@ -2,6 +2,7 @@ export type SiteHint = { kind: string; homepage_candidate: string; reference_url
 
 const labels: Record<string, string> = {
   ARTICLE_OWNER_REVIEW: '検索で記事ページを発見しました。掲載元のサイト候補です。公式サイトか確認してください。',
+  ARTICLE_RESULT_REVIEW: '記事ページを発見しました。企業サイトへの自動振替はしていません。',
   REFERENCE_SITE: '検索で掲載媒体・比較サイトを発見しました。企業サイトとは分けて確認してください。',
   REFERENCE_DOCUMENT: '検索で資料ファイルを発見しました。企業サイトとしては登録していません。',
   BUSINESS_SITE_REVIEW: '検索でサイト候補を発見しました。企業主体・公式サイトは未確認です。',

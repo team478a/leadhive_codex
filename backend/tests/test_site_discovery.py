@@ -37,6 +37,32 @@ def test_article_routes_to_same_host_homepage_as_unconfirmed_candidate(monkeypat
     assert candidate.site_discovery["contact_status"] == "NOT_CHECKED"
 
 
+def test_aggregation_title_remains_under_existing_exclusion_rules(monkeypatch):
+    monkeypatch.setattr(collection.settings, "serper_api_key", "test-only")
+    monkeypatch.setattr(
+        collection.httpx,
+        "Client",
+        lambda **kwargs: FakeClient(
+            [
+                {
+                    "organic": [
+                        {
+                            "title": "大阪のおすすめ店7選",
+                            "link": "https://store.example/blog/selection",
+                        }
+                    ]
+                }
+            ],
+            [],
+        ),
+    )
+
+    [candidate] = collection.search_serper("店舗", "大阪", 10)
+    assert candidate.website_url == "https://store.example/blog/selection"
+    assert candidate.company_name == "大阪のおすすめ店7選"
+    assert candidate.site_discovery["kind"] == "ARTICLE_RESULT_REVIEW"
+
+
 def test_reference_host_boundaries_and_non_article_service_pages():
     assert is_reference_host("www.hotpepper.jp")
     assert not is_reference_host("not-hotpepper.jp")
