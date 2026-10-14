@@ -31,7 +31,7 @@ const aiNames = {
   failed: 'AI判定失敗', skipped: 'AI判定保留',
 }
 type CompanyAnalysisSummary = { saved: number; webCompleted: number; webPending: number; webFailed: number; aiCompleted: number; aiPending: number }
-type FormAnalysisSummary = { counts: Record<string, number>; company_total: number }
+type FormAnalysisSummary = { counts: Record<string, number>; company_total: number; analyzed_count: number }
 const emptyAnalysisSummary: CompanyAnalysisSummary = { saved: 0, webCompleted: 0, webPending: 0, webFailed: 0, aiCompleted: 0, aiPending: 0 }
 
 export function CollectionPage({ projects, profiles, initialProjectId, onConfigureTarget, onProjectSelected, mode = 'collection' }: {
@@ -332,8 +332,8 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
         </div>}
       </aside>}
     {mode === 'analysis' && <section className="panel" role="region" aria-label="解析開始"><h2>収集済みリストを後から解析</h2><p className="muted mt-2">新しく収集せず、保存済み企業のWeb情報取得・AI判定・フォーム解析を行います。解析だけでは送信されません。</p><Field label="解析する収集リスト"><select value={projectId} onChange={e => { setProjectId(e.target.value); onProjectSelected?.(e.target.value) }}>{projects.map(item => <option key={item.id} value={item.id}>{item.project_name} / {item.region}</option>)}</select></Field>
-      {dataLoading ? <p className="muted mt-4" role="status">保存済み企業と解析状況を読み込んでいます…</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-7" aria-label="解析状況">
-        {([['保存済み', analysisCounts.saved], ['Web解析済み', analysisCounts.webCompleted], ['Web未解析', analysisCounts.webPending], ['Web解析失敗', analysisCounts.webFailed], ['AI判定済み', analysisCounts.aiCompleted], ['AI未判定', analysisCounts.aiPending], ['フォーム未解析', formAnalysisSummary?.counts.unanalyzed ?? 0]] as const).map(([label, count]) => <div className="metric" key={label}><span>{label}</span><strong>{count}社</strong></div>)}
+      {dataLoading ? <p className="muted mt-4" role="status">保存済み企業と解析状況を読み込んでいます…</p> : <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-8" aria-label="解析状況">
+        {([['保存済み', analysisCounts.saved], ['Web解析済み', analysisCounts.webCompleted], ['Web未解析', analysisCounts.webPending], ['Web解析失敗', analysisCounts.webFailed], ['AI判定済み', analysisCounts.aiCompleted], ['AI未判定', analysisCounts.aiPending], ['フォーム解析済み', formAnalysisSummary?.analyzed_count ?? 0], ['フォーム未解析', formAnalysisSummary?.counts.unanalyzed ?? 0]] as const).map(([label, count]) => <div className="metric" key={label}><span>{label}</span><strong>{count}社</strong></div>)}
       </div>}
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={dataLoading || webBusy || analysisCounts.webPending + analysisCounts.webFailed === 0}
