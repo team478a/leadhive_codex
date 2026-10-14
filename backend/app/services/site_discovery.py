@@ -7,17 +7,29 @@ DOCUMENT_SUFFIXES = (".pdf", ".doc", ".docx", ".xls", ".xlsx", ".csv", ".ppt", "
 # Keep aligned with scraper.AGGREGATOR_DOMAINS. Avoid importing scraper here:
 # scraper imports collection.canonicalize_url, so this module must stay leaf-level.
 REFERENCE_DOMAINS = {
-    "hotpepper.jp", "beauty.rakuten.co.jp", "minimodel.jp", "ekiten.jp", "hairlog.jp",
-    "facebook.com", "instagram.com", "x.com", "twitter.com", "tiktok.com", "youtube.com",
-    "linkedin.com", "wikipedia.org", "itp.ne.jp", "townpage.goo.ne.jp", "mapion.co.jp",
+    "hotpepper.jp",
+    "beauty.rakuten.co.jp",
+    "minimodel.jp",
+    "ekiten.jp",
+    "hairlog.jp",
+    "facebook.com",
+    "instagram.com",
+    "x.com",
+    "twitter.com",
+    "tiktok.com",
+    "youtube.com",
+    "linkedin.com",
+    "wikipedia.org",
+    "itp.ne.jp",
+    "townpage.goo.ne.jp",
+    "mapion.co.jp",
 }
 
 
 def is_reference_host(host: str) -> bool:
     normalized = host.lower().rstrip(".").removeprefix("www.")
     return any(
-        normalized == domain or normalized.endswith("." + domain)
-        for domain in REFERENCE_DOMAINS
+        normalized == domain or normalized.endswith("." + domain) for domain in REFERENCE_DOMAINS
     )
 
 

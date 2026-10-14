@@ -64,9 +64,7 @@ def test_article_hint_is_recorded_without_confirming_identity(auth, db):
     )
     company = db.scalar(select(Company).where(Company.project_id == project["id"]))
     observation = db.scalar(
-        select(LeadSourceObservation).where(
-            LeadSourceObservation.collection_job_id == job.id
-        )
+        select(LeadSourceObservation).where(LeadSourceObservation.collection_job_id == job.id)
     )
     assert company.website_url == "https://publisher.example"
     assert company.reference_url == hint["reference_url"]
