@@ -46,8 +46,13 @@ def preserve_merged_evidence(db, target, source):
 
 def observe_candidate(db, job, company, candidate, *, new=False):
     values = {field: getattr(candidate, field) for field in FIELDS}
+    discovery = candidate.site_discovery if job.source == "serper" else {}
     digest = hashlib.sha256(
-        json.dumps(values, sort_keys=True, ensure_ascii=False).encode()
+        json.dumps(
+            {**values, **({"site_discovery": discovery} if discovery else {})},
+            sort_keys=True,
+            ensure_ascii=False,
+        ).encode()
     ).hexdigest()
     if db.scalar(
         select(LeadSourceObservation.id).where(
@@ -90,6 +95,9 @@ def observe_candidate(db, job, company, candidate, *, new=False):
         else {}
     )
     terms, attribution = TERMS[job.source]
+    if discovery:
+        # URL routing is derived search metadata, never official identity evidence.
+        facts["site_discovery"] = discovery
     db.add(
         LeadSourceObservation(
             company_id=company.id,
