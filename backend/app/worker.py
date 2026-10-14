@@ -815,9 +815,7 @@ def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     db.commit()
 
 
-def next_form_analysis_batch(
-    db, project_id: uuid.UUID, force: bool = False
-) -> list[Company]:
+def next_form_analysis_batch(db, project_id: uuid.UUID, force: bool = False) -> list[Company]:
     query = select(Company).where(
         Company.project_id == project_id,
         Company.analysis_status == "completed",
@@ -838,9 +836,7 @@ def next_form_analysis_batch(
             select(FormAnalysisLog.id)
             .where(
                 FormAnalysisLog.company_id == Company.id,
-                FormAnalysisLog.event_type.in_(
-                    ("analysis_completed", "analysis_failed")
-                ),
+                FormAnalysisLog.event_type.in_(("analysis_completed", "analysis_failed")),
             )
             .exists()
         )
@@ -860,9 +856,7 @@ def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             .order_by(Company.created_at, Company.id)
         ).all()
     else:
-        companies = next_form_analysis_batch(
-            db, job.project_id, bool(job.payload.get("force"))
-        )
+        companies = next_form_analysis_batch(db, job.project_id, bool(job.payload.get("force")))
     job.total_count = len(companies)
     db.commit()
     while companies:
