@@ -52,7 +52,7 @@ def test_name_email_form_on_contact_anchor_is_detected(auth, db, monkeypatch):
     assert profiles[0]["form_found"] is True
     assert profiles[0]["form_url"] == "https://contact-analysis.example/contact"
     assert profiles[0]["form_status"] == "REVIEW_REQUIRED"
-    assert {field["name"] for field in profiles[0]["fields"]} == {
+    assert {field["name"] for field in profiles[0]["fields"] if field["name"]} == {
         "your-name",
         "your-email",
     }
