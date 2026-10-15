@@ -254,15 +254,7 @@ def navigation_links(
         # inquiries. Otherwise a large site's incidental links exhaust the
         # bounded crawl before its general contact destination is reached.
         direct_label = re.sub(r"\s+", "", label) in {re.sub(r"\s+", "", hint) for hint in HINTS}
-        score = (
-            120
-            if direct_label
-            else 100
-            if label_contact
-            else 90
-            if path_hint
-            else 0
-        )
+        score = 120 if direct_label else 100 if label_contact else 90 if path_hint else 0
         # Dedicated contact paths beat incidental article text, including a
         # footer link whose wording is longer than the exact contact label.
         if path_hint:
