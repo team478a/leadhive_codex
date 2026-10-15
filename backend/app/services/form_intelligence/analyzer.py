@@ -37,8 +37,9 @@ from app.services.scraper import CONTACT_HINTS, ScrapeError
 from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "2.2"
+ANALYSIS_VERSION = "2.3"
 MAX_CONTACT_PAGES = 8
+MAX_GUESSED_PATHS = 6
 MAX_EXTERNAL_CONTACT_PAGES = 3
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
 
@@ -392,12 +393,15 @@ def analyze_company_forms(
 
         record_external_links(root.html, root.url)
         resolved_urls: dict[str, str] = {}
+        found_contact: set[bool] = set()
         local_pages = contact_pages(
             root.url,
             root_cache,
             company.contact_url or "",
             max_pages=MAX_CONTACT_PAGES,
             resolved_urls=resolved_urls,
+            found_contact=found_contact,
+            guessed_path_limit=MAX_GUESSED_PATHS,
         )
 
         def pages() -> Iterator[tuple[str, bool]]:
@@ -545,6 +549,7 @@ def analyze_company_forms(
                 for form_index, form in enumerate(forms):
                     if not is_contact_form(form, contact_context=contact_context):
                         continue
+                    found_contact.add(True)
                     form_started = time.monotonic()
                     compatibility = assess_delivery_compatibility(form, url)
                     fields = parse_form_fields(form)

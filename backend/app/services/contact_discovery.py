@@ -2,6 +2,7 @@
 
 import ipaddress
 import re
+import unicodedata
 from collections.abc import Iterator
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -19,10 +20,75 @@ HINTS = (
     "問い合わせ",
     "ご相談",
 )
+DIRECT_HINTS = (
+    "お問い合わせ",
+    "お問合せ",
+    "お問合わせ",
+    "問い合わせ",
+    "問合せ",
+    "問合わせ",
+    "問い合せ",
+    "contact",
+    "contact us",
+    "inquiry",
+    "inquire",
+    "otoiawase",
+    "toiawase",
+)
+CONSULT_HINTS = (
+    "ご相談",
+    "無料相談",
+    "相談する",
+    "お見積り",
+    "お見積もり",
+    "見積依頼",
+    "無料見積",
+    "無料見積もり",
+    "ご依頼",
+    "メールフォーム",
+    "mailform",
+)
+DOCUMENT_HINTS = ("資料請求", "資料ダウンロード")
+EXCLUDED_LINK_HINTS = (
+    "採用",
+    "求人",
+    "エントリー",
+    "応募",
+    "recruit",
+    "career",
+    "ログイン",
+    "会員登録",
+    "カート",
+)
+BOOKING_HINTS = ("予約",)
+SUBMIT_EXCLUDED_HINTS = (
+    "登録",
+    "購読",
+    "メルマガ",
+    "予約",
+    "ログイン",
+    "検索",
+    "カート",
+    "購入",
+    "申し込み",
+)
+MAX_GUESSED_PATHS = 6
 FALLBACK_PATHS = (
     "/contact",
     "/contact-us",
+    "/contact.html",
+    "/contact.php",
     "/inquiry",
+    "/inquiry.html",
+    "/mailform/",
+    "/contact/index.html",
+    "/contact/form/",
+    "/inquiry.php",
+    "/toiawase.html",
+    "/otoiawase.html",
+    "/mail/",
+    "/form.html",
+    "/form/contact/",
     "/inquiry-form",
     "/contact-form",
     "/form",
@@ -31,12 +97,58 @@ FALLBACK_PATHS = (
 )
 
 
+def _normalize(value: str) -> str:
+    return re.sub(r"\s+", "", unicodedata.normalize("NFKC", value)).casefold()
+
+
+def _link_label(element: Tag) -> str:
+    parts = [element.get_text(" ", strip=True)]
+    parts.extend(str(image.get("alt") or "") for image in element.select("img[alt]"))
+    parts.extend(str(element.get(key) or "") for key in ("title", "aria-label", "alt"))
+    return " ".join(part for part in parts if part)
+
+
+def _hint_score(label: str) -> int:
+    normalized = _normalize(label)
+    suffixes = ("はこちら", "フォーム", "する", "先", "窓口", "ページ", "へ", "form", "page")
+
+    def matches(terms: tuple[str, ...]) -> bool:
+        return any(
+            normalized == _normalize(term)
+            or any(normalized == _normalize(term) + suffix for suffix in suffixes)
+            for term in terms
+        )
+
+    has_direct = matches(DIRECT_HINTS)
+    has_consult = matches(CONSULT_HINTS)
+    consult_context = any(_normalize(word) in normalized for word in CONSULT_HINTS)
+    if any(_normalize(word) in normalized for word in BOOKING_HINTS) and not (
+        has_direct or consult_context
+    ):
+        return 0
+    if any(_normalize(word) in normalized for word in EXCLUDED_LINK_HINTS):
+        return 0
+    if has_direct:
+        return 120
+    booking = any(_normalize(word) in normalized for word in BOOKING_HINTS)
+    if has_consult or (consult_context and booking):
+        return 80
+    if matches(DOCUMENT_HINTS):
+        return 40
+    return 0
+
+
+def _static_location_target(onclick: str) -> str:
+    match = re.search(r"(?:window\.)?location(?:\.href)?\s*=\s*(['\"])(.*?)\1", onclick, re.I)
+    return match.group(2) if match else ""
+
+
 def external_contact_links(html: str, base: str, root: str) -> list[dict[str, str]]:
     """Unverified provenance only; these URLs are never added to the crawl queue."""
     candidates: dict[str, dict[str, str]] = {}
     for anchor in BeautifulSoup(html, "html.parser").select("a[href]"):
-        label = re.sub(r"\s+", "", anchor.get_text(" ", strip=True)).lower()
-        if label not in {re.sub(r"\s+", "", hint) for hint in HINTS}:
+        label = _link_label(anchor)
+        if not _hint_score(label):
             continue
         try:
             parsed = urlsplit(urljoin(base, str(anchor.get("href") or "")))
@@ -155,9 +267,21 @@ def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
     if form.select_one("textarea"):
         return True
     for field in form.select("input, select"):
-        identity = f"{field.get('name', '')} {field.get('id', '')}".lower()
+        identity = " ".join(
+            str(field.get(key) or "") for key in ("name", "id", "placeholder", "aria-label")
+        ).lower()
         if str(field.get("type", "text")).lower() not in {"hidden", "submit", "button"} and any(
-            word in identity for word in ("message", "inquiry", "inquire", "comment", "detail")
+            word in identity
+            for word in (
+                "message",
+                "inquiry",
+                "inquire",
+                "comment",
+                "detail",
+                "内容",
+                "お問い合わせ",
+                "ご相談",
+            )
         ):
             return True
     visible = [
@@ -174,12 +298,33 @@ def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
         f"{field.get('aria-label', '')}"
         for field in visible
     ).lower()
-    if contact_context and len(visible) >= 2:
-        if any(word in identities for word in ("email", "mail", "name", "company", "phone", "tel")):
+    if contact_context:
+        if any(
+            word in identities
+            for word in (
+                "message",
+                "inquiry",
+                "comment",
+                "detail",
+                "内容",
+                "お問い合わせ",
+                "ご相談",
+            )
+        ):
             return True
-        if any(hint in text for hint in ("名前", "氏名", "メール", "電話", "会社名")):
+        email_or_phone = any(
+            word in identities for word in ("email", "mail", "phone", "tel", "電話", "メール")
+        ) or form.select_one("input[type='email'], input[type='tel']")
+        buttons = " ".join(
+            button.get_text(" ", strip=True) or str(button.get("value") or "")
+            for button in form.select("button, input[type='submit']")
+        )
+        excluded = any(_normalize(word) in _normalize(buttons) for word in SUBMIT_EXCLUDED_HINTS)
+        explicit_contact = any(
+            _normalize(word) in _normalize(buttons) for word in ("お問い合わせ", "相談")
+        )
+        if len(visible) >= 2 and email_or_phone and (not excluded or explicit_contact):
             return True
-        return True
     return False
 
 
@@ -187,7 +332,7 @@ def is_contact_path(url: str) -> bool:
     path = urlsplit(url).path.lower()
     return bool(
         re.search(
-            r"(?:^|[/_-])(?:contact|inquiry|inquire|otoiawase|toiawase|form)(?:$|[/_.-])",
+            r"(?:^|[/_-])(?:contact|inquiry|inquire|otoiawase|toiawase|form|mailform|estimate|mitsumori|soudan)(?:$|[/_.-])",
             path,
         )
     )
@@ -212,18 +357,30 @@ def navigation_links(
 ) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     ranked: list[tuple[int, str]] = []
-    for element in soup.select("a[href], iframe[src]"):
-        value = str(element.get("href") or element.get("src") or "").strip()
+    elements = list(
+        soup.select("a[href], iframe[src], area[href], [data-href], [data-url], [onclick]")
+    )
+    for element in elements:
+        value = str(
+            element.get("href")
+            or element.get("src")
+            or element.get("data-href")
+            or element.get("data-url")
+            or ""
+        ).strip()
+        if not value:
+            value = _static_location_target(str(element.get("onclick") or ""))
         if not value or value.startswith(("mailto:", "tel:", "javascript:")):
             continue
-        label = element.get_text(" ", strip=True).lower()
+        label = _link_label(element).lower()
         fragment = urlsplit(value).fragment.lower()
         fragment_contact = bool(
             fragment
             and any(hint in fragment for hint in ("contact", "inquiry", "otoiawase", "form"))
         )
-        label_contact = any(hint in label for hint in HINTS)
-        label_contact_cta = label in HINTS or bool(
+        label_score = _hint_score(label)
+        label_contact = label_score > 0
+        label_contact_cta = label_score >= 120 or bool(
             re.search(
                 r"(?:contact(?: us)?|inquiry|inquire|お問い合わせ|問合せ|問い合わせ|ご相談)"
                 r"(?:はこちら|フォーム|する|先|窓口|ページ)?$",
@@ -247,19 +404,16 @@ def navigation_links(
             continue
         path_hint = bool(
             re.search(
-                r"(?:^|[/_-])(?:contact|inquiry|inquire|otoiawase|toiawase)(?:$|[/_.-])",
+                r"(?:^|[/_-])(?:contact|inquiry|inquire|otoiawase|toiawase|mailform|estimate|mitsumori|soudan)(?:$|[/_.-])",
                 parsed.path.lower(),
             )
         )
         # A direct contact label outranks testimonials/service copy mentioning
         # inquiries. Otherwise a large site's incidental links exhaust the
         # bounded crawl before its general contact destination is reached.
-        direct_label = re.sub(r"\s+", "", label) in {re.sub(r"\s+", "", hint) for hint in HINTS}
-        score = 120 if direct_label else 100 if label_contact else 90 if path_hint else 0
+        score = label_score or (90 if fragment_contact else 70 if path_hint else 0)
         # Dedicated contact paths beat incidental article text, including a
         # footer link whose wording is longer than the exact contact label.
-        if path_hint:
-            score += 10
         if contact_context and (
             element.name == "iframe"
             or any(hint in label for hint in ("フォーム", "入力", "こちら", "進む"))
@@ -279,6 +433,8 @@ def contact_pages(
     max_pages: int = 12,
     max_depth: int = 3,
     resolved_urls: dict[str, str] | None = None,
+    found_contact: set[bool] | None = None,
+    guessed_path_limit: int = MAX_GUESSED_PATHS,
 ) -> Iterator[tuple[str, bool]]:
     """Caller fetches each yielded URL and fills cache before resuming iteration.
 
@@ -320,10 +476,17 @@ def contact_pages(
     ]
     visited: set[str] = set()
     count = 0
+    fallback_count = 0
     while queue or fallbacks:
         if not queue:
+            if found_contact:
+                break
             queue, fallbacks = fallbacks, []
         url, explicit, depth = queue.pop(0)
+        if not explicit:
+            fallback_count += 1
+            if fallback_count > guessed_path_limit:
+                break
         key = url.rstrip("/")
         if key in visited:
             continue
