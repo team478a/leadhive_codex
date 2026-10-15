@@ -19,6 +19,7 @@ _HEADING_PREFIX = re.compile(
     r"[0-9０-９一二三四五六七八九十]+\s*位\s*)"
 )
 _PAREN_SUFFIX = re.compile(r"\s*[（(\[].*?[）)\]]\s*$")
+_CATCHPHRASE_SUFFIX = re.compile(r"[｜|：].*$")
 _LEGAL_FORMS = (
     "株式会社",
     "有限会社",
@@ -228,6 +229,7 @@ def _name_key(name: str) -> str:
 
 def _clean_heading(value: str) -> str:
     cleaned = _HEADING_PREFIX.sub("", value).strip()
+    cleaned = _CATCHPHRASE_SUFFIX.sub("", cleaned).strip()
     cleaned = _PAREN_SUFFIX.sub("", cleaned).strip(" \t　:：-‐–—")
     return cleaned
 

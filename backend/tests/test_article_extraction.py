@@ -125,6 +125,22 @@ def test_heading_cleanup_keeps_region_in_context_and_normalizes_fullwidth_number
     assert "大阪市" in result.entries[0].context
 
 
+def test_extracted_company_names_drop_catchphrase_suffixes():
+    html = """<main><ol>
+    <li><h2>株式会社サンプル一｜地域密着</h2><a href="https://one.example/">公式</a></li>
+    <li><h2>株式会社サンプル二|高品質</h2><a href="https://two.example/">公式</a></li>
+    <li><h2>株式会社サンプル三：無料相談</h2><a href="https://three.example/">公式</a></li>
+    </ol></main>"""
+
+    result = extract_entries(html, ARTICLE_URL)
+
+    assert [entry.name for entry in result.entries] == [
+        "株式会社サンプル一",
+        "株式会社サンプル二",
+        "株式会社サンプル三",
+    ]
+
+
 def test_entry_limit_is_reported_and_urls_are_canonicalized():
     items = "".join(
         f"<li><strong>株式会社テスト{i}</strong><a href='https://sub{i}.example/path#fragment'>公式サイト</a></li>"

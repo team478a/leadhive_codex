@@ -908,6 +908,9 @@ def run_article_extraction(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     from app.services.collection_jobs import is_suppressed, save_candidates, start_job
     from app.services.scraper import SafeFetcher, ScrapeError, is_aggregator_domain
 
+    operation_started = time.monotonic()
+    article_limit = job.payload.get("article_limit", 20)
+    operation_deadline = operation_started + article_limit * 70
     source_ids = {uuid.UUID(value) for value in job.payload["source_operation_ids"]}
     root_ids = set(
         db.scalars(
@@ -937,167 +940,171 @@ def run_article_extraction(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             ),
         )
         .order_by(CollectionDiscoveryHit.observed_at, CollectionDiscoveryHit.id)
-        .limit(job.payload.get("article_limit", 20))
+        .limit(article_limit)
     ).all()
     job.total_count = len(hits)
     db.commit()
-    fetcher = SafeFetcher()
-    try:
-        for hit in hits:
-            if stop_requested(db, job, worker_id):
-                return
-            parent = db.get(CollectionJob, hit.collection_job_id)
-            article_url = (hit.snapshot or {}).get("link", "")
-            started = datetime.now(timezone.utc)
-            elapsed = 0
-            extraction = CollectionArticleExtraction(
-                project_id=job.project_id,
-                operation_job_id=job.id,
-                discovery_hit_id=hit.id,
-                article_url=article_url,
-                extractor_version=EXTRACTOR_VERSION,
-                status="FETCHED",
-                warnings=[],
-            )
-            db.add(extraction)
-            db.flush()
-            db.commit()
-            usage_status = "failed"
-            success = False
-            try:
-                fetcher.site_root = article_url
-                if not fetcher.robots_allowed(article_url):
-                    extraction.status = "ROBOTS_DISALLOWED"
-                else:
-                    page = fetcher.fetch_html(article_url)
-                    extraction.final_url = page.url
-                    extraction.body_sha256 = hashlib.sha256(page.html.encode()).hexdigest()
-                    result = extract_entries(page.html, article_url)
-                    extraction.page_kind = result.page_kind
-                    extraction.pattern = result.entries[0].pattern if result.entries else ""
-                    extraction.warnings = list(result.warnings)
-                    extraction.status = (
-                        "EXTRACTED" if result.page_kind == "LIST_ARTICLE" else result.page_kind
-                    )
-                    extraction.entry_count = len(result.entries)
-                    extraction.linked_count = sum(row.status == "LINKED" for row in result.entries)
-                    extraction.name_only_count = sum(
-                        row.status == "NAME_ONLY" for row in result.entries
-                    )
-                    extraction.rejected_count = sum(
-                        row.status == "REJECTED" for row in result.entries
-                    )
-                    for row in result.entries:
-                        entry = CollectionExtractedEntry(
-                            extraction_id=extraction.id,
-                            entry_order=row.order,
-                            name=row.name,
-                            name_key=row.name_key,
-                            link_url=row.link_url,
-                            link_kind=row.link_kind,
-                            website_candidate=row.link_url
-                            if row.link_kind == "EXTERNAL_SITE"
-                            else "",
-                            pattern=row.pattern,
-                            locator=row.locator,
-                            context=row.context,
-                            status=row.status,
-                            reasons=list(row.reasons),
-                        )
-                        db.add(entry)
-                    if not job.payload.get("dry_run"):
-                        for entry in [row for row in result.entries if row.status == "LINKED"]:
-                            if stop_requested(db, job, worker_id):
-                                return
-                            persisted = db.scalar(
-                                select(CollectionExtractedEntry).where(
-                                    CollectionExtractedEntry.extraction_id == extraction.id,
-                                    CollectionExtractedEntry.entry_order == entry.order,
-                                )
-                            )
-                            child = start_job(
-                                db, job.project_id, "serper", parent.keyword, parent.region, job.id
-                            )
-                            candidate = Candidate(
-                                company_name=entry.name,
-                                website_url=entry.link_url,
-                                reference_url=article_url,
-                                search_excerpt=entry.context,
-                                site_discovery={
-                                    "discovery_method": "ARTICLE_EXTRACT",
-                                    "article_url": article_url,
-                                    "article_title": (hit.snapshot or {}).get("title", ""),
-                                    "extraction_id": str(extraction.id),
-                                    "entry_id": str(persisted.id),
-                                },
-                            )
-                            suppressed = is_suppressed(db, job.project_id, candidate)
-                            _, entry_domain = canonicalize_url(entry.link_url)
-                            save_candidates(db, child, [candidate])
-                            persisted.collection_job_id = child.id
-                            if child.saved_count:
-                                persisted.disposition = "SAVED"
-                                success = True
-                                job.payload = {
-                                    **(job.payload or {}),
-                                    "article_saved_count": (job.payload or {}).get(
-                                        "article_saved_count", 0
-                                    )
-                                    + child.saved_count,
-                                }
-                            elif child.duplicate_count:
-                                persisted.disposition = "SUPPRESSED" if suppressed else "DUPLICATE"
-                            elif child.excluded_count:
-                                persisted.disposition = (
-                                    "AGGREGATOR_EXCLUDED"
-                                    if is_aggregator_domain(entry_domain)
-                                    else "NON_COMPANY_SOURCE"
-                                )
-                            else:
-                                persisted.disposition = "INGESTION_CONFLICT"
-                            persisted.company_id = db.scalar(
-                                select(Company.id).where(
-                                    Company.project_id == job.project_id,
-                                    Company.company_name == entry.name,
-                                    Company.domain == entry_domain,
-                                )
-                            )
-                            db.commit()
-                    usage_status = "completed"
-                    success = True
-            except ScrapeError as exc:
-                message = str(exc).lower()
+    for index, hit in enumerate(hits):
+        if stop_requested(db, job, worker_id):
+            return
+        if time.monotonic() >= operation_deadline:
+            job.error_message = "記事抽出操作の時間上限に達しました。"
+            for _ in hits[index:]:
+                if not progress(db, job, worker_id, False):
+                    return
+            return
+
+        parent = db.get(CollectionJob, hit.collection_job_id)
+        article_url = (hit.snapshot or {}).get("link", "")
+        started = datetime.now(timezone.utc)
+        extraction = CollectionArticleExtraction(
+            project_id=job.project_id,
+            operation_job_id=job.id,
+            discovery_hit_id=hit.id,
+            article_url=article_url,
+            extractor_version=EXTRACTOR_VERSION,
+            status="FETCHED",
+            warnings=[],
+        )
+        db.add(extraction)
+        db.flush()
+        db.commit()
+        usage_status = "failed"
+        success = False
+        fetcher = SafeFetcher()
+        try:
+            fetcher.site_root = article_url
+            if not fetcher.robots_allowed(article_url):
+                extraction.status = "ROBOTS_DISALLOWED"
+            else:
+                page = fetcher.fetch_html(article_url)
+                extraction.final_url = page.url
+                extraction.body_sha256 = hashlib.sha256(page.html.encode()).hexdigest()
+                result = extract_entries(page.html, article_url)
+                extraction.page_kind = result.page_kind
+                extraction.pattern = result.entries[0].pattern if result.entries else ""
+                extraction.warnings = list(result.warnings)
                 extraction.status = (
-                    "TOO_LARGE"
-                    if "サイズ" in message
-                    else (
-                        "ROBOTS_DISALLOWED"
-                        if "robots" in message
-                        else (
-                            "NOT_HTML"
-                            if "html" in message or "コンテンツ" in message
-                            else "FETCH_FAILED"
+                    "EXTRACTED" if result.page_kind == "LIST_ARTICLE" else result.page_kind
+                )
+                extraction.entry_count = len(result.entries)
+                extraction.linked_count = sum(row.status == "LINKED" for row in result.entries)
+                extraction.name_only_count = sum(
+                    row.status == "NAME_ONLY" for row in result.entries
+                )
+                extraction.rejected_count = sum(
+                    row.status == "REJECTED" for row in result.entries
+                )
+                for row in result.entries:
+                    entry = CollectionExtractedEntry(
+                        extraction_id=extraction.id,
+                        entry_order=row.order,
+                        name=row.name,
+                        name_key=row.name_key,
+                        link_url=row.link_url,
+                        link_kind=row.link_kind,
+                        website_candidate=row.link_url
+                        if row.link_kind == "EXTERNAL_SITE"
+                        else "",
+                        pattern=row.pattern,
+                        locator=row.locator,
+                        context=row.context,
+                        status=row.status,
+                        reasons=list(row.reasons),
+                    )
+                    db.add(entry)
+                if not job.payload.get("dry_run"):
+                    for entry in [row for row in result.entries if row.status == "LINKED"]:
+                        if stop_requested(db, job, worker_id):
+                            return
+                        persisted = db.scalar(
+                            select(CollectionExtractedEntry).where(
+                                CollectionExtractedEntry.extraction_id == extraction.id,
+                                CollectionExtractedEntry.entry_order == entry.order,
+                            )
                         )
+                        child = start_job(
+                            db, job.project_id, "serper", parent.keyword, parent.region, job.id
+                        )
+                        candidate = Candidate(
+                            company_name=entry.name,
+                            website_url=entry.link_url,
+                            reference_url=article_url,
+                            search_excerpt=entry.context,
+                            site_discovery={
+                                "discovery_method": "ARTICLE_EXTRACT",
+                                "article_url": article_url,
+                                "article_title": (hit.snapshot or {}).get("title", ""),
+                                "extraction_id": str(extraction.id),
+                                "entry_id": str(persisted.id),
+                            },
+                        )
+                        suppressed = is_suppressed(db, job.project_id, candidate)
+                        _, entry_domain = canonicalize_url(entry.link_url)
+                        save_candidates(db, child, [candidate])
+                        persisted.collection_job_id = child.id
+                        if child.saved_count:
+                            persisted.disposition = "SAVED"
+                            success = True
+                            job.payload = {
+                                **(job.payload or {}),
+                                "article_saved_count": (job.payload or {}).get(
+                                    "article_saved_count", 0
+                                )
+                                + child.saved_count,
+                            }
+                        elif child.duplicate_count:
+                            persisted.disposition = "SUPPRESSED" if suppressed else "DUPLICATE"
+                        elif child.excluded_count:
+                            persisted.disposition = (
+                                "AGGREGATOR_EXCLUDED"
+                                if is_aggregator_domain(entry_domain)
+                                else "NON_COMPANY_SOURCE"
+                            )
+                        else:
+                            persisted.disposition = "INGESTION_CONFLICT"
+                        persisted.company_id = db.scalar(
+                            select(Company.id).where(
+                                Company.project_id == job.project_id,
+                                Company.company_name == entry.name,
+                                Company.domain == entry_domain,
+                            )
+                        )
+                        db.commit()
+                usage_status = "completed"
+                success = True
+        except ScrapeError as exc:
+            message = str(exc).lower()
+            extraction.status = (
+                "TOO_LARGE"
+                if "サイズ" in message
+                else (
+                    "ROBOTS_DISALLOWED"
+                    if "robots" in message
+                    else (
+                        "NOT_HTML"
+                        if "html" in message or "コンテンツ" in message
+                        else "FETCH_FAILED"
                     )
                 )
-                extraction.warnings = [exc.public_message]
-            finally:
-                elapsed = max(0, int((datetime.now(timezone.utc) - started).total_seconds() * 1000))
-                db.add(
-                    LeadProcessingUsage(
-                        project_id=job.project_id,
-                        kind="search",
-                        provider="article_fetch",
-                        status=usage_status,
-                        started_at=started,
-                        elapsed_ms=elapsed,
-                    )
+            )
+            extraction.warnings = [exc.public_message]
+        finally:
+            fetcher.close()
+            elapsed = max(0, int((datetime.now(timezone.utc) - started).total_seconds() * 1000))
+            db.add(
+                LeadProcessingUsage(
+                    project_id=job.project_id,
+                    kind="search",
+                    provider="article_fetch",
+                    status=usage_status,
+                    started_at=started,
+                    elapsed_ms=elapsed,
                 )
-                db.commit()
-            if not progress(db, job, worker_id, success):
-                return
-    finally:
-        fetcher.close()
+            )
+            db.commit()
+        if not progress(db, job, worker_id, success):
+            return
 
 
 def run_once() -> bool:
