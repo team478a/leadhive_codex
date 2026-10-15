@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 import { DmApprovalPreparationPanel } from './DmApprovalPreparationPanel'
 import type { HumanDestinationChoice } from './DestinationChoice'
@@ -24,6 +24,7 @@ export function DmPreparationPanel({ companyId, projectId }: { companyId: string
   const [name, setName] = useState('')
   const [subject, setSubject] = useState('')
   const [base, setBase] = useState('')
+  const editorRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     let active = true
     api<Options>(`/companies/${companyId}/dm-preparation`).then(value => { if (active) { setData(value) } }).catch(e => { if (active) { setData(null); setError(errorMessage(e)) } })
@@ -59,7 +60,7 @@ export function DmPreparationPanel({ companyId, projectId }: { companyId: string
     <h3>根拠付きDM下書き準備</h3>
     <p className="muted">選択した窓口と公開情報の根拠を固定して下書きを保存します。AI通信・サイト接続は行いません。根拠はHumanの確認記録で、独立した事実検証ではありません。保存後に入力内容を確認し、承認待ち提案を準備できます。下書き保存だけではDM READYになりません。</p>
     {!selected && <p>有効な窓口を準備対象に選択すると、下書きを準備できます。</p>}
-    {selected && data?.can_prepare && <>
+    {selected && data?.can_prepare && <div ref={editorRef}>
       <p>対象窓口：{selected.type} / {selected.destination} / 選択版 {choice?.version}</p>
       <details><summary>基本文面テンプレートを作成</summary>
         <p>会社名と根拠付きの一文は自動で差し込みます。サービス説明・提案・CTA・署名を基本文面にまとめてください。</p>
@@ -75,7 +76,7 @@ export function DmPreparationPanel({ companyId, projectId }: { companyId: string
       <label className="field">DMに使う事実<input value={fact} maxLength={500} disabled={busy} onChange={e => { setFact(e.target.value); setObserved(false) }} placeholder="上の引用に含まれる事実を10文字以上で入力" /></label>
       <label className="checkbox-row"><input type="checkbox" checked={observed} disabled={busy} onChange={e => setObserved(e.target.checked)} />この公式ページで事実と引用を確認しました</label>
       <button disabled={busy || !template || !observed || !source.trim() || fact.trim().length < 10 || !excerpt.includes(fact.trim())} onClick={() => void save(false)}>根拠付き下書きを保存</button>
-    </>}
+    </div>}
     {error && <p role="alert">{error}</p>}
     {data?.preparations.map(p => <article className="mt-4" key={p.id} aria-label="保存した根拠付き下書き">
       <p role="status">{p.status === 'DRAFT_PREPARED' ? '下書き準備済み' : '要再確認'}（{p.status}）{p.reason && `：${reasons[p.reason] ?? p.reason}`}</p>
@@ -86,7 +87,11 @@ export function DmPreparationPanel({ companyId, projectId }: { companyId: string
       <p>使った事実：{p.snapshot.evidence.fact}</p>
       <p>根拠：<a href={p.snapshot.evidence.source_url} target="_blank" rel="noreferrer">{p.snapshot.evidence.source_url}</a> / Human確認日時：{new Date(p.snapshot.evidence.observed_at).toLocaleString('ja-JP')}</p>
       <blockquote>{p.snapshot.evidence.evidence_excerpt}</blockquote>
-      <DmApprovalPreparationPanel preparationId={p.id} canPrepare={data.can_prepare} />
+      <DmApprovalPreparationPanel preparationId={p.id} projectId={projectId} canPrepare={data.can_prepare} onEdit={() => {
+        editorRef.current?.scrollIntoView({ block: 'start' })
+        editorRef.current?.querySelector<HTMLSelectElement>('select')?.focus()
+      }} />
+      <p className="muted text-sm">修正内容は新しい下書きとして保存します。既存の承認内容には上書きしません。</p>
     </article>)}
     {data && <p className="muted">最新10件の準備記録を表示しています。</p>}
   </section>

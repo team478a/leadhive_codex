@@ -26,10 +26,11 @@ const reasonNames: Record<string, string> = {
   'request expired': '候補の有効期限が切れました。新しい有効な証拠で再準備してください。',
 }
 
-export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: {
+export function ApprovalQueuePage({ projects, projectRoles, initialProjectId, inlineRequest }: {
   projects: Project[]; projectRoles: Record<string, ProjectMember['role']>; initialProjectId?: string
+  inlineRequest?: { id: string; projectId: string; canWrite: boolean; onChanged?: () => Promise<unknown>; onBusyChange?: (busy: boolean) => void }
 }) {
-  const [projectId, setProjectId] = useState(projects.some(p => p.id === initialProjectId) ? initialProjectId! : projects[0]?.id ?? '')
+  const [projectId, setProjectId] = useState(inlineRequest?.projectId ?? (projects.some(p => p.id === initialProjectId) ? initialProjectId! : projects[0]?.id ?? ''))
   const [items, setItems] = useState<Proposal[]>([])
   const [events, setEvents] = useState<AuditEvent[]>([])
   const [companies, setCompanies] = useState<Company[]>([])
@@ -51,19 +52,38 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: 
   const [offset, setOffset] = useState(0)
   const [cf7Reviewed, setCf7Reviewed] = useState(false)
   useEffect(() => { setCf7Reviewed(false) }, [selected?.id, selected?.payload_hash, selected?.status])
-  const canWrite = ['owner', 'editor'].includes(projectRoles[projectId] ?? '')
+  const inlineRequestId = inlineRequest?.id
+  const onInlineChanged = inlineRequest?.onChanged
+  const canWrite = inlineRequest ? inlineRequest.canWrite : ['owner', 'editor'].includes(projectRoles[projectId] ?? '')
   useEffect(() => {
     if (!projectId) return
     let live = true
     setError(''); setSelected(null); setPassword(''); setReason('')
+    if (inlineRequestId) {
+      api<Proposal>(`/approval-requests/${inlineRequestId}`).then(async proposal => {
+        if (live) {
+          if (proposal.project_id !== projectId) throw new Error('提案のプロジェクトが一致しません。')
+          setSelected(proposal)
+          await onInlineChanged?.()
+        }
+      }).catch(e => { if (live) setError(errorMessage(e)) })
+      return () => { live = false }
+    }
     Promise.all([
       api<Proposal[]>(`/projects/${projectId}/approval-requests?limit=50&offset=${offset}`),
       api<AuditEvent[]>(`/projects/${projectId}/approval-audit?limit=100`),
     ]).then(([next, ledger]) => { if (live) { setItems(next); setEvents(ledger) } })
       .catch(e => { if (live) setError(errorMessage(e)) })
     return () => { live = false }
-  }, [projectId, offset])
+  }, [projectId, offset, inlineRequestId, onInlineChanged])
   async function refresh() {
+    if (inlineRequest) {
+      const proposal = await api<Proposal>(`/approval-requests/${inlineRequest.id}`)
+      if (proposal.project_id !== projectId) throw new Error('提案のプロジェクトが一致しません。')
+      setSelected(proposal)
+      await inlineRequest.onChanged?.()
+      return
+    }
     const [next, ledger] = await Promise.all([
       api<Proposal[]>(`/projects/${projectId}/approval-requests?limit=50&offset=${offset}`),
       api<AuditEvent[]>(`/projects/${projectId}/approval-audit?limit=100`),
@@ -73,8 +93,9 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: 
   }
   async function act(fn: () => Promise<void>) {
     setBusy(true); setError(''); setNotice('')
+    inlineRequest?.onBusyChange?.(true)
     try { await fn() } catch (e) { setError(errorMessage(e)) }
-    finally { setBusy(false); setPassword('') }
+    finally { setBusy(false); setPassword(''); inlineRequest?.onBusyChange?.(false) }
   }
   async function approve() {
     if (!selected) return
@@ -117,19 +138,21 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: 
     })
   }
   return <section className="space-y-6">
-    <p className="muted">提案の宛先と内容を確認し、ログインパスワードで再認証して承認してください。承認だけでは送信しません。承認済みメールは別操作で予約でき、実行設定が有効な場合だけワーカーが送信します。承認の有効期限は作成から最大24時間です。</p>
-    <Field label="承認プロジェクト"><select value={projectId} onChange={e => { setProjectId(e.target.value); setOffset(0); setCreateOpen(false); setNotice('') }}>
+    <p className="muted">{inlineRequest ? '宛先・本文・根拠を確認し、ログインパスワードで再認証して承認してください。承認だけでは送信しません。変更・期限切れの場合は再準備が必要です。' : '提案の宛先と内容を確認し、ログインパスワードで再認証して承認してください。承認だけでは送信しません。承認済みメールは別操作で予約でき、実行設定が有効な場合だけワーカーが送信します。承認の有効期限は作成から最大24時間です。'}</p>
+    {!inlineRequest && <Field label="承認プロジェクト"><select value={projectId} onChange={e => { setProjectId(e.target.value); setOffset(0); setCreateOpen(false); setNotice('') }}>
       {projects.map(project => <option key={project.id} value={project.id}>{project.project_name}</option>)}
-    </select></Field>
+    </select></Field>}
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
+    {!inlineRequest && <>
     <ApprovedEmailPanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     <ApprovedFormPanel key={`form-dispatch-${projectId}`} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     {canWrite && <FormApprovalPreparationPanel key={`form-${projectId}`} projectId={projectId} refresh={refresh} />}
     {canWrite && <CF7CandidatePreparationPanel key={`cf7-${projectId}`} projectId={projectId} refresh={refresh} />}
+    </>}
     <fieldset disabled={busy || !projectId}>
       <div className="flex flex-wrap gap-3"><button type="button" className="secondary" onClick={() => act(refresh)}>最新の状態を取得</button>
-        {canWrite && <button type="button" onClick={openCreate}>承認待ち提案を作成</button>}</div>
+        {canWrite && !inlineRequest && <button type="button" onClick={openCreate}>承認待ち提案を作成</button>}</div>
       {createOpen && canWrite && <form onSubmit={create} className="panel mt-4">
         <h2>新しい提案（送信しません）</h2>
         <Field label="提案先の会社"><select required value={companyId} onChange={e => setCompanyId(e.target.value)}>{companies.map(company => <option key={company.id} value={company.id}>{company.company_name}</option>)}</select></Field>
@@ -142,12 +165,12 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: 
         {channel === 'form' && <Field label="フォーム入力値（JSON）"><textarea value={fieldValues} onChange={e => setFieldValues(e.target.value)} /></Field>}
         <button type="submit" disabled={!companyId}>提案を保存</button> <button type="button" className="secondary" onClick={() => setCreateOpen(false)}>閉じる</button>
       </form>}
-      <div className="panel mt-4"><h2>Human Approval Queue</h2>
+      {!inlineRequest && <div className="panel mt-4"><h2>Human Approval Queue</h2>
         {!items.length && <p>このページに承認提案はありません。</p>}
         <ul>{items.map(item => <li key={item.id}><button type="button" className="secondary my-2" onClick={() => { setSelected(item); setPassword(''); setReason('') }}>{item.company_name} · {item.channel}{item.delivery_method === 'cf7_real_reservation' ? '（予約のみ）' : item.delivery_method === 'cf7_real_candidate_only' ? '（候補内容）' : ''} · v{item.payload_version} · {names[item.status] ?? item.status}</button></li>)}</ul>
         <button type="button" className="secondary" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 50))}>前の50件</button>{' '}
         <button type="button" className="secondary" disabled={items.length < 50} onClick={() => setOffset(offset + 50)}>次の50件</button>
-      </div>
+      </div>}
       {selected && <article className="panel mt-4">
         <h2>{selected.company_name} の提案内容</h2>
         {selected.delivery_method === 'cf7_candidate_only' && <p role="status">CF7候補内容の承認のみです。送信予約・実送信には使用できません。</p>}
@@ -181,7 +204,7 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: 
           {selected.adapter_plan && <><dt>予約用の操作計画</dt><dd><FormAdapterPlanDetails plan={selected.adapter_plan} hash={selected.adapter_plan_hash} /></dd></>}
           <dt>提案者</dt><dd>{selected.created_by_principal_type === 'AGENT' ? 'Agent' : 'Human'}</dd>
           <dt>作成 / 有効期限</dt><dd>{date(selected.created_at)} / {date(selected.expires_at)}</dd>
-          <dt>payload version / hash</dt><dd className="break-all">{selected.payload_version} / {selected.payload_hash}</dd>
+          <dt>{inlineRequest ? '承認内容の識別情報' : 'payload version / hash'}</dt><dd className="break-all">{inlineRequest ? <details><summary>版番号・照合情報を見る</summary>{selected.payload_version} / {selected.payload_hash}</details> : <>{selected.payload_version} / {selected.payload_hash}</>}</dd>
           {(selected.rejection_reason || selected.invalidation_reason) && <><dt>理由</dt><dd>{reasonNames[selected.rejection_reason || selected.invalidation_reason || ''] || selected.rejection_reason || selected.invalidation_reason}</dd></>}
         </dl>
         {canWrite && selected.status === 'PENDING' && <form onSubmit={e => { e.preventDefault(); void approve() }}>
@@ -199,6 +222,6 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: 
         {canWrite && selected.delivery_method === 'cf7_candidate_only' && <CF7CandidatePreparationPanel key={`cf7-revision-${selected.id}`} projectId={projectId} refresh={refresh} revision={selected} />}
       </article>}
     </fieldset>
-    <details className="panel"><summary>監査記録（最新100件）</summary><ul>{events.map(event => <li key={event.id}>{date(event.timestamp)} · {event.principal_type} · {event.event} · {event.reason}</li>)}</ul></details>
+    {!inlineRequest && <details className="panel"><summary>監査記録（最新100件）</summary><ul>{events.map(event => <li key={event.id}>{date(event.timestamp)} · {event.principal_type} · {event.event} · {event.reason}</li>)}</ul></details>}
   </section>
 }
