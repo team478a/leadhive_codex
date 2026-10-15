@@ -27,6 +27,7 @@ async function setup(page: Page, count = 2, role = 'editor', openGuide = true, a
     else if (path.endsWith('/company-list')) body = { items: [], total: 0 }
     else if (path.endsWith('/data-quality') || path.endsWith('/deal-pipeline') || path.endsWith('/analysis-refresh-schedule')) body = null
     else if (path.endsWith('/form-readiness')) body = { counts: {}, items: [], total: 0, company_total: 0 }
+    else if (path.endsWith('/missing-diagnostics')) body = { counts: {}, reason_labels: {}, total: 0, items: [] }
     await route.fulfill({ json: body })
   })
   await page.goto('/')
