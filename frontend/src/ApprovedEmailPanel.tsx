@@ -5,7 +5,7 @@ import type { CF7Snapshot, CF7Observation } from './CF7CandidateDetails'
 
 export interface ApprovalProposal {
   lead_dm_evidence?: { choice_version: number; evidence: { source_url: string; fact: string; evidence_excerpt: string; observed_at: string } } | null
-  id: string; company_name: string; company_id: string; channel: 'email' | 'form'
+  id: string; project_id: string; company_name: string; company_id: string; channel: 'email' | 'form'
   recipient: string | null; form_url: string | null; subject: string; body: string
   form_action_url?: string | null
   delivery_method?: string
