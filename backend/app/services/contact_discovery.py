@@ -271,7 +271,17 @@ def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
             str(field.get(key) or "") for key in ("name", "id", "placeholder", "aria-label")
         ).lower()
         if str(field.get("type", "text")).lower() not in {"hidden", "submit", "button"} and any(
-            word in identity for word in ("message", "inquiry", "inquire", "comment", "detail")
+            word in identity
+            for word in (
+                "message",
+                "inquiry",
+                "inquire",
+                "comment",
+                "detail",
+                "内容",
+                "お問い合わせ",
+                "ご相談",
+            )
         ):
             return True
     visible = [

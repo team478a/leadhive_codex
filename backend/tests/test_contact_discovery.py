@@ -330,6 +330,13 @@ def test_contact_context_requires_contact_signal_or_safe_email_submit():
     assert named_message is not None
     assert is_contact_form(named_message, contact_context=True)
 
+    japanese_message = BeautifulSoup(
+        '<form><input name="お問合せ内容"></form>',
+        "html.parser",
+    ).form
+    assert japanese_message is not None
+    assert is_contact_form(japanese_message)
+
 
 def test_guessed_path_reaches_contact_html_and_stops_after_six():
     root = "https://example.com/"
