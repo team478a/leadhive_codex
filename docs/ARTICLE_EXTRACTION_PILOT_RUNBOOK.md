@@ -17,7 +17,7 @@
 - 取得状態・抽出pattern・`LINKED` / `NAME_ONLY` / `REJECTED` 数・新規候補・重複／除外・処理時間を記録する。
 - 新規候補を全件、人が「掲載企業と一致／記事運営会社／別会社／広告／判断不可」で確認する。未確認を正解扱いしない。
 - 誤登録率はHuman確認済み候補のみを分母にして計算し、対象件数と未確認件数を併記する。
-- 記録先は `docs/208_ARTICLE_EXTRACTION_PILOT.md`。結果の後で停止し、名称のみ行のsite lookupやAI抽出には進まない。
+- 記録先は `docs/209_ARTICLE_EXTRACTION_PILOT.md`。結果の後で停止し、名称のみ行のsite lookupやAI抽出には進まない。
 
 ## 即時停止条件
 

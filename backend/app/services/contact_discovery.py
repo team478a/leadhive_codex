@@ -54,6 +54,9 @@ EXCLUDED_LINK_HINTS = (
     "求人",
     "エントリー",
     "応募",
+    "メルマガ",
+    "メールマガジン",
+    "購読",
     "recruit",
     "career",
     "ログイン",
@@ -108,9 +111,49 @@ def _link_label(element: Tag) -> str:
     return " ".join(part for part in parts if part)
 
 
+def _is_contact_cta(label: str) -> bool:
+    normalized = _normalize(label)
+    allowed_suffixes = (
+        "",
+        "はこちら",
+        "フォーム",
+        "する",
+        "先",
+        "窓口",
+        "ページ",
+        "ください",
+        "くださいませ",
+        "願いします",
+        "form",
+        "page",
+        "・ご相談",
+        "・お問い合わせ",
+        "・相談",
+        "(無料)",
+    )
+    allowed_prefixes = (
+        "",
+        "contact",
+        "contactus",
+        "ご予約・",
+        "ご予約",
+        "ご相談・",
+        "お気軽に",
+    )
+    return any(
+        (position := normalized.find(term)) >= 0
+        and normalized[:position] in allowed_prefixes
+        and normalized[position + len(term) :] in allowed_suffixes
+        for term in DIRECT_HINTS + CONSULT_HINTS
+    )
+
+
 def _hint_score(label: str) -> int:
     normalized = _normalize(label)
     suffixes = ("はこちら", "フォーム", "する", "先", "窓口", "ページ", "へ", "form", "page")
+
+    def partial_matches(terms: tuple[str, ...]) -> bool:
+        return any(_normalize(term) in normalized for term in terms)
 
     def matches(terms: tuple[str, ...]) -> bool:
         return any(
@@ -119,14 +162,14 @@ def _hint_score(label: str) -> int:
             for term in terms
         )
 
-    has_direct = matches(DIRECT_HINTS)
-    has_consult = matches(CONSULT_HINTS)
-    consult_context = any(_normalize(word) in normalized for word in CONSULT_HINTS)
+    if any(_normalize(word) in normalized for word in EXCLUDED_LINK_HINTS):
+        return 0
+    has_direct = partial_matches(DIRECT_HINTS)
+    has_consult = partial_matches(CONSULT_HINTS)
+    consult_context = has_consult
     if any(_normalize(word) in normalized for word in BOOKING_HINTS) and not (
         has_direct or consult_context
     ):
-        return 0
-    if any(_normalize(word) in normalized for word in EXCLUDED_LINK_HINTS):
         return 0
     if has_direct:
         return 120
@@ -148,7 +191,7 @@ def external_contact_links(html: str, base: str, root: str) -> list[dict[str, st
     candidates: dict[str, dict[str, str]] = {}
     for anchor in BeautifulSoup(html, "html.parser").select("a[href]"):
         label = _link_label(anchor)
-        if not _hint_score(label):
+        if not _is_contact_cta(label) or not _hint_score(label):
             continue
         try:
             parsed = urlsplit(urljoin(base, str(anchor.get("href") or "")))
@@ -380,13 +423,7 @@ def navigation_links(
         )
         label_score = _hint_score(label)
         label_contact = label_score > 0
-        label_contact_cta = label_score >= 120 or bool(
-            re.search(
-                r"(?:contact(?: us)?|inquiry|inquire|お問い合わせ|問合せ|問い合わせ|ご相談)"
-                r"(?:はこちら|フォーム|する|先|窓口|ページ)?$",
-                label,
-            )
-        )
+        label_contact_cta = _is_contact_cta(label)
         if value.startswith("#") and not (fragment_contact or label_contact):
             continue
         parsed = urlsplit(urljoin(base, value))
@@ -411,7 +448,10 @@ def navigation_links(
         # A direct contact label outranks testimonials/service copy mentioning
         # inquiries. Otherwise a large site's incidental links exhaust the
         # bounded crawl before its general contact destination is reached.
-        score = label_score or (90 if fragment_contact else 70 if path_hint else 0)
+        score = max(
+            label_score if label_contact_cta else min(label_score, 60),
+            90 if fragment_contact else 70 if path_hint else 0,
+        )
         # Dedicated contact paths beat incidental article text, including a
         # footer link whose wording is longer than the exact contact label.
         if contact_context and (

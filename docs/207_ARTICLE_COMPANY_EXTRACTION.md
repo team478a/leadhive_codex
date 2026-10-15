@@ -320,7 +320,7 @@ python -m offline_replay.article_extraction_inventory --output dist/article-extr
 - 独立した検証Projectで実行し、営業用Projectに取り込まない。
 - 記録: 記事ごとの取得状態・パターン・`LINKED`/`NAME_ONLY`/`REJECTED`数、新規企業候補数、既存との重複数、処理時間。
 - Human確認: 新規企業候補の全件（最大でも数十件）を「掲載企業と一致／記事運営会社／別会社／広告／判断不可」で人が確認し、**誤って登録された割合**を出す。Human未確認のものを正解に数えない。
-- 結果を `docs/208_ARTICLE_EXTRACTION_PILOT.md` にまとめ、ここで止める。名称のみ行のsite lookupやAI抽出に進むかは、この結果を見て判断する。
+- 結果を `docs/209_ARTICLE_EXTRACTION_PILOT.md` にまとめ、ここで止める。名称のみ行のsite lookupやAI抽出に進むかは、この結果を見て判断する。
 
 ## 11. 停止条件（どれか1つでも起きたら止めて報告）
 

@@ -10,6 +10,7 @@ from app.services.contact_discovery import (
     is_contact_path,
     navigation_links,
 )
+from app.services.form_intelligence.analyzer import ANALYSIS_VERSION
 
 
 def crawl(pages, *, saved="", limit=12):
@@ -255,6 +256,10 @@ def test_external_contact_candidate_budget():
 FIXTURES = Path(__file__).parent / "fixtures" / "contact_recall"
 
 
+def test_contact_recall_changes_bump_form_analysis_version():
+    assert ANALYSIS_VERSION == "2.4"
+
+
 def fixture(name):
     return (FIXTURES / name).read_text(encoding="utf-8")
 
@@ -298,6 +303,31 @@ def test_contact_form_false_positive_guards():
     )
     for html, expected in cases:
         assert navigation_links(html, "https://example.com/", "https://example.com/") == expected
+
+
+def test_contact_link_hints_match_phrases_and_keep_exclusions():
+    root = "https://example.com/"
+    positive_labels = (
+        "CONTACT お問い合わせ",
+        '<img alt="お問い合わせ">お問い合わせ',
+        "ご予約・お問い合わせ",
+        "お問い合わせ（無料）",
+        "お問い合わせ・ご相談",
+        "お気軽にお問い合わせください",
+    )
+    for index, label in enumerate(positive_labels):
+        html = f'<a href="/contact-{index}/">{label}</a>'
+        assert navigation_links(html, root, root) == [f"https://example.com/contact-{index}/"]
+
+    negative_links = (
+        ("/recruit/", "採用エントリー"),
+        ("/newsletter/", "メルマガ登録"),
+        ("/newsletter/", "メールマガジン"),
+        ("/reserve/", "予約のみ"),
+    )
+    for path, label in negative_links:
+        html = f'<a href="{path}">{label}</a>'
+        assert navigation_links(html, root, root) == []
 
     for html in (
         '<form><input name="name"><input name="email" type="email"><button>登録</button></form>',
