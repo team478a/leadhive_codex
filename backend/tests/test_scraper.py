@@ -71,6 +71,35 @@ def test_safe_fetcher_decodes_japanese_before_extracting_links(
         fetcher.close()
 
 
+def test_safe_fetcher_pins_article_redirects_to_the_source_site(monkeypatch):
+    requests = []
+
+    def respond(request):
+        requests.append(str(request.url))
+        if request.url.path == "/robots.txt":
+            return httpx.Response(404, request=request)
+        return httpx.Response(
+            302,
+            headers={"Location": "https://foreign.example/article"},
+            request=request,
+        )
+
+    monkeypatch.setattr(scraper, "_validated_target", lambda url: (url, "article.example"))
+    fetcher = scraper.SafeFetcher()
+    fetcher.client.close()
+    fetcher.client = httpx.Client(transport=httpx.MockTransport(respond))
+    fetcher.site_root = "https://article.example/list"
+    try:
+        with pytest.raises(ScrapeError, match="別サイト"):
+            fetcher.fetch_html("https://article.example/article")
+        assert requests == [
+            "https://article.example/robots.txt",
+            "https://article.example/article",
+        ]
+    finally:
+        fetcher.close()
+
+
 def make_project(auth, name="解析テスト"):
     profile_id = auth.get("/api/target-profiles").json()[0]["id"]
     return auth.post(

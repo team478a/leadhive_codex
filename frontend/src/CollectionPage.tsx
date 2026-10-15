@@ -79,8 +79,8 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const progressPanel = useRef<HTMLDivElement>(null)
   const hadActiveOperations = useRef(false)
   const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
-  const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis', 'form_intelligence'].includes(job.operation_type) : job.operation_type === 'collect_search')
-  const collectionRunning = visibleOperations.some(job => ['queued', 'running'].includes(job.status))
+  const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis', 'form_intelligence'].includes(job.operation_type) : ['collect_search', 'extract_articles'].includes(job.operation_type))
+  const collectionRunning = operations.some(job => job.operation_type === 'collect_search' && ['queued', 'running'].includes(job.status))
   const resumableJob = !collectionRunning ? visibleOperations.find(job => job.operation_type === 'collect_search'
     && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED'
     && !!job.collection_progress.pending_queries) : undefined
@@ -309,8 +309,8 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const progress = <div className="panel scroll-mt-24" ref={progressPanel} tabIndex={-1}><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
         <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
         {visibleOperations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : visibleOperations.map(job =>
-            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : job.operation_type === 'form_intelligence' ? 'フォーム解析' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
-            {job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
+            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : job.operation_type === 'form_intelligence' ? 'フォーム解析' : job.operation_type === 'extract_articles' ? '記事から企業を抽出' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
+            {job.operation_type === 'extract_articles' ? <p className="muted my-2 text-sm">記事 {job.processed_count} / {job.total_count} 件（新規保存 {job.article_saved_count ?? 0} 社・失敗 {job.failed_count} 件）</p> : job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
@@ -485,7 +485,10 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {(job.keyword || job.region) && <p className="muted my-2 text-sm">{[job.keyword, job.region].filter(Boolean).join(' / ')}</p>}
             <PresenceRequirements key={`${job.id}-${job.status}-${operations.map(o => o.status).join()}-${companies.length}`} jobId={job.id} /><div className="job-stats"><span>発見 {job.found_count}</span><span>保存 {job.saved_count}</span>
               <span>重複 {job.duplicate_count}</span><span>公式外 {job.excluded_count}</span><span>エラー {job.error_count}</span><span>{job.processing_ms}ms</span></div>
-            {job.source === 'serper' && <CollectionDiscovery key={`${job.id}-${job.status}`} jobId={job.id} />}
+            {job.source === 'serper' && <CollectionDiscovery key={`${job.id}-${job.status}`} jobId={job.id} projectId={projectId}
+              sourceOperationId={job.operation_job_id ?? undefined}
+              extractionJob={operations.find(operation => operation.operation_type === 'extract_articles' && operation.source_operation_ids?.includes(job.operation_job_id ?? ''))}
+              onStarted={() => { void reload(true).catch(e => setError(errorMessage(e))) }} />}
             {job.error_message && <p className="error mt-3 mb-0">{job.error_message}</p>}
             {job.source === 'csv' && job.error_count > 0 && <button type="button" className="secondary mt-3" onClick={() => void download(`/collection-jobs/${job.id}/errors.csv`, 'csv-import-errors.csv').catch(e => setError(errorMessage(e)))}>行別エラーをダウンロード</button>}
           </article>)}

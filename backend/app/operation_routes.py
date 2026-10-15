@@ -358,6 +358,16 @@ def enqueue_operation(
     )
     if active:
         raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
+    if body.operation_type == "extract_articles":
+        source_jobs = db.scalars(
+            select(OperationJob).where(
+                OperationJob.id.in_(body.source_operation_ids),
+                OperationJob.project_id == project_id,
+                OperationJob.operation_type == "collect_search",
+            )
+        ).all()
+        if len(source_jobs) != len(set(body.source_operation_ids)):
+            raise HTTPException(404, "指定された収集処理が見つかりません。")
     payload = body.model_dump(
         mode="json",
         exclude={"operation_type", "condition_request_id", "condition_version", "condition_hash"},
@@ -400,6 +410,71 @@ def enqueue_operation(
     db.commit()
     db.refresh(job)
     return job
+
+
+@router.get("/collection-jobs/{job_id}/article-extractions")
+def list_article_extractions(
+    job_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=20),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.model_article_extraction import CollectionArticleExtraction, CollectionExtractedEntry
+    from app.model_collection_discovery import CollectionDiscoveryHit
+
+    collection = db.get(CollectionJob, job_id)
+    if collection is None:
+        raise HTTPException(404, "収集ジョブが見つかりません。")
+    project_access(collection.project_id, db, user, write=False)
+    rows = db.scalars(
+        select(CollectionArticleExtraction)
+        .join(
+            CollectionDiscoveryHit,
+            CollectionDiscoveryHit.id == CollectionArticleExtraction.discovery_hit_id,
+        )
+        .where(CollectionDiscoveryHit.collection_job_id == job_id)
+        .order_by(CollectionArticleExtraction.fetched_at.desc())
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return {
+        "offset": offset,
+        "limit": limit,
+        "items": [
+            {
+                "id": row.id,
+                "article_url": row.article_url,
+                "final_url": row.final_url,
+                "status": row.status,
+                "page_kind": row.page_kind,
+                "pattern": row.pattern,
+                "entry_count": row.entry_count,
+                "linked_count": row.linked_count,
+                "name_only_count": row.name_only_count,
+                "rejected_count": row.rejected_count,
+                "warnings": row.warnings,
+                "entries": [
+                    {
+                        "id": entry.id,
+                        "entry_order": entry.entry_order,
+                        "name": entry.name,
+                        "link_url": entry.link_url,
+                        "status": entry.status,
+                        "reasons": entry.reasons,
+                        "disposition": entry.disposition,
+                        "company_id": entry.company_id,
+                    }
+                    for entry in db.scalars(
+                        select(CollectionExtractedEntry)
+                        .where(CollectionExtractedEntry.extraction_id == row.id)
+                        .order_by(CollectionExtractedEntry.entry_order)
+                    ).all()
+                ],
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.post("/operations/{job_id}/continue", response_model=OperationJobOut, status_code=202)

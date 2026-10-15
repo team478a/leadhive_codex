@@ -13,6 +13,7 @@ from app.model_approved_email import (
     EmailSendAttempt,
 )
 from app.model_approved_form import ApprovedFormDispatch, FormDispatchLimits, FormDispatchSite
+from app.model_article_extraction import CollectionArticleExtraction, CollectionExtractedEntry
 from app.model_cf7 import CF7Observation
 from app.model_collection_conditions import CollectionConditionRequest, CollectionFactReview
 from app.model_collection_discovery import CollectionDiscoveryHit
@@ -110,6 +111,8 @@ __all__ = [
     "CollectionQueryTask",
     "CollectionSearchAttempt",
     "CollectionDiscoveryHit",
+    "CollectionArticleExtraction",
+    "CollectionExtractedEntry",
     "CollectionFactReview",
     "CollectionConditionRequest",
     "ExternalPresence",

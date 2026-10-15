@@ -6,9 +6,14 @@ test('collection progress and recent jobs stay visible when an optional report e
   const project = { id: 'project-1', project_name: '大阪リスト', target_profile_id: profile.id, region: '大阪府', status: 'active' }
   const requestedCompanyList: string[] = []
   let failedReportRequests = 0
+  let extractionStarted = false
+  let extractionStatus = 'running'
+  const writes: string[] = []
   await page.addInitScript(email => localStorage.setItem(`leadhive:onboarding:${email}`, 'dismissed'), email)
   await page.route('**/api/**', async route => {
-    const path = new URL(route.request().url()).pathname
+    const request = route.request()
+    const path = new URL(request.url()).pathname
+    if (request.method() !== 'GET') writes.push(`${request.method()} ${path}`)
     let data: unknown = []
     if (path === '/api/auth/me') data = { id: 'operator', email, is_admin: false }
     else if (path === '/api/target-profiles') data = [profile]
@@ -19,14 +24,27 @@ test('collection progress and recent jobs stay visible when an optional report e
     else if (path.endsWith('/company-analysis-summary')) data = {
       saved: 3, webCompleted: 0, webPending: 3, webFailed: 0, aiCompleted: 0, aiPending: 0,
     }
-    else if (path.endsWith('/operations')) data = [{
-      id: 'operation-1', project_id: project.id, operation_type: 'collect_search', status: 'running',
-      processed_count: 12, total_count: 100, success_count: 12, failed_count: 0, attempt_count: 1,
-    }]
+    else if (request.method() === 'POST' && path === `/api/projects/${project.id}/operations`) {
+      extractionStarted = true
+      expect(request.postDataJSON()).toMatchObject({ operation_type: 'extract_articles', source_operation_ids: ['operation-1'], article_limit: 20, dry_run: false })
+      data = { id: 'extract-operation', project_id: project.id, operation_type: 'extract_articles', status: 'queued', processed_count: 0, total_count: 0, success_count: 0, failed_count: 0, attempt_count: 0 }
+    }
+    else if (path.endsWith('/operations')) data = [
+      { id: 'operation-1', project_id: project.id, operation_type: 'collect_search', status: 'running', processed_count: 12, total_count: 100, success_count: 12, failed_count: 0, attempt_count: 1 },
+      ...(extractionStarted ? [{ id: 'extract-operation', project_id: project.id, operation_type: 'extract_articles', status: extractionStatus, source_operation_ids: ['operation-1'], article_saved_count: 1, processed_count: 1, total_count: 1, success_count: 1, failed_count: 0, attempt_count: 1 }] : []),
+    ]
     else if (path.endsWith('/collection-jobs')) data = [{
-      id: 'collection-1', source: 'serper', status: 'completed', keyword: 'SNS運用代行', region: '大阪府',
+      id: 'collection-1', project_id: project.id, operation_job_id: 'operation-1', source: 'serper', status: 'completed', keyword: 'SNS運用代行', region: '大阪府',
       found_count: 12, saved_count: 8, duplicate_count: 2, excluded_count: 1, error_count: 0, processing_ms: 1200,
     }]
+    else if (path.endsWith('/collection-jobs/collection-1/discovery')) data = {
+      summary: { available: true, received_count: 1, captured_count: 1, omitted_count: 0, dispositions: { CAPTURED: 1 }, classifications: { ARTICLE: 1 } },
+      hits: [{ id: 'hit-1', position: 1, classification: 'ARTICLE', disposition: 'CAPTURED', snapshot: { title: '合成記事', link: 'https://publisher.example/article', snippet: '記事', truncated: false } }],
+    }
+    else if (path.endsWith('/collection-jobs/collection-1/article-extractions')) data = { offset: 0, limit: 20, items: extractionStarted ? [{
+      id: 'extraction-1', article_url: 'https://publisher.example/article', final_url: 'https://publisher.example/article', status: 'EXTRACTED', page_kind: 'LIST_ARTICLE', pattern: 'TABLE', entry_count: 1, linked_count: 1, name_only_count: 0, rejected_count: 0, warnings: [],
+      entries: [{ id: 'entry-1', entry_order: 1, name: '株式会社サンプル', link_url: 'https://company.example', status: 'LINKED', reasons: [], disposition: 'SAVED', company_id: 'company-1' }],
+    }] : [] }
     else if (path.endsWith('/external-presence-report')) data = { required_platforms: [], candidates: [] }
     else if (path.endsWith('/search-schedules')) {
       failedReportRequests++
@@ -44,7 +62,18 @@ test('collection progress and recent jobs stay visible when an optional report e
   await expect(page.locator('body')).toContainText('SNS運用代行 / 大阪府')
   await expect.poll(() => failedReportRequests).toBeGreaterThan(0)
   await expect(page.getByText('12 / 100 件（成功 12・失敗 0・試行 1）')).toBeVisible()
+  await page.getByRole('button', { name: '取得候補と未取込の理由を確認' }).click()
+  await page.getByRole('button', { name: '記事から企業を抽出（最大20記事）' }).click()
+  await expect(page.getByText('記事抽出中 1 / 1')).toBeVisible()
+  await expect(page.getByText('株式会社サンプル')).toBeVisible()
+  expect(writes).toEqual(['POST /api/projects/project-1/operations'])
   expect(requestedCompanyList).toHaveLength(0)
+  extractionStatus = 'completed'
+  await page.reload()
+  await page.getByRole('button', { name: 'このターゲットで収集へ' }).click()
+  await page.getByRole('button', { name: '取得候補と未取込の理由を確認' }).click()
+  await page.getByRole('button', { name: '記事ごとの抽出結果を表示' }).click()
+  await expect(page.getByText('株式会社サンプル')).toBeVisible()
 })
 
 test('background refresh identifies the endpoint when its network request fails', async ({ page }) => {
