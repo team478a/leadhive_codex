@@ -13,6 +13,12 @@ test('stored form overview filters, paginates and does not authorize sending', a
     const items = offset ? [] : category === 'all' ? [row] : [{ ...row, category: category === 'legacy' ? 'UNRECOGNIZED' : category, review_reason: category === 'captcha' ? '人による操作・確認が必要です。' : '', permission: { status: category === 'review' ? 'UNCERTAIN' : 'ALLOWED', reason_code: '', message: '保存情報からは未確定です。' } }]
     return route.fulfill({ json: { counts: { candidate: 26, captcha: 1, missing_form: 3 }, company_total: 30, total: category === 'captcha' ? 1 : category === 'missing_form' ? 3 : 30, analysis_version: '1.2', items } })
   })
+  await page.route(`**/api/projects/${fixture.project_id}/form-intelligence/missing-diagnostics?**`, route =>
+    route.fulfill({ json: {
+      counts: { NO_CONTACT_PAGE: 2 },
+      reason_labels: { NO_CONTACT_PAGE: '問い合わせページ未到達' },
+      total: 2, offset: 0, limit: 20, items: [],
+    } }))
   let redetectionRequested = false
   await page.route(`**/api/projects/${fixture.project_id}/form-intelligence/retry-missing`, route => {
     redetectionRequested = true

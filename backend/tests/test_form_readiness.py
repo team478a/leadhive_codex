@@ -2,6 +2,7 @@ import pytest
 
 from app.models import (
     Company,
+    FormAnalysisLog,
     FormProfile,
     FormProfileField,
     OperationJob,
@@ -172,6 +173,56 @@ def test_bulk_redetection_queues_only_visible_missing_form_companies(auth, form_
     assert (
         auth.post(f"/api/projects/{project.id}/form-intelligence/retry-missing").status_code == 409
     )
+
+
+def test_missing_diagnostics_classify_recent_logs_and_export_csv(auth, form_source, db):
+    from datetime import datetime, timedelta, timezone
+
+    project, company, _, profile, _, _ = form_source
+    company.analysis_status = "completed"
+    profile.form_found = False
+    profile.form_status = "READY"
+    profile.analysis_version = ANALYSIS_VERSION
+    started_at = datetime.now(timezone.utc)
+    db.add_all(
+        [
+            FormAnalysisLog(
+                company_id=company.id,
+                event_type="analysis_started",
+                details={"analysis_version": ANALYSIS_VERSION},
+                created_at=started_at,
+            ),
+            FormAnalysisLog(
+                company_id=company.id,
+                event_type="contact_page_found",
+                details={
+                    "url": "https://example.com/contact",
+                    "discovery_method": "LINK",
+                },
+                created_at=started_at + timedelta(seconds=1),
+            ),
+            FormAnalysisLog(
+                company_id=company.id,
+                event_type="analysis_completed",
+                details={"finding": "DOM_CONTACT_FORM_NOT_FOUND"},
+                created_at=started_at + timedelta(seconds=2),
+            ),
+        ]
+    )
+    db.commit()
+
+    path = f"/api/projects/{project.id}/form-intelligence/missing-diagnostics"
+    result = auth.get(path).json()
+    assert result["counts"] == {"PAGE_FOUND_NO_FORM": 1}
+    assert result["items"][0]["company_id"] == str(company.id)
+    assert result["items"][0]["primary_reason"] == "PAGE_FOUND_NO_FORM"
+    assert result["items"][0]["last_reached_url"] == "https://example.com/contact"
+
+    exported = auth.get(path, params={"format": "csv"})
+    assert exported.status_code == 200
+    assert exported.headers["content-type"].startswith("text/csv")
+    assert "missing-form-diagnostics.csv" in exported.headers["content-disposition"]
+    assert "https://example.com/contact" in exported.text
 
 
 def test_permissions_and_query_validation(auth, form_source, db, users):

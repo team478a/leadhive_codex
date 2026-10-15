@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { api, errorMessage } from './api'
+import { api, download, errorMessage } from './api'
 import { Field } from './forms'
 
 interface Row {
@@ -9,6 +9,15 @@ interface Row {
 }
 interface Overview { counts: Record<string, number>; company_total: number; total: number; items: Row[]; analysis_version: string }
 interface OperationJob { id: string; total_count: number }
+interface DiagnosticRow {
+  company_id: string; company_name: string; website_url: string; primary_reason: string
+  secondary_reasons: string[]; last_reached_url: string; analysis_version: string
+  analyzed_at: string | null
+}
+interface MissingDiagnostics {
+  counts: Record<string, number>; reason_labels: Record<string, string>
+  total: number; items: DiagnosticRow[]
+}
 const labels: Record<string, string> = {
   candidate: '解析条件の候補', unanalyzed: '未解析', prohibited: '営業NGリスト', do_not_contact: '連絡禁止',
   review: '内容・項目の確認', captcha: 'CAPTCHA・人の操作が必要', confirmation: '確認画面・段階の確認',
@@ -46,6 +55,9 @@ export function FormReadinessPanel({ projectId, onOpen }: { projectId: string; o
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
+  const [missingDiagnostics, setMissingDiagnostics] = useState<MissingDiagnostics | null>(null)
+  const [diagnosticReason, setDiagnosticReason] = useState('')
+  const [diagnosticOffset, setDiagnosticOffset] = useState(0)
   useEffect(() => {
     let live = true
     setBusy(true); setError(''); setData(null)
@@ -54,6 +66,15 @@ export function FormReadinessPanel({ projectId, onOpen }: { projectId: string; o
       .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
   }, [projectId, category, offset, refresh])
+  useEffect(() => {
+    let live = true
+    const params = new URLSearchParams({ offset: String(diagnosticOffset), limit: '20' })
+    if (diagnosticReason) params.set('reason', diagnosticReason)
+    api<MissingDiagnostics>(`/projects/${projectId}/form-intelligence/missing-diagnostics?${params}`)
+      .then(result => { if (live) setMissingDiagnostics(result) })
+      .catch(e => { if (live) setError(errorMessage(e)) })
+    return () => { live = false }
+  }, [projectId, diagnosticReason, diagnosticOffset, refresh])
   async function retryMissingForms() {
     const missingCount = data?.counts.missing_form ?? 0
     if (!missingCount || !window.confirm(
@@ -82,6 +103,39 @@ export function FormReadinessPanel({ projectId, onOpen }: { projectId: string; o
     <button type="button" className="secondary" disabled={busy || !data?.counts.missing_form} onClick={() => void retryMissingForms()}>
       フォーム未発見を一括再検出（{data?.counts.missing_form ?? 0}社）
     </button>
+    <h3 className="mt-4">フォーム未発見の理由（再検出対象のみ）</h3>
+    <p>分類は直近の解析ログに基づく診断です。旧解析など、ログだけでは原因を確定できない場合があります。</p>
+    <div className="flex flex-wrap gap-2">
+      {Object.entries(missingDiagnostics?.counts ?? {}).map(([key, count]) =>
+        <button type="button" className="secondary" key={key} onClick={() => {
+          setDiagnosticReason(key); setDiagnosticOffset(0)
+        }}>{missingDiagnostics?.reason_labels[key] ?? key}: {count}社</button>)}
+    </div>
+    {missingDiagnostics && <div className="mt-3">
+      <p>{diagnosticReason ? missingDiagnostics.reason_labels[diagnosticReason] : 'すべての理由'}：{missingDiagnostics.total}社</p>
+      <button type="button" className="secondary" onClick={() => {
+        const params = new URLSearchParams({ format: 'csv' })
+        if (diagnosticReason) params.set('reason', diagnosticReason)
+        void download(`/projects/${projectId}/form-intelligence/missing-diagnostics?${params}`, 'missing-form-diagnostics.csv')
+          .catch(e => setError(errorMessage(e)))
+      }}>診断CSVを全件出力</button>
+      {missingDiagnostics.items.map(row => <article className="border rounded p-3 my-2" key={row.company_id}>
+        <p>{row.company_name} / {missingDiagnostics.reason_labels[row.primary_reason] ?? row.primary_reason}</p>
+        <p className="break-all">{row.website_url}</p>
+        {row.secondary_reasons.length > 0 && <p>副理由: {row.secondary_reasons.map(key => missingDiagnostics.reason_labels[key] ?? key).join('、')}</p>}
+        {row.last_reached_url && <p className="break-all">最後に到達したURL: {row.last_reached_url}</p>}
+        <p>解析: version {row.analysis_version} / {row.analyzed_at ? new Date(row.analyzed_at).toLocaleString('ja-JP') : '解析日時なし'}</p>
+        <button type="button" className="secondary" disabled={busy} onClick={async () => {
+          setBusy(true); setError('')
+          try { await onOpen(row.company_id) } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+        }}>{row.company_name}の企業詳細を確認</button>
+      </article>)}
+      <button type="button" className="secondary" disabled={diagnosticOffset === 0} onClick={() => setDiagnosticOffset(Math.max(0, diagnosticOffset - 20))}>診断の前の20社</button>{' '}
+      <button type="button" className="secondary" disabled={diagnosticOffset + missingDiagnostics.items.length >= missingDiagnostics.total} onClick={() => setDiagnosticOffset(diagnosticOffset + 20)}>診断の次の20社</button>
+      {diagnosticReason && <button type="button" className="secondary" onClick={() => {
+        setDiagnosticReason(''); setDiagnosticOffset(0)
+      }}>理由の絞り込みを解除</button>}
+    </div>}
     <p>表示対象: {data?.total ?? '—'}社</p>
     {!busy && data?.items.length === 0 && <p>この表示範囲に該当する企業はありません。表示対象やページを変更して確認できます。</p>}
     {data?.items.map(row => <article className="border rounded p-3 my-3" key={row.company_id}>
