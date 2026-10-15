@@ -11,7 +11,12 @@ test('stored form overview filters, paginates and does not authorize sending', a
     const category = params.get('category')
     const offset = Number(params.get('offset'))
     const items = offset ? [] : category === 'all' ? [row] : [{ ...row, category: category === 'legacy' ? 'UNRECOGNIZED' : category, review_reason: category === 'captcha' ? '人による操作・確認が必要です。' : '', permission: { status: category === 'review' ? 'UNCERTAIN' : 'ALLOWED', reason_code: '', message: '保存情報からは未確定です。' } }]
-    return route.fulfill({ json: { counts: { candidate: 26, captcha: 1 }, company_total: 27, total: category === 'captcha' ? 1 : 27, analysis_version: '1.2', items } })
+    return route.fulfill({ json: { counts: { candidate: 26, captcha: 1, missing_form: 3 }, company_total: 30, total: category === 'captcha' ? 1 : category === 'missing_form' ? 3 : 30, analysis_version: '1.2', items } })
+  })
+  let redetectionRequested = false
+  await page.route(`**/api/projects/${fixture.project_id}/form-intelligence/retry-missing`, route => {
+    redetectionRequested = true
+    return route.fulfill({ json: { id: 'job-123', total_count: 3 } })
   })
   const writes: string[] = []
   page.on('request', request => { if (request.url().includes('/api/') && request.method() !== 'GET' && !request.url().includes('/auth/') && !request.url().includes('/onboarding')) writes.push(request.url()) })
@@ -23,7 +28,7 @@ test('stored form overview filters, paginates and does not authorize sending', a
   await navigateWorkspace(page, '▤ 企業一覧')
   await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
   const panel = page.getByRole('region', { name: 'フォーム候補の集計' })
-  await expect(panel.getByText('プロジェクト全体: 27社 / 現行解析: 1.2', { exact: true })).toBeVisible()
+  await expect(panel.getByText('プロジェクト全体: 30社 / 現行解析: 1.2', { exact: true })).toBeVisible()
   await expect(panel.getByText(/連絡制御: Suppression/)).toBeVisible()
   await expect(panel.getByText(/次にすること：連絡制御によって停止しています/)).toBeVisible()
   await expect(panel.getByText(/送信許可の件数ではありません/)).toBeVisible()
@@ -45,6 +50,11 @@ test('stored form overview filters, paginates and does not authorize sending', a
     await panel.getByRole('combobox', { name: 'フォーム集計の表示対象', exact: true }).selectOption(category)
     await expect(panel.getByText(text, { exact: false })).toBeVisible()
   }
+  await panel.getByRole('combobox', { name: 'フォーム集計の表示対象', exact: true }).selectOption('missing_form')
+  page.once('dialog', dialog => dialog.accept())
+  await panel.getByRole('button', { name: 'フォーム未発見を一括再検出（3社）' }).click()
+  await expect(panel.getByText('3社の一括再検出をバックグラウンドに登録しました。', { exact: true })).toBeVisible()
+  expect(redetectionRequested).toBe(true)
   await page.setViewportSize({ width: 390, height: 844 })
   await panel.getByRole('combobox', { name: 'フォーム集計の表示対象', exact: true }).selectOption('all')
   const detailButton = panel.getByRole('button', { name: '集計テスト会社の企業詳細を確認' })
@@ -52,6 +62,7 @@ test('stored form overview filters, paginates and does not authorize sending', a
   const companyDetails = page.getByRole('region', { name: '企業詳細', exact: true })
   await expect(companyDetails).toBeVisible()
   await expect(companyDetails).toBeInViewport()
-  expect(writes).toEqual([])
+  expect(writes).toHaveLength(1)
+  expect(writes[0]).toContain('/form-intelligence/retry-missing')
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
 })

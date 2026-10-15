@@ -8,6 +8,7 @@ interface Row {
   review_reason: string; permission: { status: string; reason_code: string; message: string }
 }
 interface Overview { counts: Record<string, number>; company_total: number; total: number; items: Row[]; analysis_version: string }
+interface OperationJob { id: string; total_count: number }
 const labels: Record<string, string> = {
   candidate: '解析条件の候補', unanalyzed: '未解析', prohibited: '営業NGリスト', do_not_contact: '連絡禁止',
   review: '内容・項目の確認', captcha: 'CAPTCHA・人の操作が必要', confirmation: '確認画面・段階の確認',
@@ -43,6 +44,7 @@ export function FormReadinessPanel({ projectId, onOpen }: { projectId: string; o
   const [offset, setOffset] = useState(0)
   const [refresh, setRefresh] = useState(0)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     let live = true
@@ -52,11 +54,24 @@ export function FormReadinessPanel({ projectId, onOpen }: { projectId: string; o
       .finally(() => { if (live) setBusy(false) })
     return () => { live = false }
   }, [projectId, category, offset, refresh])
+  async function retryMissingForms() {
+    const missingCount = data?.counts.missing_form ?? 0
+    if (!missingCount || !window.confirm(
+      `現在のプロジェクトで「フォーム未発見」と判定された企業を一括で再解析します（最大100社ずつ）。対象サイトを再取得しますが、フォーム送信は行いません。開始しますか？`,
+    )) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const job = await api<OperationJob>(`/projects/${projectId}/form-intelligence/retry-missing`, 'POST')
+      setNotice(`${job.total_count}社の一括再検出をバックグラウンドに登録しました。`)
+      setRefresh(current => current + 1)
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   return <section className="panel mt-4" aria-label="フォーム候補の集計">
     <h2>フォーム候補の集計</h2>
     <p>選択中のプロジェクト全体が対象です。企業一覧のキーワード・ランクなどの絞り込みとは別に集計します。</p>
     <p>保存済み解析を企業ごとに集計します。候補数は解析条件による参考値です。Suppression・送信履歴・文面・送信者・承認などは準備時に再確認するため、送信許可の件数ではありません。</p>
     {error && <p className="error" role="alert">{error}</p>}
+    {notice && <p className="notice" role="status">{notice}</p>}
     {busy && !data && <p role="status">フォーム候補を読み込み中…</p>}
     <p>プロジェクト全体: {data?.company_total ?? '—'}社 / 現行解析: {data?.analysis_version ?? '—'}</p>
     <div className="flex flex-wrap gap-2">{Object.entries(labels).map(([name, label]) => <button type="button" className="secondary" key={name} disabled={busy} onClick={() => { setCategory(name); setOffset(0) }}>{label}: {data ? data.counts[name] ?? 0 : '—'}社</button>)}</div>
@@ -64,6 +79,9 @@ export function FormReadinessPanel({ projectId, onOpen }: { projectId: string; o
       <option value="all">すべて</option>{Object.entries(labels).map(([name, label]) => <option key={name} value={name}>{label}</option>)}
     </select></Field>
     <button type="button" className="secondary" disabled={busy} onClick={() => setRefresh(refresh + 1)}>フォーム集計を更新</button>
+    <button type="button" className="secondary" disabled={busy || !data?.counts.missing_form} onClick={() => void retryMissingForms()}>
+      フォーム未発見を一括再検出（{data?.counts.missing_form ?? 0}社）
+    </button>
     <p>表示対象: {data?.total ?? '—'}社</p>
     {!busy && data?.items.length === 0 && <p>この表示範囲に該当する企業はありません。表示対象やページを変更して確認できます。</p>}
     {data?.items.map(row => <article className="border rounded p-3 my-3" key={row.company_id}>

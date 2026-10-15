@@ -1,6 +1,13 @@
 import pytest
 
-from app.models import Company, FormProfile, FormProfileField, ProjectMember, SuppressionEntry
+from app.models import (
+    Company,
+    FormProfile,
+    FormProfileField,
+    OperationJob,
+    ProjectMember,
+    SuppressionEntry,
+)
 from app.services.form_intelligence.analyzer import ANALYSIS_VERSION
 from tests.conftest import PASSWORD
 from tests.test_approval_foundation import workspace as workspace
@@ -128,6 +135,43 @@ def test_suppression_is_separate_from_analysis_candidate_and_read_is_nonmutating
     assert result["items"][0]["permission"]["reason_code"] == "suppression_domain"
     db.expire_all()
     assert db.get(FormProfile, form_source[3].id).updated_at == before
+
+
+def test_bulk_redetection_queues_only_visible_missing_form_companies(auth, form_source, db):
+    project, company, _, profile, _, _ = form_source
+    company.analysis_status = "completed"
+    profile.form_found = False
+    profile.form_status = "READY"
+    blocked_company = Company(
+        project_id=project.id,
+        company_name="営業禁止フォーム",
+        source="url",
+        website_url="https://blocked.example",
+        analysis_status="completed",
+    )
+    db.add(blocked_company)
+    db.flush()
+    db.add(
+        FormProfile(
+            company_id=blocked_company.id,
+            form_url="https://blocked.example/contact",
+            form_status="BLOCKED",
+            sales_contact_status="PROHIBITED",
+            form_found=False,
+            is_primary=True,
+        )
+    )
+    db.commit()
+
+    response = auth.post(f"/api/projects/{project.id}/form-intelligence/retry-missing")
+
+    assert response.status_code == 202, response.text
+    assert response.json()["total_count"] == 1
+    job = db.get(OperationJob, response.json()["id"])
+    assert job.payload == {"company_ids": [str(company.id)], "force": True}
+    assert (
+        auth.post(f"/api/projects/{project.id}/form-intelligence/retry-missing").status_code == 409
+    )
 
 
 def test_permissions_and_query_validation(auth, form_source, db, users):
