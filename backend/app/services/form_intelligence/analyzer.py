@@ -194,6 +194,7 @@ def _log(
             estimated_cost=estimated_cost,
             confidence=confidence,
             details=details or {},
+            created_at=datetime.now(timezone.utc),
         )
     )
 

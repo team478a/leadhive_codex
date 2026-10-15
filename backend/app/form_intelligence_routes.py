@@ -1,10 +1,12 @@
+import csv
 import hashlib
+import io
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import Field
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -47,6 +49,12 @@ from app.services.form_live_check import check as check_live_form
 from app.services.form_live_check import latest as latest_live_check
 from app.services.form_live_check import record as record_live_check
 from app.services.form_live_check import source_binding
+from app.services.form_missing_diagnostics import (
+    REASON_LABELS,
+    REASON_ORDER,
+    collect_missing_diagnostics,
+    missing_form_candidates_query,
+)
 from app.services.form_profile_delivery import sender_values
 from app.services.form_review_material import build_review_material
 from app.services.form_route_diagnostics import diagnose as diagnose_saved_route
@@ -541,41 +549,8 @@ def enqueue_missing_form_redetection(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
-    ranked_profiles = (
-        select(
-            FormProfile.id.label("profile_id"),
-            FormProfile.company_id.label("company_id"),
-            func.row_number()
-            .over(
-                partition_by=FormProfile.company_id,
-                order_by=(
-                    FormProfile.is_primary.desc(),
-                    FormProfile.updated_at.desc(),
-                    FormProfile.id,
-                ),
-            )
-            .label("position"),
-        )
-        .join(Company, Company.id == FormProfile.company_id)
-        .where(Company.project_id == project_id)
-        .subquery()
-    )
     company_ids = list(
-        db.scalars(
-            select(Company.id)
-            .join(ranked_profiles, ranked_profiles.c.company_id == Company.id)
-            .join(FormProfile, FormProfile.id == ranked_profiles.c.profile_id)
-            .where(
-                ranked_profiles.c.position == 1,
-                Company.analysis_status == "completed",
-                Company.website_url.is_not(None),
-                Company.do_not_contact.is_(False),
-                FormProfile.form_status.notin_(("UNANALYZED", "ERROR", "STALE", "BLOCKED")),
-                FormProfile.sales_contact_status != "PROHIBITED",
-                FormProfile.form_found.is_(False),
-            )
-            .order_by(Company.created_at, Company.id)
-        ).all()
+        db.scalars(missing_form_candidates_query(project_id).with_only_columns(Company.id)).all()
     )
     if not company_ids:
         raise HTTPException(409, "一括再検出できるフォーム未発見企業がありません。")
@@ -590,6 +565,78 @@ def enqueue_missing_form_redetection(
     db.commit()
     db.refresh(job)
     return job
+
+
+def _safe_csv_cell(value: object) -> str:
+    text = str(value or "")
+    return f"'{text}" if text.startswith(("=", "+", "-", "@", "\t", "\r")) else text
+
+
+@router.get("/projects/{project_id}/form-intelligence/missing-diagnostics")
+def missing_form_diagnostics(
+    project_id: UUID,
+    reason: str | None = Query(None, pattern=f"^({'|'.join(REASON_ORDER)})$"),
+    format: str = Query("json", pattern="^(json|csv)$"),
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=20),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    counts, rows = collect_missing_diagnostics(db, project_id)
+    if reason:
+        rows = [row for row in rows if row["primary_reason"] == reason]
+    total = len(rows)
+    page = rows[offset : offset + limit]
+    if format == "csv":
+        output = io.StringIO(newline="")
+        writer = csv.writer(output)
+        writer.writerow(
+            [
+                "company_id",
+                "company_name",
+                "website_url",
+                "primary_reason",
+                "secondary_reasons",
+                "last_reached_url",
+                "analyzed_at",
+                "analysis_version",
+            ]
+        )
+        for row in rows:
+            writer.writerow(
+                [
+                    _safe_csv_cell(row["company_id"]),
+                    _safe_csv_cell(row["company_name"]),
+                    _safe_csv_cell(row["website_url"]),
+                    _safe_csv_cell(
+                        f"{row['primary_reason']}:{REASON_LABELS[row['primary_reason']]}"
+                    ),
+                    _safe_csv_cell(
+                        " / ".join(
+                            f"{code}:{REASON_LABELS[code]}" for code in row["secondary_reasons"]
+                        )
+                    ),
+                    _safe_csv_cell(row["last_reached_url"]),
+                    _safe_csv_cell(
+                        row["analyzed_at"].isoformat() if row["analyzed_at"] else ""
+                    ),
+                    _safe_csv_cell(row["analysis_version"]),
+                ]
+            )
+        return Response(
+            content="\ufeff" + output.getvalue(),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": "attachment; filename=missing-form-diagnostics.csv"},
+        )
+    return {
+        "counts": counts,
+        "reason_labels": REASON_LABELS,
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "items": page,
+    }
 
 
 @router.patch("/form-profile-fields/{field_id}", response_model=FormProfileFieldOut)
