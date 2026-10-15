@@ -75,13 +75,18 @@ class OperationJobInput(Input):
     condition_version: int | None = Field(default=None, ge=1)
     condition_hash: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
     presence_search: PresenceSearchPlan | None = None
-    operation_type: Literal["collect_search", "web_analysis", "ai_analysis", "form_intelligence"]
+    operation_type: Literal[
+        "collect_search", "web_analysis", "ai_analysis", "form_intelligence", "extract_articles"
+    ]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
     source: Literal["serper", "google_places", "gbizinfo"] | None = None
     keywords: list[Keyword] = Field(default_factory=list, max_length=20)
     region: str = Field(default="", max_length=500)
     max_results: int = Field(default=20, ge=1, le=100)
     force: bool = False
+    source_operation_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    article_limit: int = Field(default=20, ge=1, le=50, strict=True)
+    dry_run: bool = False
 
     @model_validator(mode="after")
     def validate_operation(self):
@@ -120,6 +125,18 @@ class OperationJobInput(Input):
                 raise ValueError("Search collection requires source, keywords and region")
             if self.source == "google_places" and self.max_results > 60:
                 raise ValueError("Google Places supports at most 60 results")
+        elif self.operation_type == "extract_articles":
+            if not self.source_operation_ids:
+                raise ValueError("記事抽出には収集operation IDが必要です。")
+            if (
+                self.company_ids
+                or self.source
+                or self.keywords
+                or self.region
+                or self.target_count
+                or self.presence_search
+            ):
+                raise ValueError("記事抽出では会社・検索条件を指定できません。")
         elif (
             self.target_count is not None
             or self.source
@@ -143,6 +160,12 @@ class OperationJobOut(BaseModel):
     )
     collection_runtime_history: list[dict] = Field(
         default_factory=list, validation_alias=AliasPath("payload", "collection_runtime_history")
+    )
+    article_saved_count: int = Field(
+        default=0, validation_alias=AliasPath("payload", "article_saved_count")
+    )
+    source_operation_ids: list[UUID] = Field(
+        default_factory=list, validation_alias=AliasPath("payload", "source_operation_ids")
     )
 
     @field_validator("collection_runtime_history", mode="before")

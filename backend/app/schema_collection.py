@@ -19,6 +19,7 @@ class CollectionJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     project_id: UUID
+    operation_job_id: UUID | None = None
     source: Literal["serper", "google_places", "gbizinfo", "url", "csv"]
     keyword: str
     region: str

@@ -51,7 +51,7 @@ export interface ProjectMember {
 }
 export type CollectionSource = 'serper' | 'google_places' | 'gbizinfo' | 'url' | 'csv'
 export interface CollectionJob {
-  id: string; project_id: string; source: CollectionSource; keyword: string; region: string
+  id: string; project_id: string; operation_job_id: string | null; source: CollectionSource; keyword: string; region: string
   status: 'running' | 'completed' | 'failed'; found_count: number; saved_count: number
   duplicate_count: number; excluded_count: number; error_count: number; processing_ms: number
   error_message: string
@@ -189,7 +189,8 @@ export interface OperationJob {
   condition_request_id?: string | null
   condition_version?: number | null
   id: string; project_id: string
-  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach'
+  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'extract_articles'
+  source_operation_ids?: string[]; article_saved_count?: number
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_count: number; processed_count: number; success_count: number; failed_count: number
   cancel_requested: boolean; attempt_count: number; acknowledged_at: string | null; error_message: string

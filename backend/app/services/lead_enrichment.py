@@ -96,8 +96,10 @@ def observe_candidate(db, job, company, candidate, *, new=False):
     )
     terms, attribution = TERMS[job.source]
     if discovery:
-        # URL routing is derived search metadata, never official identity evidence.
-        facts["site_discovery"] = discovery
+        if discovery.get("discovery_method") == "ARTICLE_EXTRACT":
+            facts.update(discovery)
+        else:
+            facts["site_discovery"] = discovery
     db.add(
         LeadSourceObservation(
             company_id=company.id,

@@ -303,6 +303,16 @@ Migrationはupgrade → downgrade → upgradeと `alembic check` を通す。dow
 - project別の `ARTICLE` hit数、理由別内訳、ユニーク記事URL数。
 - 抽出対象になり得る記事数（同版未抽出）。
 
+実装CLIは `backend/offline_replay/article_extraction_inventory.py`。URL環境変数は明示指定し、DBの接続先を選んだうえで実行する。CLIはread-only transactionを強制し、URL・タイトル・snippetを出力しない。既存出力を上書きしない。
+
+```powershell
+cd backend
+$env:ARTICLE_EXTRACTION_READONLY_DATABASE_URL = '<明示的に選んだPostgreSQL URL>'
+python -m offline_replay.article_extraction_inventory --output dist/article-extraction-inventory-<new-id>.json
+```
+
+この集計はDBアクセスを伴うため、実行前に接続先・権限・保持条件を確認する。集計の実行自体はPilotや記事GETの承認を意味しない。
+
 ### 10.2 少量Pilot（**田中さんの明示承認後のみ**）
 
 - 対象: 大阪府・兵庫県「SNS運用代行 会社」の既存収集で保存済みの `ARTICLE` hitから最大10記事。新規検索はしない。
