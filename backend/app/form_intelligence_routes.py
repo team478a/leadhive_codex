@@ -618,9 +618,7 @@ def missing_form_diagnostics(
                         )
                     ),
                     _safe_csv_cell(row["last_reached_url"]),
-                    _safe_csv_cell(
-                        row["analyzed_at"].isoformat() if row["analyzed_at"] else ""
-                    ),
+                    _safe_csv_cell(row["analyzed_at"].isoformat() if row["analyzed_at"] else ""),
                     _safe_csv_cell(row["analysis_version"]),
                 ]
             )

@@ -84,10 +84,7 @@ def classify_missing_form(
     pages = [log for log in current_logs if log.event_type == "contact_page_found"]
     failures = [log for log in current_logs if log.event_type == "analysis_failed"]
     completions = [log for log in current_logs if log.event_type == "analysis_completed"]
-    methods = [
-        str(log.details.get("discovery_method") or "")
-        for log in [*pages, *failures]
-    ]
+    methods = [str(log.details.get("discovery_method") or "") for log in [*pages, *failures]]
     root_url = website_url.rstrip("/")
     reached_urls = [
         str(log.details.get("url") or "")
@@ -102,9 +99,7 @@ def classify_missing_form(
     )
     if failures and not pages and root_failure:
         reasons.add("ROOT_FETCH_FAILED")
-    failure_text = " ".join(
-        str(log.details.get("reason") or "") for log in failures
-    ).casefold()
+    failure_text = " ".join(str(log.details.get("reason") or "") for log in failures).casefold()
     if any(word in failure_text for word in ("上限", "回数", "timeout", "timed out", "budget")):
         reasons.add("BUDGET_EXHAUSTED")
     if any(word in failure_text for word in ("robots", "別サイト", "転送", "redirect")):
