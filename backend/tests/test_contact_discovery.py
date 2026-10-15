@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 from app.services.contact_discovery import (
     contact_pages,
     embedded_form_providers,
+    external_contact_links,
     is_contact_form,
     is_contact_path,
     navigation_links,
@@ -137,15 +138,11 @@ def test_same_page_contact_anchor_is_scanned_and_not_confused_with_other_anchors
     ) == ["https://example.com/"]
 
 
-def test_contact_path_and_contact_labeled_article_links_keep_context():
+def test_contact_path_context_supports_common_english_and_japanese_paths():
     assert is_contact_path("https://example.com/contact/")
     assert is_contact_path("https://example.com/forms/inquiry-form")
+    assert is_contact_path("https://example.com/toiawase")
     assert not is_contact_path("https://example.com/company-information")
-    assert navigation_links(
-        '<a href="/blog/contact-process">お問い合わせはこちら</a>',
-        "https://example.com/",
-        "https://example.com/",
-    ) == ["https://example.com/blog/contact-process"]
 
 
 def test_embedding_is_evidence_separate_from_dom_confirmation():
@@ -161,3 +158,82 @@ def test_articles_about_forms_do_not_consume_contact_budget():
         "https://example.com/",
         "https://example.com/",
     ) == ["https://example.com/contact"]
+
+
+def test_direct_contact_label_precedes_incidental_inquiry_copy():
+    result = crawl(
+        {
+            "https://example.com/": (
+                '<a href="/service/request?a=1">サービスへの相談・問合せ</a>'
+                '<a href="/interview/1">問い合わせが増えた導入事例</a>'
+                '<a href="/help/form/"> お問い 合わせ </a>'
+            ),
+            "https://example.com/help/form/": "<form><textarea></textarea></form>",
+        },
+        limit=1,
+    )
+    assert result == [("https://example.com/help/form/", True)]
+
+
+def test_direct_contact_priority_preserves_nested_navigation_and_query():
+    result = crawl(
+        {
+            "https://example.com/": (
+                '<a href="/service/inquiry">問い合わせについてのサービス</a>'
+                '<a href="/help?kind=business">Contact</a>'
+            ),
+            "https://example.com/help?kind=business": ('<a href="/entry/42">フォームはこちら</a>'),
+        },
+        limit=2,
+    )
+    assert result == [
+        ("https://example.com/help?kind=business", True),
+        ("https://example.com/entry/42", True),
+    ]
+
+
+def test_external_contact_is_preserved_without_being_crawled():
+    root = "https://example.com/"
+    html = (
+        '<a href="https://1lejend.com/stepmail/kd.php?no=bAorms#top">お問い合わせ</a>'
+        '<a href="https://1lejend.com/stepmail/kd.php?no=bAorms">お問い合わせ</a>'
+        '<a href="https://ads.example.org/">広告掲載</a>'
+    )
+    assert external_contact_links(html, root, root) == [
+        {
+            "url": "https://1lejend.com/stepmail/kd.php?no=bAorms",
+            "source_url": root,
+            "label": "お問い合わせ",
+        }
+    ]
+    assert navigation_links(html, root, root) == []
+
+
+def test_external_contact_rejects_unsafe_and_incidental_links():
+    root = "https://example.com/"
+    for url in (
+        "http://external.example/contact",
+        "https://user:pass@external.example/contact",
+        "https://127.0.0.1/contact",
+        "https://169.254.169.254/contact",
+        "https://localhost/contact",
+        "https://service.local/contact",
+        "https://external.example:8443/contact",
+        "javascript:alert(1)",
+        "/contact",
+        "https://external.example/contact.pdf",
+    ):
+        assert external_contact_links(f'<a href="{url}">お問い合わせ</a>', root, root) == []
+    assert (
+        external_contact_links(
+            '<a href="https://external.example/contact">問い合わせフォーム改善サービス</a>',
+            root,
+            root,
+        )
+        == []
+    )
+
+
+def test_external_contact_candidate_budget():
+    html = "".join(f'<a href="https://external.example/{i}">Contact</a>' for i in range(20))
+    assert len(external_contact_links(html, "https://example.com/", "https://example.com/")) == 8

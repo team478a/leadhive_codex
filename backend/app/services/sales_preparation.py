@@ -263,7 +263,9 @@ def prepare_item(db: Session, job: OperationJob, item: SalesPreparationItem, sto
         channel = "email" if company.email else "form"
     item.channel = channel
     db.commit()
-    if channel == "form" and company.contact_url and not item.details.get("form_checked"):
+    # A missing anchor is not proof that no contact form exists. The bounded
+    # GET-only analyzer also searches from the site and probes contact paths.
+    if channel == "form" and not item.details.get("form_checked"):
         analyze_company_forms(db, company, allow_ai=False)
         if stopped():
             return

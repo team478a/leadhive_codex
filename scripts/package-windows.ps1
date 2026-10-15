@@ -52,6 +52,7 @@ $rootFiles = @(
     "Install-LeadHive.cmd",
     "Open-Manual.cmd",
     "Open-QuickStart.cmd",
+    "Open-DeploymentGuide.cmd",
     "README.md",
     "Restore-LeadHive.cmd",
     "Start-LeadHive.cmd",
@@ -68,6 +69,7 @@ $fixedFiles = @(
     "deploy/nginx.conf",
     "deploy/README-FIRST.txt",
     "docs/73_WINDOWS_LOCAL_INSTALLER.md",
+    "docs/DEPLOYMENT_OPTIONS.md",
     "docs/G14_BEGINNER_QUICKSTART.md",
     "docs/acceptance/LEADHIVE_ACCEPTANCE_SAMPLE.csv",
     "docs/82_LEADHIVE_USER_MANUAL.md",
@@ -82,8 +84,10 @@ $fixedFiles = @(
 $directoryPrefixes = @(
     ".agents/skills/leadhive-form-submit/",
     "backend/app/",
+    "backend/offline_replay/",
     "backend/migrations/",
     "frontend/src/",
+    "frontend/public/",
     "scripts/windows/"
 )
 
@@ -171,6 +175,8 @@ try {
         "Resume-LeadHive.cmd",
         "Install-LeadHive.cmd",
         "Open-Manual.cmd",
+        "Open-DeploymentGuide.cmd",
+        "docs\DEPLOYMENT_OPTIONS.md",
         "Diagnose-LeadHive.cmd",
         "Restore-LeadHive.cmd",
         "compose.local.yaml",

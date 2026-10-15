@@ -1,5 +1,6 @@
 """Bounded, GET-only contact navigation; discovered links are not send permission."""
 
+import ipaddress
 import re
 from collections.abc import Iterator
 from urllib.parse import urljoin, urlsplit, urlunsplit
@@ -30,6 +31,43 @@ FALLBACK_PATHS = (
 )
 
 
+def external_contact_links(html: str, base: str, root: str) -> list[dict[str, str]]:
+    """Unverified provenance only; these URLs are never added to the crawl queue."""
+    candidates: dict[str, dict[str, str]] = {}
+    for anchor in BeautifulSoup(html, "html.parser").select("a[href]"):
+        label = re.sub(r"\s+", "", anchor.get_text(" ", strip=True)).lower()
+        if label not in {re.sub(r"\s+", "", hint) for hint in HINTS}:
+            continue
+        try:
+            parsed = urlsplit(urljoin(base, str(anchor.get("href") or "")))
+            host = (parsed.hostname or "").lower().rstrip(".")
+            if (
+                parsed.scheme != "https"
+                or not host
+                or parsed.username
+                or parsed.password
+                or parsed.port not in {None, 443}
+                or "." not in host
+                or host.endswith((".localhost", ".local", ".internal", ".test"))
+                or same_site(root, parsed.geturl())
+            ):
+                continue
+            try:
+                if not ipaddress.ip_address(host).is_global:
+                    continue
+            except ValueError:
+                pass
+            url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", parsed.query, ""))
+            if parsed.path.lower().endswith((".pdf", ".jpg", ".png", ".zip")):
+                continue
+        except ValueError:
+            continue
+        candidates.setdefault(url, {"url": url, "source_url": base, "label": label[:100]})
+        if len(candidates) >= 8:
+            break
+    return list(candidates.values())
+
+
 def embedded_form_providers(html: str) -> list[str]:
     """Presence evidence only: scripts/iframes do not prove a rendered contact form."""
     soup = BeautifulSoup(html, "html.parser")
@@ -44,6 +82,69 @@ def embedded_form_providers(html: str) -> list[str]:
     }
     return [
         name for name, markers in patterns.items() if any(marker in sources for marker in markers)
+    ]
+
+
+def custom_contact_containers(html: str) -> list[Tag]:
+    """Observe narrowly identified JS contact controls, never an HTTP form contract."""
+    soup = BeautifulSoup(html, "html.parser")
+    candidates: list[Tag] = []
+    for container in soup.select("div, section, fieldset, [role='form']"):
+        identity = " ".join(
+            str(container.get(key) or "") for key in ("id", "aria-label", "role")
+        ).lower()
+        if container.get("role") != "form" and not any(hint in identity for hint in HINTS):
+            continue
+        if (
+            container.name == "form"
+            or container.find_parent("form")
+            or container.select_one("form")
+        ):
+            continue
+        if any(
+            parent.has_attr("hidden")
+            or str(parent.get("aria-hidden") or "").lower() == "true"
+            or re.search(
+                r"display\s*:\s*none|visibility\s*:\s*hidden", str(parent.get("style") or ""), re.I
+            )
+            for parent in [container, *container.parents]
+            if isinstance(parent, Tag)
+        ):
+            continue
+        controls = container.select("input, textarea, select")
+        if not controls or any(control.has_attr("form") for control in controls):
+            continue
+        if container.select_one("input[type='password'], input[type='search']"):
+            continue
+        if not container.select_one("input[type='email']:not([disabled])"):
+            continue
+        if not container.select_one("textarea:not([disabled])"):
+            continue
+        buttons = container.select("button, input[type='submit'], input[type='button']")
+        if not any(
+            not button.has_attr("disabled")
+            and re.search(
+                r"送信|確認|send|submit|confirm",
+                button.get_text(" ", strip=True) + str(button.get("value") or ""),
+                re.I,
+            )
+            for button in buttons
+        ):
+            continue
+        names = [str(control.get("name") or "") for control in controls]
+        if not all(names) or len(names) != len(set(names)) or len(controls) > 100:
+            continue
+        candidates.append(container)
+        if len(candidates) > 32:
+            return []
+    # Keep the smallest explicitly identified container, not each ancestor.
+    return [
+        candidate
+        for candidate in candidates
+        if not any(
+            other is not candidate and any(parent is candidate for parent in other.parents)
+            for other in candidates
+        )
     ]
 
 
@@ -68,10 +169,6 @@ def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
     text = form.get_text(" ", strip=True).lower()
     if len(visible) >= 2 and any(hint in text for hint in HINTS):
         return True
-    # Contact pages often use a simple name/email-only form without a message
-    # textarea, and the labels may be outside the <form>. The page URL or its
-    # navigation link is stronger context than the form's own copy. This only
-    # marks a candidate for review; it never authorizes submission.
     identities = " ".join(
         f"{field.get('name', '')} {field.get('id', '')} {field.get('placeholder', '')} "
         f"{field.get('aria-label', '')}"
@@ -85,6 +182,16 @@ def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
     return False
 
 
+def is_contact_path(url: str) -> bool:
+    path = urlsplit(url).path.lower()
+    return bool(
+        re.search(
+            r"(?:^|[/_-])(?:contact|inquiry|inquire|otoiawase|toiawase|form)(?:$|[/_.-])",
+            path,
+        )
+    )
+
+
 def same_site(left: str, right: str) -> bool:
     a, b = urlsplit(left), urlsplit(right)
     return (
@@ -96,16 +203,6 @@ def same_site(left: str, right: str) -> bool:
         and not a.username
         and not b.username
         and not (a.scheme == "https" and b.scheme == "http")
-    )
-
-
-def is_contact_path(url: str) -> bool:
-    path = urlsplit(url).path.lower()
-    return bool(
-        re.search(
-            r"(?:^|[/_-])(?:contact|inquiry|inquire|otoiawase|toiawase|form)(?:$|[/_.-])",
-            path,
-        )
     )
 
 
@@ -143,7 +240,7 @@ def navigation_links(
         if not allowed or parsed.path.lower().endswith((".pdf", ".jpg", ".png", ".zip")):
             continue
         if (
-            re.search(r"^/(?:blog|news|lab|column|article|srv)(?:/|$)", parsed.path.lower())
+            re.search(r"^/(?:blog|news|post|lab|column|article|srv)(?:/|$)", parsed.path.lower())
             and not label_contact_cta
         ):
             continue
@@ -153,7 +250,23 @@ def navigation_links(
                 parsed.path.lower(),
             )
         )
-        score = 100 if label_contact else (90 if path_hint or fragment_contact else 0)
+        # A direct contact label outranks testimonials/service copy mentioning
+        # inquiries. Otherwise a large site's incidental links exhaust the
+        # bounded crawl before its general contact destination is reached.
+        direct_label = re.sub(r"\s+", "", label) in {re.sub(r"\s+", "", hint) for hint in HINTS}
+        score = (
+            120
+            if direct_label
+            else 100
+            if label_contact
+            else 90
+            if path_hint
+            else 0
+        )
+        # Dedicated contact paths beat incidental article text, including a
+        # footer link whose wording is longer than the exact contact label.
+        if path_hint:
+            score += 10
         if contact_context and (
             element.name == "iframe"
             or any(hint in label for hint in ("フォーム", "入力", "こちら", "進む"))
@@ -172,6 +285,7 @@ def contact_pages(
     *,
     max_pages: int = 12,
     max_depth: int = 3,
+    resolved_urls: dict[str, str] | None = None,
 ) -> Iterator[tuple[str, bool]]:
     """Caller fetches each yielded URL and fills cache before resuming iteration.
 
@@ -192,7 +306,12 @@ def contact_pages(
         )
         for anchor in root_soup.select("a[href]")
     )
-    if root_soup.select_one("form") or has_contact_anchor:
+    if (
+        root_soup.select_one("form")
+        or has_contact_anchor
+        or embedded_form_providers(root_html)
+        or custom_contact_containers(root_html)
+    ):
         queue.append((root, True, 0))
     if saved_contact:
         try:
@@ -223,7 +342,9 @@ def contact_pages(
         yield url, explicit
         html = cache.get(url)
         if html and depth < max_depth:
-            children = navigation_links(html, url, root, contact_context=explicit)
+            base = (resolved_urls or {}).get(url, url)
+            visited.add(base.rstrip("/"))
+            children = navigation_links(html, base, root, contact_context=explicit)
             queue[0:0] = [
                 (child, True, depth + 1) for child in children if child.rstrip("/") not in visited
             ]

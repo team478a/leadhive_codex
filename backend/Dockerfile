@@ -13,6 +13,7 @@ RUN grep -v '^-e git+' requirements.lock > /tmp/requirements.lock && \
 
 COPY pyproject.toml alembic.ini ./
 COPY app ./app
+COPY offline_replay ./offline_replay
 COPY migrations ./migrations
 RUN python -m pip install --no-deps . && \
     useradd --create-home --uid 10001 leadhive && \

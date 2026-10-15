@@ -1,0 +1,21 @@
+# Phase 3：Human確認から判明した収集誤採用
+
+2026-10-09。検索/GET基準main `79d5255db19573ce94143de35d1e986f197fdc83`。利用者がスマホ確認票の候補1・2・3・6を「マッチングサービスなのでそもそも対象外」と明示した。
+
+## 反映
+
+4候補を営業対象不適合、Raw Review outcome `PORTAL_OR_AGGREGATOR` として、Git管理外のappend-only chat provenance付きイベントに記録した。reviewer browser user IDやreview secondsは不明nullであり、Browser Human sessionによるDB reviewと偽っていない。実在・SNSサービス提供・公式サイト・問い合わせ存在の他軸はUNREVIEWEDのまま。送信承認ではない。
+
+元Raw/GETの観測結果は変更せず、確認票へレビューoverlayを適用した。4件を末尾の対象外へ移し、残り未確認は23候補。CAPTCHA/営業禁止marker未観測の確認優先は7から6へ変更した。フォーム検出16件という過去観測値は保持する。確認票だけの反映で、本番Company/Suppression/Delivery等へ変更を加えていない。
+
+## 問題点
+
+掲載・仲介・求人等の第三者ページが今回の簡易URL境界で候補として通過していた。後続監査で、求人2候補は最新mainの保存前gateでは既に除外されると確認した。実際の追加分類が必要なのは今回のHuman negativeでは掲載・仲介の2候補であり、残りは比較harnessが既存gateを再現していなかった問題だった。詳しくは `PHASE3_THIRD_PARTY_FILTER_PR_PROPOSAL.md` を参照。
+
+SNS関連語や問い合わせformの存在は、SNS運用代行の提供企業本人である根拠にはならない。特に仲介サービス自身の問い合わせformを営業対象企業のformと数えてはいけない。
+
+検索title/snippetやドメイン種別から、第三者掲載・求人を企業の公式候補から区別するルール改善が必要。Raw/Evidenceとして残す価値と企業候補として採用する可否は別に扱う。今回production code変更はしていない。
+
+次の改善候補は第三者サイトの誤採用防止。Human negative例をoffline fixtureへ変換し、公式企業サイトの誤除外・外部Presence保存の維持を検証するPR案を作る。実装は別承認後。単にSNS語やformがあることだけで採用しない。
+
+利用者が選んだ4件はすべてnegativeだが、選択されたnegative batchから候補全体の精度を0%と推定してはいけない。全体precisionはnull。未確認23件を正解に繰り上げない。

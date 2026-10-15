@@ -18,6 +18,7 @@ export function CompanyFormAdapterPrerequisites({ report }: { report: AdapterPre
     {report.cf7_readiness && report.cf7_readiness.status !== 'NOT_APPLICABLE' && <section aria-label="CF7対応状況" className="mt-3">
       <strong>CF7対応状況：{({ BLOCKED: '送信対象外', HUMAN_REQUIRED: '人の操作が必要', HOLD: '実サイト送信は保留' } as Record<string, string>)[report.cf7_readiness.status] ?? '未確認'}</strong>
       <p>HTML記載の版：{report.cf7_readiness.observed_version ?? '未確認'} / 隔離環境の契約検証：{report.cf7_readiness.lab_contract_status === 'VERIFIED_FIXTURE_ONLY' ? '検証済み（実サイト対応ではありません）' : '未確認'}</p>
+      {report.cf7_readiness.observed_version === '6.1.6' && <p>6.1.6は管理下の候補契約のみ検証済みです。追加hidden・必須項目・選択肢の照合と、実サイト準備への接続は未完了です。6.1.4として代用できません。</p>}
       <p>{report.cf7_readiness.freshness === 'CURRENT' ? '24時間以内の観測です。実行時の状態やプラグインの実版を保証しません。' : '以前の情報または未確認です。現在のフォームを確認してください。'}</p>
       {report.cf7_readiness.reasons.map((reason, index) => <details className="mt-2" key={reason.code} open={index === 0}>
         <summary>{index === 0 ? '最初に確認すること：' : ''}{reason.message}</summary>

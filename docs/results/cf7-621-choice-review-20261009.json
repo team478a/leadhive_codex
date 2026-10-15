@@ -1,0 +1,35 @@
+{
+  "baseline_commit": "b10393ca9075966100eee4dc14e756ec1dd41a79",
+  "method": "saved_snapshot_hash_verified_no_network",
+  "source_compare": {
+    "repository": "rocklobster-in/contact-form-7",
+    "base_tag": "v6.2.0",
+    "base_commit": "34acb3a6995b403274820c5ea42abd01b754c03b",
+    "head_tag": "v6.2.1",
+    "head_commit": "f3c41966bde736bd557d81989780004728aa878b"
+  },
+  "saved_case": {
+    "count": 1,
+    "html_declared_version": "6.2.1",
+    "extra_hidden": 4,
+    "select_controls": 1,
+    "checkbox_controls": 1,
+    "unsupported_controls": 1,
+    "review_state_counts": {
+      "DO_NOT_FILL": 11,
+      "SENDER_VALUE_MISSING": 4,
+      "CHOICE_REVIEW_REQUIRED": 1,
+      "DRAFT_VALUE_MISSING": 1,
+      "HUMAN_CONSENT_REQUIRED": 1
+    },
+    "static_contract_evidence_generated": false
+  },
+  "human_reviewed": 0,
+  "verified_sendable": 0,
+  "external_company_requests": 0,
+  "ai_calls": 0,
+  "db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0
+}

@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models import Project, SiteIdentityReviewEvent, User
 from app.project_access import company_access
 from app.security import current_user
+from app.services.field_feedback import capture_site_review
 from app.services.lead_identity import compare, identity_hash, normalize
 from app.services.site_identity_review import latest, official_evidence_url, public_review
 
@@ -132,6 +133,7 @@ def confirm(
         expires_at=now + timedelta(days=7),
     )
     db.add(row)
+    capture_site_review(db, company, row)
     db.commit()
     return {"review": public_review(row, company), "execution_allowed": False}
 
@@ -169,5 +171,6 @@ def revoke(
         expires_at=now + timedelta(days=7),
     )
     db.add(row)
+    capture_site_review(db, company, row)
     db.commit()
     return {"review": public_review(row, company), "execution_allowed": False}

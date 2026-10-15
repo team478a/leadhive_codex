@@ -1,0 +1,57 @@
+{
+  "baseline_commit": "d3f94c275ef38171844ff68db4b01b48750b84e8",
+  "method": "complete_saved_page_bounded_isolated_review_only",
+  "cases": [
+    {
+      "case": "large_saved_page_1",
+      "html_bytes": 337004,
+      "regular_inspection_status": "LIMIT_EXCEEDED",
+      "review_only": {
+        "status": "REVIEW_ONLY",
+        "whole_page_scanned": true,
+        "form_count": 3,
+        "cf7_marker": true,
+        "version": "5.9.3",
+        "captcha_marker_detected": false,
+        "base_override": false,
+        "external_control": false,
+        "rest_link_same_origin": false,
+        "extra_hidden": 0,
+        "repeated_names": 0,
+        "radio_controls": 0,
+        "select_controls": 0,
+        "file_inputs": 0,
+        "missing_names": 0,
+        "permission_status": "UNKNOWN",
+        "human_review_required": true,
+        "execution_allowed": false,
+        "eligible_for_approval": false
+      }
+    },
+    {
+      "case": "large_saved_page_2",
+      "html_bytes": 840296,
+      "regular_inspection_status": "LIMIT_EXCEEDED",
+      "review_only": {
+        "status": "PARSE_FAILED",
+        "human_review_required": true,
+        "execution_allowed": false,
+        "eligible_for_approval": false
+      }
+    }
+  ],
+  "external_requests": 0,
+  "ai_calls": 0,
+  "db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "human_reviewed": 0,
+  "verified_sendable": 0,
+  "limitations": [
+    "No current site observation",
+    "No approval or contract evidence generation",
+    "Version is HTML marker only",
+    "CAPTCHA marker absence does not prove no dynamic CAPTCHA"
+  ]
+}

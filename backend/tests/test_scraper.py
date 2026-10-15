@@ -1,6 +1,8 @@
 from uuid import UUID, uuid4
 
+import httpx
 import pytest
+from sqlalchemy.exc import DataError
 
 from app.models import Company
 from app.services import scraper, web_analysis
@@ -26,6 +28,47 @@ HTML = """
 <script>secret script text</script>
 </body></html>
 """
+
+
+@pytest.mark.parametrize(
+    ("encoding", "declaration", "content_type"),
+    [
+        ("utf-8", "", "text/html"),
+        ("cp932", '<meta charset="shift_jis">', "text/html"),
+        (
+            "euc-jp",
+            '<meta http-equiv="Content-Type" content="text/html; charset=euc-jp">',
+            "text/html",
+        ),
+        ("cp932", '<meta charset="utf-8">', "text/html; charset=shift_jis"),
+        ("utf-8-sig", "", "text/html"),
+    ],
+)
+def test_safe_fetcher_decodes_japanese_before_extracting_links(
+    monkeypatch, encoding, declaration, content_type
+):
+    markup = (
+        f"<html><head>{declaration}<title>株式会社サンプル</title></head>"
+        '<body><a href="/entry">お問い合わせ</a></body></html>'
+    )
+    monkeypatch.setattr(scraper, "_validated_target", lambda url: (url, "example.com"))
+    fetcher = scraper.SafeFetcher()
+    fetcher.client.close()
+    fetcher.client = httpx.Client(
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(
+                200, content=markup.encode(encoding), headers={"Content-Type": content_type}
+            )
+        )
+    )
+    try:
+        page = fetcher._request("https://example.com/", 10000)
+        data = extract_page(page.html, page.url)
+        assert data.company_name == "株式会社サンプル"
+        assert data.contact_url == "https://example.com/entry"
+        assert "�" not in page.html
+    finally:
+        fetcher.close()
 
 
 def make_project(auth, name="解析テスト"):
@@ -255,6 +298,23 @@ def test_analysis_failure_missing_url_and_aggregator(auth, db, monkeypatch):
     assert result["analysis_error"] == "接続できません。"
 
 
+def test_analysis_data_error_has_safe_diagnostics(auth, monkeypatch, caplog):
+    project = make_project(auth)
+    company = add_url(auth, project["id"], "https://data-error.example")
+
+    def fail(url):
+        raise DataError("insert", {"private": "do-not-log"}, Exception("invalid value"))
+
+    monkeypatch.setattr(web_analysis, "scrape_company", fail)
+    with caplog.at_level("ERROR", logger="leadhive"):
+        result = auth.post(f"/api/companies/{company['id']}/analyze", json={}).json()
+
+    assert result["analysis_status"] == "failed"
+    assert "データ形式エラー" in result["analysis_error"]
+    assert "type=DataError phase=fetch sqlstate=unknown" in caplog.text
+    assert "do-not-log" not in caplog.text
+
+
 def test_analysis_marks_redirected_domain_duplicate(auth, monkeypatch):
     project = make_project(auth)
     original = add_url(auth, project["id"], "https://canonical.example")
@@ -305,3 +365,49 @@ def test_batch_analysis_and_access_isolation(auth, users, monkeypatch):
 
 def urlsplit_name(url):
     return url.split("//", 1)[-1].split(".", 1)[0]
+
+
+def test_extraction_evidence_does_not_bootstrap_official_confirmation(auth, db, monkeypatch):
+    from sqlalchemy import select
+
+    from app.models import LeadSiteEvidence, LeadSourceObservation
+
+    project = make_project(auth)
+    item = add_url(auth, project["id"], "https://example.jp")
+    company = db.get(Company, UUID(item["id"]))
+    before_name = company.company_name
+    monkeypatch.setattr(
+        web_analysis,
+        "scrape_company",
+        lambda url: (
+            FetchedPage("https://example.jp", HTML),
+            extract_page(HTML, "https://example.jp"),
+        ),
+    )
+    result = web_analysis.analyze(db, company)
+    assert result.company_name != before_name
+    evidence = db.scalar(select(LeadSiteEvidence).where(LeadSiteEvidence.company_id == company.id))
+    assert evidence.confidence == "REVIEW_REQUIRED"
+    assert "IDENTITY_CHANGED_DURING_EXTRACTION" in evidence.reasons
+    observation = db.scalar(
+        select(LeadSourceObservation).where(
+            LeadSourceObservation.company_id == company.id,
+            LeadSourceObservation.source == "website",
+        )
+    )
+    assert observation is not None
+    assert observation.facts["email"]["verified"] is False
+    assert observation.facts["email"]["source_url"] == "https://example.jp"
+    web_analysis.analyze(db, company, force=True)
+    assert all(
+        row.confidence == "REVIEW_REQUIRED"
+        for row in db.scalars(
+            select(LeadSiteEvidence).where(LeadSiteEvidence.company_id == company.id)
+        )
+    )
+    assert any(
+        "IDENTITY_DERIVED_FROM_EXTRACTION" in row.reasons
+        for row in db.scalars(
+            select(LeadSiteEvidence).where(LeadSiteEvidence.company_id == company.id)
+        )
+    )

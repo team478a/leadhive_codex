@@ -15,20 +15,39 @@
   .brand { @apply text-2xl font-bold tracking-tight; }
   .eyebrow { @apply mb-3 text-xs font-semibold tracking-[0.16em] text-[#688579]; }
   .muted { @apply text-[#65776f] leading-relaxed; }
-  .panel { @apply rounded-xl border border-[#e0e6df] bg-white p-6 shadow-xs break-words; }
+  .panel { @apply min-w-0 rounded-xl border border-[#e0e6df] bg-white p-4 sm:p-6 shadow-xs break-words; }
   .badge { @apply inline-block h-fit shrink-0 rounded-full bg-[#edf2eb] px-3 py-1 text-xs font-medium text-[#45644e]; }
   .keyword { @apply rounded-md bg-[#f2f4f0] px-2.5 py-1.5 text-xs text-[#58705f]; }
   .secondary { @apply border border-[#dce3dc] bg-white text-[#315e4a] hover:bg-[#f1f5ee]; }
+  button.analysis-active, button.analysis-active:disabled { @apply border-2 border-[#235c4c] bg-white text-[#235c4c] opacity-100; }
   .danger { @apply bg-transparent px-3 text-[#a65047] hover:bg-red-50; }
   .error { @apply mb-5 rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-800; }
   .notice { @apply mb-5 rounded-lg bg-emerald-50 p-4 text-sm text-emerald-800; }
   .field { @apply mb-5 flex flex-col gap-2 text-sm font-medium; }
+  .checkbox-row { @apply mb-3 flex items-center gap-2 text-sm; }
+  .checkbox-row input[type="checkbox"] { @apply size-4 shrink-0 accent-[#235c4c]; }
+  .required-label::after { content: ""; display: inline-block; width: 0.7rem; height: 0.7rem; margin-left: 0.3rem; vertical-align: 0.05rem; background: #b91c1c; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 95%, 50% 72%, 21% 95%, 32% 57%, 2% 35%, 39% 35%); }
   .actions { @apply mt-7 flex justify-end gap-3 border-t border-[#e6eae4] pt-5; }
+  .flow-steps { @apply grid list-none gap-3 p-0 md:grid-cols-2; }
+  .flow-steps li { @apply flex min-w-0 flex-col items-start gap-2 rounded-lg border border-[#e0e6df] bg-[#fafbf9] p-4; }
+  .flow-steps li strong { @apply text-[#235c4c]; }
+  .flow-steps li span { @apply text-sm leading-relaxed text-[#65776f]; }
+  .send-count { @apply rounded-lg bg-emerald-50 p-3 font-semibold text-emerald-900; }
+  .send-empty { @apply rounded-lg border border-[#e0e6df] bg-[#fafbf9] p-4; }
+  @media (max-width: 639px) {
+    .actions { @apply flex-col items-stretch; }
+    .actions > button { @apply min-h-11 w-full whitespace-normal; }
+  }
   .form-panel { @apply max-w-3xl; }
   .form-panel > .muted { @apply mb-6 mt-2; }
   .app-layout { @apply min-h-screen lg:flex; }
-  .sidebar { @apply flex flex-col bg-[#173c35] p-6 text-white lg:fixed lg:inset-y-0 lg:w-64; }
-  .nav-label { @apply mb-3 mt-10 text-xs text-[#a5bcb1]; }
+  .sidebar { @apply sticky top-0 z-30 flex flex-col bg-[#173c35] px-5 py-3 text-white lg:fixed lg:inset-y-0 lg:w-64 lg:p-6 lg:overflow-y-auto lg:overscroll-y-contain; }
+  .sidebar-header { @apply flex shrink-0 items-center justify-between gap-3; }
+  .mobile-menu-toggle { @apply flex min-h-11 items-center gap-2 bg-[#284e43] px-3 py-2 lg:hidden; }
+  .sidebar-menu { @apply min-h-0 flex-col overflow-y-auto overscroll-y-contain lg:flex-1 lg:overflow-visible; max-height: calc(100dvh - 76px); }
+  @media (min-width: 1024px) { .sidebar-menu { max-height: none; } }
+  .sidebar > * { @apply shrink-0; }
+  .nav-label { @apply mb-3 mt-4 lg:mt-10 text-xs text-[#a5bcb1]; }
   .nav-item { @apply block w-full rounded-lg bg-transparent px-3 py-3 text-left text-sm text-[#c8d9d0] hover:bg-[#284e43]; }
   .nav-item.selected { @apply bg-[#335b4d] text-white; }
   .sidebar-footer { @apply mt-6 border-t border-white/15 pt-5 text-xs text-[#aac0b5] lg:mt-auto; }

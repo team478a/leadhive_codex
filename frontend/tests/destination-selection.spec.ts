@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -17,7 +18,7 @@ test('Human preparation choice persists, can be revoked and invalidates on desti
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByRole('button', { name: '詳細', exact: true }).first().click()
     const panel = page.getByRole('region', { name: 'リスト完成の根拠' })
@@ -39,7 +40,7 @@ test('Human preparation choice persists, can be revoked and invalidates on desti
     await choice.getByRole('button', { name: /この窓口を準備対象に選択/ }).click()
     await expect(choice).toContainText('有効（CURRENT） / 記録版 3')
     await page.reload()
-    await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+    await navigateWorkspace(page, '▤ 企業一覧')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await page.getByRole('button', { name: '詳細', exact: true }).first().click()
     await expect(choice).toContainText('有効（CURRENT） / 記録版 3')

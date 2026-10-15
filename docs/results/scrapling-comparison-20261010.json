@@ -1,0 +1,272 @@
+{
+  "cohort_size": 100,
+  "methods": {
+    "current": {
+      "html_acquired": 99,
+      "extraction_success": 99,
+      "success_rate": 0.99,
+      "field_availability": {
+        "company_name": 1.0,
+        "address": 0.6767676767676768,
+        "phone": 0.4444444444444444,
+        "contact_url": 0.9797979797979798,
+        "instagram_url": 0.3838383838383838,
+        "x_url": 0.42424242424242425,
+        "facebook_url": 0.3333333333333333,
+        "youtube_url": 0.30303030303030304,
+        "tiktok_url": 0.13131313131313133,
+        "line_url": 0.0707070707070707
+      },
+      "human_accuracy": {
+        "company_name": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "address": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "phone": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "contact_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "instagram_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "x_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "facebook_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "youtube_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "tiktok_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "line_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        }
+      },
+      "mean_processing_seconds": 2.429880000001867,
+      "estimated_cost_per_company": null,
+      "failure_reasons": {
+        "HTTP_ACQUISITION_FAILED": 1
+      }
+    },
+    "scrapling_static": {
+      "html_acquired": 99,
+      "extraction_success": 99,
+      "success_rate": 0.99,
+      "field_availability": {
+        "company_name": 1.0,
+        "address": 0.6767676767676768,
+        "phone": 0.4444444444444444,
+        "contact_url": 0.9797979797979798,
+        "instagram_url": 0.3838383838383838,
+        "x_url": 0.42424242424242425,
+        "facebook_url": 0.3333333333333333,
+        "youtube_url": 0.30303030303030304,
+        "tiktok_url": 0.13131313131313133,
+        "line_url": 0.0707070707070707
+      },
+      "human_accuracy": {
+        "company_name": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "address": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "phone": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "contact_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "instagram_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "x_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "facebook_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "youtube_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "tiktok_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "line_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        }
+      },
+      "mean_processing_seconds": 2.4288899999999556,
+      "estimated_cost_per_company": null,
+      "failure_reasons": {
+        "HTTP_ACQUISITION_FAILED": 1
+      }
+    },
+    "scrapling_dynamic_replay": {
+      "html_acquired": 99,
+      "extraction_success": 99,
+      "success_rate": 0.99,
+      "field_availability": {
+        "company_name": 1.0,
+        "address": 0.6767676767676768,
+        "phone": 0.4444444444444444,
+        "contact_url": 0.9797979797979798,
+        "instagram_url": 0.3838383838383838,
+        "x_url": 0.42424242424242425,
+        "facebook_url": 0.3333333333333333,
+        "youtube_url": 0.30303030303030304,
+        "tiktok_url": 0.13131313131313133,
+        "line_url": 0.0707070707070707
+      },
+      "human_accuracy": {
+        "company_name": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "address": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "phone": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "contact_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "instagram_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "x_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "facebook_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "youtube_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "tiktok_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        },
+        "line_url": {
+          "reviewed": 0,
+          "correct": null,
+          "accuracy": null
+        }
+      },
+      "mean_processing_seconds": 5.6081499999985684,
+      "estimated_cost_per_company": null,
+      "failure_reasons": {
+        "HTTP_ACQUISITION_FAILED": 1
+      }
+    }
+  },
+  "field_disagreements": {
+    "scrapling_static": {
+      "company_name": 0,
+      "address": 0,
+      "phone": 0,
+      "contact_url": 2,
+      "instagram_url": 0,
+      "x_url": 0,
+      "facebook_url": 0,
+      "youtube_url": 0,
+      "tiktok_url": 0,
+      "line_url": 0
+    },
+    "scrapling_dynamic_replay": {
+      "company_name": 0,
+      "address": 0,
+      "phone": 0,
+      "contact_url": 0,
+      "instagram_url": 0,
+      "x_url": 0,
+      "facebook_url": 0,
+      "youtube_url": 0,
+      "tiktok_url": 0,
+      "line_url": 0
+    }
+  },
+  "correct_sales_target_information_companies": null,
+  "js_correctness_improvement_companies": null,
+  "misextractions": null,
+  "misclassifications": null,
+  "acquisition_failure_reasons": {
+    "HTTP_ACQUISITION_FAILED": 1
+  },
+  "external_gets": 207,
+  "estimated_processing_cost": null,
+  "search_api_calls": 0,
+  "ai_calls": 0,
+  "db_writes": 0,
+  "email_sent": 0,
+  "form_post": 0,
+  "approvals": 0,
+  "source_sha256": "d1a58b1a09fe291185877b7aaa60c78becf32e763b89bbbfbd9fa03c64518444",
+  "scope": "root HTML shared acquisition; offline inline-JS replay; not full site crawl",
+  "human_truth_supplied": false,
+  "production_enabled": false
+}

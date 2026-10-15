@@ -1,18 +1,21 @@
 import ipaddress
-import json
 import logging
 import re
 import socket
+import time
 import urllib.robotparser
 from dataclasses import dataclass
+from dataclasses import field as dataclass_field
 from html import unescape
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import httpx
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, UnicodeDammit
 
 from app.config import settings
+from app.services import site_extraction
 from app.services.collection import canonicalize_url
+from app.services.contact_discovery import navigation_links, same_site
 
 logger = logging.getLogger("leadhive")
 
@@ -135,6 +138,9 @@ class PageData:
     business_summary: str = ""
     website_text: str = ""
     scraped_urls: list[str] | None = None
+    field_evidence: dict = dataclass_field(default_factory=dict)
+    crawl_errors: list[dict] = dataclass_field(default_factory=list)
+    source_exclusion_reason: str = ""
 
 
 def is_aggregator_domain(domain: str) -> bool:
@@ -201,16 +207,40 @@ class SafeFetcher:
             },
         )
         self._robots: dict[str, urllib.robotparser.RobotFileParser] = {}
+        self.site_root = ""
+        self._request_count = 0
+        self._started = time.monotonic()
+        self._last_request: dict[str, float] = {}
 
     def close(self):
         self.client.close()
 
     def _request(
-        self, url: str, max_bytes: int, redirects: int = 0, robots_request: bool = False
+        self,
+        url: str,
+        max_bytes: int,
+        redirects: int = 0,
+        robots_request: bool = False,
+        allowed_content_types: tuple[str, ...] | None = None,
+        compact_form_images: bool = False,
     ) -> FetchedPage:
         if redirects > 5:
             raise ScrapeError("リダイレクト回数が上限を超えました。")
         normalized, _ = _validated_target(url)
+        if self.site_root and not same_site(self.site_root, normalized):
+            raise ScrapeError("追加探索の別サイト・HTTP降格への転送は取得しません。")
+        if redirects and not robots_request and not self.robots_allowed(normalized):
+            raise ScrapeError("転送先のrobots.txtにより解析が許可されていません。")
+        if self._request_count >= 32 or time.monotonic() - self._started >= 60:
+            raise ScrapeError("Webサイト取得の回数・時間上限に達しました。")
+        host = urlsplit(normalized).hostname or ""
+        wait = 1 - (time.monotonic() - self._last_request.get(host, 0))
+        if wait > 0:
+            time.sleep(wait)
+        if time.monotonic() - self._started >= 60:
+            raise ScrapeError("Webサイト取得の時間上限に達しました。")
+        self._request_count += 1
+        self._last_request[host] = time.monotonic()
         try:
             with self.client.stream("GET", normalized) as response:
                 if response.status_code in {301, 302, 303, 307, 308}:
@@ -218,7 +248,12 @@ class SafeFetcher:
                     if not location:
                         raise ScrapeError("Webサイトのリダイレクト先が不明です。")
                     return self._request(
-                        urljoin(normalized, location), max_bytes, redirects + 1, robots_request
+                        urljoin(normalized, location),
+                        max_bytes,
+                        redirects + 1,
+                        robots_request,
+                        allowed_content_types,
+                        compact_form_images,
                     )
                 if robots_request and response.status_code == 404:
                     return FetchedPage(str(response.url), "")
@@ -229,22 +264,54 @@ class SafeFetcher:
                         f"Webサイトを取得できませんでした（HTTP {response.status_code}）。"
                     )
                 content_type = response.headers.get("content-type", "").lower()
-                if "html" not in content_type and "text/plain" not in content_type:
+                mime = content_type.split(";", 1)[0].strip()
+                if allowed_content_types is not None and mime not in allowed_content_types:
+                    raise ScrapeError("指定した描画リソースとContent-Typeが一致しません。")
+                if (
+                    allowed_content_types is None
+                    and "html" not in content_type
+                    and "text/plain" not in content_type
+                ):
                     raise ScrapeError("HTMLではないコンテンツは解析できません。")
                 declared = response.headers.get("content-length")
-                if declared and declared.isdigit() and int(declared) > max_bytes:
+                # Discovery may read a bounded larger document, but only raster
+                # image src data is removable. Never parse a truncated page.
+                read_limit = (
+                    max(max_bytes, min(max_bytes * 4, 8_000_000))
+                    if compact_form_images
+                    else max_bytes
+                )
+                if declared and declared.isdigit() and int(declared) > read_limit:
                     raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
                 chunks = []
                 size = 0
                 for chunk in response.iter_bytes():
+                    if time.monotonic() - self._started >= 60:
+                        raise ScrapeError("Webサイト取得の時間上限に達しました。")
                     size += len(chunk)
-                    if size > max_bytes:
+                    if size > read_limit:
                         raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
                     chunks.append(chunk)
-                encoding = response.encoding or "utf-8"
-                return FetchedPage(
-                    str(response.url), b"".join(chunks).decode(encoding, errors="replace")
-                )
+                # httpx defaults to UTF-8 without consulting HTML charset.
+                # Respect an explicit HTTP charset, otherwise HTML metadata/BOM
+                # and byte detection, before extracting Japanese names/links.
+                charset = re.search(r"charset\s*=\s*[\"']?([^\s;\"']+)", content_type)
+                decoded = UnicodeDammit(
+                    b"".join(chunks),
+                    known_definite_encodings=[charset.group(1)] if charset else [],
+                    is_html=True,
+                ).unicode_markup
+                html = decoded if decoded is not None else ""
+                if compact_form_images and size > max_bytes:
+                    html = compact_discovery_images(html)
+                    if len(html.encode("utf-8")) > max_bytes:
+                        raise ScrapeError("Webサイトのデータサイズが上限を超えました。")
+                    logger.info(
+                        "form_discovery_image_compaction received_bytes=%s retained_bytes=%s",
+                        size,
+                        len(html.encode("utf-8")),
+                    )
+                return FetchedPage(str(response.url), html)
         except ScrapeError:
             raise
         except httpx.HTTPError as exc:
@@ -257,10 +324,9 @@ class SafeFetcher:
         if cached:
             return cached.can_fetch(settings.scraper_user_agent, url)
         robots_url = urlunsplit((parsed.scheme, parsed.netloc, "/robots.txt", "", ""))
-        try:
-            page = self._request(robots_url, 256_000, robots_request=True)
-        except ScrapeError:
-            return False
+        # Failure to fetch robots is not evidence of a robots prohibition.
+        # Propagate the acquisition failure, remaining fail-closed.
+        page = self._request(robots_url, 256_000, robots_request=True)
         parser = urllib.robotparser.RobotFileParser()
         parser.set_url(robots_url)
         parser.parse(page.html.splitlines())
@@ -275,6 +341,60 @@ class SafeFetcher:
             raise ScrapeError("robots.txtにより解析が許可されていません。")
         return self._request(normalized, settings.scraper_max_bytes)
 
+    def fetch_browser_resource(self, url: str, kind: str) -> FetchedPage:
+        """Explicit text assets only; preserve public URL, robots and crawl budgets."""
+        types = {
+            "script": ("application/javascript", "text/javascript", "application/x-javascript"),
+            "style": ("text/css",),
+        }
+        if kind not in types or not self.site_root:
+            raise ScrapeError("描画リソースの種類または取得元が不正です。")
+        normalized, _ = _validated_target(url)
+        if not same_site(self.site_root, normalized) or not self.robots_allowed(normalized):
+            raise ScrapeError("描画リソースの取得範囲またはrobots.txtにより拒否しました。")
+        return self._request(normalized, 500_000, allowed_content_types=types[kind])
+
+
+def compact_discovery_images(html: str) -> str:
+    """Remove only large embedded raster image src values, not text or form data.
+
+    This representation is for discovery, never browser rendering or dispatch.
+    Scripts, styles, CAPTCHA markers, links, hidden inputs and prohibition text
+    remain intact. SVG and other executable/non-image data are not removed.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for image in soup.find_all("img"):
+        value = image.get("src")
+        if (
+            isinstance(value, str)
+            and len(value) > 4096
+            and re.fullmatch(
+                r"data:image/(?:png|jpe?g|gif|webp|avif);base64,[A-Za-z0-9+/=\s]+",
+                value,
+                re.IGNORECASE,
+            )
+        ):
+            image["src"] = "data:,"
+    return str(soup)
+
+
+class ImageCompactingFetcher(SafeFetcher):
+    """Bounded raster-image compaction for page analysis workflows."""
+
+    def fetch_html(self, url: str) -> FetchedPage:
+        normalized, _ = _validated_target(url)
+        if not self.robots_allowed(normalized):
+            raise ScrapeError("robots.txtにより解析が許可されていません。")
+        return self._request(normalized, settings.scraper_max_bytes, compact_form_images=True)
+
+
+class FormDiscoveryFetcher(ImageCompactingFetcher):
+    """Compatibility name for existing form-discovery call sites."""
+
+
+class ServiceProposalFetcher(ImageCompactingFetcher):
+    """Fetch service pages for editable target proposals within bounded limits."""
+
 
 def _clean_url(value: str, base_url: str) -> str:
     absolute = urljoin(base_url, unescape(value.strip()))
@@ -285,56 +405,23 @@ def _clean_url(value: str, base_url: str) -> str:
 
 
 def _extract_company_name(soup: BeautifulSoup) -> str:
-    for selector, attribute in (
-        ("meta[property='og:site_name']", "content"),
-        ("meta[name='application-name']", "content"),
-    ):
+    org = site_extraction.organization(soup)
+    if org.get("name"):
+        return str(org["name"]).strip()[:500]
+    for selector in ("meta[property='og:site_name']", "meta[name='application-name']"):
         element = soup.select_one(selector)
-        if element and element.get(attribute):
-            return str(element[attribute]).strip()[:500]
-    for script in soup.select("script[type='application/ld+json']"):
-        try:
-            value = json.loads(script.string or "")
-        except (json.JSONDecodeError, TypeError):
-            continue
-        values = value if isinstance(value, list) else [value]
-        for item in values:
-            if isinstance(item, dict) and item.get("@type") in {
-                "Organization",
-                "Corporation",
-                "LocalBusiness",
-            }:
-                if item.get("name"):
-                    return str(item["name"]).strip()[:500]
+        if element and element.get("content"):
+            return str(element["content"]).strip()[:500]
     title = soup.title.get_text(" ", strip=True) if soup.title else ""
     return re.split(r"\s*[|｜–—]\s*", title, maxsplit=1)[0].strip()[:500]
 
 
 def _extract_email(soup: BeautifulSoup, text: str) -> str:
-    candidates = []
-    for anchor in soup.select("a[href^='mailto:']"):
-        value = anchor.get("href", "").split(":", 1)[-1].split("?", 1)[0].strip()
-        if value:
-            candidates.append(value)
-    candidates.extend(re.findall(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}", text))
-    unique = list(dict.fromkeys(value.lower() for value in candidates if len(value) <= 320))
-    priorities = ("info@", "contact@", "inquiry@", "sales@", "support@")
-    return next(
-        (value for prefix in priorities for value in unique if value.startswith(prefix)),
-        unique[0] if unique else "",
-    )
+    return site_extraction.email(soup, text)
 
 
 def _extract_phone(text: str) -> str:
-    patterns = (
-        r"(?:TEL|電話|Phone)\s*[：:]?\s*(0\d{1,4}[\s\-‐‑‒–—ー]\d{1,4}[\s\-‐‑‒–—ー]\d{3,4})",
-        r"(?<!\d)(0\d{1,4}[\-‐‑‒–—ー]\d{1,4}[\-‐‑‒–—ー]\d{3,4})(?!\d)",
-    )
-    for pattern in patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            return re.sub(r"[\s‐‑‒–—ー]", "-", match.group(1))[:100]
-    return ""
+    return site_extraction.phone(text)
 
 
 def _extract_location(text: str) -> tuple[str, str, str]:
@@ -343,6 +430,12 @@ def _extract_location(text: str) -> tuple[str, str, str]:
         return "", "", ""
     start = text.find(prefecture)
     fragment = text[start : start + 160]
+    fragment = re.split(
+        r"\s+(?:TEL|FAX|Phone|電話|メール|営業時間|お問い合わせ|対応地域)",
+        fragment,
+        maxsplit=1,
+        flags=re.IGNORECASE,
+    )[0]
     city_match = re.match(re.escape(prefecture) + r"([^\s、,]{1,30}?(?:市|区|町|村))", fragment)
     city = city_match.group(1) if city_match else ""
     address_match = re.match(r"[^\n。]{2,120}", fragment)
@@ -389,19 +482,11 @@ def _social_links(soup: BeautifulSoup, base_url: str) -> dict[str, str]:
 
 
 def _contact_url(soup: BeautifulSoup, base_url: str) -> str:
-    base_host = (urlsplit(base_url).hostname or "").lower()
-    scored = []
-    for anchor in soup.select("a[href]"):
-        label = anchor.get_text(" ", strip=True).lower()
-        href = str(anchor.get("href", ""))
-        combined = f"{label} {href.lower()}"
-        if not any(hint in combined for hint in CONTACT_HINTS):
-            continue
-        url = _clean_url(href, base_url)
-        if url and (urlsplit(url).hostname or "").lower() == base_host:
-            score = 2 if "お問い合わせ" in label or "contact" in label else 1
-            scored.append((score, url))
-    return max(scored, default=(0, ""))[1]
+    # Use the crawler's ranking rather than breaking equal scores by URL text.
+    # Keep this field an observed anchor destination, not iframe/form proof.
+    anchors = "".join(str(anchor) for anchor in soup.select("a[href]"))
+    links = navigation_links(anchors, base_url, base_url)
+    return links[0] if links else ""
 
 
 def discover_important_urls(html: str, base_url: str) -> list[str]:
@@ -458,6 +543,8 @@ def merge_page_data(target: PageData, source: PageData, source_url: str) -> None
     ):
         if not getattr(target, field) and getattr(source, field):
             setattr(target, field, getattr(source, field))
+            if field in source.field_evidence:
+                target.field_evidence[field] = source.field_evidence[field]
     if source.website_text and source.website_text not in target.website_text:
         target.website_text = (f"{target.website_text}\n\n[{source_url}]\n{source.website_text}")[
             :100_000
@@ -469,10 +556,12 @@ def extract_page(html: str, base_url: str) -> PageData:
     summary_tag = soup.select_one("meta[name='description'], meta[property='og:description']")
     summary = str(summary_tag.get("content", "")).strip() if summary_tag else ""
     company_name = _extract_company_name(soup)
+    org = site_extraction.organization(soup)
     for element in soup.select("script, style, noscript, svg, template"):
         element.decompose()
     text = re.sub(r"\s+", " ", soup.get_text(" ", strip=True)).strip()
-    address, prefecture, city = _extract_location(text)
+    location, address_method = site_extraction.location_text(soup, text, org)
+    address, prefecture, city = _extract_location(location)
     data = PageData(
         company_name=company_name,
         phone=_extract_phone(text),
@@ -484,28 +573,103 @@ def extract_page(html: str, base_url: str) -> PageData:
         business_summary=(summary or text[:500])[:2000],
         website_text=text[:100_000],
     )
+    for field_name, method in (
+        ("company_name", "JSON_LD_NAME" if org.get("name") else "METADATA_OR_TITLE_CANDIDATE"),
+        ("address", address_method),
+        ("phone", "PHONE_TEXT"),
+        ("email", "MAILTO_OR_TEXT"),
+        ("contact_url", "CONTACT_LINK"),
+    ):
+        value = getattr(data, field_name)
+        if value:
+            data.field_evidence[field_name] = {
+                "value": value,
+                "source_url": base_url,
+                "method": method,
+                "verified": False,
+            }
     for key, value in _social_links(soup, base_url).items():
         setattr(data, key, value)
     return data
 
 
-def scrape_company(url: str) -> tuple[FetchedPage, PageData]:
+def scrape_company(
+    url: str, *, excluded_domains: set[str] | None = None
+) -> tuple[FetchedPage, PageData]:
     fetcher = SafeFetcher()
     try:
         page = fetcher.fetch_html(url)
+        root_attempts = 0
+        from app.services.source_page_policy import page_reason
+
+        def source_reason(target):
+            host = (urlsplit(target.url).hostname or "").lower().rstrip(".").removeprefix("www.")
+            if host in (excluded_domains or set()) or is_aggregator_domain(host):
+                return "EXCLUDED_SOURCE_DOMAIN"
+            return page_reason(target.html, target.url)
+
+        reason = source_reason(page)
+        if reason:
+            # Recover the same-site root once; never learn a business-wide ban from an article.
+            parsed = urlsplit(page.url)
+            root_url = urlunsplit((parsed.scheme, parsed.netloc, "/", "", ""))
+            if reason in {"ARTICLE_PAGE", "JOB_LISTING"} and page.url.rstrip(
+                "/"
+            ) != root_url.rstrip("/"):
+                try:
+                    root_attempts = 1
+                    root = fetcher.fetch_html(root_url)
+                    if same_site(page.url, root.url) and not source_reason(root):
+                        page = root
+                        reason = ""
+                except ScrapeError:
+                    pass
+            if reason:
+                return page, PageData(source_exclusion_reason=reason, scraped_urls=[page.url])
+        fetcher.site_root = page.url
         data = extract_page(page.html, page.url)
         data.scraped_urls = [page.url]
         primary_host = (urlsplit(page.url).hostname or "").lower().removeprefix("www.")
-        for secondary_url in discover_important_urls(page.html, page.url):
+        queue = discover_important_urls(page.html, page.url)
+        visited = {page.url.rstrip("/")}
+        count = 0
+        while queue and count < MAX_SECONDARY_PAGES - root_attempts:
+            secondary_url = queue.pop(0)
+            if secondary_url.rstrip("/") in visited:
+                continue
+            visited.add(secondary_url.rstrip("/"))
+            count += 1
             try:
                 secondary_page = fetcher.fetch_html(secondary_url)
-            except ScrapeError:
+            except ScrapeError as exc:
+                data.crawl_errors.append(
+                    {"requested_url": secondary_url, "reason": exc.public_message}
+                )
                 continue
             secondary_host = (
                 (urlsplit(secondary_page.url).hostname or "").lower().removeprefix("www.")
             )
-            if secondary_host != primary_host:
+            if source_reason(secondary_page):
+                if data.contact_url.rstrip("/") in {
+                    secondary_url.rstrip("/"),
+                    secondary_page.url.rstrip("/"),
+                }:
+                    data.contact_url = ""
+                    data.field_evidence.pop("contact_url", None)
+                data.crawl_errors.append(
+                    {"requested_url": secondary_url, "reason": "NON_COMPANY_PAGE"}
+                )
                 continue
+            if secondary_host != primary_host or not same_site(page.url, secondary_page.url):
+                data.crawl_errors.append(
+                    {"requested_url": secondary_url, "reason": "CROSS_SITE_REDIRECT"}
+                )
+                continue
+            queue.extend(
+                navigation_links(
+                    secondary_page.html, secondary_page.url, page.url, contact_context=True
+                )
+            )
             merge_page_data(
                 data,
                 extract_page(secondary_page.html, secondary_page.url),

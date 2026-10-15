@@ -63,6 +63,16 @@ def test_company_list_filters_sorts_and_detail(auth, db):
         f"/api/projects/{project['id']}/company-list", params={"sort": "company_name"}
     ).json()["items"]
     assert len(by_name) == 2
+    beta.status = "excluded"
+    db.flush()
+    candidates = auth.get(
+        f"/api/projects/{project['id']}/company-list", params={"exclude_status": "excluded"}
+    ).json()
+    excluded = auth.get(
+        f"/api/projects/{project['id']}/company-list", params={"status": "excluded", "limit": 1}
+    ).json()
+    assert candidates["total"] == 1 and candidates["items"][0]["id"] == str(alpha.id)
+    assert excluded["total"] == 1 and excluded["items"][0]["id"] == str(beta.id)
     detail = auth.get(f"/api/companies/{beta.id}")
     assert detail.status_code == 200 and detail.json()["business_type"] == "物流会社"
 

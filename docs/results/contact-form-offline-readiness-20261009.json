@@ -1,0 +1,87 @@
+{
+  "baseline_commit": "459284da2b63dc1d4059c9fe592af4a384bbc8d8",
+  "method": "saved_html_existing_form_intelligence_pure_rules_no_provider",
+  "sites": 2,
+  "contact_forms": 2,
+  "cases": [
+    {
+      "case": "previously_detected",
+      "page_kind_heuristic": "partnership",
+      "dom_rule_sales_status": "ALLOWED",
+      "prohibition_detected": false,
+      "captcha_type": "CAPTCHA_RECAPTCHA",
+      "confirmation_page": false,
+      "delivery_supported": false,
+      "compatibility_reason": "Contact Form 7の送信経路は未対応です。ブラウザで確認してください。",
+      "profile_status": "REVIEW_REQUIRED",
+      "primary_review_reason": "CAPTCHAは人による操作・確認が必要です。自動送信できません。",
+      "mapping_review_reason": "",
+      "visible_field_count": 6,
+      "required_visible_field_count": 4,
+      "required_uncertain_mapping_count": 0,
+      "visible_mapped_keys": {
+        "company_name": 1,
+        "contact_name": 1,
+        "email": 1,
+        "phone": 1,
+        "subject": 1,
+        "message": 1
+      },
+      "human_permission_verified": false,
+      "suppression_checked": false,
+      "approval_created": false
+    },
+    {
+      "case": "previously_missed",
+      "page_kind_heuristic": "support",
+      "dom_rule_sales_status": "ALLOWED",
+      "prohibition_detected": false,
+      "captcha_type": "CAPTCHA_NONE",
+      "confirmation_page": true,
+      "delivery_supported": true,
+      "compatibility_reason": "",
+      "profile_status": "REVIEW_REQUIRED",
+      "primary_review_reason": "必須項目の自動マッピングを確定できません。",
+      "mapping_review_reason": "必須項目の自動マッピングを確定できません。",
+      "visible_field_count": 7,
+      "required_visible_field_count": 4,
+      "required_uncertain_mapping_count": 1,
+      "visible_mapped_keys": {
+        "unknown": 2,
+        "message": 1,
+        "company_name": 1,
+        "contact_name": 1,
+        "email": 1,
+        "phone": 1
+      },
+      "human_permission_verified": false,
+      "suppression_checked": false,
+      "approval_created": false
+    }
+  ],
+  "external_requests": 0,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "db_reads": 0,
+  "db_writes": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "outbound_enabled": false,
+  "worker_started": false,
+  "human_review_seconds": null,
+  "human_precision": null,
+  "limitations": [
+    "ALLOWED from existing rule means no prohibited phrase matched in saved page, not affirmative permission",
+    "Page kind is heuristic and includes page text, not Human review",
+    "CAPTCHA is static markup detection, not browser execution",
+    "Compatibility does not mean sendability or authorization",
+    "Core suppression/optout/identity/sender not queried; live safety unverified"
+  ],
+  "runner_sha256": "a6561e6e48c92691046424cde17b0ed33ec0e289cc78027e67c94a9e9387d747",
+  "readiness_totals": {
+    "READY": 0,
+    "REVIEW_REQUIRED": 2,
+    "BLOCKED": 0
+  }
+}

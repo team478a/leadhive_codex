@@ -1,0 +1,280 @@
+{
+  "generatedAt": "2026-10-09T20:51:13.202Z",
+  "commit": "c1418d9ced70c0c3879648d9205124970e87e30f",
+  "model": "gpt-5.4-mini-2026-03-17",
+  "priceSource": "https://developers.openai.com/api/docs/models/gpt-5.4-mini",
+  "baseline": {
+    "status": "passed",
+    "vcs": {
+      "commit": "c1418d9ced70c0c3879648d9205124970e87e30f",
+      "branch": "codex/phase4a-ai-e2e-poc",
+      "dirty": false
+    },
+    "summary": {
+      "discovered": 21,
+      "selected": 14,
+      "executed": 14,
+      "passed": 14,
+      "failed": 0,
+      "interrupted": 0,
+      "flaky": 0,
+      "skipped": 0
+    },
+    "comparisons": [
+      {
+        "scenario": "html",
+        "trials": 2,
+        "passed": 2,
+        "measurementStatus": "MEASURED",
+        "successRate": 1,
+        "requiredRecognitionRate": 1,
+        "wrongValues": 0,
+        "previewReached": 2,
+        "errorsRecognized": 0,
+        "durationMs": [
+          351.6175999999998,
+          317.1631
+        ],
+        "repeatable": true
+      },
+      {
+        "scenario": "dynamic",
+        "trials": 2,
+        "passed": 2,
+        "measurementStatus": "MEASURED",
+        "successRate": 1,
+        "requiredRecognitionRate": 1,
+        "wrongValues": 0,
+        "previewReached": 2,
+        "errorsRecognized": 0,
+        "durationMs": [
+          282.5769,
+          278.33870000000024
+        ],
+        "repeatable": true
+      },
+      {
+        "scenario": "confirmation",
+        "trials": 2,
+        "passed": 2,
+        "measurementStatus": "MEASURED",
+        "successRate": 1,
+        "requiredRecognitionRate": 1,
+        "wrongValues": 0,
+        "previewReached": 2,
+        "errorsRecognized": 0,
+        "durationMs": [
+          339.4809,
+          418.06039999999985
+        ],
+        "repeatable": true
+      },
+      {
+        "scenario": "iframe",
+        "trials": 2,
+        "passed": 2,
+        "measurementStatus": "MEASURED",
+        "successRate": 1,
+        "requiredRecognitionRate": 1,
+        "wrongValues": 0,
+        "previewReached": 2,
+        "errorsRecognized": 0,
+        "durationMs": [
+          844.2439999999997,
+          839.8110999999999
+        ],
+        "repeatable": true
+      },
+      {
+        "scenario": "selection",
+        "trials": 2,
+        "passed": 2,
+        "measurementStatus": "MEASURED",
+        "successRate": 1,
+        "requiredRecognitionRate": 1,
+        "wrongValues": 0,
+        "previewReached": 2,
+        "errorsRecognized": 0,
+        "durationMs": [
+          634.3455000000004,
+          656.8953999999994
+        ],
+        "repeatable": true
+      },
+      {
+        "scenario": "consent",
+        "trials": 2,
+        "passed": 2,
+        "measurementStatus": "MEASURED",
+        "successRate": 1,
+        "requiredRecognitionRate": 1,
+        "wrongValues": 0,
+        "previewReached": 2,
+        "errorsRecognized": 0,
+        "durationMs": [
+          532.5634,
+          534.7289000000001
+        ],
+        "repeatable": true
+      },
+      {
+        "scenario": "invalid",
+        "trials": 2,
+        "passed": 2,
+        "measurementStatus": "MEASURED",
+        "successRate": 1,
+        "requiredRecognitionRate": 1,
+        "wrongValues": 0,
+        "previewReached": 0,
+        "errorsRecognized": 2,
+        "durationMs": [
+          418.6363000000001,
+          443.47260000000097
+        ],
+        "repeatable": true
+      }
+    ],
+    "safety": {
+      "postRequests": 0,
+      "forbiddenRequests": 0,
+      "productionConnected": false
+    },
+    "modelTokensReportedByRunner": 0
+  },
+  "ai": {
+    "status": "error",
+    "vcs": {
+      "commit": "a8104aff2f1aa60770c1a7393178ad7674acfbf0",
+      "branch": "codex/phase4a-ai-e2e-poc",
+      "dirty": true
+    },
+    "summary": {
+      "discovered": 21,
+      "selected": 14,
+      "executed": 1,
+      "passed": 0,
+      "failed": 1,
+      "interrupted": 0,
+      "flaky": 0,
+      "skipped": 13
+    },
+    "comparisons": [
+      {
+        "scenario": "html",
+        "trials": 2,
+        "passed": 0,
+        "measurementStatus": "PROVIDER_BLOCKED",
+        "successRate": null,
+        "requiredRecognitionRate": null,
+        "wrongValues": null,
+        "previewReached": null,
+        "errorsRecognized": null,
+        "durationMs": [
+          3459.5627999999997
+        ],
+        "repeatable": null
+      },
+      {
+        "scenario": "dynamic",
+        "trials": 2,
+        "passed": 0,
+        "measurementStatus": "PROVIDER_BLOCKED",
+        "successRate": null,
+        "requiredRecognitionRate": null,
+        "wrongValues": null,
+        "previewReached": null,
+        "errorsRecognized": null,
+        "durationMs": null,
+        "repeatable": null
+      },
+      {
+        "scenario": "confirmation",
+        "trials": 2,
+        "passed": 0,
+        "measurementStatus": "PROVIDER_BLOCKED",
+        "successRate": null,
+        "requiredRecognitionRate": null,
+        "wrongValues": null,
+        "previewReached": null,
+        "errorsRecognized": null,
+        "durationMs": null,
+        "repeatable": null
+      },
+      {
+        "scenario": "iframe",
+        "trials": 2,
+        "passed": 0,
+        "measurementStatus": "PROVIDER_BLOCKED",
+        "successRate": null,
+        "requiredRecognitionRate": null,
+        "wrongValues": null,
+        "previewReached": null,
+        "errorsRecognized": null,
+        "durationMs": null,
+        "repeatable": null
+      },
+      {
+        "scenario": "selection",
+        "trials": 2,
+        "passed": 0,
+        "measurementStatus": "PROVIDER_BLOCKED",
+        "successRate": null,
+        "requiredRecognitionRate": null,
+        "wrongValues": null,
+        "previewReached": null,
+        "errorsRecognized": null,
+        "durationMs": null,
+        "repeatable": null
+      },
+      {
+        "scenario": "consent",
+        "trials": 2,
+        "passed": 0,
+        "measurementStatus": "PROVIDER_BLOCKED",
+        "successRate": null,
+        "requiredRecognitionRate": null,
+        "wrongValues": null,
+        "previewReached": null,
+        "errorsRecognized": null,
+        "durationMs": null,
+        "repeatable": null
+      },
+      {
+        "scenario": "invalid",
+        "trials": 2,
+        "passed": 0,
+        "measurementStatus": "PROVIDER_BLOCKED",
+        "successRate": null,
+        "requiredRecognitionRate": null,
+        "wrongValues": null,
+        "previewReached": null,
+        "errorsRecognized": null,
+        "durationMs": null,
+        "repeatable": null
+      }
+    ],
+    "safety": {
+      "postRequests": 0,
+      "forbiddenRequests": 0,
+      "productionConnected": false
+    },
+    "modelTokensReportedByRunner": 0
+  },
+  "cost": {
+    "calls": 1,
+    "interruptedPreviousRequests": 5,
+    "totalProviderRequests": 6,
+    "errors": [
+      {
+        "status": 429,
+        "code": "credit_balance_exhausted"
+      }
+    ],
+    "inputTokens": null,
+    "outputTokens": null,
+    "estimatedUsdNoCacheDiscount": null,
+    "budgetUsd": 5,
+    "realFormSendSuccessRate": null
+  },
+  "productionConnected": false
+}

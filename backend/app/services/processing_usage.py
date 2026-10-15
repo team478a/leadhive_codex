@@ -62,10 +62,14 @@ def persist_usage(db, rows, project_id, *, collection_job_id=None, company_id=No
 
 
 def measured_search(db, collection, search, keyword, region, limit):
-    with capture_usage() as rows:
+    from app.services.collection_discovery import persist_discovery
+    from app.services.discovery_capture import capturing_discovery
+
+    with capture_usage() as rows, capturing_discovery() as discovery:
         try:
             return search(keyword, region, limit)
         finally:
+            persist_discovery(db, collection, discovery)
             persist_usage(db, rows, collection.project_id, collection_job_id=collection.id)
 
 

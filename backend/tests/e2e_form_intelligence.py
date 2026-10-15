@@ -210,6 +210,42 @@ with SessionLocal() as db:
             ),
         ]
     )
+    db.add_all(
+        [
+            FormAnalysisLog(
+                company_id=company.id,
+                event_type="contact_page_found",
+                details={
+                    "finding": "EXTERNAL_CONTACT_UNVERIFIED",
+                    "url": "https://external-contact.example/entry?no=test-only",
+                    "source_url": company.website_url,
+                    "label": "お問い合わせ",
+                    "discovery_method": "OFFICIAL_SITE_LINK",
+                },
+            ),
+            FormAnalysisLog(
+                company_id=company.id,
+                event_type="analysis_completed",
+                details={
+                    "finding": "DOM_CONTACT_FORM_NOT_FOUND",
+                    "url": f"{company.website_url}/help",
+                },
+            ),
+            FormAnalysisLog(
+                company_id=company.id,
+                event_type="analysis_completed",
+                details={
+                    "finding": "EMBEDDED_FORM_UNVERIFIED",
+                    "url": f"{company.website_url}/embed",
+                },
+            ),
+            FormAnalysisLog(
+                company_id=company.id,
+                event_type="analysis_failed",
+                details={"finding": "FETCH_FAILED", "reason": "検証用の取得失敗"},
+            ),
+        ]
+    )
     db.add(
         OutreachDraft(
             company_id=company.id,

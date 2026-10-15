@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -13,13 +13,22 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     session_hours: int = 12
     agent_features_enabled: bool = False
+    feedback_provenance_enabled: bool = False
+    feedback_workbench_enabled: bool = False
+    pc_diagnostic_transfer_enabled: bool = False
+    live_form_input_enabled: bool = False
     worker_paused: bool = False
+    collection_fair_scheduler_enabled: bool = False
+    collection_discovery_max_operation_hits: int = Field(default=5000, ge=100, le=5000)
+    collection_discovery_field_chars: int = Field(default=4000, ge=100, le=4000)
+    collection_discovery_retention_days: int = Field(default=90, ge=1, le=365)
     outbound_enabled: bool = False
     human_approved_email_enabled: bool = False
     human_approved_form_enabled: bool = False
     form_adapter_preparation_enabled: bool = False
     cf7_candidate_preparation_enabled: bool = False
     form_adapter_lab_execution_enabled: bool = False
+    form_confirmation_lab_enabled: bool = False
     legacy_form_delivery_enabled: bool = False
     email_feedback_webhook_enabled: bool = False
     email_feedback_webhook_secret: str = ""
@@ -31,6 +40,7 @@ class Settings(BaseSettings):
     scraper_timeout_seconds: float = 15.0
     scraper_max_bytes: int = 2_000_000
     scraper_user_agent: str = "LeadHiveBot/2.0 (+https://leadhive.work/bot)"
+    scrapling_probe_enabled: bool = False
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-luna"
     ai_timeout_seconds: float = 45.0

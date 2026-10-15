@@ -8,6 +8,7 @@ from app.models import CollectionJob, Company, LeadSourceObservation
 from app.schema_external_presence import PresenceSearchPlan
 from app.services.collection import ExternalServiceError, canonicalize_url, search_serper_page
 from app.services.collection_conditions import evaluate
+from app.services.collection_discovery import classify_candidate, mark_discovery, persist_discovery
 from app.services.collection_jobs import (
     fail_job,
     is_duplicate,
@@ -15,9 +16,11 @@ from app.services.collection_jobs import (
     save_candidates,
     start_job,
 )
+from app.services.discovery_capture import capturing_discovery
 from app.services.external_presence import extra_searches
 from app.services.processing_usage import capture_usage, persist_usage
 from app.services.scraper import is_aggregator_domain
+from app.services.source_exclusions import domain_key, domains
 
 REQUEST_BUDGET = 50
 PAGE_SIZE = 10
@@ -56,12 +59,27 @@ def bounded_candidates(db, job, candidates, remaining):
     """Do not overshoot the goal; retain duplicate/excluded observations for ingestion."""
     selected = []
     keys: set[str | tuple[str, str]] = set()
+    remembered_sources = domains(db, job.project_id)
+
     for candidate in candidates:
         domain = canonicalize_url(candidate.website_url)[1] if candidate.website_url else ""
         if (
             is_duplicate(db, job.project_id, candidate)
+            or (candidate.website_url and domain_key(candidate.website_url) in remembered_sources)
             or is_suppressed(db, job.project_id, candidate)
             or (domain and is_aggregator_domain(domain))
+            or (
+                candidate.website_url
+                and classify_candidate(candidate)[0] in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
+            )
+            or (
+                candidate.website_url
+                and classify_candidate(candidate) == ("JOB_PR", "EXTERNAL_PLATFORM")
+            )
+            or (
+                candidate.website_url
+                and classify_candidate(candidate) == ("ARTICLE", "AGGREGATION_TITLE")
+            )
         ):
             selected.append(candidate)
             continue
@@ -69,12 +87,18 @@ def bounded_candidates(db, job, candidates, remaining):
         if key in keys or len(keys) < remaining:
             keys.add(key)
             selected.append(candidate)
+        else:
+            mark_discovery(db, job, candidate, "TARGET_LIMIT")
     return selected
 
 
 def run(db, job, payload, conditions, stopped):
     target = payload["target_count"]
     state = dict(job.payload.get("collection_progress") or {})
+    budget = min(
+        REQUEST_BUDGET,
+        state.get("request_budget", payload.get("search_request_limit") or REQUEST_BUDGET),
+    )
     index = state.get("keyword_index", 0)
     page = state.get("next_page", 1)
     requests = state.get("requests", 0)
@@ -92,7 +116,7 @@ def run(db, job, payload, conditions, stopped):
             no_match_count=sum(value == "NO_MATCH" for value in inventory.values()),
             conditions_applied=bool(conditions),
             requests=requests,
-            request_budget=REQUEST_BUDGET,
+            request_budget=budget,
             keyword_index=index,
             next_page=page,
             query_stops=query_stops,
@@ -109,7 +133,7 @@ def run(db, job, payload, conditions, stopped):
         if state["collected_count"] >= target:
             record("TARGET_REACHED")
             return
-        if requests >= REQUEST_BUDGET:
+        if requests >= budget:
             record("REQUEST_BUDGET_REACHED")
             return
         keyword = payload["keywords"][index]
@@ -121,12 +145,13 @@ def run(db, job, payload, conditions, stopped):
         # Reserve the attempt before HTTP, retaining the ceiling after a crash/retry.
         requests += 1
         record()
-        with capture_usage() as usage:
+        with capture_usage() as usage, capturing_discovery() as discovery:
             try:
                 candidates = search_serper_page(keyword, payload["region"], PAGE_SIZE, page)
                 error = None
             except ExternalServiceError as exc:
                 candidates, error = [], exc
+        persist_discovery(db, collection, discovery)
         persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
         if stopped():
             fail_job(db, collection, "収集が中断されました。")
@@ -139,7 +164,7 @@ def run(db, job, payload, conditions, stopped):
         save_candidates(
             db,
             collection,
-            bounded_candidates(db, job, candidates, target - len(before)),
+            bounded_candidates(db, collection, candidates, target - len(before)),
             keyword,
         )
         collection.found_count = len(candidates)

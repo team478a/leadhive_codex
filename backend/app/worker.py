@@ -15,8 +15,10 @@ from app.models import (
     Company,
     EmailCampaign,
     EmailDelivery,
+    FormAnalysisLog,
     FormDeliveryBatch,
     FormDeliveryBatchItem,
+    FormProfile,
     Notification,
     OperationJob,
     OutreachDraftApproval,
@@ -520,6 +522,10 @@ def claim_job(db) -> OperationJob | None:
         job.lease_expires_at = lease_deadline()
         job.started_at = datetime.now(timezone.utc)
         job.finished_at = None
+        if job.operation_type == "collect_search":
+            from app.services.collection_runtime import annotate_claim
+
+            annotate_claim(job)
         db.commit()
         db.refresh(job)
     return job
@@ -568,6 +574,9 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     if payload.get("target_count"):
         from app.services.target_collection import run
 
+        if payload.get("query_plan"):
+            from app.services.collection_scheduler import run
+
         job.total_count = payload["target_count"]
         db.commit()
         run(db, job, payload, conditions, lambda: stop_requested(db, job, worker_id))
@@ -593,17 +602,27 @@ def run_collection(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         ]
 
         def fetch(keyword):
-            with capture_usage() as usage:
+            from app.services.discovery_capture import capturing_discovery
+
+            with capture_usage() as usage, capturing_discovery() as discovery:
                 try:
-                    return search(keyword, payload["region"], payload["max_results"]), None, usage
+                    return (
+                        search(keyword, payload["region"], payload["max_results"]),
+                        None,
+                        usage,
+                        discovery,
+                    )
                 except ExternalServiceError as exc:
-                    return [], exc, usage
+                    return [], exc, usage, discovery
 
         with ThreadPoolExecutor(max_workers=min(4, len(keywords))) as executor:
             results = list(executor.map(fetch, keywords))
-        for keyword, collection, (candidates, error, usage) in zip(
+        for keyword, collection, (candidates, error, usage, discovery) in zip(
             keywords, collections, results, strict=True
         ):
+            from app.services.collection_discovery import persist_discovery
+
+            persist_discovery(db, collection, discovery)
             persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
             if stop_requested(db, job, worker_id):
                 return
@@ -695,16 +714,40 @@ def selected_companies(db, job: OperationJob, ai: bool) -> list[Company]:
     return list(db.scalars(query.order_by(Company.created_at).limit(100)).all())
 
 
+def next_analysis_batch(db, job: OperationJob, ai: bool) -> list[Company]:
+    """Select only untouched records for automatic follow-up batches."""
+    query = select(Company).where(Company.project_id == job.project_id)
+    if ai:
+        query = query.where(
+            Company.analysis_status == "completed",
+            Company.ai_status == "pending",
+        )
+    else:
+        query = query.where(
+            Company.website_url.is_not(None),
+            Company.analysis_status == "pending",
+        )
+    return list(db.scalars(query.order_by(Company.created_at, Company.id).limit(100)).all())
+
+
 def run_web(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     companies = selected_companies(db, job, False)
     job.total_count = len(companies)
     db.commit()
-    for company in companies:
-        if stop_requested(db, job, worker_id):
+    while companies:
+        for company in companies:
+            if stop_requested(db, job, worker_id):
+                return
+            result = analyze(db, company, job.payload.get("force", False))
+            if not progress(db, job, worker_id, result.analysis_status == "completed"):
+                return
+        # Explicitly selected company IDs are a bounded one-off operation.
+        if job.payload.get("company_ids") or job.payload.get("force"):
             return
-        result = analyze(db, company, job.payload.get("force", False))
-        if not progress(db, job, worker_id, result.analysis_status == "completed"):
-            return
+        companies = next_analysis_batch(db, job, False)
+        if companies:
+            job.total_count += len(companies)
+            db.commit()
 
 
 def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
@@ -713,12 +756,21 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     companies = selected_companies(db, job, True)
     job.total_count = len(companies)
     db.commit()
-    for company in companies:
-        if stop_requested(db, job, worker_id):
+    while companies:
+        for company in companies:
+            if stop_requested(db, job, worker_id):
+                return
+            result = analyze_company_ai(
+                db, company, project, profile, job.payload.get("force", False)
+            )
+            if not progress(db, job, worker_id, result.ai_status == "completed"):
+                return
+        if job.payload.get("company_ids") or job.payload.get("force"):
             return
-        result = analyze_company_ai(db, company, project, profile, job.payload.get("force", False))
-        if not progress(db, job, worker_id, result.ai_status == "completed"):
-            return
+        companies = next_analysis_batch(db, job, True)
+        if companies:
+            job.total_count += len(companies)
+            db.commit()
 
 
 def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
@@ -763,22 +815,64 @@ def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     db.commit()
 
 
+def next_form_analysis_batch(db, project_id: uuid.UUID, force: bool = False) -> list[Company]:
+    query = select(Company).where(
+        Company.project_id == project_id,
+        Company.analysis_status == "completed",
+        Company.website_url.is_not(None),
+    )
+    if not force:
+        has_profile = select(FormProfile.id).where(FormProfile.company_id == Company.id).exists()
+        has_unanalyzed_profile = (
+            select(FormProfile.id)
+            .where(
+                FormProfile.company_id == Company.id,
+                FormProfile.form_status == "UNANALYZED",
+                FormProfile.last_analyzed_at.is_(None),
+            )
+            .exists()
+        )
+        has_terminal_log = (
+            select(FormAnalysisLog.id)
+            .where(
+                FormAnalysisLog.company_id == Company.id,
+                FormAnalysisLog.event_type.in_(("analysis_completed", "analysis_failed")),
+            )
+            .exists()
+        )
+        query = query.where(
+            ~has_terminal_log,
+            or_(~has_profile, has_unanalyzed_profile),
+        )
+    return list(db.scalars(query.order_by(Company.created_at, Company.id).limit(100)).all())
+
+
 def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])][:100]
-    companies = db.scalars(
-        select(Company)
-        .where(Company.project_id == job.project_id, Company.id.in_(company_ids))
-        .order_by(Company.created_at, Company.id)
-    ).all()
+    if company_ids:
+        companies = db.scalars(
+            select(Company)
+            .where(Company.project_id == job.project_id, Company.id.in_(company_ids))
+            .order_by(Company.created_at, Company.id)
+        ).all()
+    else:
+        companies = next_form_analysis_batch(db, job.project_id, bool(job.payload.get("force")))
     job.total_count = len(companies)
     db.commit()
-    for company in companies:
-        if stop_requested(db, job, worker_id):
+    while companies:
+        for company in companies:
+            if stop_requested(db, job, worker_id):
+                return
+            profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
+            success = bool(profiles) and any(profile.form_status != "ERROR" for profile in profiles)
+            if not progress(db, job, worker_id, success):
+                return
+        if company_ids or job.payload.get("force"):
             return
-        profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
-        success = bool(profiles) and any(profile.form_status != "ERROR" for profile in profiles)
-        if not progress(db, job, worker_id, success):
-            return
+        companies = next_form_analysis_batch(db, job.project_id)
+        if companies:
+            job.total_count += len(companies)
+            db.commit()
 
 
 def run_once() -> bool:
@@ -832,11 +926,46 @@ def run_once() -> bool:
             }[job.operation_type](db, job, worker_id)
             db.refresh(job)
             if job.status == "running" and job.worker_id == worker_id:
-                job.status = "completed" if job.failed_count == 0 else "failed"
-                job.error_message = "" if job.failed_count == 0 else "一部の処理に失敗しました。"
+                job.status = (
+                    "cancelled"
+                    if job.cancel_requested
+                    else ("completed" if job.failed_count == 0 else "failed")
+                )
+                job.error_message = (
+                    ""
+                    if job.status == "completed"
+                    else (
+                        "キャンセルされました。"
+                        if job.status == "cancelled"
+                        else "一部の処理に失敗しました。"
+                    )
+                )
                 job.worker_id = None
                 job.lease_expires_at = None
                 job.finished_at = datetime.now(timezone.utc)
+                progress_state = (job.payload or {}).get("collection_progress") or {}
+                chain = (job.payload or {}).get("collection_chain") or {}
+                if (
+                    job.status == "completed"
+                    and job.operation_type == "collect_search"
+                    and chain.get("auto_continue")
+                    and progress_state.get("stop_reason") == "REQUEST_BUDGET_REACHED"
+                    and progress_state.get("pending_queries", 0) > 0
+                    and progress_state.get("total_requests", 0)
+                    < chain.get("total_request_budget", 0)
+                ):
+                    from app.services.collection_continuation import enqueue_continuation
+
+                    continuation = enqueue_continuation(db, job, automatic=True)
+                    if continuation:
+                        job.payload = {
+                            **job.payload,
+                            "collection_progress": {
+                                **progress_state,
+                                "stop_reason": "AUTO_CONTINUING",
+                                "next_operation_id": str(continuation.id),
+                            },
+                        }
                 db.commit()
         except Exception as exc:
             db.rollback()

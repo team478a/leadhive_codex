@@ -1,0 +1,26 @@
+{
+  "baseline_commit": "c698e31b9af984e74da0b66a1b26b9bccfff278b",
+  "method": "same_saved_html_navigation_replay",
+  "affected_cases": 1,
+  "max_secondary_pages": 8,
+  "root_candidate_count_before": 84,
+  "historical_detected_target_root_rank_before": 8,
+  "historical_detected_target_root_rank_after": 1,
+  "target_within_budget_before": false,
+  "target_within_budget_after": true,
+  "before_secondary_count": 8,
+  "after_secondary_count": 8,
+  "target_html_cached": false,
+  "verified_form_gain": null,
+  "external_requests": 0,
+  "search_calls": 0,
+  "ai_calls": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "limitations": [
+    "Historical destination not cached: arrival candidate only, not verified detection",
+    "Single case, not general precision benchmark",
+    "Unknown pages not simulated as successful fetches"
+  ]
+}

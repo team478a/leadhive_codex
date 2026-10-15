@@ -2,6 +2,60 @@ name: LeadHive checks
 on: [push, pull_request]
 
 jobs:
+  pc-input-package:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+      - working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install chromium
+      - name: Package and test without host runtimes on PATH
+        run: |
+          python scripts/pc_connector/package_runner.py
+          python scripts/pc_connector/verify_package.py
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pc-input-runner-windows-x64
+          path: |
+            dist/pc-input-*.zip
+            dist/pc-input-*.zip.sha256
+          retention-days: 14
+
+  pc-review-connector:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==9.1.1 ruff==0.11.13 mypy==2.4.0
+      - run: |
+          python -m pytest scripts/pc_connector -q
+          python -m ruff check scripts/pc_connector
+          python -m ruff format --check scripts/pc_connector
+          python -m mypy --check-untyped-defs scripts/pc_connector/client.py
+
+  offline-collection-replay:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+      - run: python -m pip install pytest==9.1.1 mypy==2.4.0
+      - run: |
+          python -m pytest offline_tests -q
+          python -m mypy offline_replay --check-untyped-defs
+        working-directory: backend
+
   backend-lint:
     runs-on: ubuntu-24.04
     steps:
@@ -18,9 +72,23 @@ jobs:
           backend/.venv/bin/python -m pip install mypy==2.4.0
       - run: |
           backend/.venv/bin/python -m ruff check backend
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/feedback_provenance.py backend/app/services/feedback_period.py backend/app/feedback_export_routes.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/field_feedback.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/feedback_improvement.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/feedback_review_routes.py backend/app/model_feedback_review.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/feedback_evaluation_routes.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/target_profile_proposal.py backend/app/profile_proposal_routes.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/scraper.py backend/app/services/browser_input_snapshot.py backend/app/services/static_form_diagnostics.py backend/scripts/prepare_rendered_input.py backend/scripts/diagnose_stored_form.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/pc_input_routes.py backend/app/live_input_routes.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/collection_feedback_routes.py backend/app/services/collection_feedback.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/controlled_confirmation_contract.py backend/app/services/controlled_confirmation_review.py backend/app/services/two_stage_lab_contract.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/tests/two_stage_lab_process.py backend/tests/test_two_stage_lab_process.py backend/tests/two_stage_lab_http.py
           backend/.venv/bin/python -m ruff format --check backend
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/cf7_616_contract.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/cf7_large_page_review.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/benchmark_evidence.py backend/app/services/benchmark_summary.py backend/app/services/cohort_destinations.py backend/app/services/completion_metrics.py backend/app/completion_metrics_routes.py backend/scripts/run_completion_benchmark.py backend/app/site_identity_review_routes.py backend/app/lead_completion_routes.py backend/app/raw_collection_routes.py backend/app/model_raw_collection.py backend/app/project_access.py backend/app/services/raw_capture.py backend/app/services/raw_benchmark.py backend/app/services/raw_repeat.py backend/app/raw_pair_routes.py
           backend/.venv/bin/python -c "from app.main import app; print(app.title)"
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/site_extraction.py backend/app/services/contact_discovery.py backend/app/services/website_evidence.py backend/app/services/scraper.py backend/app/services/lead_identity.py backend/app/services/web_analysis.py backend/app/services/form_intelligence/analyzer.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_external_presence.py backend/app/schema_external_presence.py backend/app/services/external_presence.py backend/app/services/presence_platforms.py backend/app/external_presence_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_conditions.py backend/app/schema_collection_conditions.py backend/app/services/collection_conditions.py backend/app/collection_condition_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/condition_collection.py backend/app/schema_workflow.py
@@ -32,6 +100,8 @@ jobs:
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/condition_summary.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/sending_window.py backend/app/sending_window_routes.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/target_collection.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_discovery.py backend/app/services/discovery_capture.py backend/app/services/collection_discovery.py backend/app/services/collection_runtime.py
+          MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/model_collection_scheduler.py backend/app/services/collection_query_plan.py backend/app/services/collection_search_policy.py backend/app/services/collection_scheduler.py backend/app/services/collection.py backend/app/services/collection_jobs.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_intelligence/fields.py backend/app/services/form_profile_delivery.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/services/form_review_material.py
           MYPYPATH=backend backend/.venv/bin/python -m mypy --check-untyped-defs --follow-imports=silent backend/app/form_intelligence_routes.py backend/app/schema_form_review.py
@@ -41,22 +111,18 @@ jobs:
 
   backend-tests:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
       TEST_DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -66,22 +132,11 @@ jobs:
           python -m venv backend/.venv
           backend/.venv/bin/python -m pip install -r backend/requirements.lock
           backend/.venv/bin/python -m pip install --no-deps -e backend
-      - run: backend/.venv/bin/python -m pytest backend/tests -q
+      - run: backend/.venv/bin/python -m pytest backend/tests backend/unit_tests -q
 
   form-http-acceptance:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_form_http_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_form_http_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_form_http_test
       TEST_DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_form_http_test
@@ -92,6 +147,13 @@ jobs:
       AGENT_FEATURES_ENABLED: 'false'
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_form_http_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -106,21 +168,17 @@ jobs:
 
   migration-validation:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -155,22 +213,18 @@ jobs:
 
   e2e:
     runs-on: ubuntu-24.04
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: ci-test-only
-          POSTGRES_DB: leadhive_test
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd "pg_isready -U postgres -d leadhive_test"
-          --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
       TEST_DATABASE_URL: postgresql+psycopg://postgres:ci-test-only@127.0.0.1:5432/leadhive_test
     steps:
       - uses: actions/checkout@v7
+      - name: Start test PostgreSQL
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes postgresql-16
+          sudo systemctl start postgresql
+          sudo -u postgres psql -c "ALTER ROLE postgres WITH PASSWORD 'ci-test-only';"
+          sudo -u postgres createdb leadhive_test
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -191,6 +245,32 @@ jobs:
           npm ci
           npx playwright install --with-deps chromium
           npm test
+
+  form-browser-poc:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - working-directory: frontend
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:form-browser-poc
+          node form-lab/summarize.mjs test-results/form-browser-poc/report.json test-results/form-browser-poc/summary.json
+          npx playwright test --config form-lab/handoff-ui.config.ts
+          npx playwright test --config operator-guide.config.ts
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: localhost-form-browser-poc
+          path: |
+            frontend/test-results/form-browser-poc
+            frontend/test-results/operator-guide
 
   windows-package:
     runs-on: windows-latest

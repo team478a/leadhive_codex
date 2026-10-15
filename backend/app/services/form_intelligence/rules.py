@@ -88,6 +88,18 @@ FIELD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
 PROHIBITED_PATTERNS = tuple(
     re.compile(pattern, re.IGNORECASE)
     for pattern in (
+        # Explicit purpose clauses and refusal wording observed in contact-page reviews.
+        # Bind the refusal to a sales contact clause, not an unrelated sentence or category.
+        r"(?:営業|セールス|勧誘)(?:\s*(?:・|や|及び|および)\s*(?:営業|セールス|勧誘))?"
+        r"\s*(?:を\s*)?目的\s*(?:と\s*した|で\s*の|の|による)?\s*"
+        r"(?:お問い合わせ|問い合わせ|お問合せ|連絡|メール|送信)"
+        r"[^。！？!?;]{0,24}(?:禁止|お断り|ご遠慮)",
+        r"(?:営業|セールス|勧誘)\s*(?:の\s*)?"
+        r"(?:メール|お問い合わせ|問い合わせ|お問合せ|連絡|送信)\s*(?:には|は|を)?\s*"
+        r"(?:(?:こちら|この(?:窓口|フォーム))\s*(?:では|で)\s*)?"
+        r"(?:承ること\s*(?:は|が)?\s*できません|承れません|"
+        r"受け付け(?:ておりません|ていません|ません|できません)|"
+        r"対応(?:しておりません|できません))",
         r"営業(?:目的)?(?:の|による)?(?:お問い合わせ|連絡|メール|勧誘).{0,15}(?:禁止|お断り|ご遠慮)",
         r"(?:セールス|勧誘)(?:目的)?(?:の|による)?(?:お問い合わせ|連絡|メール).{0,15}(?:禁止|お断り|ご遠慮)",
         r"営業(?:・|や|及び)?勧誘.{0,12}(?:禁止|お断り|ご遠慮)",
@@ -162,7 +174,7 @@ def recommended_option(options: list[dict], sales_objective: str) -> tuple[str, 
     if not options:
         return "", 0.0
     objective = normalize(sales_objective)
-    preference = (
+    preference: tuple[str, ...] = (
         "事業提携",
         "協業",
         "法人",

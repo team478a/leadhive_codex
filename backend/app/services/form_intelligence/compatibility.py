@@ -12,10 +12,16 @@ class DeliveryCompatibility:
 
 
 def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibility:
-    if (form.get("method") or "get").lower() != "post":
+    if str(form.get("method") or "get").lower() != "post":
         return DeliveryCompatibility(False, "POST形式ではないためCodex支援が必要です。")
     if str(form.get("enctype") or "").lower() == "multipart/form-data":
-        return DeliveryCompatibility(False, "ファイル送信用フォームはCodex支援が必要です。")
+        has_file = form.select_one('input[type="file"]:not([disabled])') is not None
+        return DeliveryCompatibility(
+            False,
+            "ファイル送信用フォームはCodex支援が必要です。"
+            if has_file
+            else "multipart形式の送信経路は未検証です。ブラウザでの確認が必要です。",
+        )
 
     action_url = urljoin(page_url, str(form.get("action") or page_url))
     action = urlsplit(action_url)
@@ -26,7 +32,7 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
         return DeliveryCompatibility(False, "安全でない通信へ送信するフォームです。")
 
     if (
-        "wpcf7-form" in form.get("class", [])
+        "wpcf7-form" in form.get_attribute_list("class")
         or form.select_one('input[name="_wpcf7"]')
         or form.find_parent(class_="wpcf7")
     ):

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import { navigateWorkspace } from './navigation'
 
 test('unknown form results are visible without retry or Codex send actions', async ({ page }, info) => {
   await page.goto('/')
@@ -21,7 +22,8 @@ test('unknown form results are visible without retry or Codex send actions', asy
       created_at: '2026-10-05T00:00:00Z', form_url: 'https://example.com/contact' }],
   }] }))
   await page.reload()
-  await page.getByRole('article').filter({ has: page.getByRole('heading', { name, exact: true }) }).getByRole('button', { name: '企業一覧', exact: true }).click()
+  await navigateWorkspace(page, '▤ 企業一覧')
+  await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(project.id)
   const batch = page.getByRole('article').filter({ hasText: '一括フォームDM' })
   await expect(batch.getByRole('alert')).toContainText('結果不明・再送禁止')
   await expect(batch.getByRole('button', { name: '再試行待ちに戻す' })).toHaveCount(0)

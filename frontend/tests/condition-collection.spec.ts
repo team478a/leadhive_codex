@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { test, expect } from '@playwright/test'
@@ -15,7 +16,7 @@ test('Confirmed criteria can be attached to a queued collection without running 
     await page.getByLabel('パスワード').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: 'ログインする', exact: true }).click()
     await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-    await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+    await navigateWorkspace(page, '⌕ 企業収集')
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     const checkbox = page.getByRole('checkbox', { name: /確定条件を今回の収集に使う/ })
     await expect(checkbox).toBeDisabled()
@@ -30,6 +31,7 @@ test('Confirmed criteria can be attached to a queued collection without running 
     expect(response.status()).toBe(202)
     const data = await response.json() as { condition_request_id: string; condition_version: number }
     expect(data.condition_request_id).toBeTruthy(); expect(data.condition_version).toBe(1)
+    await page.getByRole('button', { name: '進捗を見る', exact: true }).click()
     await page.getByText('この収集の条件判定', { exact: true }).click()
     await expect(page.getByText('この収集の保存済み候補はありません。', { exact: true })).toBeVisible()
     const jobReport = page.locator('details[data-condition-results]').filter({ has: page.getByText('この収集の条件判定', { exact: true }) })

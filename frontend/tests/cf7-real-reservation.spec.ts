@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { execFileSync } from 'node:child_process'
 import { test, expect } from '@playwright/test'
 
@@ -59,7 +60,7 @@ test('CF7 separate reapproval saves reservation only', async ({ page }) => {
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
-  await page.getByRole('button', { name: '✓ 承認キュー', exact: true }).click()
+  await navigateWorkspace(page, '✓ 承認キュー')
   await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
   await page.getByRole('button', { name: /Real CF7 Review Fixture.*承認済み/ }).click()
   await page.getByRole('button', { name: '予約用の準備内容を確認', exact: true }).click()

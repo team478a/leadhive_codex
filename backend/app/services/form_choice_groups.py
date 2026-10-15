@@ -131,12 +131,35 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
                 and profile.form_status not in {"STALE", "ERROR"},
                 "review_status": status,
                 "execution_supported": False,
+                "requirement_scope_status": (
+                    "HUMAN_RECORDED" if status == "RECORDED" else "UNCONFIRMED"
+                ),
+                "grouping_basis": "SAVED_HEADING_CANDIDATE",
+                "member_count": len(members),
+                "option_count": sum(
+                    len(f.options) if isinstance(f.options, list) else 0 for f in members
+                ),
+                "individual_required_count": sum(f.required for f in members),
+                "minimum_selected": 1 if status == "RECORDED" else None,
+                "maximum_selected": (
+                    1
+                    if status == "RECORDED"
+                    and latest is not None
+                    and latest.details.get("rule") == "EXACTLY_ONE"
+                    else None
+                ),
                 "rule": latest.details.get("rule") if latest else None,
                 "saved_selections": latest.details.get("selections", {}) if latest else {},
                 "reviewed_at": latest.created_at if latest else None,
                 "expires_at": latest.details.get("expires_at") if latest else None,
                 "members": [
-                    {"field_id": str(f.id), "name": f.name, "options": f.options} for f in members
+                    {
+                        "field_id": str(f.id),
+                        "name": f.name,
+                        "options": f.options,
+                        "individually_required": f.required,
+                    }
+                    for f in members
                 ],
             }
         )

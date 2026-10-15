@@ -85,6 +85,32 @@ def delivery(db):
     return db.scalar(select(EmailDelivery))
 
 
+def test_clean_list_preview_scope_no_approval_and_reserved_exclusion(auth, db, configured):
+    project, company = configured
+    prefix = f"/api/projects/{project.id}/bulk-send-preview"
+    pending = create(auth, configured)
+    assert auth.get(prefix).json()["items"] == []
+    assert db.get(ApprovalRequest, UUID(pending["id"])).status == "PENDING"
+    assert db.scalar(select(func.count()).select_from(EmailDelivery)) == 0
+
+    item = approved(auth, configured)
+    preview = auth.get(prefix)
+    assert preview.status_code == 200, preview.text
+    assert [row["id"] for row in preview.json()["items"]] == [item["id"]]
+    assert auth.get(f"/api/projects/{uuid4()}/bulk-send-preview").status_code == 404
+    company.do_not_contact = True
+    db.commit()
+    assert auth.get(prefix).json()["items"] == []
+    company.do_not_contact = False
+    db.commit()
+    response, _ = queue(auth, configured, item)
+    assert response.status_code == 201, response.text
+    preview = auth.get(prefix).json()
+    assert preview["items"] == []
+    assert preview["skipped"]["予約・試行済み"] == 1
+    assert db.scalar(select(func.count()).select_from(EmailDelivery)) == 1
+
+
 def test_bulk_stepup_replay_and_agent_denial(auth, db, configured):
     item = create(auth, configured)
     prefix = f"/api/projects/{configured[0].id}/bulk-approval"

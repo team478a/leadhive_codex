@@ -1,3 +1,4 @@
+import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('location CSV keeps shared sites and prevents repeat import', async ({ page }, testInfo) => {
@@ -5,7 +6,7 @@ test('location CSV keeps shared sites and prevents repeat import', async ({ page
   await page.getByLabel('メールアドレス').fill(process.env.E2E_EMAIL!)
   await page.getByLabel('パスワード', { exact: true }).fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
-  await expect(page.getByRole('button', { name: 'ログアウト', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '収集ターゲット設定', exact: true, level: 1 })).toBeVisible()
   const later = page.getByRole('button', { name: 'あとで見る', exact: true })
   await expect(later).toBeVisible()
   await later.click()
@@ -18,7 +19,7 @@ test('location CSV keeps shared sites and prevents repeat import', async ({ page
   expect(result.status()).toBe(201)
   const projectId = (await result.json()).id
   await page.reload()
-  await page.getByRole('button', { name: '⌕ 企業収集', exact: true }).click()
+  await navigateWorkspace(page, '⌕ 企業収集')
   await page.getByLabel('プロジェクト', { exact: true }).selectOption(projectId)
   await page.getByLabel('収集元', { exact: true }).selectOption('csv')
   await page.getByLabel('取り込み単位', { exact: true }).selectOption('location')
@@ -44,9 +45,9 @@ test('location CSV keeps shared sites and prevents repeat import', async ({ page
   const again = await submit()
   expect(again.saved_count).toBe(0)
   expect(again.duplicate_count).toBe(4)
-  await page.getByRole('button', { name: '▤ 企業一覧', exact: true }).click()
+  await navigateWorkspace(page, '▤ 企業一覧')
   await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(projectId)
-  const east = page.getByRole('row').filter({ has: page.getByText('店舗東', { exact: true }) })
+  const east = page.getByTestId('company-list-item').filter({ has: page.getByText('店舗東', { exact: true }) })
   await expect(east).toBeVisible()
   await east.getByRole('button', { name: '詳細', exact: true }).click()
   await expect(page.getByRole('link', { name: '参考ページを開く', exact: true })).toHaveAttribute('href', 'https://beauty.hotpepper.jp/sln1')

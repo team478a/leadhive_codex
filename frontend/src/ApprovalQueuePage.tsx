@@ -26,10 +26,10 @@ const reasonNames: Record<string, string> = {
   'request expired': '候補の有効期限が切れました。新しい有効な証拠で再準備してください。',
 }
 
-export function ApprovalQueuePage({ projects, projectRoles }: {
-  projects: Project[]; projectRoles: Record<string, ProjectMember['role']>
+export function ApprovalQueuePage({ projects, projectRoles, initialProjectId }: {
+  projects: Project[]; projectRoles: Record<string, ProjectMember['role']>; initialProjectId?: string
 }) {
-  const [projectId, setProjectId] = useState(projects[0]?.id ?? '')
+  const [projectId, setProjectId] = useState(projects.some(p => p.id === initialProjectId) ? initialProjectId! : projects[0]?.id ?? '')
   const [items, setItems] = useState<Proposal[]>([])
   const [events, setEvents] = useState<AuditEvent[]>([])
   const [companies, setCompanies] = useState<Company[]>([])

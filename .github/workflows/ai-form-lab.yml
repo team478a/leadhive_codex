@@ -1,0 +1,34 @@
+name: AI form lab offline checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  isolated-form-baseline:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: ai-form-lab
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: ai-form-lab/package-lock.json
+      - run: npm ci
+      - run: npx e2e-web install chromium --with-deps
+      - run: npm run typecheck
+      - run: npm run test:safety
+      - run: npm run test:baseline
+        env:
+          E2E_TELEMETRY_DISABLED: '1'
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: isolated-form-baseline
+          path: ai-form-lab/results
+          retention-days: 7
+
+# Live AI is intentionally manual/local, not a pull_request job with API secrets.

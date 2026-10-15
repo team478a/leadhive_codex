@@ -124,6 +124,11 @@ bundle = COLLECT(gui, engine, a.binaries, a.datas, strip=False, upx=False, name=
 
     adjustments = configure_postgres(pgroot / "bin")
     shutil.copy(ROOT / "scripts/native/README-FIRST.txt", package / "README-FIRST.txt")
+    (package / "docs").mkdir(exist_ok=True)
+    shutil.copy(
+        ROOT / "docs/DEPLOYMENT_OPTIONS.md", package / "docs/DEPLOYMENT_OPTIONS.md"
+    )
+    shutil.copy(ROOT / "Open-DeploymentGuide.cmd", package / "Open-DeploymentGuide.cmd")
     notices = package / "licenses/python-packages"
     for distribution in importlib.metadata.distributions():
         for file in distribution.files or []:

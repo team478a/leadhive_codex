@@ -1,8 +1,17 @@
 # LeadHive V2
 
+クラウド版・ローカル版の利用説明と配布リンクは、画面の「導入・ダウンロード」から確認できます。管理者向けのリンク設定は [導入・ダウンロードページ](docs/INSTALLATION_DOWNLOAD_PAGE.md) を参照してください。
+
 LeadHive V2 は、業種ごとの営業先候補を収集し、企業情報を解析し、AIで営業適性を判定して優先順位付きリストを作成するBtoB営業リスト収集基盤です。
 
+クリーニング済みリストの承認済み宛先をまとめて送信開始する手順は、[一括送信ガイド](docs/CLEAN_LIST_BULK_SEND.md)を参照してください。
+
+担当者が入力・結果記録を運用する手順は [担当者向け運用ガイド](docs/OPERATOR_INPUT_WORKFLOW_GUIDE.md) を参照してください。画面の「担当者の作業ガイド」からも操作先へ進めます。
+
 初めて利用する方は [`docs/82_LEADHIVE_USER_MANUAL.md`](docs/82_LEADHIVE_USER_MANUAL.md) を参照してください。
+
+導入先はクラウド/ローカルを会社ごとに選択する方針です。既存ローカル版を維持し、
+同じコードから提供します。[導入方法と現在の対応状況](docs/DEPLOYMENT_OPTIONS.md)を参照してください。
 
 メール・フォーム送信と追客の運用手順は [`docs/41_SMTP_SETTINGS_MANAGEMENT.md`](docs/41_SMTP_SETTINGS_MANAGEMENT.md) から [`docs/65_BULK_FORM_DELIVERY.md`](docs/66_DELIVERY_CAMPAIGNS_AND_PIPELINE.md) を参照してください。
 

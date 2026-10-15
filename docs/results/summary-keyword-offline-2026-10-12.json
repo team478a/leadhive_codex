@@ -1,0 +1,35 @@
+{
+  "baseline_commit": "302d8db921b41dcba7b2197f88a292b36c94c605",
+  "input_type": "synthetic_title_cases",
+  "input_fixture": "backend/offline_tests/test_summary_keywords.py",
+  "title_cases": 24,
+  "raw_hits": 72,
+  "expected_summary_hits": 33,
+  "expected_control_hits": 39,
+  "before": {
+    "eligible_candidates": 72,
+    "excluded_candidates": 0,
+    "source_hashes": {
+      "collection": "717933dd365d83fe2f758ef2628c439c6fb0eda908505ead5e8ab345d897d443",
+      "scraper": "f05be7b3059d4606d550358cd5de28dc390d94cd647ba800eadbf0877b65a158",
+      "presence_platforms": "7b983d18e71e1d13b897602bd8a0eb5ad9583c40bed4e73a5cc9cb6932372cee",
+      "collection_discovery": "022ed908e037a0d09699215f8ca23bca093368aa82c205df40e04145f3b42685"
+    }
+  },
+  "after": {
+    "eligible_candidates": 39,
+    "excluded_candidates": 33,
+    "source_hashes": {
+      "collection": "717933dd365d83fe2f758ef2628c439c6fb0eda908505ead5e8ab345d897d443",
+      "scraper": "f05be7b3059d4606d550358cd5de28dc390d94cd647ba800eadbf0877b65a158",
+      "presence_platforms": "7b983d18e71e1d13b897602bd8a0eb5ad9583c40bed4e73a5cc9cb6932372cee",
+      "collection_discovery": "c5baf09d7a8baea3deb6fe37019e468400a65d077834be7b24136c8212aa7ec4"
+    }
+  },
+  "human_reviewed": 0,
+  "human_precision": null,
+  "live_validated": false,
+  "external_requests": 0,
+  "api_cost": null,
+  "integration_main_commit": "03a0dee54e9d82a7c6480accedf0bd608d51d13e"
+}

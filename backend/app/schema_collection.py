@@ -6,6 +6,7 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
+    JsonValue,
     StringConstraints,
     model_validator,
 )
@@ -31,6 +32,26 @@ class CollectionJobOut(BaseModel):
     error_message: str
     created_at: datetime
     finished_at: datetime | None
+
+
+class CollectionDiscoveryHitOut(BaseModel):
+    id: UUID
+    position: int
+    snapshot: dict[str, JsonValue]
+    raw_hash: str
+    classification: str
+    classification_version: str
+    classification_reason: str
+    disposition: str
+    company_id: UUID | None
+    observed_at: datetime
+
+
+class CollectionDiscoveryOut(BaseModel):
+    summary: dict[str, JsonValue]
+    offset: int
+    limit: int
+    hits: list[CollectionDiscoveryHitOut]
 
 
 class CsvPreviewOut(BaseModel):

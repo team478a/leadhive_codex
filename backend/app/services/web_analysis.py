@@ -4,11 +4,14 @@ import logging
 from datetime import datetime, timezone
 
 from sqlalchemy import or_, select
+from sqlalchemy.exc import DataError
 from sqlalchemy.orm import Session
 
 from app.models import Company
 from app.services.collection import canonicalize_url
+from app.services.lead_identity import identity_hash, website_match
 from app.services.scraper import ScrapeError, is_aggregator_domain, scrape_company
+from app.services.website_evidence import record as record_website_evidence
 
 logger = logging.getLogger("leadhive")
 PROTECTABLE_WEB_FIELDS = (
@@ -68,6 +71,15 @@ def find_duplicate(
 
 
 def analyze(db: Session, company: Company, force: bool = False) -> Company:
+    from app.services.source_exclusions import domains, excluded
+
+    if company.website_url and excluded(db, company.project_id, company.website_url):
+        company.analysis_status = "excluded"
+        company.analysis_error = "SOURCE_DOMAIN_EXCLUDED: このプロジェクトで除外した掲載媒体です。"
+        company.scraped_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(company)
+        return company
     if company.analysis_status == "completed" and not force:
         return company
     if not company.website_url:
@@ -89,8 +101,24 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
     company.analysis_error = ""
     db.commit()
     logger.info("scraper start: company_id=%s", company.id)
+    phase = "fetch"
     try:
-        page, data = scrape_company(company.website_url)
+        remembered = domains(db, company.project_id)
+        page, data = (
+            scrape_company(company.website_url, excluded_domains=remembered)
+            if remembered
+            else scrape_company(company.website_url)
+        )
+        phase = "normalize"
+        if data.source_exclusion_reason:
+            company.analysis_status = "excluded"
+            company.analysis_error = data.source_exclusion_reason
+            company.scraped_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(company)
+            return company
+        before_hash = identity_hash(company)
+        confidence, reasons = website_match(company, data)
         website_url, domain = canonicalize_url(page.url)
         if company.record_type == "location" and is_aggregator_domain(domain):
             company.reference_url = company.reference_url or website_url
@@ -111,6 +139,7 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             else (data.company_name or company.company_name)
         )
         address = company.address if "address" in protected else (data.address or company.address)
+        phase = "duplicate_check"
         duplicate = find_duplicate(db, company, website_url, domain, name, address)
         if duplicate:
             company.analysis_status = "duplicate"
@@ -119,7 +148,16 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
         else:
             company.website_url = website_url
             company.domain = domain
+            before_values = {field: getattr(company, field) for field in PROTECTABLE_WEB_FIELDS}
             update_unprotected_fields(company, data)
+            applied = [
+                field
+                for field in PROTECTABLE_WEB_FIELDS
+                if before_values[field] != getattr(company, field)
+            ]
+            record_website_evidence(
+                db, company, data, page.url, before_hash, confidence, reasons, applied
+            )
             from app.services.external_presence import capture_website_links
 
             capture_website_links(db, company, data, page.url)
@@ -135,13 +173,20 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
             company.analysis_error = ""
             company.duplicate_of_id = None
         company.scraped_at = datetime.now(timezone.utc)
+        if company.analysis_status == "completed":
+            from app.services.field_feedback import capture_web
+
+            capture_web(db, company)
+        phase = "save"
         db.commit()
         db.refresh(company)
         logger.info("scraper end: company_id=%s status=%s", company.id, company.analysis_status)
         return company
     except ScrapeError as exc:
         db.rollback()
-        company = db.get(Company, company.id)
+        current = db.get(Company, company.id)
+        assert current is not None
+        company = current
         company.analysis_status = "failed"
         company.analysis_error = exc.public_message[:500]
         company.scraped_at = datetime.now(timezone.utc)
@@ -151,11 +196,33 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
         return company
     except Exception as exc:
         db.rollback()
-        company = db.get(Company, company.id)
+        current = db.get(Company, company.id)
+        assert current is not None
+        company = current
         company.analysis_status = "failed"
-        company.analysis_error = "Webサイト解析中にエラーが発生しました。"
+        if isinstance(exc, DataError):
+            company.analysis_error = (
+                "Webサイト解析中にデータ形式エラーが発生しました。"
+                "再解析しても続く場合は管理者にお問い合わせください。"
+            )
+            original = exc.orig
+            sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+            logger.error(
+                "scraper error: company_id=%s type=%s phase=%s sqlstate=%s",
+                company.id,
+                type(exc).__name__,
+                phase,
+                sqlstate or "unknown",
+            )
+        else:
+            company.analysis_error = "Webサイト解析中にエラーが発生しました。"
+            logger.error(
+                "scraper error: company_id=%s type=%s phase=%s",
+                company.id,
+                type(exc).__name__,
+                phase,
+            )
         company.scraped_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(company)
-        logger.error("scraper error: company_id=%s type=%s", company.id, type(exc).__name__)
         return company

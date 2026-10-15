@@ -98,6 +98,24 @@ def mock_page(monkeypatch, profile, html=HTML, url=None, failure=False):
         ("<p>フォームなし</p>", "FORM_NOT_FOUND", "NOT_DETECTED_STATIC", False),
         (HTML + '<script src="recaptcha.js"></script>', "SAME_STRUCTURE", "DETECTED", False),
         (HTML + "営業メールはご遠慮ください", "SAME_STRUCTURE", "NOT_DETECTED_STATIC", True),
+        (
+            HTML + "営業・勧誘を目的としたお問い合わせはご遠慮ください。",
+            "SAME_STRUCTURE",
+            "NOT_DETECTED_STATIC",
+            True,
+        ),
+        (
+            HTML + "協業・新規お取り組みのご提案・営業のメールはこちらでは承ることはできません。",
+            "SAME_STRUCTURE",
+            "NOT_DETECTED_STATIC",
+            True,
+        ),
+        (
+            HTML + "技術提供・OEM・協業のご相談を承ります。",
+            "SAME_STRUCTURE",
+            "NOT_DETECTED_STATIC",
+            False,
+        ),
     ],
 )
 def test_target_diagnostics_and_no_send(auth, db, monkeypatch, html, status, captcha, prohibited):

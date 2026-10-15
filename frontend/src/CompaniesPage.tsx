@@ -5,6 +5,9 @@ import { CompanyCodexFormQueue } from './CompanyCodexFormQueue'
 import { CompanyContactsPanel } from './CompanyContactsPanel'
 import { CompanyDealsPanel } from './CompanyDealsPanel'
 import { CompanyDetailsPanel } from './CompanyDetailsPanel'
+import { CompanySalesNgAction } from './CompanySalesNgAction'
+import { OperatorListHint } from './OperatorGuide'
+import { CompanyFormInputTrial } from './CompanyFormInputTrial'
 import { CompanyFilters } from './CompanyFilters'
 import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
 import { CompanyFormDeliveryPanel } from './CompanyFormDeliveryPanel'
@@ -73,6 +76,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   const [page, setPage] = useState(0)
   const [checked, setChecked] = useState<string[]>([])
   const [selected, setSelected] = useState<Company | null>(null)
+  const companyDetailsRef = useRef<HTMLDivElement>(null)
+  const selectedCompanyId = selected?.id
   const [companyEdit, setCompanyEdit] = useState<Record<string, string>>({})
   const [protectedFields, setProtectedFields] = useState<string[]>([])
   const [doNotContact, setDoNotContact] = useState(false)
@@ -174,6 +179,14 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     }
   }, [projectId, query, staleDays])
   useEffect(() => { reload().catch(e => setError(errorMessage(e))) }, [reload])
+  useEffect(() => {
+    if (!selectedCompanyId) return
+    const frame = window.requestAnimationFrame(() => {
+      companyDetailsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      companyDetailsRef.current?.focus({ preventScroll: true })
+    })
+    return () => window.cancelAnimationFrame(frame)
+  }, [selectedCompanyId])
   useEffect(() => {
     if (
       initialReplyInboundEmailId
@@ -355,6 +368,15 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       setActivityNote(''); setActivities(await api<Activity[]>(`/companies/${selected.id}/activities`))
       setNotice('活動履歴を追加しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
+  async function recordInputTrial(note: string) {
+    if (!selected || readOnly || busy) return false
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const saved = await api<Activity>(`/companies/${selected.id}/activities`, 'POST', { activity_type: 'note', note })
+      setActivities(current => [saved, ...current].slice(0, 100))
+      return true
+    } catch (e) { setError(errorMessage(e)); return false } finally { setBusy(false) }
   }
   function editContact(contact: ContactPerson) {
     setEditingContactId(contact.id)
@@ -714,6 +736,21 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     try { setExperimentResults(await api<OutreachExperimentResult[]>(`/outreach-experiments/${id}/results`)) }
     catch (e) { setError(errorMessage(e)) }
   }
+  async function markSalesNg(reason: string) {
+    if (!selected || readOnly || busy || !reason.trim()) return
+    setBusy(true); setError(''); setNotice('')
+    try {
+      const previous = selected.exclusion_reason.trim()
+      const updated = await api<Company>(`/companies/${selected.id}/contact-control`, 'PATCH', {
+        do_not_contact: true,
+        exclusion_reason: `営業NG：${reason.trim()}${previous ? ` / 以前の理由：${previous}` : ''}`.slice(0, 500),
+        contact_quality_status: selected.contact_quality_status,
+      })
+      setSelected(updated); setDoNotContact(true); setExclusionReason(updated.exclusion_reason)
+      setStatus(updated.status); setContactQuality(updated.contact_quality_status)
+      await reload(); setNotice('営業NGリストに登録しました。この企業には送信しません。')
+    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
+  }
   async function saveContactControl() {
     if (!selected) return
     setBusy(true); setError('')
@@ -796,6 +833,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   }
   if (projects.length === 0) return <section className="panel empty"><h2>先にプロジェクトを作成してください</h2></section>
   return <>
+    <OperatorListHint />
     {error && <p className="error" role="alert">{error}</p>}{notice && <p className="notice" role="status">{notice}</p>}
     <CompanyFilters
       projects={projects}
@@ -808,106 +846,6 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onDownload={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}
     />
     {projectId && <FormReadinessPanel key={projectId} projectId={projectId} onOpen={async id => { await open(await api<Company>(`/companies/${id}`)) }} />}
-    <DealPipelinePanel pipeline={dealPipeline} />
-    <CompanyEmailCampaignsPanel
-      selectedCount={checked.length}
-      templates={outreachTemplates}
-      campaigns={emailCampaigns}
-      name={emailCampaignName}
-      templateId={emailCampaignTemplateId}
-      followupDays={emailCampaignFollowupDays}
-      confirmed={emailCampaignConfirmed}
-      busy={busy}
-      onNameChange={setEmailCampaignName}
-      onTemplateChange={setEmailCampaignTemplateId}
-      onFollowupDaysChange={setEmailCampaignFollowupDays}
-      onConfirmedChange={setEmailCampaignConfirmed}
-      onCreate={() => void createEmailCampaign()}
-      onChangeCampaign={(campaign, action) => void changeEmailCampaign(campaign, action)}
-    />
-    <CompanyCodexFormQueue items={formCodexTasks} busy={busy} onCopy={task => void copyBatchCodexTask(task)} onUpdate={(task, status) => void updateFormCodexTask(task, status)} />
-    <CompanyFormBatchesPanel selectedCount={checked.length} templates={outreachTemplates} templateId={formBatchTemplateId} batches={formBatches} confirmed={formBatchConfirmed} busy={busy} onTemplateChange={setFormBatchTemplateId} onConfirmedChange={setFormBatchConfirmed} onCreate={() => void createFormBatch()} onExecute={batch => void executeFormBatch(batch)} onCancel={batch => void cancelFormBatch(batch)} onRetry={itemId => void retryFormBatchItem(itemId)} />
-    <CompanyReplyQueuePanel
-      items={replyQueue}
-      target={replyTarget}
-      outcome={replyOutcome}
-      note={replyNote}
-      followup={replyFollowup}
-      busy={busy}
-      onStart={startReply}
-      onOutcomeChange={setReplyOutcome}
-      onNoteChange={setReplyNote}
-      onFollowupChange={setReplyFollowup}
-      onRecord={() => void recordReplyResponse()}
-      onCancel={() => setReplyTarget(null)}
-    />
-    <CompanyFollowupTasksPanel
-      items={followupTasks}
-      target={followupTarget}
-      action={followupAction}
-      note={followupTaskNote}
-      scheduledAt={followupTaskDate}
-      busy={busy}
-      onStart={startFollowupTask}
-      onActionChange={setFollowupAction}
-      onNoteChange={setFollowupTaskNote}
-      onScheduledAtChange={setFollowupTaskDate}
-      onResolve={() => void resolveFollowupTask()}
-      onCancel={() => setFollowupTarget(null)}
-    />
-    <CompanyOutreachQueuePanel
-      items={outreachQueue}
-      target={outreachTarget}
-      channel={outreachChannel}
-      outcome={outreachOutcome}
-      note={outreachNote}
-      followup={outreachFollowup}
-      busy={busy}
-      onStart={startOutreach}
-      onChannelChange={setOutreachChannel}
-      onOutcomeChange={setOutreachOutcome}
-      onNoteChange={setOutreachNote}
-      onFollowupChange={setOutreachFollowup}
-      onRecord={() => void recordOutreach()}
-      onCancel={() => setOutreachTarget(null)}
-    />
-    <CompanySavedFiltersPanel
-      items={savedFilters}
-      currentFilters={filters}
-      filterName={filterName}
-      editingId={editingFilterId}
-      editingName={editingFilterName}
-      busy={busy}
-      onFilterNameChange={setFilterName}
-      onEditingNameChange={setEditingFilterName}
-      onSave={() => void saveFilter()}
-      onApply={nextFilters => { setDraft(nextFilters); setFilters(nextFilters); setPage(0) }}
-      onOverwrite={item => void updateFilter(item, item.name, filters)}
-      onStartRename={item => { setEditingFilterId(item.id); setEditingFilterName(item.name) }}
-      onCancelRename={() => setEditingFilterId('')}
-      onRename={item => void updateFilter(item, editingFilterName, item.filters)}
-      onDelete={item => void deleteFilter(item.id)}
-    />
-    <AssigneeAnalyticsPanel items={assigneeAnalytics} />
-    <CompanyQualityPanels
-      quality={quality}
-      staleDays={staleDays}
-      busy={busy}
-      refreshSchedule={refreshSchedule}
-      refreshInterval={refreshInterval}
-      refreshStaleDays={refreshStaleDays}
-      refreshBatchLimit={refreshBatchLimit}
-      duplicates={duplicates}
-      onStaleDaysChange={setStaleDays}
-      onReanalyze={() => void reanalyzeQuality()}
-      onRefreshIntervalChange={setRefreshInterval}
-      onRefreshStaleDaysChange={setRefreshStaleDays}
-      onRefreshBatchLimitChange={setRefreshBatchLimit}
-      onSaveRefreshSchedule={active => void saveRefreshSchedule(active)}
-      onRunRefreshSchedule={() => void runRefreshSchedule()}
-      onDeleteRefreshSchedule={() => void deleteRefreshSchedule()}
-      onMerge={(primary, duplicate) => void mergeCompanies(primary, duplicate)}
-    />
     <CompanyList
       companies={companies}
       total={total}
@@ -924,8 +862,12 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onAssign={() => void assignSelected()}
       onAnalyzeSelected={() => void enqueueSelectedFormAnalysis()}
       onOpen={company => void open(company)}
+      onFeedbackSaved={() => { void reload().catch(e => setError(errorMessage(e))); setSelected(null); setNotice('確認結果を保存しました。送信承認は行っていません。') }}
     />
-    {selected && <CompanyDetailsPanel
+    {selected && <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />}
+    {selected && <CompanyFormInputTrial key={`input-trial-${selected.id}`} company={selected} profiles={formProfiles} activities={activities} readOnly={readOnly} busy={busy} onSave={recordInputTrial} />}
+    {selected && <div ref={companyDetailsRef} className="scroll-mt-6" tabIndex={-1} aria-label="企業詳細">
+    <CompanyDetailsPanel
       company={selected}
       values={companyEdit}
       protectedFields={protectedFields}
@@ -948,7 +890,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onSaveContactControl={() => void saveContactControl()}
       onSaveStatus={() => void save()}
       onClose={() => setSelected(null)}
-    />}
+    />
+    </div>}
     {selected && <CompanyFormIntelligencePanel
       company={selected}
       profiles={formProfiles}
@@ -1088,5 +1031,106 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onActivityNoteChange={setActivityNote}
       onAdd={() => void addActivity()}
     />}
+    <div className="section-heading mt-7"><h2>配信・追客・管理</h2><span className="muted">必要なときだけ利用</span></div>
+    <DealPipelinePanel pipeline={dealPipeline} />
+    <CompanyEmailCampaignsPanel
+      selectedCount={checked.length}
+      templates={outreachTemplates}
+      campaigns={emailCampaigns}
+      name={emailCampaignName}
+      templateId={emailCampaignTemplateId}
+      followupDays={emailCampaignFollowupDays}
+      confirmed={emailCampaignConfirmed}
+      busy={busy}
+      onNameChange={setEmailCampaignName}
+      onTemplateChange={setEmailCampaignTemplateId}
+      onFollowupDaysChange={setEmailCampaignFollowupDays}
+      onConfirmedChange={setEmailCampaignConfirmed}
+      onCreate={() => void createEmailCampaign()}
+      onChangeCampaign={(campaign, action) => void changeEmailCampaign(campaign, action)}
+    />
+    <CompanyCodexFormQueue items={formCodexTasks} busy={busy} onCopy={task => void copyBatchCodexTask(task)} onUpdate={(task, status) => void updateFormCodexTask(task, status)} />
+    <CompanyFormBatchesPanel selectedCount={checked.length} templates={outreachTemplates} templateId={formBatchTemplateId} batches={formBatches} confirmed={formBatchConfirmed} busy={busy} onTemplateChange={setFormBatchTemplateId} onConfirmedChange={setFormBatchConfirmed} onCreate={() => void createFormBatch()} onExecute={batch => void executeFormBatch(batch)} onCancel={batch => void cancelFormBatch(batch)} onRetry={itemId => void retryFormBatchItem(itemId)} />
+    <CompanyReplyQueuePanel
+      items={replyQueue}
+      target={replyTarget}
+      outcome={replyOutcome}
+      note={replyNote}
+      followup={replyFollowup}
+      busy={busy}
+      onStart={startReply}
+      onOutcomeChange={setReplyOutcome}
+      onNoteChange={setReplyNote}
+      onFollowupChange={setReplyFollowup}
+      onRecord={() => void recordReplyResponse()}
+      onCancel={() => setReplyTarget(null)}
+    />
+    <CompanyFollowupTasksPanel
+      items={followupTasks}
+      target={followupTarget}
+      action={followupAction}
+      note={followupTaskNote}
+      scheduledAt={followupTaskDate}
+      busy={busy}
+      onStart={startFollowupTask}
+      onActionChange={setFollowupAction}
+      onNoteChange={setFollowupTaskNote}
+      onScheduledAtChange={setFollowupTaskDate}
+      onResolve={() => void resolveFollowupTask()}
+      onCancel={() => setFollowupTarget(null)}
+    />
+    <CompanyOutreachQueuePanel
+      items={outreachQueue}
+      target={outreachTarget}
+      channel={outreachChannel}
+      outcome={outreachOutcome}
+      note={outreachNote}
+      followup={outreachFollowup}
+      busy={busy}
+      onStart={startOutreach}
+      onChannelChange={setOutreachChannel}
+      onOutcomeChange={setOutreachOutcome}
+      onNoteChange={setOutreachNote}
+      onFollowupChange={setOutreachFollowup}
+      onRecord={() => void recordOutreach()}
+      onCancel={() => setOutreachTarget(null)}
+    />
+    <CompanySavedFiltersPanel
+      items={savedFilters}
+      currentFilters={filters}
+      filterName={filterName}
+      editingId={editingFilterId}
+      editingName={editingFilterName}
+      busy={busy}
+      onFilterNameChange={setFilterName}
+      onEditingNameChange={setEditingFilterName}
+      onSave={() => void saveFilter()}
+      onApply={nextFilters => { setDraft(nextFilters); setFilters(nextFilters); setPage(0) }}
+      onOverwrite={item => void updateFilter(item, item.name, filters)}
+      onStartRename={item => { setEditingFilterId(item.id); setEditingFilterName(item.name) }}
+      onCancelRename={() => setEditingFilterId('')}
+      onRename={item => void updateFilter(item, editingFilterName, item.filters)}
+      onDelete={item => void deleteFilter(item.id)}
+    />
+    <AssigneeAnalyticsPanel items={assigneeAnalytics} />
+    <CompanyQualityPanels
+      quality={quality}
+      staleDays={staleDays}
+      busy={busy}
+      refreshSchedule={refreshSchedule}
+      refreshInterval={refreshInterval}
+      refreshStaleDays={refreshStaleDays}
+      refreshBatchLimit={refreshBatchLimit}
+      duplicates={duplicates}
+      onStaleDaysChange={setStaleDays}
+      onReanalyze={() => void reanalyzeQuality()}
+      onRefreshIntervalChange={setRefreshInterval}
+      onRefreshStaleDaysChange={setRefreshStaleDays}
+      onRefreshBatchLimitChange={setRefreshBatchLimit}
+      onSaveRefreshSchedule={active => void saveRefreshSchedule(active)}
+      onRunRefreshSchedule={() => void runRefreshSchedule()}
+      onDeleteRefreshSchedule={() => void deleteRefreshSchedule()}
+      onMerge={(primary, duplicate) => void mergeCompanies(primary, duplicate)}
+    />
   </>
 }

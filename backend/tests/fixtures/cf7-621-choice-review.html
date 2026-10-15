@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja"><head>
+<link rel="https://api.w.org/" href="https://managed.example/wp-json/">
+</head><body>
+<!-- Independently authored review fixture. No real company, token or endpoint. -->
+<form class="wpcf7-form" method="post" enctype="multipart/form-data">
+<fieldset>
+<input type="hidden" name="_wpcf7" value="7">
+<input type="hidden" name="_wpcf7_version" value="6.2.1">
+<input type="hidden" name="_wpcf7_locale" value="ja">
+<input type="hidden" name="_wpcf7_unit_tag" value="wpcf7-f7-o1">
+<input type="hidden" name="_wpcf7_container_post" value="0">
+<input type="hidden" name="_wpcf7_posted_data_hash" value="">
+<input type="hidden" name="fixture-context" value="PRIVATE-CONTEXT">
+<input type="hidden" name="fixture-addon" value="PRIVATE-ADDON">
+<input type="hidden" name="fixture-nonce" value="PRIVATE-NONCE">
+<input type="hidden" name="fixture-route" value="PRIVATE-ROUTE">
+</fieldset>
+<label>会社名<input name="your-company" required></label>
+<label>お名前<input name="your-name" required></label>
+<label>メール<input type="email" name="your-email" required></label>
+<label>ご相談の種類<select name="consultation" required>
+<option value="">選択してください</option><option value="partnership">提携の相談</option><option value="support">サポート</option>
+</select></label>
+<label>本文<textarea name="your-message" required></textarea></label>
+<span class="wpcf7-acceptance"><label><input type="checkbox" name="privacy" value="1" required>個人情報の取り扱いに同意する</label></span>
+<input type="submit" value="送信">
+</form></body></html>

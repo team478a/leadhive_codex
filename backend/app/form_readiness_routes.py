@@ -60,6 +60,10 @@ def overview_query(project_id):
         .exists()
     )
     category = case(
+        (
+            Company.do_not_contact.is_(True) & Company.exclusion_reason.startswith("営業NG："),
+            "prohibited",
+        ),
         (Company.do_not_contact.is_(True), "do_not_contact"),
         (
             or_(
@@ -96,7 +100,12 @@ def overview_query(project_id):
         else_="candidate",
     ).label("category")
     return (
-        select(Company, FormProfile, category)
+        select(
+            Company,
+            FormProfile,
+            category,
+            FormProfile.last_analyzed_at.is_not(None).label("analyzed"),
+        )
         .select_from(Company)
         .outerjoin(ranked, (ranked.c.company_id == Company.id) & (ranked.c.position == 1))
         .outerjoin(
@@ -118,8 +127,15 @@ def listing(
     project_access(project_id, db, user, write=False)
     base = overview_query(project_id)
     snapshot = base.subquery()
-    counts = dict(
-        db.execute(select(snapshot.c.category, func.count()).group_by(snapshot.c.category)).all()
+    counts: dict[str, int] = {
+        str(group): int(count)
+        for group, count in db.execute(
+            select(snapshot.c.category, func.count()).group_by(snapshot.c.category)
+        ).all()
+    }
+    analyzed_count = (
+        db.scalar(select(func.count()).select_from(snapshot).where(snapshot.c.analyzed.is_(True)))
+        or 0
     )
     if category != "all":
         base = base.where(base.selected_columns.category == category)
@@ -128,7 +144,7 @@ def listing(
         base.order_by(Company.company_name, Company.id).limit(limit).offset(offset)
     ).all()
     items = []
-    for company, profile, group in rows:
+    for company, profile, group, _analyzed in rows:
         permission = evaluate_contact_permission(
             db, project_id, company.id, "form", profile.form_url if profile else company.contact_url
         )
@@ -152,6 +168,7 @@ def listing(
     return {
         "counts": counts,
         "company_total": sum(counts.values()),
+        "analyzed_count": int(analyzed_count),
         "total": total,
         "items": items,
         "analysis_version": ANALYSIS_VERSION,

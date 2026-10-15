@@ -16,6 +16,7 @@ from app.approved_form_routes import router as approved_form_router
 from app.campaign_routes import router as campaign_router
 from app.cf7_candidate_routes import router as cf7_candidate_router
 from app.collection_condition_routes import router as collection_condition_router
+from app.collection_feedback_routes import router as collection_feedback_router
 from app.collection_routes import router as collection_router
 from app.company_quality_routes import router as company_quality_router
 from app.company_reporting_routes import router as company_reporting_router
@@ -30,6 +31,9 @@ from app.dm_approval_routes import router as dm_approval_router
 from app.dm_preparation_routes import router as dm_preparation_router
 from app.email_feedback_routes import router as email_feedback_router
 from app.external_presence_routes import router as external_presence_router
+from app.feedback_evaluation_routes import router as feedback_evaluation_router
+from app.feedback_export_routes import router as feedback_export_router
+from app.feedback_review_routes import router as feedback_review_router
 from app.form_batch_routes import router as form_batch_router
 from app.form_intelligence_routes import router as form_intelligence_router
 from app.form_observation_job_routes import router as form_observation_job_router
@@ -38,18 +42,85 @@ from app.form_operations_routes import router as form_operations_router
 from app.form_readiness_routes import router as form_readiness_router
 from app.improvement_routes import router as improvement_router
 from app.lead_completion_routes import router as lead_completion_router
+from app.live_input_routes import router as live_input_router
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
 from app.outreach_draft_routes import router as outreach_draft_router
+from app.pc_input_routes import router as pc_input_router
 from app.preparation_routes import router as preparation_router
+from app.profile_proposal_routes import router as profile_proposal_router
 from app.raw_collection_routes import router as raw_collection_router
 from app.raw_pair_routes import router as raw_pair_router
 from app.routes import router
 from app.sending_window_routes import router as sending_window_router
 from app.services.approval_principals import reject_mixed_credentials
 from app.site_identity_review_routes import router as site_identity_review_router
+from app.source_exclusion_routes import router as source_exclusion_router
 
 logger = logging.getLogger("leadhive")
+
+_VALIDATION_FIELD_LABELS = {
+    "profile_name": "プロファイル名",
+    "description": "説明",
+    "search_keywords": "検索キーワード",
+    "positive_keywords": "加点キーワード",
+    "negative_keywords": "減点キーワード",
+    "exclusion_keywords": "除外キーワード",
+    "scoring_rules": "スコアルール",
+    "ai_instruction": "AIへの指示",
+    "default_regions": "標準地域",
+    "project_name": "プロジェクト名",
+    "target_profile_id": "ターゲットプロファイル",
+    "sales_objective": "営業目的",
+    "region": "地域",
+    "status": "ステータス",
+    "keywords": "検索キーワード",
+    "max_results": "収集件数",
+    "target_count": "収集件数",
+    "search_request_limit": "検索回数",
+    "url": "URL",
+    "sales_goal": "営業目的",
+    "target_mode": "営業先の種類",
+}
+_VALIDATION_MESSAGES = {
+    "missing": "必須項目です。",
+    "string_too_short": "文字数が不足しています。",
+    "string_too_long": "文字数が上限を超えています。",
+    "too_short": "入力件数が不足しています。",
+    "too_long": "入力件数が上限を超えています。",
+    "uuid_parsing": "有効な対象を選択してください。",
+    "enum": "選択肢から選んでください。",
+    "json_invalid": "有効なJSON形式で入力してください。",
+    "extra_forbidden": "想定外の項目が含まれています。",
+    "string_type": "文字列で入力してください。",
+    "int_parsing": "数値で入力してください。",
+    "int_type": "数値で入力してください。",
+    "bool_parsing": "有効／無効を選択してください。",
+    "bool_type": "有効／無効を選択してください。",
+    "value_error": "入力値を確認してください。",
+}
+
+
+def validation_issues(errors: list[dict]) -> list[dict[str, str]]:
+    """Return safe field labels and reasons without echoing submitted values."""
+    issues: list[dict[str, str]] = []
+    for error in errors:
+        location = error.get("loc", ())
+        field = next(
+            (
+                part
+                for part in reversed(location)
+                if isinstance(part, str) and part in _VALIDATION_FIELD_LABELS
+            ),
+            None,
+        )
+        issue = {
+            "field": _VALIDATION_FIELD_LABELS.get(field, "入力項目"),
+            "message": _VALIDATION_MESSAGES.get(error.get("type"), "入力内容を確認してください。"),
+        }
+        if issue not in issues:
+            issues.append(issue)
+    return issues or [{"field": "入力項目", "message": "入力内容を確認してください。"}]
 
 
 @asynccontextmanager
@@ -68,6 +139,12 @@ app = FastAPI(
     dependencies=[Depends(reject_mixed_credentials)],
 )
 app.include_router(raw_collection_router)
+app.include_router(feedback_export_router)
+app.include_router(feedback_evaluation_router)
+app.include_router(feedback_review_router)
+app.include_router(source_exclusion_router)
+app.include_router(pc_input_router)
+app.include_router(live_input_router)
 app.include_router(sending_window_router)
 app.include_router(collection_condition_router)
 app.include_router(raw_pair_router)
@@ -125,7 +202,13 @@ async def protect_browser_requests(request: Request, call_next):
 @app.exception_handler(RequestValidationError)
 async def validation_error(request: Request, exc: RequestValidationError):
     # Do not echo submitted passwords or arbitrary input through validation responses.
-    return JSONResponse(status_code=422, content={"detail": "入力内容を確認してください。"})
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "入力内容を確認してください。",
+            "issues": validation_issues(exc.errors()),
+        },
+    )
 
 
 @app.exception_handler(IntegrityError)
@@ -148,12 +231,14 @@ async def internal_error(request: Request, exc: Exception):
 
 app.include_router(external_presence_router)
 app.include_router(router)
+app.include_router(profile_proposal_router)
 app.include_router(admin_router)
 app.include_router(collection_router)
 app.include_router(campaign_router)
 app.include_router(analysis_router)
 app.include_router(ai_router)
 app.include_router(company_router)
+app.include_router(collection_feedback_router)
 app.include_router(company_workflow_router)
 app.include_router(company_reporting_router)
 app.include_router(company_quality_router)

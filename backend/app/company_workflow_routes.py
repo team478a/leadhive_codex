@@ -402,6 +402,12 @@ def add_activity(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    from app.services.collection_feedback import PREFIX
+    from app.services.feedback_provenance import PREFIX as DECISION_PREFIX
+    from app.services.field_feedback import PREFIX as FIELD_PREFIX
+
+    if body.note.startswith((PREFIX, DECISION_PREFIX, FIELD_PREFIX)):
+        raise HTTPException(422, "判定記録は企業一覧の確認操作から保存してください。")
     company = owned_company(company_id, db, user)
     activity = Activity(company_id=company.id, **body.model_dump())
     db.add(activity)

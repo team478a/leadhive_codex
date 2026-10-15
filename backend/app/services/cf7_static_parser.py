@@ -7,6 +7,21 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
 LIMIT = 262144
+LARGE_REVIEW_LIMIT = 1048576
+REVIEW_FAILURE_REASONS = {
+    "duplicate attribute": "DUPLICATE_ATTRIBUTE",
+    "nested form": "NESTED_FORM",
+    "unclosed form": "UNCLOSED_FORM",
+    "duplicate hidden": "DUPLICATE_HIDDEN",
+    "duplicate marker": "DUPLICATE_MARKER",
+    "tag limit": "TAG_LIMIT",
+    "form limit": "FORM_LIMIT",
+    "name limit": "NAME_LIMIT",
+    "control limit": "CONTROL_LIMIT",
+    "review size limit": "SIZE_LIMIT",
+    "review index limit": "INVALID_INDEX",
+    "input limit": "INPUT_LIMIT",
+}
 CONTRACT_MARKERS = {
     "_wpcf7",
     "_wpcf7_version",
@@ -267,6 +282,64 @@ def inspect_html(html: str, url: str, index: int) -> dict:
     }
 
 
+class ReviewInspector(Inspector):
+    """Scan the whole bounded page, retain no script text or execution evidence."""
+
+    def __init__(self, url: str, index: int):
+        super().__init__(url, index)
+        self.captcha_marker = False
+        self.tail = ""
+
+    def marker(self, text: str) -> None:
+        self.captcha_marker |= bool(re.search(r"recaptcha|hcaptcha|turnstile", text, re.I))
+
+    def handle_starttag(self, tag, attributes):
+        self.marker(" ".join(str(v or "") for _, v in attributes))
+        super().handle_starttag(tag, attributes)
+
+    def handle_data(self, data):
+        self.marker(self.tail + data)
+        self.tail = data[-32:]
+        # Deliberately do not retain script bodies for contract_evidence().
+
+
+def review_large_html(html: str, url: str, index: int) -> dict:
+    """Additional diagnostic route only. Never substitute for inspect_html()."""
+    if len(html.encode("utf-8")) > LARGE_REVIEW_LIMIT:
+        raise ValueError("review size limit")
+    if type(index) is not int or not 0 <= index < 20:
+        raise ValueError("review index limit")
+    parser = ReviewInspector(url, index)
+    for offset in range(0, len(html), 8192):
+        parser.feed(html[offset : offset + 8192])
+    parser.close()
+    if parser.current is not None:
+        raise ValueError("unclosed form")
+    form = parser.forms[index] if index < len(parser.forms) else None
+    shape = contract_shape(form) or {}
+    return {
+        "status": "REVIEW_ONLY",
+        "whole_page_scanned": True,
+        "form_count": len(parser.forms),
+        "cf7_marker": bool(form and form["marker"]),
+        "version": form["version"] if form else None,
+        "captcha_marker_detected": parser.captcha_marker,
+        "base_override": parser.base_override,
+        "external_control": parser.external_control,
+        "rest_link_same_origin": parser.rest_same_origin and not parser.base_override,
+        "extra_hidden": shape.get("extra_hidden"),
+        "repeated_names": shape.get("repeated_names"),
+        "radio_controls": form["radios"] if form else None,
+        "select_controls": form["selects"] if form else None,
+        "file_inputs": form["files"] if form else None,
+        "missing_names": form["missing"] if form else None,
+        "permission_status": "UNKNOWN",
+        "human_review_required": True,
+        "execution_allowed": False,
+        "eligible_for_approval": False,
+    }
+
+
 def unique_object(pairs):
     result = {}
     for key, value in pairs:
@@ -349,12 +422,24 @@ def contract_evidence(parser: Inspector, form: dict | None) -> dict | None:
 
 
 if __name__ == "__main__":
+    review_only = sys.argv[1:] == ["--large-review-only"]
     try:
-        raw = sys.stdin.buffer.read(LIMIT * 2 + 1)
-        if len(raw) > LIMIT * 2:
+        input_limit = LARGE_REVIEW_LIMIT * 6 + 4096 if review_only else LIMIT * 2
+        raw = sys.stdin.buffer.read(input_limit + 1)
+        if len(raw) > input_limit:
             raise ValueError("input limit")
         data = json.loads(raw)
-        result = inspect_html(data["html"], data["url"], data["index"])
+        handler = review_large_html if review_only else inspect_html
+        result = handler(data["html"], data["url"], data["index"])
         print(json.dumps(result, ensure_ascii=True))
-    except Exception:
-        print('{"status":"PARSE_FAILED"}')
+    except Exception as exc:
+        failure: dict = {"status": "PARSE_FAILED"}
+        if review_only:
+            failure.update(
+                failure_reason=REVIEW_FAILURE_REASONS.get(str(exc), "INVALID_INPUT"),
+                whole_page_scanned=False,
+                human_review_required=True,
+                execution_allowed=False,
+                eligible_for_approval=False,
+            )
+        print(json.dumps(failure))

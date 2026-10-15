@@ -1,0 +1,94 @@
+{
+  "schema_version": "collection-comparison-design-v1",
+  "audit_date": "2026-10-09",
+  "status": "DESIGN_ONLY_NOT_EXECUTED",
+  "baselines": {
+    "current": {
+      "repository": "team478a/leadhive_codex",
+      "branch": "codex/integration",
+      "commit": "31ec306819a5485de3c3cc9f3bb11a3da3cc6d0f",
+      "ci_run": 37820496982,
+      "ci_conclusion": "success"
+    },
+    "legacy": {
+      "repository": "stockbusiness/leadhive",
+      "branch": "main",
+      "commit": "393f690e34c7a5fbdddd4b15e0285aa2ff313269",
+      "license": null
+    },
+    "gosom": {
+      "repository": "gosom/google-maps-scraper",
+      "branch": "main",
+      "commit": "d0b51bcf3cd56d9a3f71e049cb6e226554e24162",
+      "license": "MIT",
+      "decision": "REFERENCE_ADAPT_CONCEPTS_ONLY"
+    },
+    "omkarcloud": {
+      "repository": "omkarcloud/google-maps-scraper",
+      "branch": "master",
+      "commit": "60cc92d89cd9651baa1350f0e0821b770c16497c",
+      "license": "MIT_REPOSITORY_CONTENT_ONLY",
+      "collector_source_present": false,
+      "decision": "REFERENCE_DOCUMENTATION_ONLY"
+    }
+  },
+  "proposed_pilot": {
+    "approval_status": "NOT_REQUESTED_NOT_GRANTED",
+    "source": "serper",
+    "regions": ["大阪府", "兵庫県"],
+    "keyword": "SNS運用代行 会社",
+    "page": 1,
+    "num": 10,
+    "max_runs_per_implementation": 3,
+    "first_run_total_request_ceiling_both_implementations": 4,
+    "all_runs_total_request_ceiling_both_implementations": 12,
+    "human_unique_candidate_target": [20, 30],
+    "website_get_budget_initial": 0,
+    "ai_call_budget": 0,
+    "completion_job_budget": 0,
+    "approval_creation_budget": 0,
+    "outbound_budget": 0
+  },
+  "measured_metrics": {
+    "legacy": {
+      "raw_hits": null,
+      "reviewed": null,
+      "correct": null,
+      "strict_precision": null,
+      "resolved_precision": null,
+      "official_site_accuracy": null,
+      "contact_discovery_rate": null,
+      "api_cost": null,
+      "processing_seconds": null,
+      "human_review_seconds": null,
+      "coverage": null
+    },
+    "current": {
+      "raw_hits": null,
+      "reviewed": null,
+      "correct": null,
+      "strict_precision": null,
+      "resolved_precision": null,
+      "official_site_accuracy": null,
+      "contact_discovery_rate": null,
+      "api_cost": null,
+      "processing_seconds": null,
+      "human_review_seconds": null,
+      "coverage": null
+    }
+  },
+  "audit_actions": {
+    "live_collection_requests": 0,
+    "business_site_gets": 0,
+    "paid_collection_api_requests": 0,
+    "ai_calls": 0,
+    "completion_jobs_started": 0,
+    "approvals_created": 0,
+    "email_sent": 0,
+    "form_posts": 0,
+    "production_code_changed": false,
+    "database_changed": false,
+    "runtime_settings_changed": false,
+    "deployment_performed": false
+  }
+}

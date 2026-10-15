@@ -1,4 +1,4 @@
-type GuideDestination = 'collection' | 'companies' | 'settings'
+type GuideDestination = 'collection' | 'results' | 'settings'
 
 export function OnboardingGuide({
   open,
@@ -22,10 +22,10 @@ export function OnboardingGuide({
   const hasProject = projectCount > 0
   const hasCompanies = totalCompanies > 0
   const nextAction = !hasProject
-    ? { label: '最初のプロジェクトを作る', action: onCreateProject }
+    ? { label: '収集ターゲットを設定する', action: onCreateProject }
     : !hasCompanies
       ? { label: '企業を集める', action: () => onNavigate('collection') }
-      : { label: '企業一覧を見る', action: () => onNavigate('companies') }
+      : { label: '収集結果を確認する', action: () => onNavigate('results') }
 
   return <div className="guide-backdrop" role="presentation">
     <section className="guide-dialog" role="dialog" aria-modal="true" aria-labelledby="guide-title">
@@ -33,7 +33,7 @@ export function OnboardingGuide({
         <div>
           <p className="eyebrow">QUICK START</p>
           <h2 id="guide-title">3ステップで始めましょう</h2>
-          <p className="muted mt-2">まずは企業を1社登録するところまで進めれば、LeadHiveの基本操作を確認できます。</p>
+          <p className="muted mt-2">まずリストを集めます。DM準備・承認・送信は、別の「営業作業」メニューで行います。</p>
         </div>
         <button type="button" className="guide-close" aria-label="使い方ガイドを閉じる" onClick={onClose}>×</button>
       </div>
@@ -42,22 +42,22 @@ export function OnboardingGuide({
         <li className={hasProject ? 'guide-step completed' : 'guide-step current'}>
           <span className="guide-step-number">{hasProject ? '✓' : '1'}</span>
           <div>
-            <div className="guide-step-title"><strong>プロジェクトを作る</strong>{hasProject && <span className="badge">完了</span>}</div>
-            <p className="muted">標準プロファイルを選び、案件名・提案内容・対象地域を入力します。</p>
+            <div className="guide-step-title"><strong>収集ターゲットを設定</strong>{hasProject && <span className="badge">完了</span>}</div>
+            <p className="muted">対象・地域とリスト名を保存します。サービスURLから対象の提案もできます。</p>
           </div>
         </li>
         <li className={hasCompanies ? 'guide-step completed' : hasProject ? 'guide-step current' : 'guide-step'}>
           <span className="guide-step-number">{hasCompanies ? '✓' : '2'}</span>
           <div>
             <div className="guide-step-title"><strong>企業を集める</strong>{hasCompanies && <span className="badge">完了</span>}</div>
-            <p className="muted">最初は会社URLを1件貼る方法が簡単です。検索やCSV取込も利用できます。</p>
+            <p className="muted">キーワード・都道府県・目標件数で検索するか、URL・CSVを取り込みます。</p>
           </div>
         </li>
         <li className={hasCompanies ? 'guide-step current' : 'guide-step'}>
           <span className="guide-step-number">3</span>
           <div>
-            <div className="guide-step-title"><strong>企業一覧で確認する</strong></div>
-            <p className="muted">企業情報・連絡先・優先度を確認し、営業対象を決めます。</p>
+            <div className="guide-step-title"><strong>収集結果を確認する</strong></div>
+            <p className="muted">集まった候補が対象に合うか確認します。営業担当は同じプロジェクトを選び、DM準備へ進めます。</p>
           </div>
         </li>
       </ol>

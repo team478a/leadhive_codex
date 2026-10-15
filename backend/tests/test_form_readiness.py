@@ -19,7 +19,10 @@ def candidate(db, source):
 
 
 def test_one_company_primary_determinism_and_counts(auth, form_source, db):
+    from datetime import datetime, timezone
+
     candidate(db, form_source)
+    form_source[3].last_analyzed_at = datetime.now(timezone.utc)
     db.add(
         FormProfile(
             company_id=form_source[1].id,
@@ -42,6 +45,7 @@ def test_one_company_primary_determinism_and_counts(auth, form_source, db):
     result = auth.get(url(form_source)).json()
     assert result["counts"] == {"candidate": 1, "unanalyzed": 1}
     assert result["company_total"] == result["total"] == 2
+    assert result["analyzed_count"] == 1
     assert len(result["items"]) == 2
     assert result["scope"] == "stored_analysis_not_send_authorization"
     filtered = auth.get(url(form_source, "?category=candidate&limit=1")).json()

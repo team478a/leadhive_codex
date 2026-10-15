@@ -1,5 +1,34 @@
 # LeadHive V2 ドキュメント一覧（Codex開発版）
 
+- [Phase 5: 運用フィードバック・隔離評価PoC](PHASE5_OPERATIONAL_FEEDBACK_LAB.md)
+- [Phase 5A: 判定版記録と所有者限定評価export](PHASE5A_FEEDBACK_PROVENANCE_EXPORT.md)
+
+- [導入・ダウンロードページと配布リンク設定](INSTALLATION_DOWNLOAD_PAGE.md)
+
+- [クラウド/ローカルの導入方法・会社別提供方針](DEPLOYMENT_OPTIONS.md)
+
+- [クラウド本体＋PC側Codex連携：読取コネクター](CLOUD_PC_CODEX_CONNECTOR.md)
+- [クラウド試験環境の準備](CLOUD_STAGING_READINESS.md)
+- [Render試験配置案・費用・設定手順](RENDER_STAGING_SETUP.md)
+
+- [Scrapling導入適合性・隔離取得/描画比較](SCRAPLING_SUITABILITY_EVALUATION.md)
+
+- [Phase 4A: AI E2E導入監査・隔離比較PoC](PHASE4A_AI_E2E_AUDIT.md)
+- [Phase 4: フォーム判定分離・ブラウザ操作PoC](PHASE4_FORM_OPERATION_BROWSER_POC.md)
+
+- [収集改善PR1: 取得候補・分類・未取込理由](COLLECTION_DISCOVERY_LEDGER.md)
+
+- [キーワード収集改善・全国展開の統合実装計画](KEYWORD_NATIONWIDE_COLLECTION_IMPLEMENTATION_PLAN.md)
+
+- [Phase 2C 収集エンジン監査・再現結果](PHASE2C_COLLECTION_ENGINE_AUDIT.md)
+- [Phase 2C 実装前の段階計画](PHASE2C_COLLECTION_IMPLEMENTATION_PLAN.md)
+
+- [Raw Collection共通入力オフライン比較](RAW_OFFLINE_COLLECTION_REPLAY.md)
+
+- [旧版・現行版・OSSの収集精度比較監査](COLLECTION_ACCURACY_COMPARATIVE_AUDIT.md)
+- [収集移植候補・段階的実装・テスト計画](COLLECTION_TRANSPLANT_AND_IMPLEMENTATION_PLAN.md)
+- [SNS運用代行会社の同条件比較Benchmark設計（実行前）](SNS_AGENCY_COLLECTION_COMPARISON_BENCHMARK.md)
+
 - [件数目標と新規対象増分による収集終了](164_COUNT_DRIVEN_COLLECTION.md)
 
 LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公式サイト・連絡窓口の確認、DM準備、Human承認、送信を支援する営業リスト完成システムです。主要KPIはDM READY率です。現行方針と段階的実装は `133_LEAD_COMPLETION_DIRECTION_AND_PHASE_A.md` を参照してください。
@@ -344,3 +373,18 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md](205_CF7_REAL_CANDIDATE_HUMAN_APPROVAL.md): 実サイト候補のHuman再認証承認・変更/期限失効・DB不変性/予約拒否・送信未接続
 
 - [206_CF7_REAL_RESERVATION_REAPPROVAL.md](206_CF7_REAL_RESERVATION_REAPPROVAL.md): 実サイト候補とは別のHuman再承認・予約のみの保存・worker/DB実行拒否・送信未接続
+
+- [COLLECTION_QUERY_SCHEDULER.md](COLLECTION_QUERY_SCHEDULER.md): 工程2・公平な検索配分、停滞2回、永続予算、再開と部分結果
+
+- [COLLECTION_SITE_EXTRACTION.md](COLLECTION_SITE_EXTRACTION.md): 工程3・企業情報の根拠、公式照合、段階的問い合わせ探索と取得診断
+
+## 担当者の実運用
+
+- [Phase 5D: 改善候補のHuman判断台帳](PHASE5D_PROPOSAL_REVIEW.md)
+
+- [Phase 5B/C: 改善候補と隔離比較PoC](PHASE5BC_IMPROVEMENT_WORKBENCH.md)
+
+- [Phase 5A: フィールド評価記録](PHASE5A_FIELD_FEEDBACK.md)
+
+- [入力・結果記録の運用ガイド](OPERATOR_INPUT_WORKFLOW_GUIDE.md)
+- [UI・ガイド整備記録](OPERATOR_UI_GUIDE_REPORT.md)

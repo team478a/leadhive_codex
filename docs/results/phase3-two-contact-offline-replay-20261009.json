@@ -1,0 +1,55 @@
+{
+  "baseline_commit": "6484249ed19c82311ad5f800d196ed0e5831b1cc",
+  "measurement": "SAVED_HTML_OFFLINE_REPLAY_NOT_DELIVERY_VERIFICATION",
+  "candidates": [
+    {
+      "candidate_id": 12,
+      "snapshot_sha256": "1c498d7e4d089d98e0d1dd2340cd855d469df7b75d3f59a1a4518939e65c856c",
+      "snapshot_unchanged": true,
+      "native_supported": false,
+      "review_states": {
+        "CHOICE_REVIEW_REQUIRED": 3,
+        "SENDER_VALUE_PROPOSED": 2,
+        "SENDER_VALUE_MISSING": 4,
+        "UNAPPROVED_DRAFT_VALUE": 1,
+        "DO_NOT_FILL": 3
+      },
+      "choice_count": 3,
+      "auto_selected_choices": 0,
+      "cf7_version": null,
+      "checkbox_controls": 0,
+      "contract_evidence_present": false,
+      "execution_allowed": false,
+      "eligible_for_approval": false
+    },
+    {
+      "candidate_id": 20,
+      "snapshot_sha256": "b62bf2a81c9fd91509746de65afa685fe08704d46dcae5ccf53cc668df95daed",
+      "snapshot_unchanged": true,
+      "native_supported": false,
+      "review_states": {
+        "DO_NOT_FILL": 7,
+        "GROUP_SELECTION_REVIEW_REQUIRED": 4,
+        "SENDER_VALUE_MISSING": 2,
+        "SENDER_VALUE_PROPOSED": 2,
+        "UNAPPROVED_DRAFT_VALUE": 1
+      },
+      "choice_count": 4,
+      "auto_selected_choices": 0,
+      "cf7_version": "6.2.1",
+      "checkbox_controls": 18,
+      "contract_evidence_present": false,
+      "execution_allowed": false,
+      "eligible_for_approval": false
+    }
+  ],
+  "new_external_requests": 0,
+  "search_api_calls": 0,
+  "ai_calls": 0,
+  "approvals": 0,
+  "email_sent": 0,
+  "form_sent": 0,
+  "production_db_writes": 0,
+  "snapshots_modified": 0,
+  "human_truth_added": 0
+}

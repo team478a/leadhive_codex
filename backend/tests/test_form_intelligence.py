@@ -6,7 +6,8 @@ from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from app import worker
-from app.models import Company, FormAnalysisLog, OperationJob
+from app.models import Company, FormAnalysisLog, FormProfileField, OperationJob
+from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence import analyzer
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
 from app.services.form_intelligence.fingerprint import form_fingerprint
@@ -60,6 +61,260 @@ def install_pages(monkeypatch, pages):
     FakeFetcher.pages = pages
     monkeypatch.setattr(analyzer, "SafeFetcher", FakeFetcher)
     monkeypatch.setattr(analyzer, "get_form_decision_provider", lambda: None)
+
+
+def test_official_external_contact_analyzed_without_send_permission(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    requested = []
+    root = "https://form-intelligence.example"
+    external = "https://1lejend.com/stepmail/kd.php?no=bAorms"
+    install_pages(
+        monkeypatch,
+        {
+            root: f'<a href="{external}">お問い合わせ</a><a href="/contact">Contact</a>',
+            root + "/contact": f'<a href="{external}">お問い合わせ</a>',
+            external: '<form method="post"><input name="email" type="email" required>'
+            '<textarea name="message" required></textarea><button>送信</button></form>',
+        },
+    )
+    original_fetch = FakeFetcher.fetch_html
+
+    def track_fetch(self, url):
+        requested.append(url)
+        return original_fetch(self, url)
+
+    monkeypatch.setattr(FakeFetcher, "fetch_html", track_fetch)
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert requested.count(external) == 1
+    external_profile = next(profile for profile in profiles if profile.form_url == external)
+    assert external_profile.form_found
+    assert external_profile.delivery_supported
+    assert external_profile.form_status == "REVIEW_REQUIRED"
+    fields = db.scalars(
+        select(FormProfileField).where(FormProfileField.form_profile_id == external_profile.id)
+    ).all()
+    assert {field.mapped_key for field in fields} >= {"email", "message"}
+    assert all(profile.sales_contact_status == "UNCERTAIN" for profile in profiles)
+    events = list(
+        db.scalars(
+            select(FormAnalysisLog).where(
+                FormAnalysisLog.company_id == company.id,
+                FormAnalysisLog.details["finding"].astext == "EXTERNAL_CONTACT_UNVERIFIED",
+            )
+        )
+    )
+    assert len(events) == 1
+    assert events[0].details == {
+        "url": external,
+        "source_url": root,
+        "label": "お問い合わせ",
+        "finding": "EXTERNAL_CONTACT_UNVERIFIED",
+        "discovery_method": "OFFICIAL_SITE_LINK",
+    }
+    assert not company.contact_url
+
+
+def test_external_candidates_bounded_without_recursive_provider_crawl(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    root = "https://form-intelligence.example"
+    links = [f"https://provider.example/form/{i}" for i in range(5)]
+    install_pages(
+        monkeypatch,
+        {
+            root: "".join(f'<a href="{url}">お問い合わせ</a>' for url in links),
+            **{url: '<a href="https://other.example/contact">お問い合わせ</a>' for url in links},
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert {
+        profile.form_url for profile in profiles if "provider.example" in profile.form_url
+    } == set(links[:3])
+    assert all("other.example" not in profile.form_url for profile in profiles)
+
+
+@pytest.mark.parametrize("external", [False, True])
+def test_sales_ng_without_form_moves_company_to_ng_list(auth, db, monkeypatch, external):
+    project, company = make_company(auth, db)
+    root = "https://form-intelligence.example"
+    target = "https://provider.example/contact" if external else root + "/contact"
+    install_pages(
+        monkeypatch,
+        {
+            root: f'<a href="{target}">お問い合わせ</a>',
+            target: "<p>営業目的のお問い合わせはお断りします。</p>",
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    blocked = next(profile for profile in profiles if profile.form_url == target)
+    assert blocked.sales_contact_status == "PROHIBITED"
+    assert blocked.form_status == "BLOCKED"
+    assert not blocked.form_found
+    assert company.do_not_contact
+    assert company.exclusion_reason.startswith("営業NG：")
+    for channel, destination in (("form", target), ("email", "contact@example.com")):
+        decision = evaluate_contact_permission(
+            db, company.project_id, company.id, channel, destination
+        )
+        assert decision.status == "PROHIBITED"
+    listing = auth.get(f"/api/projects/{project['id']}/form-readiness?category=prohibited").json()
+    assert listing["total"] == 1
+    assert listing["items"][0]["permission"]["status"] == "PROHIBITED"
+    # Reanalysis with no prohibition never silently restores eligibility.
+    FakeFetcher.pages[target] = (
+        '<form method="post"><textarea name="message"></textarea><button>送信</button></form>'
+    )
+    analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert company.do_not_contact
+    assert (
+        auth.get(f"/api/projects/{project['id']}/form-readiness?category=prohibited").json()[
+            "total"
+        ]
+        == 1
+    )
+    logs = list(
+        db.scalars(
+            select(FormAnalysisLog).where(
+                FormAnalysisLog.company_id == company.id,
+                FormAnalysisLog.event_type == "sales_prohibition_detected",
+            )
+        )
+    )
+    assert any(log.details.get("url") == target for log in logs)
+
+
+def test_root_sales_ng_blocks_external_form(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    root = "https://form-intelligence.example"
+    external = "https://provider.example/contact"
+    install_pages(
+        monkeypatch,
+        {
+            root: "<p>営業目的のお問い合わせはお断りします。</p>"
+            f'<a href="{external}">お問い合わせ</a>',
+            external: '<form method="post"><textarea name="message"></textarea>'
+            "<button>送信</button></form>",
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert (
+        next(profile for profile in profiles if profile.form_url == external).form_status
+        == "BLOCKED"
+    )
+    assert company.do_not_contact
+
+
+def test_external_fetch_failure_records_reason_not_missing_form(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    root = "https://form-intelligence.example"
+    target = "https://provider.example/contact"
+    install_pages(monkeypatch, {root: f'<a href="{target}">お問い合わせ</a>'})
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    profile = next(profile for profile in profiles if profile.form_url == target)
+    assert profile.form_status == "ERROR"
+    assert profile.error_message == "ページが見つかりません。"
+    assert not profile.delivery_supported
+
+
+def test_external_redirect_cannot_escape_candidate_host(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    root = "https://form-intelligence.example"
+    target = "https://provider.example/contact"
+    install_pages(monkeypatch, {root: f'<a href="{target}">お問い合わせ</a>'})
+    original = FakeFetcher.fetch_html
+
+    def redirect(self, url):
+        if url == target:
+            assert self.site_root == target
+            return FetchedPage(
+                "https://other.example/contact", "<form><textarea></textarea></form>"
+            )
+        return original(self, url)
+
+    monkeypatch.setattr(FakeFetcher, "fetch_html", redirect)
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    profile = next(profile for profile in profiles if profile.form_url == target)
+    assert profile.form_status == "ERROR"
+    assert "別サイトへ転送" in profile.error_message
+    assert not profile.form_found
+
+
+def test_sales_ng_in_long_page_footer_is_not_truncated(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    root = "https://form-intelligence.example"
+    install_pages(
+        monkeypatch,
+        {
+            root: '<a href="/contact">お問い合わせ</a>',
+            root + "/contact": "<p>" + "公開情報 " * 10000 + "</p>"
+            '<form method="post"><textarea name="message"></textarea><button>送信</button></form>'
+            "<footer>営業目的のお問い合わせはお断りします。</footer>",
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert company.do_not_contact
+    assert next(p for p in profiles if p.form_url == root + "/contact").form_status == "BLOCKED"
+
+
+def test_ng_survives_later_analysis_failure(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    root = "https://form-intelligence.example"
+    install_pages(monkeypatch, {root: "営業目的のお問い合わせはお断りします。"})
+
+    def fail_provider():
+        raise RuntimeError("test-only failure")
+
+    monkeypatch.setattr(analyzer, "get_form_decision_provider", fail_provider)
+    profiles = analyzer.analyze_company_forms(db, company)
+    assert profiles[0].form_status == "ERROR"
+    assert company.do_not_contact
+    assert company.exclusion_reason.startswith("営業NG：")
+
+
+def test_guidance_iframe_and_original_form_index(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<a href="/contact">お問い合わせ</a>',
+            "https://form-intelligence.example/contact": (
+                '<a href="/entry/index">フォームはこちら</a>'
+            ),
+            "https://form-intelligence.example/entry/index": '<iframe src="/embed"></iframe>',
+            "https://form-intelligence.example/embed": '<form><input type="search" name="q"></form>'
+            '<form method="post"><input type="email" name="email">'
+            '<textarea name="message"></textarea></form>',
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    found = [profile for profile in profiles if profile.form_found]
+    assert len(found) == 1
+    assert found[0].form_index == 1
+    assert found[0].form_url == "https://form-intelligence.example/embed"
+    logs = list(db.scalars(select(FormAnalysisLog).where(FormAnalysisLog.company_id == company.id)))
+    assert any(log.details.get("finding") == "DOM_CONTACT_FORM_NOT_FOUND" for log in logs)
+    from sqlalchemy import func
+
+    from app.models import ApprovalRequest, EmailDelivery, FormDelivery
+
+    for model in (ApprovalRequest, EmailDelivery, FormDelivery):
+        assert db.scalar(select(func.count()).select_from(model)) == 0
+
+
+def test_root_external_embed_is_unverified_and_not_fetched(auth, db, monkeypatch):
+    _, company = make_company(auth, db)
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<iframe src="https://docs.google.com/forms/d/example/viewform"></iframe>',
+        },
+    )
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
+    assert not any(profile.form_found for profile in profiles)
+    assert any("GOOGLE_FORMS" in profile.review_reason for profile in profiles)
+    assert any(
+        log.details.get("finding") == "EMBEDDED_FORM_UNVERIFIED"
+        for log in db.scalars(select(FormAnalysisLog))
+    )
 
 
 def login_as(client, user):
@@ -417,6 +672,46 @@ def test_bulk_form_intelligence_job(auth, db, monkeypatch):
     assert job.status == "completed" and job.success_count == 1
 
 
+def test_project_form_analysis_job_continues_in_bounded_batches(auth, db, monkeypatch):
+    project, first = make_company(auth, db)
+    first.analysis_status = "completed"
+    first.website_url = "https://form-intelligence.example"
+    second = Company(
+        project_id=first.project_id,
+        company_name="次の会社",
+        source="url",
+        analysis_status="completed",
+        website_url="https://second-form-intelligence.example",
+    )
+    db.add(second)
+    db.commit()
+    batches = [[first], [second], []]
+    analyzed_ids = []
+    response = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json={"operation_type": "form_intelligence", "company_ids": [], "force": False},
+    )
+    assert response.status_code == 202
+    job = db.get(OperationJob, response.json()["id"])
+
+    def next_batch(_db, _project_id, _force=False):
+        return batches.pop(0)
+
+    def analyze_company(_db, company, _force):
+        analyzed_ids.append(company.id)
+        return [SimpleNamespace(form_status="READY")]
+
+    monkeypatch.setattr(worker, "next_form_analysis_batch", next_batch)
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: 0)
+    monkeypatch.setattr(worker, "analyze_company_forms", analyze_company)
+    assert worker.run_once()
+    db.refresh(job)
+    assert job.status == "completed"
+    assert job.total_count == 2 and job.processed_count == 2
+    assert analyzed_ids == [first.id, second.id]
+
+
 def test_review_reason_is_saved_for_browser_only_form(auth, db, monkeypatch):
     _, company = make_company(auth, db)
     install_pages(
@@ -475,6 +770,19 @@ def test_delivery_compatibility_reports_browser_only_forms():
         ).reason
     )
     assert "name属性" in assess('<form method="post"><input type="text"></form>').reason
+
+
+@pytest.mark.parametrize("file_control", ["", '<input type="file" name="upload" disabled>'])
+def test_multipart_without_enabled_file_input_reports_transport_gap(file_control):
+    form = BeautifulSoup(
+        '<form method="post" enctype="multipart/form-data">'
+        f'{file_control}<textarea name="message"></textarea><button>送信</button></form>',
+        "html.parser",
+    ).select_one("form")
+    result = assess_delivery_compatibility(form, "https://example.com/contact")
+    assert result.supported is False
+    assert "multipart" in result.reason
+    assert "ファイル送信" not in result.reason
 
 
 def test_field_mapping_prefers_specific_labels_and_common_names():

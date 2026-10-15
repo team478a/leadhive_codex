@@ -58,6 +58,7 @@ class CollectionJob(Base):
     keyword: Mapped[str] = mapped_column(String(500), default="")
     region: Mapped[str] = mapped_column(String(500), default="")
     presence_search_plan: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
+    discovery_summary: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")
     status: Mapped[str] = mapped_column(String(20), default="running", index=True)
     found_count: Mapped[int] = mapped_column(Integer, default=0)
     saved_count: Mapped[int] = mapped_column(Integer, default=0)

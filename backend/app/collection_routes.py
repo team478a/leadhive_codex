@@ -6,12 +6,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.model_collection_discovery import CollectionDiscoveryHit
 from app.models import CollectionJob, Company, Project, User
 from app.project_access import project_access
+from app.schema_collection import CollectionDiscoveryOut
 from app.schemas import (
     CollectionJobOut,
     CompanyOut,
@@ -30,10 +32,48 @@ from app.services.collection import (
     search_google_places,
     search_serper,
 )
+from app.services.collection_discovery import discovery_summary
 from app.services.collection_jobs import fail_job, save_candidates, start_job
 from app.services.processing_usage import measured_search
 
 router = APIRouter(prefix="/api")
+
+
+@router.get("/projects/{project_id}/company-analysis-summary")
+def company_analysis_summary(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    counts = db.execute(
+        select(
+            func.count(Company.id),
+            func.count(Company.id).filter(Company.analysis_status == "completed"),
+            func.count(Company.id).filter(
+                Company.website_url.is_not(None),
+                Company.website_url != "",
+                Company.analysis_status == "pending",
+            ),
+            func.count(Company.id).filter(
+                Company.website_url.is_not(None),
+                Company.website_url != "",
+                Company.analysis_status == "failed",
+            ),
+            func.count(Company.id).filter(Company.ai_status == "completed"),
+            func.count(Company.id).filter(
+                Company.analysis_status == "completed", Company.ai_status != "completed"
+            ),
+        ).where(Company.project_id == project_id)
+    ).one()
+    return {
+        "saved": counts[0],
+        "webCompleted": counts[1],
+        "webPending": counts[2],
+        "webFailed": counts[3],
+        "aiCompleted": counts[4],
+        "aiPending": counts[5],
+    }
 
 
 def owned_project(project_id: UUID, db: Session, user: User, *, write: bool = True) -> Project:
@@ -87,6 +127,44 @@ def list_jobs(
 @router.get("/collection-jobs/{job_id}", response_model=CollectionJobOut)
 def get_job(job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
     return owned_job(job_id, db, user)
+
+
+@router.get("/collection-jobs/{job_id}/discovery", response_model=CollectionDiscoveryOut)
+def get_discovery(
+    job_id: UUID,
+    offset: int = Query(0, ge=0),
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    job = owned_job(job_id, db, user)
+    rows = db.scalars(
+        select(CollectionDiscoveryHit)
+        .where(CollectionDiscoveryHit.collection_job_id == job.id)
+        .order_by(CollectionDiscoveryHit.position)
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return dict(
+        summary=discovery_summary(db, job),
+        offset=offset,
+        limit=limit,
+        hits=[
+            dict(
+                id=hit.id,
+                position=hit.position,
+                snapshot=hit.snapshot,
+                raw_hash=hit.raw_hash,
+                classification=hit.classification,
+                classification_version=hit.classification_version,
+                classification_reason=hit.classification_reason,
+                disposition=hit.disposition,
+                company_id=hit.company_id,
+                observed_at=hit.observed_at,
+            )
+            for hit in rows
+        ],
+    )
 
 
 @router.post(

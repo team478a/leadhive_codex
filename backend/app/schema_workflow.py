@@ -8,6 +8,7 @@ from pydantic import (
     ConfigDict,
     Field,
     StringConstraints,
+    field_validator,
     model_validator,
 )
 
@@ -66,7 +67,10 @@ class ReplyQueueItemOut(BaseModel):
 
 
 class OperationJobInput(Input):
-    target_count: int | None = Field(default=None, ge=1, le=500)
+    region_mode: Literal["literal", "prefecture_order"] = "literal"
+    target_count: int | None = Field(default=None, ge=1, le=10000)
+    search_request_limit: int | None = Field(default=None, ge=1, le=5000, strict=True)
+    auto_continue: bool = False
     condition_request_id: UUID | None = None
     condition_version: int | None = Field(default=None, ge=1)
     condition_hash: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
@@ -81,6 +85,31 @@ class OperationJobInput(Input):
 
     @model_validator(mode="after")
     def validate_operation(self):
+        if self.region_mode == "prefecture_order" and not (
+            self.operation_type == "collect_search"
+            and self.source == "serper"
+            and self.target_count is not None
+        ):
+            raise ValueError("都道府県順の検索はSerperの件数目標収集のみ対応しています。")
+        if self.search_request_limit is not None and not (
+            self.operation_type == "collect_search"
+            and self.source == "serper"
+            and self.target_count is not None
+        ):
+            raise ValueError("検索回数の上限はSerperの件数目標収集のみ指定できます。")
+        if (
+            self.search_request_limit is not None
+            and self.search_request_limit > 50
+            and not self.auto_continue
+        ):
+            raise ValueError("50回を超える検索には自動継続を有効にしてください。")
+        if self.auto_continue and not (
+            self.operation_type == "collect_search"
+            and self.source == "serper"
+            and self.target_count is not None
+            and self.search_request_limit is not None
+        ):
+            raise ValueError("自動継続は上限を指定したSerperの件数目標収集のみ対応しています。")
         binding = (self.condition_request_id, self.condition_version, self.condition_hash)
         if any(v is not None for v in binding) and not all(v is not None for v in binding):
             raise ValueError("条件ID・版・hashをすべて指定してください。")
@@ -98,6 +127,7 @@ class OperationJobInput(Input):
             or self.region
             or self.presence_search
             or self.condition_request_id
+            or self.auto_continue
         ):
             raise ValueError("Analysis operations do not accept search conditions")
         return self
@@ -108,6 +138,18 @@ class OperationJobOut(BaseModel):
     collection_progress: dict | None = Field(
         default=None, validation_alias=AliasPath("payload", "collection_progress")
     )
+    collection_runtime: dict | None = Field(
+        default=None, validation_alias=AliasPath("payload", "collection_runtime")
+    )
+    collection_runtime_history: list[dict] = Field(
+        default_factory=list, validation_alias=AliasPath("payload", "collection_runtime_history")
+    )
+
+    @field_validator("collection_runtime_history", mode="before")
+    @classmethod
+    def keep_recent_runtime_history(cls, value):
+        return value[-5:] if isinstance(value, list) else []
+
     id: UUID
     condition_request_id: UUID | None = None
     condition_version: int | None = None

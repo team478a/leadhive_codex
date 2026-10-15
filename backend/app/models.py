@@ -15,6 +15,8 @@ from app.model_approved_email import (
 from app.model_approved_form import ApprovedFormDispatch, FormDispatchLimits, FormDispatchSite
 from app.model_cf7 import CF7Observation
 from app.model_collection_conditions import CollectionConditionRequest, CollectionFactReview
+from app.model_collection_discovery import CollectionDiscoveryHit
+from app.model_collection_scheduler import CollectionQueryTask, CollectionSearchAttempt
 from app.model_company import (
     Activity,
     AiReview,
@@ -43,6 +45,12 @@ from app.model_external_presence import (
     ExternalPresence,
     ExternalPresenceEvidence,
     ExternalPresenceSearch,
+)
+from app.model_feedback_review import (
+    FeedbackEvaluation,
+    FeedbackEvaluationNote,
+    FeedbackProposal,
+    FeedbackProposalDecision,
 )
 from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
@@ -91,8 +99,17 @@ from app.model_settings import (
     SmtpSettings,
 )
 from app.model_site_identity_review import SiteIdentityReviewEvent
+from app.model_source_exclusion import SourceDomainExclusion
 
 __all__ = [
+    "FeedbackProposal",
+    "FeedbackProposalDecision",
+    "FeedbackEvaluation",
+    "FeedbackEvaluationNote",
+    "SourceDomainExclusion",
+    "CollectionQueryTask",
+    "CollectionSearchAttempt",
+    "CollectionDiscoveryHit",
     "CollectionFactReview",
     "CollectionConditionRequest",
     "ExternalPresence",
