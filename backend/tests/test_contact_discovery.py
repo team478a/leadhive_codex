@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from bs4 import BeautifulSoup
 
 from app.services.contact_discovery import (
@@ -108,7 +110,8 @@ def test_form_classification():
 
 def test_contact_context_detects_name_email_only_form_but_not_login_or_search():
     form = BeautifulSoup(
-        '<form><input name="your-name"><input name="your-email" type="email"></form>',
+        '<form><input name="your-name"><input name="your-email" type="email">'
+        "<button>送信</button></form>",
         "html.parser",
     ).form
     assert form is not None
@@ -128,7 +131,7 @@ def test_contact_context_detects_forms_with_opaque_field_names():
     ).form
     assert form is not None
     assert not is_contact_form(form)
-    assert is_contact_form(form, contact_context=True)
+    assert not is_contact_form(form, contact_context=True)
 
 
 def test_same_page_contact_anchor_is_scanned_and_not_confused_with_other_anchors():
@@ -247,3 +250,108 @@ def test_external_contact_rejects_unsafe_and_incidental_links():
 def test_external_contact_candidate_budget():
     html = "".join(f'<a href="https://external.example/{i}">Contact</a>' for i in range(20))
     assert len(external_contact_links(html, "https://example.com/", "https://example.com/")) == 8
+
+
+FIXTURES = Path(__file__).parent / "fixtures" / "contact_recall"
+
+
+def fixture(name):
+    return (FIXTURES / name).read_text(encoding="utf-8")
+
+
+def test_contact_recall_link_labels_and_elements():
+    root = "https://example.com/"
+    expected = {
+        "01_label.html": "/page12/",
+        "02_img_alt.html": "/contact/",
+        "03_area.html": "/contact/",
+        "04_onclick.html": "/inquiry/",
+    }
+    for filename, path in expected.items():
+        links = navigation_links(fixture(filename), root, root)
+        assert links and path in links[0]
+
+
+def test_consultation_terms_rank_below_direct_contact_and_document_requests():
+    root = "https://example.com/"
+    links = navigation_links(fixture("05_consult.html"), root, root)
+    assert set(links) == {
+        "https://example.com/estimate/",
+        "https://example.com/consult/",
+    }
+    prioritized = navigation_links(fixture("06_priority.html"), root, root)
+    assert prioritized[0] == "https://example.com/contact/"
+
+
+def test_contact_form_false_positive_guards():
+    cases = (
+        ('<a href="/recruit/">採用エントリー</a>', []),
+        ('<a href="/apply/">応募フォーム</a>', []),
+        ('<a href="/reserve/">予約</a>', []),
+        ('<a href="/consult/">ご相談・ご予約</a>', ["https://example.com/consult/"]),
+        ('<a href="/contact/">お問い合わせ</a>', ["https://example.com/contact/"]),
+    )
+    for html, expected in cases:
+        assert navigation_links(html, "https://example.com/", "https://example.com/") == expected
+
+    for html in (
+        '<form><input name="name"><input name="email" type="email"><button>登録</button></form>',
+        '<form><input name="date"><input name="time"><button>予約する</button></form>',
+    ):
+        form = BeautifulSoup(html, "html.parser").form
+        assert form is not None
+        assert not is_contact_form(form, contact_context=True)
+
+
+def test_contact_context_requires_contact_signal_or_safe_email_submit():
+    opaque = BeautifulSoup(
+        '<form><input name="field_1"><input name="field_2"><button>送信</button></form>',
+        "html.parser",
+    ).form
+    assert opaque is not None
+    assert not is_contact_form(opaque, contact_context=True)
+
+    email_form = BeautifulSoup(
+        '<form><input name="field_1"><input name="email" type="email"><button>送信</button></form>',
+        "html.parser",
+    ).form
+    assert email_form is not None
+    assert is_contact_form(email_form, contact_context=True)
+
+    named_message = BeautifulSoup(
+        '<form><input name="contact_message"><input name="field_2"></form>',
+        "html.parser",
+    ).form
+    assert named_message is not None
+    assert is_contact_form(named_message, contact_context=True)
+
+
+def test_guessed_path_reaches_contact_html_and_stops_after_six():
+    root = "https://example.com/"
+    pages = {root: fixture("09_guessed_404.html")}
+    pages["https://example.com/contact.html"] = fixture("07_guessed.html")
+    cache = {root: pages[root]}
+    visited = []
+    for url, explicit in contact_pages(root, cache, max_pages=8):
+        visited.append((url, explicit))
+        if url in pages:
+            cache[url] = pages[url]
+    assert ("https://example.com/contact.html", False) in visited
+    assert len([item for item in visited if not item[1]]) == 6
+    form = BeautifulSoup(pages["https://example.com/contact.html"], "html.parser").form
+    assert form is not None and is_contact_form(form, contact_context=False)
+
+
+def test_discovered_link_form_skips_guessed_paths():
+    root = "https://example.com/"
+    linked = "https://example.com/contact/"
+    cache = {root: '<a href="/contact/">お問い合わせ</a>', linked: fixture("08_link_found.html")}
+    found = set()
+    visited = []
+    for url, explicit in contact_pages(root, cache, found_contact=found):
+        visited.append((url, explicit))
+        if url == linked:
+            form = BeautifulSoup(cache[url], "html.parser").form
+            assert form is not None and is_contact_form(form, contact_context=True)
+            found.add(True)
+    assert visited == [(linked, True)]
