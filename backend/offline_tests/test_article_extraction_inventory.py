@@ -1,7 +1,8 @@
 import json
+import sys
 from contextlib import nullcontext
+from types import SimpleNamespace
 
-import psycopg
 import pytest
 
 from offline_replay.article_extraction_inventory import (
@@ -89,7 +90,7 @@ def test_database_inventory_starts_read_only_transaction(monkeypatch):
         assert kwargs["options"] == "-c default_transaction_read_only=on"
         return FakeConnection()
 
-    monkeypatch.setattr(psycopg, "connect", connect)
+    monkeypatch.setitem(sys.modules, "psycopg", SimpleNamespace(connect=connect))
 
     report = read_inventory("postgresql://read-only")
 

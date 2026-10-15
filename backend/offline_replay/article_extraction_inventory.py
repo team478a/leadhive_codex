@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib
 import json
 import os
 import sys
@@ -78,7 +79,7 @@ def aggregate_rows(rows: list[tuple[str, str, str | None, bool]]) -> dict:
 
 
 def read_inventory(database_url: str) -> dict:
-    import psycopg
+    psycopg = importlib.import_module("psycopg")
 
     query = """
         SELECT j.project_id::text, h.classification_reason, h.snapshot->>'link',
