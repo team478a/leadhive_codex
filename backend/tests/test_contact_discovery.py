@@ -270,6 +270,11 @@ def test_contact_recall_link_labels_and_elements():
     for filename, path in expected.items():
         links = navigation_links(fixture(filename), root, root)
         assert links and path in links[0]
+    assert navigation_links(
+        '<a href="/lead/">Contact form</a><a href="#contact">Open form</a>',
+        root,
+        root,
+    ) == ["https://example.com/lead/", root]
 
 
 def test_consultation_terms_rank_below_direct_contact_and_document_requests():

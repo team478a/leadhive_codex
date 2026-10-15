@@ -21,21 +21,56 @@ HINTS = (
     "ご相談",
 )
 DIRECT_HINTS = (
-    "お問い合わせ", "お問合せ", "お問合わせ", "問い合わせ", "問合せ", "問合わせ",
-    "問い合せ", "contact", "contact us", "inquiry", "inquire", "otoiawase", "toiawase",
+    "お問い合わせ",
+    "お問合せ",
+    "お問合わせ",
+    "問い合わせ",
+    "問合せ",
+    "問合わせ",
+    "問い合せ",
+    "contact",
+    "contact us",
+    "inquiry",
+    "inquire",
+    "otoiawase",
+    "toiawase",
 )
 CONSULT_HINTS = (
-    "ご相談", "無料相談", "相談する", "お見積り", "お見積もり", "見積依頼", "無料見積",
+    "ご相談",
+    "無料相談",
+    "相談する",
+    "お見積り",
+    "お見積もり",
+    "見積依頼",
+    "無料見積",
     "無料見積もり",
-    "ご依頼", "メールフォーム", "mailform",
+    "ご依頼",
+    "メールフォーム",
+    "mailform",
 )
 DOCUMENT_HINTS = ("資料請求", "資料ダウンロード")
 EXCLUDED_LINK_HINTS = (
-    "採用", "求人", "エントリー", "応募", "recruit", "career", "ログイン", "会員登録", "カート"
+    "採用",
+    "求人",
+    "エントリー",
+    "応募",
+    "recruit",
+    "career",
+    "ログイン",
+    "会員登録",
+    "カート",
 )
 BOOKING_HINTS = ("予約",)
 SUBMIT_EXCLUDED_HINTS = (
-    "登録", "購読", "メルマガ", "予約", "ログイン", "検索", "カート", "購入", "申し込み"
+    "登録",
+    "購読",
+    "メルマガ",
+    "予約",
+    "ログイン",
+    "検索",
+    "カート",
+    "購入",
+    "申し込み",
 )
 MAX_GUESSED_PATHS = 6
 FALLBACK_PATHS = (
@@ -75,15 +110,12 @@ def _link_label(element: Tag) -> str:
 
 def _hint_score(label: str) -> int:
     normalized = _normalize(label)
-    suffixes = ("はこちら", "フォーム", "する", "先", "窓口", "ページ", "へ")
+    suffixes = ("はこちら", "フォーム", "する", "先", "窓口", "ページ", "へ", "form", "page")
 
     def matches(terms: tuple[str, ...]) -> bool:
         return any(
             normalized == _normalize(term)
-            or any(
-                normalized == _normalize(term) + suffix
-                for suffix in suffixes
-            )
+            or any(normalized == _normalize(term) + suffix for suffix in suffixes)
             for term in terms
         )
 
@@ -107,9 +139,7 @@ def _hint_score(label: str) -> int:
 
 
 def _static_location_target(onclick: str) -> str:
-    match = re.search(
-        r"(?:window\.)?location(?:\.href)?\s*=\s*(['\"])(.*?)\1", onclick, re.I
-    )
+    match = re.search(r"(?:window\.)?location(?:\.href)?\s*=\s*(['\"])(.*?)\1", onclick, re.I)
     return match.group(2) if match else ""
 
 
@@ -262,7 +292,13 @@ def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
         if any(
             word in identities
             for word in (
-                "message", "inquiry", "comment", "detail", "内容", "お問い合わせ", "ご相談"
+                "message",
+                "inquiry",
+                "comment",
+                "detail",
+                "内容",
+                "お問い合わせ",
+                "ご相談",
             )
         ):
             return True
@@ -365,7 +401,7 @@ def navigation_links(
         # A direct contact label outranks testimonials/service copy mentioning
         # inquiries. Otherwise a large site's incidental links exhaust the
         # bounded crawl before its general contact destination is reached.
-        score = label_score or (70 if path_hint else 0)
+        score = label_score or (90 if fragment_contact else 70 if path_hint else 0)
         # Dedicated contact paths beat incidental article text, including a
         # footer link whose wording is longer than the exact contact label.
         if contact_context and (
