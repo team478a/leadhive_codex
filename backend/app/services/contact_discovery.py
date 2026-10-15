@@ -127,10 +127,19 @@ def _is_contact_cta(label: str) -> bool:
         "form",
         "page",
         "・ご相談",
+        "・お問い合わせ",
         "・相談",
         "(無料)",
     )
-    allowed_prefixes = ("", "contact", "contactus", "ご予約・", "ご予約", "お気軽に")
+    allowed_prefixes = (
+        "",
+        "contact",
+        "contactus",
+        "ご予約・",
+        "ご予約",
+        "ご相談・",
+        "お気軽に",
+    )
     return any(
         (position := normalized.find(term)) >= 0
         and normalized[:position] in allowed_prefixes
@@ -439,9 +448,10 @@ def navigation_links(
         # A direct contact label outranks testimonials/service copy mentioning
         # inquiries. Otherwise a large site's incidental links exhaust the
         # bounded crawl before its general contact destination is reached.
-        score = (
-            label_score if label_contact_cta else min(label_score, 60)
-        ) or (90 if fragment_contact else 70 if path_hint else 0)
+        score = max(
+            label_score if label_contact_cta else min(label_score, 60),
+            90 if fragment_contact else 70 if path_hint else 0,
+        )
         # Dedicated contact paths beat incidental article text, including a
         # footer link whose wording is longer than the exact contact label.
         if contact_context and (

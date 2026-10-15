@@ -992,9 +992,7 @@ def run_article_extraction(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                 extraction.name_only_count = sum(
                     row.status == "NAME_ONLY" for row in result.entries
                 )
-                extraction.rejected_count = sum(
-                    row.status == "REJECTED" for row in result.entries
-                )
+                extraction.rejected_count = sum(row.status == "REJECTED" for row in result.entries)
                 for row in result.entries:
                     entry = CollectionExtractedEntry(
                         extraction_id=extraction.id,
@@ -1003,9 +1001,7 @@ def run_article_extraction(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                         name_key=row.name_key,
                         link_url=row.link_url,
                         link_kind=row.link_kind,
-                        website_candidate=row.link_url
-                        if row.link_kind == "EXTERNAL_SITE"
-                        else "",
+                        website_candidate=row.link_url if row.link_kind == "EXTERNAL_SITE" else "",
                         pattern=row.pattern,
                         locator=row.locator,
                         context=row.context,
