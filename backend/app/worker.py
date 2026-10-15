@@ -848,13 +848,29 @@ def next_form_analysis_batch(db, project_id: uuid.UUID, force: bool = False) -> 
 
 
 def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
-    company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])][:100]
+    company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])]
     if company_ids:
-        companies = db.scalars(
-            select(Company)
-            .where(Company.project_id == job.project_id, Company.id.in_(company_ids))
-            .order_by(Company.created_at, Company.id)
-        ).all()
+        job.total_count = len(company_ids)
+        db.commit()
+        for offset in range(0, len(company_ids), 100):
+            companies = db.scalars(
+                select(Company)
+                .where(
+                    Company.project_id == job.project_id,
+                    Company.id.in_(company_ids[offset : offset + 100]),
+                )
+                .order_by(Company.created_at, Company.id)
+            ).all()
+            for company in companies:
+                if stop_requested(db, job, worker_id):
+                    return
+                profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
+                success = bool(profiles) and any(
+                    profile.form_status != "ERROR" for profile in profiles
+                )
+                if not progress(db, job, worker_id, success):
+                    return
+        return
     else:
         companies = next_form_analysis_batch(db, job.project_id, bool(job.payload.get("force")))
     job.total_count = len(companies)

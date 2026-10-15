@@ -4,7 +4,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -522,6 +522,68 @@ def enqueue_form_intelligence(
         project_id=project_id,
         operation_type="form_intelligence",
         payload={"company_ids": [str(item) for item in company_ids], "force": body.force},
+    )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post(
+    "/projects/{project_id}/form-intelligence/retry-missing",
+    response_model=OperationJobOut,
+    status_code=202,
+)
+def enqueue_missing_form_redetection(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user)
+    ranked_profiles = (
+        select(
+            FormProfile.id.label("profile_id"),
+            FormProfile.company_id.label("company_id"),
+            func.row_number()
+            .over(
+                partition_by=FormProfile.company_id,
+                order_by=(
+                    FormProfile.is_primary.desc(),
+                    FormProfile.updated_at.desc(),
+                    FormProfile.id,
+                ),
+            )
+            .label("position"),
+        )
+        .join(Company, Company.id == FormProfile.company_id)
+        .where(Company.project_id == project_id)
+        .subquery()
+    )
+    company_ids = list(
+        db.scalars(
+            select(Company.id)
+            .join(ranked_profiles, ranked_profiles.c.company_id == Company.id)
+            .join(FormProfile, FormProfile.id == ranked_profiles.c.profile_id)
+            .where(
+                ranked_profiles.c.position == 1,
+                Company.analysis_status == "completed",
+                Company.website_url.is_not(None),
+                Company.do_not_contact.is_(False),
+                FormProfile.form_status.notin_(("UNANALYZED", "ERROR", "STALE", "BLOCKED")),
+                FormProfile.sales_contact_status != "PROHIBITED",
+                FormProfile.form_found.is_(False),
+            )
+            .order_by(Company.created_at, Company.id)
+        ).all()
+    )
+    if not company_ids:
+        raise HTTPException(409, "一括再検出できるフォーム未発見企業がありません。")
+    job = OperationJob(
+        project_id=project_id,
+        operation_type="form_intelligence",
+        payload={"company_ids": [str(company_id) for company_id in company_ids], "force": True},
+        total_count=len(company_ids),
     )
     if not add_operation_job(db, job):
         raise HTTPException(409, "フォーム解析がすでに実行待ちです。")

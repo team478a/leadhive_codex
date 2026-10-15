@@ -121,6 +121,16 @@ def test_contact_context_detects_name_email_only_form_but_not_login_or_search():
     assert not is_contact_form(excluded, contact_context=True)
 
 
+def test_contact_context_detects_forms_with_opaque_field_names():
+    form = BeautifulSoup(
+        '<form><input name="field_1"><input name="field_2"></form>',
+        "html.parser",
+    ).form
+    assert form is not None
+    assert not is_contact_form(form)
+    assert is_contact_form(form, contact_context=True)
+
+
 def test_same_page_contact_anchor_is_scanned_and_not_confused_with_other_anchors():
     result = crawl(
         {

@@ -37,7 +37,7 @@ from app.services.scraper import CONTACT_HINTS, ScrapeError
 from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "2.1"
+ANALYSIS_VERSION = "2.2"
 MAX_CONTACT_PAGES = 8
 MAX_EXTERNAL_CONTACT_PAGES = 3
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")

@@ -179,6 +179,7 @@ def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
             return True
         if any(hint in text for hint in ("名前", "氏名", "メール", "電話", "会社名")):
             return True
+        return True
     return False
 
 
