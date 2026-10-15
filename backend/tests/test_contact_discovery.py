@@ -5,6 +5,7 @@ from app.services.contact_discovery import (
     embedded_form_providers,
     external_contact_links,
     is_contact_form,
+    is_contact_path,
     navigation_links,
 )
 
@@ -103,6 +104,45 @@ def test_form_classification():
         form = BeautifulSoup(html, "html.parser").select_one("form")
         assert form is not None
         assert is_contact_form(form) is expected
+
+
+def test_contact_context_detects_name_email_only_form_but_not_login_or_search():
+    form = BeautifulSoup(
+        '<form><input name="your-name"><input name="your-email" type="email"></form>',
+        "html.parser",
+    ).form
+    assert form is not None
+    assert not is_contact_form(form)
+    assert is_contact_form(form, contact_context=True)
+    excluded = BeautifulSoup(
+        '<form><input type="password"><input name="email"></form>', "html.parser"
+    ).form
+    assert excluded is not None
+    assert not is_contact_form(excluded, contact_context=True)
+
+
+def test_same_page_contact_anchor_is_scanned_and_not_confused_with_other_anchors():
+    result = crawl(
+        {
+            "https://example.com/": (
+                '<a href="#contact">お問い合わせ</a>'
+                '<form><input name="your-name"><input name="your-email" type="email"></form>'
+            ),
+        }
+    )
+    assert result[0] == ("https://example.com/", True)
+    assert navigation_links(
+        '<a href="#contact">お問い合わせ</a><a href="#pricing">料金</a>',
+        "https://example.com/",
+        "https://example.com/",
+    ) == ["https://example.com/"]
+
+
+def test_contact_path_context_supports_common_english_and_japanese_paths():
+    assert is_contact_path("https://example.com/contact/")
+    assert is_contact_path("https://example.com/forms/inquiry-form")
+    assert is_contact_path("https://example.com/toiawase")
+    assert not is_contact_path("https://example.com/company-information")
 
 
 def test_embedding_is_evidence_separate_from_dom_confirmation():

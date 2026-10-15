@@ -17,6 +17,7 @@ from app.services.contact_discovery import (
     embedded_form_providers,
     external_contact_links,
     is_contact_form,
+    is_contact_path,
     same_site,
 )
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
@@ -36,7 +37,7 @@ from app.services.scraper import CONTACT_HINTS, ScrapeError
 from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "2.0"
+ANALYSIS_VERSION = "2.1"
 MAX_CONTACT_PAGES = 8
 MAX_EXTERNAL_CONTACT_PAGES = 3
 COMMON_CONTACT_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
@@ -451,7 +452,10 @@ def analyze_company_forms(
                 page_permission, page_prohibition = sales_contact_status(full_text, False)
                 record_prohibition(page_prohibition, url)
                 page_kind = _page_kind(url, text)
-                if not any(is_contact_form(form) for form in forms):
+                contact_context = explicit or is_contact_path(url)
+                if not any(
+                    is_contact_form(form, contact_context=contact_context) for form in forms
+                ):
                     custom = custom_contact_containers(html)
                     if len(custom) == 1:
                         fields = parse_form_fields(custom[0])
@@ -538,7 +542,7 @@ def analyze_company_forms(
                         seen.add((url, 0))
                     continue
                 for form_index, form in enumerate(forms):
-                    if not is_contact_form(form):
+                    if not is_contact_form(form, contact_context=contact_context):
                         continue
                     form_started = time.monotonic()
                     compatibility = assess_delivery_compatibility(form, url)

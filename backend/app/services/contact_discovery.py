@@ -19,7 +19,16 @@ HINTS = (
     "問い合わせ",
     "ご相談",
 )
-FALLBACK_PATHS = ("/contact", "/contact-us", "/inquiry", "/inquiry-form")
+FALLBACK_PATHS = (
+    "/contact",
+    "/contact-us",
+    "/inquiry",
+    "/inquiry-form",
+    "/contact-form",
+    "/form",
+    "/otoiawase",
+    "/toiawase",
+)
 
 
 def external_contact_links(html: str, base: str, root: str) -> list[dict[str, str]]:
@@ -139,7 +148,7 @@ def custom_contact_containers(html: str) -> list[Tag]:
     ]
 
 
-def is_contact_form(form: Tag) -> bool:
+def is_contact_form(form: Tag, *, contact_context: bool = False) -> bool:
     """Exclude login/search/subscription forms without treating embeds as proof."""
     if form.select_one("input[type='password'], input[type='search']"):
         return False
@@ -157,8 +166,29 @@ def is_contact_form(form: Tag) -> bool:
         if str(field.get("type", "text")).lower()
         not in {"hidden", "submit", "button", "checkbox", "radio"}
     ]
-    return len(visible) >= 2 and any(
-        hint in form.get_text(" ", strip=True).lower() for hint in HINTS
+    text = form.get_text(" ", strip=True).lower()
+    if len(visible) >= 2 and any(hint in text for hint in HINTS):
+        return True
+    identities = " ".join(
+        f"{field.get('name', '')} {field.get('id', '')} {field.get('placeholder', '')} "
+        f"{field.get('aria-label', '')}"
+        for field in visible
+    ).lower()
+    if contact_context and len(visible) >= 2:
+        if any(word in identities for word in ("email", "mail", "name", "company", "phone", "tel")):
+            return True
+        if any(hint in text for hint in ("名前", "氏名", "メール", "電話", "会社名")):
+            return True
+    return False
+
+
+def is_contact_path(url: str) -> bool:
+    path = urlsplit(url).path.lower()
+    return bool(
+        re.search(
+            r"(?:^|[/_-])(?:contact|inquiry|inquire|otoiawase|toiawase|form)(?:$|[/_.-])",
+            path,
+        )
     )
 
 
@@ -183,7 +213,23 @@ def navigation_links(
     ranked: list[tuple[int, str]] = []
     for element in soup.select("a[href], iframe[src]"):
         value = str(element.get("href") or element.get("src") or "").strip()
-        if not value or value.startswith(("#", "mailto:", "tel:", "javascript:")):
+        if not value or value.startswith(("mailto:", "tel:", "javascript:")):
+            continue
+        label = element.get_text(" ", strip=True).lower()
+        fragment = urlsplit(value).fragment.lower()
+        fragment_contact = bool(
+            fragment
+            and any(hint in fragment for hint in ("contact", "inquiry", "otoiawase", "form"))
+        )
+        label_contact = any(hint in label for hint in HINTS)
+        label_contact_cta = label in HINTS or bool(
+            re.search(
+                r"(?:contact(?: us)?|inquiry|inquire|お問い合わせ|問合せ|問い合わせ|ご相談)"
+                r"(?:はこちら|フォーム|する|先|窓口|ページ)?$",
+                label,
+            )
+        )
+        if value.startswith("#") and not (fragment_contact or label_contact):
             continue
         parsed = urlsplit(urljoin(base, value))
         url = urlunsplit((parsed.scheme, parsed.netloc, parsed.path or "/", parsed.query, ""))
@@ -193,10 +239,9 @@ def navigation_links(
             allowed = False
         if not allowed or parsed.path.lower().endswith((".pdf", ".jpg", ".png", ".zip")):
             continue
-        label = element.get_text(" ", strip=True).lower()
         if (
             re.search(r"^/(?:blog|news|post|lab|column|article|srv)(?:/|$)", parsed.path.lower())
-            and label not in HINTS
+            and not label_contact_cta
         ):
             continue
         path_hint = bool(
@@ -209,15 +254,7 @@ def navigation_links(
         # inquiries. Otherwise a large site's incidental links exhaust the
         # bounded crawl before its general contact destination is reached.
         direct_label = re.sub(r"\s+", "", label) in {re.sub(r"\s+", "", hint) for hint in HINTS}
-        score = (
-            120
-            if direct_label
-            else 100
-            if any(hint in label for hint in HINTS)
-            else 90
-            if path_hint
-            else 0
-        )
+        score = 120 if direct_label else 100 if label_contact else 90 if path_hint else 0
         # Dedicated contact paths beat incidental article text, including a
         # footer link whose wording is longer than the exact contact label.
         if path_hint:
@@ -249,8 +286,21 @@ def contact_pages(
     """
     queue: list[tuple[str, bool, int]] = []
     root_html = cache[root]
+    root_soup = BeautifulSoup(root_html, "html.parser")
+    has_contact_anchor = any(
+        str(anchor.get("href") or "").startswith("#")
+        and (
+            any(hint in anchor.get_text(" ", strip=True).lower() for hint in HINTS)
+            or any(
+                hint in str(anchor.get("href") or "").lower()
+                for hint in ("contact", "inquiry", "otoiawase", "form")
+            )
+        )
+        for anchor in root_soup.select("a[href]")
+    )
     if (
-        BeautifulSoup(root_html, "html.parser").select_one("form")
+        root_soup.select_one("form")
+        or has_contact_anchor
         or embedded_form_providers(root_html)
         or custom_contact_containers(root_html)
     ):
