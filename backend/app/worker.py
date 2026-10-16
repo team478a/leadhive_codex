@@ -906,7 +906,6 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         classify_profile,
     )
 
-    job_id = job.id
     original_job = job
     query = _ranked_form_rows(job.project_id)
     job.total_count = (
@@ -950,11 +949,9 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         db.commit()
         offset += len(rows)
         db.expunge_all()
-        job = db.get(OperationJob, job_id)
-        if job is None:
-            db.add(original_job)
-            return
-    db.add(original_job)
+        db.add(original_job)
+        db.refresh(original_job)
+        job = original_job
 
 
 def run_article_extraction(db, job: OperationJob, worker_id: uuid.UUID) -> None:
