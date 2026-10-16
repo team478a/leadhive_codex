@@ -11,6 +11,13 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
     reason_codes: ['REVIEW_REQUIRED'], fields: [], groups: [], saved_groups: [],
   }))
   const submitted: { profile_id: string; action: string; confirmed_no_sales_prohibition: boolean }[] = []
+  await page.route(`**/api/projects/${fixture.project_id}/send-flow-summary`, route =>
+    route.fulfill({ json: {
+      readiness_completed_at: null, target_company_count: 3,
+      draft_counts: { email: 0, form: 3 }, form_reviewed_count: 0,
+      approval_counts: { pending: { email: 0, form: 0 }, approved_unsent: { email: 0, form: 0 } },
+      today: { sent: 0, reserved: 0 }, results: { sent: 0, failed: 0, unknown: 0 },
+    } }))
   await page.route(`**/api/projects/${fixture.project_id}/form-review-queue`, route =>
     route.fulfill({ json: { total: items.length, offset: 0, limit: 50, items } }))
   await page.route('**/api/form-profiles/*/review-decision', async route => {
@@ -29,6 +36,8 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
   await navigateWorkspace(page, '▶ 送信の準備・実行')
   await page.getByLabel('対象プロジェクト').selectOption(fixture.project_id)
+  const queueStage = page.getByRole('region', { name: '3. フォームを確認', exact: true })
+  await queueStage.getByRole('button', { name: /3\. フォームを確認/ }).click()
 
   const panel = page.getByRole('region', { name: 'フォーム確認キュー' })
   await expect(panel.getByRole('heading', { name: 'フォーム確認キュー' })).toBeVisible()

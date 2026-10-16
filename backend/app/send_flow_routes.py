@@ -143,17 +143,20 @@ def send_flow_summary(
     ).all()
     draft_counts.update({channel: count for channel, count in rows})
 
-    reviewed_count = db.scalar(
-        select(func.count(func.distinct(Company.id)))
-        .select_from(FormAnalysisLog)
-        .join(FormProfile, FormProfile.id == FormAnalysisLog.form_profile_id)
-        .join(Company, Company.id == FormProfile.company_id)
-        .where(
-            Company.project_id == project_id,
-            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
-            FormAnalysisLog.details["profile_fingerprint"].astext == FormProfile.fingerprint,
+    reviewed_count = (
+        db.scalar(
+            select(func.count(func.distinct(Company.id)))
+            .select_from(FormAnalysisLog)
+            .join(FormProfile, FormProfile.id == FormAnalysisLog.form_profile_id)
+            .join(Company, Company.id == FormProfile.company_id)
+            .where(
+                Company.project_id == project_id,
+                FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+                FormAnalysisLog.details["profile_fingerprint"].astext == FormProfile.fingerprint,
+            )
         )
-    ) or 0
+        or 0
+    )
 
     approval_counts = {
         "pending": {"email": 0, "form": 0},
@@ -288,8 +291,7 @@ def send_flow_summary(
                     )
                 )
             ).label("unknown_without_delivery"),
-        )
-        .where(ApprovedFormDispatch.project_id == project_id)
+        ).where(ApprovedFormDispatch.project_id == project_id)
     ).one()
 
     return {

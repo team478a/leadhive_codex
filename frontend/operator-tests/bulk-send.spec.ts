@@ -18,6 +18,17 @@ async function setup(page: Page, options: { viewer?: boolean; stopped?: boolean;
     if (path === '/api/auth/me') data = { id: 'operator', email, is_admin: false }
     else if (path === '/api/projects') data = [{ id: 'project-1', project_name: '整理済みリスト', status: 'active', region: '大阪府' }]
     else if (path.endsWith('/members')) data = [{ email, role: options.viewer ? 'viewer' : 'owner' }]
+    else if (path.endsWith('/send-flow-summary')) data = {
+      readiness_completed_at: null, target_company_count: 2,
+      draft_counts: { email: 0, form: 0 }, form_reviewed_count: 0,
+      approval_counts: { pending: { email: 0, form: 0 }, approved_unsent: { email: 0, form: 0 } },
+      today: { sent: 0, reserved: 0 }, results: { sent: 0, failed: 0, unknown: 0 },
+    }
+    else if (path.endsWith('/outreach-templates')) data = []
+    else if (path.includes('/company-list')) data = {
+      items: [{ id: 'company-0', project_id: 'project-1', company_name: '候補', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }],
+      total: 1, offset: 0, limit: 20,
+    }
     else if (path === '/api/dashboard') data = { total_companies: 2 }
     else if (path === '/api/outreach-execution-status') data = { outbound_enabled: true }
     else if (path.endsWith('/companies')) data = [{ id: 'company-0', company_name: '候補', status: 'unreviewed' }]
@@ -43,6 +54,8 @@ async function setup(page: Page, options: { viewer?: boolean; stopped?: boolean;
   })
   await page.goto('/')
   await navigateWorkspace(page, '▶ 送信の準備・実行')
+  const sendStage = page.getByRole('region', { name: '5. 送信', exact: true })
+  await sendStage.getByRole('button', { name: /5\. 送信/ }).click()
   return { panel: page.getByRole('region', { name: 'クリーニング済みリストの一括送信' }), requests }
 }
 

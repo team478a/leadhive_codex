@@ -121,9 +121,7 @@ def run_bulk_template_drafts(
         }
         existing_draft_company_ids = set(
             db.scalars(
-                select(OutreachDraft.company_id).where(
-                    OutreachDraft.company_id.in_(chunk_ids)
-                )
+                select(OutreachDraft.company_id).where(OutreachDraft.company_id.in_(chunk_ids))
             ).all()
         )
         results = job.payload["bulk_template_results"]
