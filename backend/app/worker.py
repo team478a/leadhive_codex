@@ -993,12 +993,13 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
         except Exception:
             db.rollback()
             outcome["reason_code"] = "OTHER_UNSUPPORTED"
+        if not progress(db, job, worker_id, outcome["status"] != "blocked"):
+            return
         current_job = db.get(OperationJob, job.id)
         payload = dict(current_job.payload or {})
         payload["results"] = [*payload.get("results", []), outcome]
         current_job.payload = payload
-        if not progress(db, current_job, worker_id, outcome["status"] != "blocked"):
-            return
+        db.commit()
 
 
 def run_article_extraction(db, job: OperationJob, worker_id: uuid.UUID) -> None:
