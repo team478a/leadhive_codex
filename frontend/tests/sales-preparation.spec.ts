@@ -11,8 +11,9 @@ test('sales preparation can queue cancel and resume without sending', async ({ p
   await later.click()
   const profiles = await page.request.get('/api/target-profiles')
   const profileId = (await profiles.json())[0].id
+  const projectName = `営業準備 ${testInfo.project.name} ${Date.now()}`
   const result = await page.request.post('/api/projects', { data: {
-    project_name: `営業準備 ${testInfo.project.name}`, target_profile_id: profileId,
+    project_name: projectName, target_profile_id: profileId,
     sales_objective: 'No external access or sending', region: '全国', status: 'draft',
   } })
   expect(result.status()).toBe(201)
@@ -56,10 +57,25 @@ test('sales preparation can queue cancel and resume without sending', async ({ p
   } }))
   await page.reload()
   await navigateWorkspace(page, '▶ 送信の準備・実行')
-  await page.getByRole('combobox', { name: '対象プロジェクト', exact: true }).selectOption(projectId)
+  const projectSelect = page.getByRole('combobox', { name: '対象プロジェクト', exact: true })
+  await expect(projectSelect.locator('option', { hasText: projectName })).toHaveCount(1)
+  const summaryResponse = page.waitForResponse(response =>
+    response.request().method() === 'GET'
+      && new URL(response.url()).pathname === `/api/projects/${projectId}/send-flow-summary`,
+  )
+  const templatesResponse = page.waitForResponse(response =>
+    response.request().method() === 'GET'
+      && new URL(response.url()).pathname === `/api/projects/${projectId}/outreach-templates`,
+  )
+  await projectSelect.selectOption(projectId)
+  await Promise.all([summaryResponse, templatesResponse])
+  await expect(projectSelect).toHaveValue(projectId)
+  await expect(page.getByRole('region', { name: '送信フローの進捗' })).toContainText('送信可否集計なし')
   const draftStage = page.getByRole('region', { name: '2. 送信先と文面を用意', exact: true })
-  await draftStage.getByRole('button', { name: /2\. 送信先と文面を用意/ }).click()
   const draftPanel = draftStage.getByRole('region', { name: '送信先と文面の準備' })
+  if (!await draftPanel.isVisible()) {
+    await draftStage.getByRole('button', { name: /2\. 送信先と文面を用意/ }).click()
+  }
   await draftPanel.getByLabel('文面の作り方').selectOption('ai')
   const panel = page.getByRole('region', { name: '営業準備', exact: true })
   await panel.getByRole('button', { name: '営業準備を開始', exact: true }).click()
