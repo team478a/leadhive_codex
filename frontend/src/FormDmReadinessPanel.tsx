@@ -45,7 +45,13 @@ export function FormDmReadinessPanel({ projectId }: { projectId: string }) {
   const refresh = useCallback(async () => {
     if (!projectId) { setData(null); return }
     setBusy(true); setError('')
-    try { setData(await api<Readiness>(`/projects/${projectId}/form-dm-readiness?offset=${offset}`)) }
+    try {
+      const result = await api<Readiness>(`/projects/${projectId}/form-dm-readiness?offset=${offset}`)
+      if (!result || typeof result.total !== 'number' || !Array.isArray(result.items) || !result.counts) {
+        throw new Error('フォームDM診断の応答形式が不正です。再読み込みしてください。')
+      }
+      setData(result)
+    }
     catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
   }, [projectId, offset])
