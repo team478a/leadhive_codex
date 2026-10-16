@@ -2,6 +2,35 @@ name: LeadHive checks
 on: [push, pull_request]
 
 jobs:
+  migration-files-append-only:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Reject edits and deletions of existing migrations
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_BEFORE: ${{ github.event.before }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base_ref="$BASE_SHA"
+          else
+            base_ref="$EVENT_BEFORE"
+          fi
+          if [ -z "$base_ref" ] || [[ "$base_ref" =~ ^0+$ ]]; then
+            exit 0
+          fi
+          base=$(git merge-base "$base_ref" "$HEAD_SHA")
+          changed=$(git diff --name-status "$base" "$HEAD_SHA" -- 'backend/migrations/versions/*.py')
+          violations=$(printf '%s\n' "$changed" | awk 'NF && $1 != "A" { print }')
+          if [ -n "$violations" ]; then
+            printf 'Only new migration files may be added; existing migrations are immutable:\n%s\n' "$violations"
+            exit 1
+          fi
+
   pc-input-package:
     runs-on: windows-latest
     timeout-minutes: 20
