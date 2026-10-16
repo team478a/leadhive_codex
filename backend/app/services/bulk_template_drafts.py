@@ -124,7 +124,12 @@ def run_bulk_template_drafts(
                 select(OutreachDraft.company_id).where(OutreachDraft.company_id.in_(chunk_ids))
             ).all()
         )
-        results = job.payload["bulk_template_results"]
+        saved_results = job.payload["bulk_template_results"]
+        results = {
+            "created": list(saved_results["created"]),
+            "skipped_existing": list(saved_results["skipped_existing"]),
+            "excluded": [dict(item) for item in saved_results["excluded"]],
+        }
         for company_id in chunk_ids:
             company = companies.get(company_id)
             if company is None:

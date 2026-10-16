@@ -202,7 +202,13 @@ def test_bulk_template_drafts_skip_existing_and_exclude_contact_prohibitions(aut
     assert response.status_code == 202, response.text
     job = run_queued_job(db, response.json()["id"])
     result = job.payload["bulk_template_results"]
-    assert result["created"] == [str(permitted_id)]
+    assert result["created"] == [str(permitted_id)], {
+        "created": result["created"],
+        "skipped_existing": result["skipped_existing"],
+        "excluded": [(item["company_id"], item["reason_code"]) for item in result["excluded"]],
+        "processed_count": job.processed_count,
+        "total_count": job.total_count,
+    }
     assert result["skipped_existing"] == [str(existing_id)]
     assert {item["reason_code"] for item in result["excluded"]} == {
         "company_do_not_contact",
@@ -210,7 +216,7 @@ def test_bulk_template_drafts_skip_existing_and_exclude_contact_prohibitions(aut
     }
 
     draft = db.scalar(select(OutreachDraft).where(OutreachDraft.company_id == permitted_id))
-    assert "bulk-0.example.test" in draft.subject
+    assert "テスト企業0000" in draft.subject
     assert "今後のご案内が不要な場合はご返信ください" in draft.body
     preserved = db.scalar(select(OutreachDraft).where(OutreachDraft.company_id == existing_id))
     assert preserved.body == "上書きしてはいけない本文"
