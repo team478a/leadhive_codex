@@ -123,9 +123,7 @@ def test_do_not_send_accepts_unchecked_no_prohibition_confirmation(auth, form_so
         "do_not_send_reason": "WRONG_PURPOSE",
     }
 
-    response = auth.post(
-        f"/api/form-profiles/{item['profile_id']}/review-decision", json=payload
-    )
+    response = auth.post(f"/api/form-profiles/{item['profile_id']}/review-decision", json=payload)
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "DO_NOT_SEND"
@@ -150,8 +148,6 @@ def test_confirm_requires_no_sales_prohibition_confirmation(auth, form_source):
         ],
     }
 
-    response = auth.post(
-        f"/api/form-profiles/{item['profile_id']}/review-decision", json=payload
-    )
+    response = auth.post(f"/api/form-profiles/{item['profile_id']}/review-decision", json=payload)
 
     assert response.status_code == 422

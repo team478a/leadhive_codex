@@ -44,7 +44,8 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   await page.locator('body').click({ position: { x: 4, y: 4 } })
   await page.keyboard.press('s')
   await expect(panel.getByRole('heading', { name: '次の確認候補' })).toBeVisible()
-  await panel.getByRole('button', { name: '更新' }).click()
+  await panel.getByRole('button', { name: '更新' }).focus()
+  await page.keyboard.press('Enter')
   await expect(panel.getByRole('heading', { name: '次の確認候補' })).toBeVisible()
 
   await noProhibition.check()
