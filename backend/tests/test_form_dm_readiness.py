@@ -75,7 +75,7 @@ def test_form_dm_readiness_viewer_can_read_and_agent_is_not_authorized(
     )
     assert issued.status_code == 201
     response = auth.get(path, headers={"Authorization": f"Bearer {issued.json()['token']}"})
-    assert response.status_code == 401
+    assert response.status_code == 403
 
 
 def test_form_dm_readiness_hides_other_projects(auth, form_source, users, db):

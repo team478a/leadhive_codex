@@ -60,6 +60,10 @@ def _compatibility_reason(profile: FormProfile) -> str | None:
 
 def _preparation_reason(message: str) -> str:
     text = message.casefold()
+    if "captcha" in text:
+        return "CAPTCHA"
+    if any(word in text for word in ("連絡禁止", "送信できません", "suppression")):
+        return "CONTACT_PROHIBITED"
     if any(word in text for word in ("同意", "consent", "個人情報", "メルマガ")):
         return "NEEDS_CONSENT_REVIEW"
     if any(word in text for word in ("選択", "choice", "選択肢", "種別", "連絡方法")):
