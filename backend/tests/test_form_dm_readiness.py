@@ -51,6 +51,32 @@ def test_form_dm_readiness_is_read_only_and_exports_csv(auth, form_source, db):
     assert company_name in exported.text
 
 
+def test_form_dm_readiness_recalculate_joins_active_job_after_enqueue_race(
+    auth, form_source, db, monkeypatch
+):
+    from app import form_dm_readiness_routes
+    from app.models import OperationJob
+
+    project = form_source[0]
+    active_job = OperationJob(
+        project_id=project.id,
+        operation_type="form_dm_readiness",
+        payload={},
+    )
+
+    def simulate_concurrent_enqueue(_db, _job):
+        db.add(active_job)
+        db.commit()
+        return False
+
+    monkeypatch.setattr(form_dm_readiness_routes, "add_operation_job", simulate_concurrent_enqueue)
+    response = auth.post(f"/api/projects/{project.id}/form-dm-readiness/recalculate")
+
+    assert response.status_code == 202, response.text
+    assert response.json()["id"] == str(active_job.id)
+    assert response.json()["status"] == "queued"
+
+
 def test_form_dm_readiness_classifies_prohibition_before_captcha(auth, form_source, db):
     project, company, _draft, profile, _sender, _fields = form_source
     company.do_not_contact = True
