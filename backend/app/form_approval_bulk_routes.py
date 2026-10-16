@@ -7,12 +7,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.form_dm_readiness_routes import _rows
+from app.form_dm_readiness_routes import latest_completed_job
 from app.model_approved_form import FormDispatchLimits
 from app.models import (
     ApprovalRequest,
     ApprovedFormDispatch,
     Company,
+    FormDmReadinessResult,
     OperationJob,
     User,
 )
@@ -53,11 +54,19 @@ def create_form_approval_batch(
 ):
     project_access(project_id, db, user)
     if body.all_ready:
-        company_ids = [
-            company.id
-            for company, profile in _rows(db, project_id)
-            if profile.form_status == "READY"
-        ]
+        snapshot = latest_completed_job(db, project_id)
+        if snapshot is None:
+            raise HTTPException(409, "フォーム可否の集計を先に完了してください。")
+        company_ids = list(
+            db.scalars(
+                select(FormDmReadinessResult.company_id)
+                .where(
+                    FormDmReadinessResult.job_id == snapshot.id,
+                    FormDmReadinessResult.primary_reason == "READY",
+                )
+                .order_by(FormDmReadinessResult.company_id)
+            ).all()
+        )
     else:
         company_ids = list(
             db.scalars(
