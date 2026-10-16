@@ -4,6 +4,7 @@ import pytest
 from sqlalchemy import select
 
 from app.models import ApprovalRequest, Company, OperationJob, User
+from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
 
 
@@ -39,12 +40,15 @@ def test_bulk_request_queues_ready_companies_and_worker_is_idempotent(auth, form
     assert job.processed_count == 1
     assert job.success_count == 1
     assert job.payload["results"][0]["status"] == "created"
-    assert db.scalar(
-        select(ApprovalRequest).where(
-            ApprovalRequest.company_id == company.id,
-            ApprovalRequest.source_draft_id == form_source[2].id,
+    assert (
+        db.scalar(
+            select(ApprovalRequest).where(
+                ApprovalRequest.company_id == company.id,
+                ApprovalRequest.source_draft_id == form_source[2].id,
+            )
         )
-    ) is not None
+        is not None
+    )
 
     second_worker_id = uuid4()
     repeated = OperationJob(
@@ -60,12 +64,15 @@ def test_bulk_request_queues_ready_companies_and_worker_is_idempotent(auth, form
     run_form_approval_batch(db, repeated, second_worker_id)
     db.refresh(repeated)
     assert repeated.payload["results"][0]["status"] == "skipped_existing"
-    assert db.scalar(
-        select(ApprovalRequest.id).where(
-            ApprovalRequest.company_id == company.id,
-            ApprovalRequest.source_draft_id == form_source[2].id,
+    assert (
+        db.scalar(
+            select(ApprovalRequest.id).where(
+                ApprovalRequest.company_id == company.id,
+                ApprovalRequest.source_draft_id == form_source[2].id,
+            )
         )
-    ) is not None
+        is not None
+    )
 
 
 def test_bulk_request_rejects_more_than_200_company_ids(auth, form_source):
@@ -113,7 +120,10 @@ def test_bulk_worker_reports_pr0_reason_for_blocked_company(form_source, db):
 
     assert job.payload["results"][0]["status"] == "blocked"
     assert job.payload["results"][0]["reason_code"] == "CAPTCHA"
-    assert db.scalar(select(ApprovalRequest.id).where(ApprovalRequest.company_id == company.id)) is None
+    assert (
+        db.scalar(select(ApprovalRequest.id).where(ApprovalRequest.company_id == company.id))
+        is None
+    )
 
 
 def test_bulk_request_accepts_maximum_200_companies(auth, form_source, db):
@@ -141,11 +151,16 @@ def test_bulk_request_accepts_maximum_200_companies(auth, form_source, db):
     assert response.json()["total_count"] == 200
 
 
-@pytest.mark.parametrize("payload", [{}, {"company_ids": [], "all_ready": False}, {"company_ids": [str(uuid4())], "all_ready": True}])
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"company_ids": [], "all_ready": False},
+        {"company_ids": [str(uuid4())], "all_ready": True},
+    ],
+)
 def test_bulk_request_requires_one_scope(auth, form_source, payload):
     project = form_source[0]
-    response = auth.post(
-        f"/api/projects/{project.id}/form-approval-requests/bulk", json=payload
-    )
+    response = auth.post(f"/api/projects/{project.id}/form-approval-requests/bulk", json=payload)
 
     assert response.status_code == 422

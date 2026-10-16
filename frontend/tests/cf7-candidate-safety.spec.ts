@@ -32,7 +32,7 @@ test('non-executable CF7 candidates show a warning and never offer reservations'
     await navigateWorkspace(page, '✓ 承認キュー')
     await page.getByLabel('承認プロジェクト').selectOption(fixture.project_id)
     await page.getByRole('button', { name: /CF7 Safety.*承認済み/ }).click()
-    await expect(page.getByRole('status')).toContainText('送信予約・実送信には使用できません')
+    await expect(page.getByText('送信予約・実送信には使用できません')).toBeVisible()
     await expect(page.getByRole('button', { name: 'CF7 Safety の承認済みフォームを予約', exact: true })).toHaveCount(0)
     expect(forbidden).toEqual([])
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()

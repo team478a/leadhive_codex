@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.form_dm_readiness_routes import _rows
 from app.model_approved_form import FormDispatchLimits
 from app.models import (
     ApprovalRequest,
@@ -21,7 +22,6 @@ from app.security import current_user
 from app.services import human_approval
 from app.services.operations import add_operation_job
 from app.services.sending_window import allowed
-from app.form_dm_readiness_routes import _rows
 
 router = APIRouter(prefix="/api/projects", tags=["Form approval batch"])
 
@@ -106,10 +106,14 @@ def form_approval_daily_summary(
         )
         or 0
     )
-    started_approvals = select(ApprovedFormDispatch.id).where(
-        ApprovedFormDispatch.approval_id == ApprovalRequest.id,
-        ApprovedFormDispatch.started_at.is_not(None),
-    ).exists()
+    started_approvals = (
+        select(ApprovedFormDispatch.id)
+        .where(
+            ApprovedFormDispatch.approval_id == ApprovalRequest.id,
+            ApprovedFormDispatch.started_at.is_not(None),
+        )
+        .exists()
+    )
     approved_unsent = (
         db.scalar(
             select(func.count())

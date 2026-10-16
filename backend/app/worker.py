@@ -900,10 +900,10 @@ def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     from fastapi import HTTPException
 
+    from app.form_dm_readiness_routes import _preparation_reason, classify_profile
     from app.models import ApprovalRequest, FormProfile, OutreachDraft, User
     from app.services import human_approval
     from app.services.form_approval_preparation import preparation
-    from app.form_dm_readiness_routes import _preparation_reason, classify_profile
 
     company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])]
     actor = db.get(User, uuid.UUID(job.payload["user_id"]))
@@ -912,52 +912,80 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
     for company_id in company_ids:
         if stop_requested(db, job, worker_id):
             return
-        outcome = {"company_id": str(company_id), "status": "blocked", "reason_code": "OTHER_UNSUPPORTED"}
+        outcome = {
+            "company_id": str(company_id),
+            "status": "blocked",
+            "reason_code": "OTHER_UNSUPPORTED",
+        }
         try:
             company = db.scalar(
-                select(Company).where(Company.id == company_id, Company.project_id == job.project_id).with_for_update()
+                select(Company)
+                .where(Company.id == company_id, Company.project_id == job.project_id)
+                .with_for_update()
             )
             if company is None or actor is None:
                 outcome["reason_code"] = "OTHER_UNSUPPORTED"
             else:
                 profile = db.scalar(
-                    select(FormProfile).where(FormProfile.company_id == company.id).order_by(
+                    select(FormProfile)
+                    .where(FormProfile.company_id == company.id)
+                    .order_by(
                         FormProfile.is_primary.desc(), FormProfile.updated_at.desc(), FormProfile.id
-                    ).limit(1)
+                    )
+                    .limit(1)
                 )
-                readiness = classify_profile(db, company, profile) if profile else {"primary_reason": "OTHER_UNSUPPORTED"}
+                readiness = (
+                    classify_profile(db, company, profile)
+                    if profile
+                    else {"primary_reason": "OTHER_UNSUPPORTED"}
+                )
                 if readiness["primary_reason"] != "READY":
                     outcome["reason_code"] = readiness["primary_reason"]
                 else:
                     draft = db.scalar(
-                        select(OutreachDraft).where(
+                        select(OutreachDraft)
+                        .where(
                             OutreachDraft.company_id == company.id, OutreachDraft.channel == "form"
-                        ).order_by(OutreachDraft.updated_at.desc(), OutreachDraft.id.desc()).limit(1)
+                        )
+                        .order_by(OutreachDraft.updated_at.desc(), OutreachDraft.id.desc())
+                        .limit(1)
                     )
                     if draft is None:
                         outcome["reason_code"] = "NO_FORM_DRAFT"
                     else:
                         existing = db.scalar(
-                            select(ApprovalRequest).where(
+                            select(ApprovalRequest)
+                            .where(
                                 ApprovalRequest.project_id == job.project_id,
                                 ApprovalRequest.company_id == company.id,
                                 ApprovalRequest.source_draft_id == draft.id,
                                 ApprovalRequest.channel == "form",
-                            ).order_by(ApprovalRequest.created_at.desc(), ApprovalRequest.id.desc()).limit(1)
+                            )
+                            .order_by(ApprovalRequest.created_at.desc(), ApprovalRequest.id.desc())
+                            .limit(1)
                         )
                         if existing:
                             human_approval.invalidate_if_needed(db, existing)
                             db.flush()
-                            if existing.status in {"PENDING", "APPROVED"} and existing.expires_at > human_approval.now():
-                                outcome = {"company_id": str(company_id), "status": "skipped_existing", "reason_code": None}
+                            if (
+                                existing.status in {"PENDING", "APPROVED"}
+                                and existing.expires_at > human_approval.now()
+                            ):
+                                outcome = {
+                                    "company_id": str(company_id),
+                                    "status": "skipped_existing",
+                                    "reason_code": None,
+                                }
                         if outcome["status"] != "skipped_existing":
                             proposal, _ = preparation(db, company, draft)
                             request = human_approval.create_proposal(
                                 db, job.project_id, proposal, "HUMAN", actor.id
                             )
                             outcome = {
-                                "company_id": str(company_id), "status": "created",
-                                "reason_code": None, "request_id": str(request.id),
+                                "company_id": str(company_id),
+                                "status": "created",
+                                "reason_code": None,
+                                "request_id": str(request.id),
                             }
         except HTTPException as exc:
             db.rollback()
