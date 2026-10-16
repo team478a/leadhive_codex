@@ -78,7 +78,7 @@ class OperationJob(Base):
         CheckConstraint(
             "operation_type IN ('collect_search', 'web_analysis', 'ai_analysis', 'form_delivery', "
             "'form_intelligence', 'prepare_outreach', 'cf7_observation', 'extract_articles', "
-            "'form_dm_readiness')",
+            "'form_dm_readiness', 'form_approval_batch')",
             name="ck_operation_job_type",
         ),
         CheckConstraint(

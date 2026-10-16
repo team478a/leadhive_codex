@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 
 type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[] }
@@ -15,19 +15,22 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
   const [checked, setChecked] = useState<Record<string, boolean>>({}); const [rule, setRule] = useState<Record<string, string>>({})
   const [noProhibition, setNoProhibition] = useState(false)
   const [doNotSendReason, setDoNotSendReason] = useState('WRONG_PURPOSE')
-  const skip = useCallback(() => { setIndex(v => Math.min(v + 1, items.length - 1)); setNotice('') }, [items.length])
+  const item = items[index]
+  const skippedProfileIds = useRef(new Set<string>())
+  const skip = useCallback(() => { if (item) skippedProfileIds.current.add(item.profile_id); setIndex(v => Math.min(v + 1, items.length - 1)); setNotice('') }, [item, items.length])
   const load = useCallback(async () => {
     if (!projectId) return
     setBusy(true); setError('')
     try {
       const result = await api<Queue>(`/projects/${projectId}/form-review-queue`)
       const queueItems = Array.isArray(result?.items) ? result.items : []
-      setItems(queueItems); setTotal(Number.isFinite(result?.total) ? result.total : queueItems.length); setIndex(0)
+      const sortedItems = [...queueItems].sort((a, b) => Number(skippedProfileIds.current.has(a.profile_id)) - Number(skippedProfileIds.current.has(b.profile_id)))
+      setItems(sortedItems); setTotal(Number.isFinite(result?.total) ? result.total : sortedItems.length)
+      setIndex(Math.max(0, sortedItems.findIndex(queueItem => !skippedProfileIds.current.has(queueItem.profile_id))))
     }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }, [projectId])
   useEffect(() => { void load() }, [load])
-  const item = items[index]
   const canConfirm = Boolean(item && item.groups.every(g => g.supported) && item.saved_groups.every(g => g.reviewable))
   useEffect(() => {
     if (!item) return
@@ -42,7 +45,7 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
     try {
       await api(`/form-profiles/${item.profile_id}/review-decision`, 'POST', {
         action, expected_fingerprint: item.fingerprint, expected_fields_hash: item.fields_hash,
-        confirmed_no_sales_prohibition: true,
+        confirmed_no_sales_prohibition: noProhibition,
         do_not_send_reason: action === 'DO_NOT_SEND' ? doNotSendReason : undefined,
         field_decisions: item.fields.map(f => ({ field_id: f.id, mapped_key: mapping[f.id] || f.mapped_key, recommended_value: mapping[f.id] === 'privacy_consent' ? '' : values[f.id] || '', consent_checked: mapping[f.id] === 'privacy_consent' && checked[f.id] === true })),
         group_decisions: item.groups.map(g => ({ group_id: g.group_id, expected_source_hash: g.source_hash, rule: rule[g.group_id] === 'EXACTLY_ONE' ? 'EXACTLY_ONE' : 'AT_LEAST_ONE', selections: g.members.flatMap(m => values[m.field_id] ? [{ field_id: m.field_id, value: values[m.field_id] }] : []) })),
@@ -55,7 +58,7 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
       setIndex(value => Math.min(value, Math.max(0, remaining.length - 1)))
       if (remaining.length === 0 && total > 1) await load()
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
-  }, [busy, canWrite, checked, doNotSendReason, item, items, load, mapping, rule, total, values])
+  }, [busy, canWrite, checked, doNotSendReason, item, items, load, mapping, noProhibition, rule, total, values])
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (!item || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return

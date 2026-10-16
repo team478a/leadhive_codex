@@ -167,6 +167,9 @@ class OperationJobOut(BaseModel):
     source_operation_ids: list[UUID] = Field(
         default_factory=list, validation_alias=AliasPath("payload", "source_operation_ids")
     )
+    form_approval_results: list[dict] = Field(
+        default_factory=list, validation_alias=AliasPath("payload", "results")
+    )
 
     @field_validator("collection_runtime_history", mode="before")
     @classmethod
