@@ -933,7 +933,7 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             )
             results.append(
                 FormDmReadinessResult(
-                    job_id=job_id,
+                    job_id=original_job.id,
                     company_id=company.id,
                     profile_id=profile.id,
                     primary_reason=outcome["primary_reason"],
