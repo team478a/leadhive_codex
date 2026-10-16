@@ -168,7 +168,6 @@ def test_bulk_template_drafts_skip_existing_and_exclude_contact_prohibitions(aut
         suppressed.id,
         existing.id,
     )
-    permitted.company_name = ""
     prohibited.do_not_contact = True
     db.add(
         SuppressionEntry(

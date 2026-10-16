@@ -17,10 +17,43 @@ test('sales preparation can queue cancel and resume without sending', async ({ p
   } })
   expect(result.status()).toBe(201)
   const projectId = (await result.json()).id
-  const imported = await page.request.post(`/api/projects/${projectId}/collection-jobs/urls`, {
-    data: { urls: ['https://preparation.example'] },
+  const jobId = 'sales-preparation-e2e'
+  let preparationCreated = false
+  let preparationStatus: 'queued' | 'cancelled' = 'queued'
+  const preparation = () => ({
+    job: {
+      id: jobId, project_id: projectId, operation_type: 'prepare_outreach', status: preparationStatus,
+      total_count: 1, processed_count: 0, success_count: 0, failed_count: 0,
+      cancel_requested: false, attempt_count: 0, acknowledged_at: null,
+      error_message: '', created_at: '', started_at: null, finished_at: null,
+    },
+    counts: { pending: 1, running: 0, ready: 0, review: 0, blocked: 0, error: 0 },
+    item_count: 1, used_search_requests: 0, used_ai_requests: 0,
+    max_search_requests: 0, max_ai_requests: 0,
   })
-  expect(imported.ok()).toBeTruthy()
+  await page.route(`**/api/projects/${projectId}/sales-preparation`, async route => {
+    if (route.request().method() === 'POST') {
+      preparationCreated = true
+      preparationStatus = 'queued'
+      await route.fulfill({ status: 202, json: {} })
+    } else {
+      await route.fulfill({ json: preparationCreated ? [preparation()] : [] })
+    }
+  })
+  await page.route(`**/api/operations/${jobId}/cancel`, async route => {
+    preparationStatus = 'cancelled'
+    await route.fulfill({ json: {} })
+  })
+  await page.route(`**/api/sales-preparation/${jobId}/resume`, async route => {
+    preparationStatus = 'queued'
+    await route.fulfill({ json: {} })
+  })
+  await page.route(`**/api/sales-preparation/${jobId}/items**`, route => route.fulfill({ json: {
+    total: 1, offset: 0, limit: 20, items: [{
+      id: 'preparation-item', company_id: 'preparation-company', company_name: 'preparation.example',
+      status: 'pending', stage: 'pending', reason: '', channel: '', draft_id: null, details: {},
+    }],
+  } }))
   await page.reload()
   await navigateWorkspace(page, '▶ 送信の準備・実行')
   await page.getByRole('combobox', { name: '対象プロジェクト', exact: true }).selectOption(projectId)
