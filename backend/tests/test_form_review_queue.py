@@ -110,3 +110,44 @@ def test_required_privacy_consent_cannot_be_confirmed_unchecked(auth, form_sourc
     response = auth.post(f"/api/form-profiles/{profile.id}/review-decision", json=payload)
 
     assert response.status_code == 422
+
+
+def test_do_not_send_accepts_unchecked_no_prohibition_confirmation(auth, form_source, db):
+    path = make_reviewable(form_source)
+    item = auth.get(path).json()["items"][0]
+    payload = {
+        "action": "DO_NOT_SEND",
+        "expected_fingerprint": item["fingerprint"],
+        "expected_fields_hash": item["fields_hash"],
+        "confirmed_no_sales_prohibition": False,
+        "do_not_send_reason": "WRONG_PURPOSE",
+    }
+
+    response = auth.post(f"/api/form-profiles/{item['profile_id']}/review-decision", json=payload)
+
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "DO_NOT_SEND"
+
+
+def test_confirm_requires_no_sales_prohibition_confirmation(auth, form_source):
+    path = make_reviewable(form_source)
+    item = auth.get(path).json()["items"][0]
+    payload = {
+        "action": "CONFIRM",
+        "expected_fingerprint": item["fingerprint"],
+        "expected_fields_hash": item["fields_hash"],
+        "confirmed_no_sales_prohibition": False,
+        "field_decisions": [
+            {
+                "field_id": field["id"],
+                "mapped_key": "message" if field["name"] == "message" else "email",
+                "recommended_value": "" if field["name"] != "message" else "営業文面",
+                "consent_checked": False,
+            }
+            for field in item["fields"]
+        ],
+    }
+
+    response = auth.post(f"/api/form-profiles/{item['profile_id']}/review-decision", json=payload)
+
+    assert response.status_code == 422

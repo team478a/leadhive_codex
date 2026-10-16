@@ -101,7 +101,7 @@ class FormReviewDecision(Input):
     action: Literal["CONFIRM", "DO_NOT_SEND"]
     expected_fingerprint: str = Field(pattern=r"^[a-f0-9]{64}$")
     expected_fields_hash: str = Field(pattern=r"^[a-f0-9]{64}$")
-    confirmed_no_sales_prohibition: Literal[True]
+    confirmed_no_sales_prohibition: bool
     field_decisions: list[FieldDecision] = Field(default_factory=list, max_length=100)
     group_decisions: list[GroupDecision] = Field(default_factory=list, max_length=50)
     saved_group_decisions: list[SavedGroupDecision] = Field(default_factory=list, max_length=50)
@@ -306,6 +306,8 @@ def save_form_review_decision(
         db.commit()
         return {"status": "DO_NOT_SEND", "company_id": str(company.id)}
 
+    if not body.confirmed_no_sales_prohibition:
+        raise HTTPException(422, "営業禁止の記載がないことを確認してください。")
     if body.do_not_send_reason is not None:
         raise HTTPException(422, "確認内容が不正です。")
     if profile.sales_contact_status != "ALLOWED" or profile.captcha_type != "CAPTCHA_NONE":
