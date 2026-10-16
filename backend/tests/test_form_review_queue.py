@@ -11,12 +11,13 @@ from tests.test_form_approval_preparation import form_source as form_source
 
 def make_reviewable(source):
     project, _, _, profile, _, fields = source
+    project_id = project.id
     fields[1].mapped_key = "unknown"
     fields[1].confidence = 0.1
     profile.form_status = "REVIEW_REQUIRED"
     profile.review_reason = "入力項目の確認が必要です。"
     db = object_session(project)
-    job = OperationJob(project_id=project.id, operation_type="form_dm_readiness", payload={})
+    job = OperationJob(project_id=project_id, operation_type="form_dm_readiness", payload={})
     db.add(job)
     db.commit()
     job.status, job.worker_id = "running", uuid4()
@@ -27,12 +28,13 @@ def make_reviewable(source):
     db.refresh(job)
     job.status, job.finished_at = "completed", datetime.now(timezone.utc)
     db.commit()
-    return f"/api/projects/{project.id}/form-review-queue"
+    return f"/api/projects/{project_id}/form-review-queue"
 
 
 def test_queue_is_read_only_and_returns_review_fingerprint(auth, form_source, db):
+    profile = form_source[3]
+    profile_id, before = profile.id, profile.updated_at
     path = make_reviewable(form_source)
-    before = form_source[3].updated_at
 
     response = auth.get(path)
 
@@ -43,10 +45,11 @@ def test_queue_is_read_only_and_returns_review_fingerprint(auth, form_source, db
     assert result["total"] == 1
     assert len(result["items"][0]["fingerprint"]) == 64
     db.expire_all()
-    assert db.get(type(form_source[3]), form_source[3].id).updated_at == before
+    assert db.get(type(profile), profile_id).updated_at == before
 
 
 def test_review_confirmation_is_profile_bound_and_non_executable(auth, form_source, db):
+    profile_id = form_source[3].id
     path = make_reviewable(form_source)
     item = auth.get(path).json()["items"][0]
     decisions = [
@@ -74,7 +77,7 @@ def test_review_confirmation_is_profile_bound_and_non_executable(auth, form_sour
     assert response.status_code == 200, response.text
     log = db.scalar(
         select(FormAnalysisLog).where(
-            FormAnalysisLog.form_profile_id == form_source[3].id,
+            FormAnalysisLog.form_profile_id == profile_id,
             FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
         )
     )
@@ -84,12 +87,12 @@ def test_review_confirmation_is_profile_bound_and_non_executable(auth, form_sour
 
 
 def test_required_privacy_consent_cannot_be_confirmed_unchecked(auth, form_source, db):
+    profile_id = form_source[3].id
     path = make_reviewable(form_source)
-    profile = form_source[3]
     from app.models import FormProfileField
 
     consent = FormProfileField(
-        form_profile_id=profile.id,
+        form_profile_id=profile_id,
         position=10,
         name="privacy",
         label="個人情報の取扱いに同意",
@@ -123,6 +126,6 @@ def test_required_privacy_consent_cannot_be_confirmed_unchecked(auth, form_sourc
         ],
     }
 
-    response = auth.post(f"/api/form-profiles/{profile.id}/review-decision", json=payload)
+    response = auth.post(f"/api/form-profiles/{profile_id}/review-decision", json=payload)
 
     assert response.status_code == 422
