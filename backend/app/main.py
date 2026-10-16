@@ -55,6 +55,7 @@ from app.profile_proposal_routes import router as profile_proposal_router
 from app.raw_collection_routes import router as raw_collection_router
 from app.raw_pair_routes import router as raw_pair_router
 from app.routes import router
+from app.send_flow_routes import router as send_flow_router
 from app.sending_window_routes import router as sending_window_router
 from app.services.approval_principals import reject_mixed_credentials
 from app.site_identity_review_routes import router as site_identity_review_router
@@ -269,3 +270,4 @@ app.include_router(form_intelligence_router)
 app.include_router(form_observation_router)
 app.include_router(form_observation_job_router)
 app.include_router(outreach_draft_router)
+app.include_router(send_flow_router)

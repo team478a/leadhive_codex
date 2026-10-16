@@ -34,7 +34,7 @@ def make_project_and_companies(auth, db):
             "name": "フォームDM",
             "channel": "form",
             "subject": "",
-            "body": "お問い合わせ本文です。",
+            "body": "お問い合わせ本文です。今後のご案内が不要な場合はご返信ください。",
         },
     ).json()
     return project, companies, template

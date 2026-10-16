@@ -59,11 +59,21 @@ def test_ai_review_deals_and_ab_experiment(auth, db):
     assert pipeline.json()["items"][0]["company_name"] == company.company_name
     template_a = auth.post(
         f"/api/projects/{project['id']}/outreach-templates",
-        json={"name": "A案", "channel": "email", "subject": "A件名", "body": "A本文"},
+        json={
+            "name": "A案",
+            "channel": "email",
+            "subject": "A件名",
+            "body": "A本文。今後のご案内が不要な場合はご返信ください。",
+        },
     ).json()
     template_b = auth.post(
         f"/api/projects/{project['id']}/outreach-templates",
-        json={"name": "B案", "channel": "email", "subject": "B件名", "body": "B本文"},
+        json={
+            "name": "B案",
+            "channel": "email",
+            "subject": "B件名",
+            "body": "B本文。今後のご案内が不要な場合はご返信ください。",
+        },
     ).json()
     experiment = auth.post(
         f"/api/projects/{project['id']}/outreach-experiments",

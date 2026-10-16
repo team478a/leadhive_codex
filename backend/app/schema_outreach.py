@@ -8,6 +8,7 @@ from pydantic import (
     EmailStr,
     Field,
     StringConstraints,
+    model_validator,
 )
 
 from app.schema_core import Input, Name
@@ -57,6 +58,23 @@ class OutreachTemplateOut(OutreachTemplateInput):
 
 class OutreachTemplateApplyInput(Input):
     template_id: UUID
+
+
+class BulkOutreachDraftInput(Input):
+    template_id: UUID
+    channel: Literal["email", "form"]
+    company_ids: Annotated[list[UUID], Field(min_length=1, max_length=500)] | None = None
+    readiness_reason: Literal["NO_FORM_DRAFT"] | None = None
+
+    @model_validator(mode="after")
+    def validate_target(self):
+        if (self.company_ids is None) == (self.readiness_reason is None):
+            raise ValueError("企業IDまたはフォーム解析理由のどちらか一方を指定してください。")
+        if self.company_ids and len(set(self.company_ids)) != len(self.company_ids):
+            raise ValueError("企業IDを重複して指定できません。")
+        if self.readiness_reason and self.channel != "form":
+            raise ValueError("フォーム解析理由で選べるのはフォーム用Draftだけです。")
+        return self
 
 
 class OutreachDraftApprovalOut(BaseModel):

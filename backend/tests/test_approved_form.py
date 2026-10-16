@@ -229,7 +229,7 @@ def test_disabled_legacy_queue_is_readable_without_send_tasks(auth, form_source,
             "name": "フォーム",
             "channel": "form",
             "subject": "提案",
-            "body": "本文",
+            "body": "本文です。今後のご案内が不要な場合はご返信ください。",
         },
     )
     assert template.status_code == 201, template.text

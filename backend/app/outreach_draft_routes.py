@@ -60,6 +60,7 @@ from app.services.form_profile_delivery import (
 )
 from app.services.form_submission_guard import UNKNOWN_MESSAGE, reserve_form_submission
 from app.services.outbound_guard import require_legacy_form_enabled, require_outbound_enabled
+from app.services.outreach_template_validation import has_stop_method
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
@@ -136,10 +137,32 @@ def create_outreach_template(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    if not has_stop_method(body.channel, body.body):
+        raise HTTPException(422, "本文に配信停止・連絡辞退の方法を示す一文を追加してください。")
     template = OutreachTemplate(
         project_id=project_id, created_by_user_id=user.id, **body.model_dump()
     )
     db.add(template)
+    db.commit()
+    db.refresh(template)
+    return template
+
+
+@router.put("/outreach-templates/{template_id}", response_model=OutreachTemplateOut)
+def update_outreach_template(
+    template_id: UUID,
+    body: OutreachTemplateInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    template = db.get(OutreachTemplate, template_id)
+    if template is None:
+        raise HTTPException(404, "営業文面テンプレートが見つかりません。")
+    project_access(template.project_id, db, user)
+    if not has_stop_method(body.channel, body.body):
+        raise HTTPException(422, "本文に配信停止・連絡辞退の方法を示す一文を追加してください。")
+    for key, value in body.model_dump().items():
+        setattr(template, key, value)
     db.commit()
     db.refresh(template)
     return template

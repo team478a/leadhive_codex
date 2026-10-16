@@ -33,7 +33,8 @@ def preparation_fixture(auth, db):
             subject="",
             body=(
                 "{{company_name}} ご担当者様\n{{personalization}}\n"
-                "Synthetic service proposal and signature"
+                "Synthetic service proposal and signature。"
+                "今後のご案内が不要な場合はご返信ください。"
             ),
         ),
     )
@@ -197,7 +198,10 @@ def test_foreign_template_and_anonymous_requests_rejected(auth, db):
     template = auth.post(
         f"/api/projects/{project['id']}/outreach-templates",
         json=dict(
-            name="Foreign template", channel="form", subject="", body="{{personalization}} Proposal"
+            name="Foreign template",
+            channel="form",
+            subject="",
+            body="{{personalization}} Proposal。今後のご案内が不要な場合はご返信ください。",
         ),
     )
     assert template.status_code == 201

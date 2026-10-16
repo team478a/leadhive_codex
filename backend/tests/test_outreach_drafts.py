@@ -75,18 +75,33 @@ def test_generate_edit_list_delete_and_viewer_access(auth, users, db, monkeypatc
     assert updated.json()["subject"] == "編集した件名"
     assert len(auth.get(f"/api/companies/{company.id}/outreach-drafts").json()) == 1
 
+    rejected_template = auth.post(
+        f"/api/projects/{project['id']}/outreach-templates",
+        json={"name": "停止案内なし", "channel": "email", "body": "ご案内です。"},
+    )
+    assert rejected_template.status_code == 422
     template = auth.post(
         f"/api/projects/{project['id']}/outreach-templates",
         json={
             "name": "初回メール",
             "channel": "email",
             "subject": "テンプレート件名",
-            "body": "テンプレート本文です。",
+            "body": "テンプレート本文です。今後のご案内が不要な場合はご返信ください。",
         },
     )
     assert template.status_code == 201
+    edited_template = auth.put(
+        f"/api/outreach-templates/{template.json()['id']}",
+        json={
+            "name": "初回メール修正版",
+            "channel": "email",
+            "subject": "テンプレート件名",
+            "body": "更新本文です。今後のご案内が不要な場合はご返信ください。",
+        },
+    )
+    assert edited_template.status_code == 200
     templates = auth.get(f"/api/projects/{project['id']}/outreach-templates").json()
-    assert templates[0]["name"] == "初回メール"
+    assert templates[0]["name"] == "初回メール修正版"
     applied = auth.post(
         f"/api/outreach-drafts/{draft['id']}/apply-template",
         json={"template_id": template.json()["id"]},
