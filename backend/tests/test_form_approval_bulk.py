@@ -43,6 +43,7 @@ def test_bulk_request_queues_ready_companies_and_worker_is_idempotent(auth, form
         is not None
     )
 
+    actor = db.scalar(select(User).order_by(User.id))
     second_worker_id = uuid4()
     repeated = OperationJob(
         project_id=project.id,
