@@ -225,6 +225,11 @@ async def conflict_error(request: Request, exc: IntegrityError):
         constraint or "unknown",
         sqlstate or "unknown",
     )
+    if sqlstate == "23514":
+        return JSONResponse(
+            status_code=409,
+            content={"detail": "データベースの更新が未完了です。管理者に連絡してください。"},
+        )
     return JSONResponse(status_code=409, content={"detail": "関連データと競合しています。"})
 
 
