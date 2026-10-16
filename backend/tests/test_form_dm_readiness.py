@@ -1,4 +1,5 @@
 from app.models import FormProfile, ProjectMember
+from tests.test_approval_foundation import workspace as workspace  # noqa: F401
 from tests.test_form_approval_preparation import form_source as form_source
 
 
