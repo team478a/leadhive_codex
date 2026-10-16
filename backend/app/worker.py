@@ -19,6 +19,7 @@ from app.models import (
     FormAnalysisLog,
     FormDeliveryBatch,
     FormDeliveryBatchItem,
+    FormDmReadinessResult,
     FormProfile,
     LeadProcessingUsage,
     Notification,
@@ -96,6 +97,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
                     "form_intelligence",
                     "prepare_outreach",
                     "extract_articles",
+                    "form_dm_readiness",
                 )
             )
             if not settings.outbound_enabled
@@ -510,6 +512,7 @@ def claim_job(db) -> OperationJob | None:
                     "form_intelligence",
                     "prepare_outreach",
                     "extract_articles",
+                    "form_dm_readiness",
                 )
             )
             if not settings.outbound_enabled
@@ -895,6 +898,65 @@ def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             db.commit()
 
 
+def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    from app.form_dm_readiness_routes import (
+        BLOCKING_REASONS,
+        REVIEW_REASONS,
+        _ranked_form_rows,
+        classify_profile,
+    )
+
+    job_id = job.id
+    original_job = job
+    query = _ranked_form_rows(job.project_id)
+    job.total_count = (
+        db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+    )
+    job.processed_count = job.success_count = job.failed_count = 0
+    db.commit()
+    offset = 0
+    while True:
+        if stop_requested(db, job, worker_id):
+            break
+        rows = db.execute(query.offset(offset).limit(200)).all()
+        if not rows:
+            break
+        classified_at = datetime.now(timezone.utc)
+        results = []
+        for company, profile in rows:
+            outcome = classify_profile(db, company, profile)
+            reasons = [outcome["primary_reason"], *outcome["secondary_reasons"]]
+            queue_eligible = (
+                profile.is_primary is True
+                and len(profile.fingerprint or "") == 64
+                and bool(REVIEW_REASONS.intersection(reasons))
+                and not bool(BLOCKING_REASONS.intersection(reasons))
+            )
+            results.append(
+                FormDmReadinessResult(
+                    job_id=job_id,
+                    company_id=company.id,
+                    profile_id=profile.id,
+                    primary_reason=outcome["primary_reason"],
+                    secondary_reasons=outcome["secondary_reasons"],
+                    review_queue_eligible=queue_eligible,
+                    classified_at=classified_at,
+                )
+            )
+        db.add_all(results)
+        job.processed_count += len(rows)
+        job.success_count += len(rows)
+        job.lease_expires_at = lease_deadline()
+        db.commit()
+        offset += len(rows)
+        db.expunge_all()
+        job = db.get(OperationJob, job_id)
+        if job is None:
+            db.add(original_job)
+            return
+    db.add(original_job)
+
+
 def run_article_extraction(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     import hashlib
 
@@ -1148,6 +1210,7 @@ def run_once() -> bool:
                 "ai_analysis": run_ai,
                 "form_delivery": run_form_delivery,
                 "form_intelligence": run_form_intelligence,
+                "form_dm_readiness": run_form_dm_readiness,
                 "prepare_outreach": lambda db, job, worker: run_preparation(
                     db, job, worker, stop_requested
                 ),

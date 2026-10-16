@@ -1,6 +1,10 @@
-from sqlalchemy import select
+from datetime import datetime, timezone
+from uuid import uuid4
 
-from app.models import FormAnalysisLog
+from sqlalchemy import select
+from sqlalchemy.orm import object_session
+
+from app.models import FormAnalysisLog, OperationJob
 from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
 
@@ -11,6 +15,18 @@ def make_reviewable(source):
     fields[1].confidence = 0.1
     profile.form_status = "REVIEW_REQUIRED"
     profile.review_reason = "入力項目の確認が必要です。"
+    db = object_session(project)
+    job = OperationJob(project_id=project.id, operation_type="form_dm_readiness", payload={})
+    db.add(job)
+    db.commit()
+    job.status, job.worker_id = "running", uuid4()
+    db.commit()
+    from app.worker import run_form_dm_readiness
+
+    run_form_dm_readiness(db, job, job.worker_id)
+    db.refresh(job)
+    job.status, job.finished_at = "completed", datetime.now(timezone.utc)
+    db.commit()
     return f"/api/projects/{project.id}/form-review-queue"
 
 

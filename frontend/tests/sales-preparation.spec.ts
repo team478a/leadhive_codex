@@ -34,7 +34,7 @@ test('sales preparation can queue cancel and resume without sending', async ({ p
   await expect(panel.getByText('停止済み · 0/1件', { exact: true })).toBeVisible()
   await panel.getByRole('button', { name: '未処理から再開', exact: true }).click()
   await expect(panel.getByText('待機中 · 0/1件', { exact: true })).toBeVisible()
-  await panel.getByText('企業ごとの準備状況', { exact: true }).click()
+  await panel.getByText(/企業ごとの準備状況/).click()
   await expect(panel.getByText('preparation.example', { exact: true })).toBeVisible()
   expect(await panel.getByRole('button', { name: /送信/ }).count()).toBe(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
