@@ -131,8 +131,14 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
             None,
         )
         latest = next((log for log in logs if log.details.get("group_id") == group_id), None)
-        queue_rule = queue_log.details.get("choice_group_rules", {}).get(group_id)
-        queue_selections = queue_log.details.get("choice_group_selections", {}).get(group_id, {})
+        queue_rule = (
+            queue_log.details.get("choice_group_rules", {}).get(group_id) if queue_log else None
+        )
+        queue_selections = (
+            queue_log.details.get("choice_group_selections", {}).get(group_id, {})
+            if queue_log
+            else {}
+        )
         active_rule = queue_rule or (latest.details.get("rule") if latest else None)
         status = "NOT_REVIEWED"
         if queue_log:
