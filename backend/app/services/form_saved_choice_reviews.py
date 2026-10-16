@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.models import FormAnalysisLog, FormProfile, FormProfileField, User
 from app.schema_core import Input
 from app.schemas import FormProfileFieldOut
+from app.services.form_review_binding import fields_hash
 from app.services.form_saved_choice_structure import inventory
 
 OPERATION = "saved_choice_review"
@@ -62,11 +63,25 @@ def reviewable(group: dict, profile: FormProfile) -> bool:
 
 
 def reviews(db: Session, profile: FormProfile) -> list[dict]:
+    current_fields = db.scalars(
+        select(FormProfileField)
+        .where(FormProfileField.form_profile_id == profile.id)
+        .order_by(FormProfileField.position, FormProfileField.id)
+    ).all()
+    current_fields_hash = fields_hash(profile, list(current_fields))
     logs = db.scalars(
         select(FormAnalysisLog)
         .where(
             FormAnalysisLog.form_profile_id == profile.id,
             FormAnalysisLog.details["operation"].astext == OPERATION,
+        )
+        .order_by(FormAnalysisLog.created_at.desc(), FormAnalysisLog.id.desc())
+    ).all()
+    queue_logs = db.scalars(
+        select(FormAnalysisLog)
+        .where(
+            FormAnalysisLog.form_profile_id == profile.id,
+            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
         )
         .order_by(FormAnalysisLog.created_at.desc(), FormAnalysisLog.id.desc())
     ).all()
@@ -78,10 +93,24 @@ def reviews(db: Session, profile: FormProfile) -> list[dict]:
         latest = next(
             (log for log in logs if log.details.get("group_id") == group["group_id"]), None
         )
+        queue_review = next(
+            (
+                (log, review)
+                for log in queue_logs
+                if log.details.get("profile_fingerprint") == profile.fingerprint
+                and log.details.get("fields_hash") == current_fields_hash
+                for review in log.details.get("saved_choice_reviews", [])
+                if review.get("group_id") == group["group_id"]
+                and review.get("source_hash") == group["source_hash"]
+            ),
+            None,
+        )
         status = "NOT_REVIEWED"
         reasons = []
         supported = reviewable(group, profile)
-        if latest:
+        if queue_review:
+            status = "RECORDED"
+        elif latest:
             status = "RECORDED"
             if latest.details["source_hash"] != group["source_hash"]:
                 status = "STALE"
@@ -106,12 +135,32 @@ def reviews(db: Session, profile: FormProfile) -> list[dict]:
                 "check_reasons": reasons,
                 "evaluated_at": now,
                 "present_in_saved_fields": True,
-                "reviewed_at": latest.created_at if latest else None,
-                "reviewed_by": str(latest.actor_user_id) if latest else None,
-                "expires_at": latest.details["expires_at"] if latest else None,
-                "recorded_rule": latest.details["rule"] if latest else None,
+                "reviewed_at": queue_review[0].created_at
+                if queue_review
+                else latest.created_at
+                if latest
+                else None,
+                "reviewed_by": str(queue_review[0].actor_user_id)
+                if queue_review
+                else str(latest.actor_user_id)
+                if latest
+                else None,
+                "expires_at": None
+                if queue_review
+                else latest.details["expires_at"]
+                if latest
+                else None,
+                "recorded_rule": queue_review[1]["rule"]
+                if queue_review
+                else latest.details["rule"]
+                if latest
+                else None,
                 # Stale/expired values are historical only, never active selections.
-                "recorded_options": latest.details["options"] if latest else [],
+                "recorded_options": queue_review[1]["options"]
+                if queue_review
+                else latest.details["options"]
+                if latest
+                else [],
             }
         )
     # A removed/renamed group must not silently disappear from the review queue.

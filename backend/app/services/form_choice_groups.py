@@ -15,6 +15,7 @@ from app.models import FormAnalysisLog, FormProfile, FormProfileField, User
 from app.schema_core import Input
 from app.services.form_intelligence.consent import CONSENT_KEYS
 from app.services.form_intelligence.fields import GROUP_REVIEW_MARKER
+from app.services.form_review_binding import fields_hash
 
 
 class GroupSelection(Input):
@@ -96,7 +97,7 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
     fields = db.scalars(
         select(FormProfileField)
         .where(FormProfileField.form_profile_id == profile.id)
-        .order_by(FormProfileField.position)
+        .order_by(FormProfileField.position, FormProfileField.id)
     ).all()
     logs = db.scalars(
         select(FormAnalysisLog)
@@ -107,13 +108,36 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
         )
         .order_by(FormAnalysisLog.created_at.desc(), FormAnalysisLog.id.desc())
     ).all()
+    queue_logs = db.scalars(
+        select(FormAnalysisLog)
+        .where(
+            FormAnalysisLog.form_profile_id == profile.id,
+            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+        )
+        .order_by(FormAnalysisLog.created_at.desc(), FormAnalysisLog.id.desc())
+    ).all()
     result = []
     now = datetime.now(timezone.utc)
     for group_id, members in grouped_fields(list(fields)).items():
         binding = source_hash(profile, members)
+        queue_log = next(
+            (
+                log
+                for log in queue_logs
+                if log.details.get("profile_fingerprint") == profile.fingerprint
+                and log.details.get("fields_hash") == fields_hash(profile, list(fields))
+                and log.details.get("choice_group_source_hashes", {}).get(group_id) == binding
+            ),
+            None,
+        )
         latest = next((log for log in logs if log.details.get("group_id") == group_id), None)
+        queue_rule = queue_log.details.get("choice_group_rules", {}).get(group_id)
+        queue_selections = queue_log.details.get("choice_group_selections", {}).get(group_id, {})
+        active_rule = queue_rule or (latest.details.get("rule") if latest else None)
         status = "NOT_REVIEWED"
-        if latest:
+        if queue_log:
+            status = "RECORDED"
+        elif latest:
             status = "RECORDED"
             if (
                 profile.form_status in {"STALE", "ERROR"}
@@ -130,6 +154,7 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
                 "review_supported": supported(members)
                 and profile.form_status not in {"STALE", "ERROR"},
                 "review_status": status,
+                "permanent_review": queue_log is not None,
                 "execution_supported": False,
                 "requirement_scope_status": (
                     "HUMAN_RECORDED" if status == "RECORDED" else "UNCONFIRMED"
@@ -141,17 +166,22 @@ def inventory(db: Session, profile: FormProfile) -> list[dict]:
                 ),
                 "individual_required_count": sum(f.required for f in members),
                 "minimum_selected": 1 if status == "RECORDED" else None,
-                "maximum_selected": (
-                    1
-                    if status == "RECORDED"
-                    and latest is not None
-                    and latest.details.get("rule") == "EXACTLY_ONE"
-                    else None
-                ),
-                "rule": latest.details.get("rule") if latest else None,
-                "saved_selections": latest.details.get("selections", {}) if latest else {},
-                "reviewed_at": latest.created_at if latest else None,
-                "expires_at": latest.details.get("expires_at") if latest else None,
+                "maximum_selected": 1
+                if status == "RECORDED" and active_rule == "EXACTLY_ONE"
+                else None,
+                "rule": active_rule,
+                "saved_selections": queue_selections
+                or (latest.details.get("selections", {}) if latest else {}),
+                "reviewed_at": queue_log.created_at
+                if queue_log
+                else latest.created_at
+                if latest
+                else None,
+                "expires_at": None
+                if queue_log
+                else latest.details.get("expires_at")
+                if latest
+                else None,
                 "members": [
                     {
                         "field_id": str(f.id),

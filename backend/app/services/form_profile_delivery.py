@@ -11,9 +11,10 @@ from app.models import (
     FormSenderSettings,
     OutreachDraft,
 )
+from app.services.form_choice_groups import inventory as choice_group_inventory
 from app.services.form_delivery import FormDeliveryError, FormPreview, inspect_form
 from app.services.form_intelligence.contact_method import sender_contact_review_reason
-from app.services.form_intelligence.fields import mapping_review_reason
+from app.services.form_intelligence.fields import GROUP_REVIEW_MARKER, mapping_review_reason
 
 
 @dataclass(frozen=True)
@@ -98,24 +99,33 @@ def _ready_profile(db: Session, company: Company) -> tuple[FormProfile, list[For
             .order_by(FormProfileField.position)
         ).all()
     )
-    reason = mapping_review_reason(
-        [
-            {
-                key: getattr(field, key)
-                for key in (
-                    "field_type",
-                    "label",
-                    "mapped_key",
-                    "confidence",
-                    "required",
-                    "options",
-                    "recommended_value",
-                    "decision_source",
-                )
-            }
-            for field in fields
-        ]
-    )
+    mapping_fields = [
+        {
+            key: getattr(field, key)
+            for key in (
+                "field_type",
+                "label",
+                "mapped_key",
+                "confidence",
+                "required",
+                "options",
+                "recommended_value",
+                "decision_source",
+            )
+        }
+        for field in fields
+    ]
+    if any(GROUP_REVIEW_MARKER in str(field["label"] or "") for field in mapping_fields):
+        group_reviews = choice_group_inventory(db, profile)
+        if group_reviews and all(
+            group["review_status"] == "RECORDED"
+            and group["review_supported"]
+            and group["permanent_review"]
+            for group in group_reviews
+        ):
+            for field in mapping_fields:
+                field["label"] = str(field["label"] or "").replace(GROUP_REVIEW_MARKER, "")
+    reason = mapping_review_reason(mapping_fields)
     if reason:
         raise FormDeliveryError(reason, "manual_required")
     return profile, fields

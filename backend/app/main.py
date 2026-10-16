@@ -41,6 +41,7 @@ from app.form_observation_job_routes import router as form_observation_job_route
 from app.form_observation_routes import router as form_observation_router
 from app.form_operations_routes import router as form_operations_router
 from app.form_readiness_routes import router as form_readiness_router
+from app.form_review_queue_routes import router as form_review_queue_router
 from app.improvement_routes import router as improvement_router
 from app.lead_completion_routes import router as lead_completion_router
 from app.live_input_routes import router as live_input_router
@@ -248,6 +249,7 @@ app.include_router(notification_router)
 app.include_router(improvement_router)
 app.include_router(form_batch_router)
 app.include_router(form_dm_readiness_router)
+app.include_router(form_review_queue_router)
 app.include_router(form_intelligence_router)
 app.include_router(form_observation_router)
 app.include_router(form_observation_job_router)
