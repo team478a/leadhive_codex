@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 COPY requirements.lock ./
-RUN grep -v '^-e git+' requirements.lock > /tmp/requirements.lock && \
+RUN grep -v '^-e ' requirements.lock > /tmp/requirements.lock && \
     python -m pip install --upgrade pip && \
     python -m pip install -r /tmp/requirements.lock
 
