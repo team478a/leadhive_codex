@@ -99,6 +99,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
                     "extract_articles",
                     "form_dm_readiness",
                     "form_approval_batch",
+                    "bulk_template_drafts",
                 )
             )
             if not settings.outbound_enabled
@@ -515,6 +516,7 @@ def claim_job(db) -> OperationJob | None:
                     "extract_articles",
                     "form_dm_readiness",
                     "form_approval_batch",
+                    "bulk_template_drafts",
                 )
             )
             if not settings.outbound_enabled
@@ -1306,6 +1308,7 @@ def run_once() -> bool:
         worker_id = job.worker_id
         logger.info("operation start: id=%s type=%s", job.id, job.operation_type)
         try:
+            from app.services.bulk_template_drafts import run_bulk_template_drafts
             from app.services.sales_preparation import run_preparation
 
             {
@@ -1320,6 +1323,9 @@ def run_once() -> bool:
                 ),
                 "extract_articles": run_article_extraction,
                 "form_approval_batch": run_form_approval_batch,
+                "bulk_template_drafts": lambda db, job, worker: run_bulk_template_drafts(
+                    db, job, worker, stop_requested
+                ),
             }[job.operation_type](db, job, worker_id)
             db.refresh(job)
             if job.status == "running" and job.worker_id == worker_id:

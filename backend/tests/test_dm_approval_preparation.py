@@ -58,7 +58,10 @@ def prepared(auth, db, channel="form"):
             name="Synthetic template",
             channel=channel,
             subject="Synthetic email subject" if channel == "email" else "",
-            body="{{company_name}} {{personalization}} Synthetic service proposal",
+            body=(
+                "{{company_name}} {{personalization}} Synthetic service proposal。"
+                "今後のご案内が不要な場合はご返信ください。"
+            ),
         ),
     ).json()
     endpoint = f"/api/companies/{company.id}/dm-preparation"

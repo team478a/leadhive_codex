@@ -170,6 +170,9 @@ class OperationJobOut(BaseModel):
     form_approval_results: list[dict] = Field(
         default_factory=list, validation_alias=AliasPath("payload", "results")
     )
+    bulk_template_results: dict = Field(
+        default_factory=dict, validation_alias=AliasPath("payload", "bulk_template_results")
+    )
 
     @field_validator("collection_runtime_history", mode="before")
     @classmethod

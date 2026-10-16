@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { allPages, api, errorMessage } from './api'
 import { CompanyCollectionFeedback } from './CompanyCollectionFeedback'
-import { SalesPreparationPanel } from './SalesPreparationPanel'
 import { CleanListSendPanel } from './CleanListSendPanel'
-import { FormDmReadinessPanel } from './FormDmReadinessPanel'
 import { FormReviewQueue } from './FormReviewQueue'
+import { ApprovalQueuePage } from './ApprovalQueuePage'
+import { SendFlowTemplatePanel } from './SendFlowTemplatePanel'
+import { SendFlowDraftPanel } from './SendFlowDraftPanel'
 import type { Company, CompanyPage, Profile, Project, ProjectMember } from './types'
 
 type Roles = Record<string, ProjectMember['role']>
@@ -108,27 +109,105 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
   </section>
 }
 
+type SendFlowSummary = {
+  readiness_completed_at: string | null; target_company_count: number
+  draft_counts: Record<'email' | 'form', number>; form_reviewed_count: number
+  approval_counts: { pending: Record<'email' | 'form', number>; approved_unsent: Record<'email' | 'form', number> }
+  today: { sent: number; reserved: number }; results: { sent: number; failed: number; unknown: number }
+}
+
 export function SalesWorkspace({ projects, roles, initialProjectId, onNavigate, onProjectSelected }: {
   projects: Project[]; roles: Roles; initialProjectId: string; onProjectSelected: (id: string) => void
   onNavigate: (destination: 'companies' | 'approvals' | 'deliveries', id: string) => void
 }) {
   const [selected, setSelected] = useState(initialProjectId || projects[0]?.id || '')
   const [sending, setSending] = useState(false)
+  const [activeStep, setActiveStep] = useState(1)
+  const [templateCount, setTemplateCount] = useState<number | null>(null)
+  const [summary, setSummary] = useState<SendFlowSummary | null>(null)
+  const [summaryError, setSummaryError] = useState('')
+  const initializedProject = useRef('')
   const project = projects.find(p => p.id === selected) || projects[0]
+  const projectId = project?.id
+  const canWrite = Boolean(projectId && ['owner', 'editor'].includes(roles[projectId] ?? ''))
+  useEffect(() => { setSelected(initialProjectId || projects[0]?.id || '') }, [initialProjectId, projects])
+  const refreshSummary = useCallback(async () => {
+    if (!projectId) { setSummary(null); return }
+    setSummaryError('')
+    try { setSummary(await api<SendFlowSummary>(`/projects/${projectId}/send-flow-summary`)) }
+    catch (e) { setSummaryError(errorMessage(e)) }
+  }, [projectId])
+  useEffect(() => {
+    let live = true
+    if (!projectId) { setSummary(null); setTemplateCount(null); return }
+    setSummaryError('')
+    Promise.all([
+      api<SendFlowSummary>(`/projects/${projectId}/send-flow-summary`),
+      api<import('./types').OutreachTemplate[]>(`/projects/${projectId}/outreach-templates`),
+    ]).then(([nextSummary, templates]) => {
+      if (!live) return
+      setSummary(nextSummary); setTemplateCount(templates.length)
+      if (initializedProject.current !== projectId) {
+        initializedProject.current = projectId
+        const draftTotal = nextSummary.draft_counts.email + nextSummary.draft_counts.form
+        const waitingApproval = Object.values(nextSummary.approval_counts.pending).some(count => count > 0)
+          || Object.values(nextSummary.approval_counts.approved_unsent).some(count => count > 0)
+        setActiveStep(templates.length === 0 ? 1 : draftTotal === 0 ? 2
+          : nextSummary.draft_counts.form > nextSummary.form_reviewed_count ? 3
+            : waitingApproval ? 4 : nextSummary.today.reserved > 0 ? 5 : 6)
+      }
+    }).catch(e => { if (live) setSummaryError(errorMessage(e)) })
+    return () => { live = false }
+  }, [projectId])
+  const goToStep = useCallback((step: number) => {
+    setActiveStep(step)
+    requestAnimationFrame(() => document.getElementById(`send-flow-step-${step}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [])
+  const afterDrafts = useCallback((channel: 'email' | 'form') => {
+    void refreshSummary()
+    goToStep(channel === 'form' ? 3 : 4)
+  }, [goToStep, refreshSummary])
+  const draftTotal = (summary?.draft_counts.email ?? 0) + (summary?.draft_counts.form ?? 0)
+  const pendingApprovals = summary ? Object.values(summary.approval_counts.pending).reduce((sum, count) => sum + count, 0) : 0
+  const approvedUnsent = summary ? Object.values(summary.approval_counts.approved_unsent).reduce((sum, count) => sum + count, 0) : 0
+  const steps = [
+    { id: 1, title: '文面テンプレート', metric: templateCount === null ? '確認中' : `${templateCount}件`, state: templateCount ? '準備済み' : '作成してください' },
+    { id: 2, title: '送信先と文面を用意', metric: `${draftTotal}社`, state: draftTotal ? '下書きあり' : '対応が必要' },
+    { id: 3, title: 'フォームを確認', metric: summary ? `${Math.min(summary.form_reviewed_count, summary.draft_counts.form)} / ${summary.draft_counts.form}社` : '確認中', state: summary?.draft_counts.form ? '人の確認が必要' : 'フォームなし・スキップ' },
+    { id: 4, title: '承認', metric: `承認待ち ${pendingApprovals}件 · 未送信 ${approvedUnsent}件`, state: pendingApprovals ? '承認待ち' : '確認してください' },
+    { id: 5, title: '送信', metric: `本日 送信 ${summary?.today.sent ?? 0}件 · 予約 ${summary?.today.reserved ?? 0}件`, state: '承認済みのみ' },
+    { id: 6, title: '結果', metric: `送信済み ${summary?.results.sent ?? 0} · 失敗 ${summary?.results.failed ?? 0} · 不明 ${summary?.results.unknown ?? 0}`, state: '結果を確認' },
+  ]
   return <section aria-label="営業作業">
-    <div className="panel mb-5"><h2>送信までの流れ</h2><p className="mt-2">この画面で準備と送信を進めます。宛先・文面の確認と承認は人が行います。</p>
-      {project ? <><label className="field mt-4">対象プロジェクト<select disabled={sending} value={project.id} onChange={e => { setSelected(e.target.value); onProjectSelected(e.target.value) }}>{projects.map(p => <option value={p.id} key={p.id}>{p.project_name}</option>)}</select></label>
-        <ol className="flow-steps mt-4">
-          <li><strong>1. 文面を準備</strong><span>企業一覧から対象企業を選び、DMを作成します。</span><button className="secondary" disabled={sending} onClick={() => onNavigate('companies', project.id)}>企業一覧・DM準備へ</button></li>
-          <li><strong>2. 内容を確認・承認</strong><span>宛先と文面を確認し、承認キューで承認します。</span><button className="secondary" disabled={sending} onClick={() => onNavigate('approvals', project.id)}>承認キューを開く</button></li>
-          <li><strong>3. 送信を開始</strong><span>承認済みの内容だけを一括送信します。</span><button className="secondary" disabled={sending} onClick={() => document.getElementById('clean-list-send-panel')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>一括送信へ</button></li>
-          <li><strong>4. 結果を確認</strong><span>予約状況・送信結果を確認します。</span><button className="secondary" disabled={sending} onClick={() => onNavigate('deliveries', project.id)}>配信結果を見る</button></li>
-        </ol>
+    <div className="panel mb-5"><h2>送信までの流れ</h2><p className="mt-2">文面作成から結果確認まで、上から順に進めます。下書き作成後も送信には人の確認と承認が必要です。</p>
+      {project ? <><label className="field mt-4">対象プロジェクト<select disabled={sending} value={project.id} onChange={event => { setSelected(event.target.value); onProjectSelected(event.target.value); setSummary(null); setTemplateCount(null); initializedProject.current = '' }}>{projects.map(item => <option value={item.id} key={item.id}>{item.project_name}</option>)}</select></label>
+        {summaryError && <p role="alert" className="error mt-3">{summaryError}<button type="button" className="secondary ml-2" onClick={() => void refreshSummary()}>再読み込み</button></p>}
+        <section className="mt-4 rounded-lg border p-4" aria-label="送信フローの進捗">
+          <h3>進み具合</h3><p className="muted mt-1 text-sm">送信可否集計の対象 {summary?.target_company_count ?? '…'}社 · {summary?.readiness_completed_at ? `最終集計 ${new Date(summary.readiness_completed_at).toLocaleString('ja-JP')}` : '送信可否集計なし'}</p>
+          <ol className="flow-steps mt-3">{steps.map(step => <li key={step.id} className={activeStep === step.id ? 'border-[#235c4c]' : ''}>
+            <strong>{step.id}. {step.title}</strong><span>{step.metric}</span><span className="badge">{step.state}</span>
+          </li>)}</ol>
+          <button type="button" className="secondary mt-3" disabled={sending} onClick={() => void refreshSummary()}>進捗を更新</button>
+        </section>
       </> : <p className="mt-3">収集ターゲットを設定し、リストを収集してから営業作業を始めてください。</p>}
     </div>
-    {project && <FormDmReadinessPanel key={`form-readiness-${project.id}`} projectId={project.id} />}
-    {project && <FormReviewQueue key={`form-review-${project.id}`} projectId={project.id} canWrite={['owner', 'editor'].includes(roles[project.id])} />}
-    {project && roles[project.id] !== 'viewer' && roles[project.id] && <><SalesPreparationPanel key={project.id} projectId={project.id} /><CleanListSendPanel key={`send-${project.id}`} projectId={project.id} canWrite onBusyChange={setSending} onNavigate={destination => onNavigate(destination, project.id)} /></>}
+    {project && steps.map(step => <section id={`send-flow-step-${step.id}`} key={`${project.id}-${step.id}`} className="panel mb-4 scroll-mt-4" aria-label={`${step.id}. ${step.title}`}>
+      <button type="button" className="flex w-full flex-wrap items-center justify-between gap-3 bg-transparent p-0 text-left text-inherit hover:bg-transparent" aria-expanded={activeStep === step.id} onClick={() => setActiveStep(current => current === step.id ? 0 : step.id)}>
+        <span className="flex items-center gap-3"><span className="badge">{step.id}</span><strong role="heading" aria-level={2}>{step.id}. {step.title}</strong></span><span className="muted text-sm">{step.metric} · {step.state} {activeStep === step.id ? '−' : '+'}</span>
+      </button>
+      {activeStep === step.id && <div className="mt-5">
+        {step.id === 1 && <SendFlowTemplatePanel key={`templates-${project.id}`} projectId={project.id} canWrite={canWrite} onContinue={() => goToStep(2)} onTemplateCountChange={setTemplateCount} />}
+        {step.id === 2 && <SendFlowDraftPanel key={`drafts-${project.id}`} projectId={project.id} canWrite={canWrite} onContinue={channel => goToStep(channel === 'form' ? 3 : 4)} onNeedTemplate={() => goToStep(1)} onCreated={afterDrafts} />}
+        {step.id === 3 && (summary?.draft_counts.form ? <><FormReviewQueue key={`form-review-${project.id}`} projectId={project.id} canWrite={canWrite} /><div className="actions"><button type="button" onClick={() => { goToStep(4); void refreshSummary() }}>次へ：承認</button></div></> : <><p className="muted">フォーム下書きがないため、この段階はありません。</p><div className="actions"><button type="button" onClick={() => goToStep(4)}>フォーム確認を飛ばして承認へ</button></div></>)}
+        {step.id === 4 && <><p className="muted mb-4">既存の承認キューと日次承認を使用します。承認は送信を開始せず、宛先・文面を確認した人の操作と再認証が必要です。</p><ApprovalQueuePage key={`approval-${project.id}`} projects={[project]} projectRoles={{ [project.id]: roles[project.id] }} initialProjectId={project.id} /><div className="actions"><button type="button" className="secondary" onClick={() => onNavigate('approvals', project.id)}>承認キューを別画面で開く</button><button type="button" onClick={() => { goToStep(5); void refreshSummary() }}>次へ：送信</button></div></>}
+        {step.id === 5 && <><p className="muted mb-4">承認済みの内容だけを予約します。フォームは承認後に既存の実行条件と上限に従って処理されます。停止中・実行OFFの場合は送信されません。</p>{canWrite ? <CleanListSendPanel key={`send-${project.id}`} projectId={project.id} canWrite onBusyChange={setSending} onNavigate={destination => onNavigate(destination, project.id)} /> : <p className="muted">送信予約は所有者または編集者が実行できます。</p>}<div className="actions"><button type="button" onClick={() => { goToStep(6); void refreshSummary() }}>次へ：結果</button></div></>}
+        {step.id === 6 && <section aria-label="送信結果">
+          <h3>送信結果の集計</h3><div className="mt-3 flex flex-wrap gap-3"><span className="badge">送信済み {summary?.results.sent ?? 0}件</span><span className="badge">失敗 {summary?.results.failed ?? 0}件</span><span className="badge">結果不明 {summary?.results.unknown ?? 0}件</span></div>
+          <p className="muted mt-3">結果不明のものは再送せず、配信元の記録を確認してください。</p>
+          <div className="actions"><button type="button" className="secondary" onClick={() => onNavigate('deliveries', project.id)}>配信結果ページを開く</button><button type="button" onClick={() => void refreshSummary()}>結果を更新</button></div>
+        </section>}
+      </div>}
+    </section>)}
     {project && roles[project.id] === 'viewer' && <p className="panel">閲覧のみです。営業準備の実行は所有者・編集者へ依頼してください。</p>}
   </section>
 }

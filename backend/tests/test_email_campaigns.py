@@ -32,7 +32,7 @@ def make_campaign_project(auth, db):
             "name": "初回メール",
             "channel": "email",
             "subject": "ご相談",
-            "body": "ご案内です。",
+            "body": "ご案内です。今後のご案内が不要な場合はご返信ください。",
         },
     ).json()
     return project, companies, template

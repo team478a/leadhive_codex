@@ -39,7 +39,7 @@ test('Human can prepare evidence template draft without sending and changed dest
     await dm.getByText('基本文面テンプレートを作成', { exact: true }).click()
     await dm.getByLabel('基本文面の名前', { exact: true }).fill('Synthetic evidence template')
     await dm.getByLabel('基本文面の件名', { exact: true }).fill('Synthetic subject')
-    await dm.getByLabel('サービス説明・提案・CTA・署名', { exact: true }).fill('サービスのご紹介です。ご関心がありましたらご返信ください。Synthetic Sender')
+    await dm.getByLabel('サービス説明・提案・CTA・署名', { exact: true }).fill('サービスのご紹介です。ご関心がありましたらご返信ください。ご案内が不要な場合は本メールに不要とご返信ください。Synthetic Sender')
     await dm.getByRole('button', { name: '基本文面を登録', exact: true }).click()
     await expect(dm.getByRole('combobox', { name: 'DMの基本文面', exact: true })).toContainText('Synthetic evidence template')
     await dm.getByLabel('個別情報の根拠URL', { exact: true }).fill('https://approval.example/services')
