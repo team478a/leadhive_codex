@@ -10,7 +10,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.form_dm_readiness_routes import latest_completed_job
+from app.form_dm_readiness_routes import BLOCKING_REASONS, REVIEW_REASONS, latest_completed_job
 from app.models import (
     Company,
     FormAnalysisLog,
@@ -48,23 +48,6 @@ from app.services.form_saved_choice_reviews import (
 
 router = APIRouter(prefix="/api", tags=["Form review queue"])
 PAGE_SIZE = 20
-REVIEW_REASONS = {
-    "NEEDS_CONSENT_REVIEW",
-    "NEEDS_CHOICE_REVIEW",
-    "NEEDS_MAPPING_REVIEW",
-}
-BLOCKING_REASONS = {
-    "CONTACT_PROHIBITED",
-    "ALREADY_SENT_OR_UNKNOWN",
-    "CAPTCHA",
-    "CF7",
-    "JS_SUBMIT",
-    "EXTERNAL_ACTION",
-    "MULTIPART_OR_FILE",
-    "OTHER_UNSUPPORTED",
-    "CONFIRMATION_PAGE",
-    "CONFIRMATION_UNKNOWN",
-}
 
 
 class FieldDecision(Input):

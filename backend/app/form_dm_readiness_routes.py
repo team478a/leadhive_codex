@@ -46,6 +46,23 @@ REASONS = (
     "SENDER_SETTINGS",
     "READY",
 )
+REVIEW_REASONS = {
+    "NEEDS_CONSENT_REVIEW",
+    "NEEDS_CHOICE_REVIEW",
+    "NEEDS_MAPPING_REVIEW",
+}
+BLOCKING_REASONS = {
+    "CONTACT_PROHIBITED",
+    "ALREADY_SENT_OR_UNKNOWN",
+    "CAPTCHA",
+    "CF7",
+    "JS_SUBMIT",
+    "EXTERNAL_ACTION",
+    "MULTIPART_OR_FILE",
+    "OTHER_UNSUPPORTED",
+    "CONFIRMATION_PAGE",
+    "CONFIRMATION_UNKNOWN",
+}
 
 
 def _compatibility_reason(profile: FormProfile) -> str | None:

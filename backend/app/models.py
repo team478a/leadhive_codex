@@ -53,8 +53,8 @@ from app.model_feedback_review import (
     FeedbackProposal,
     FeedbackProposalDecision,
 )
-from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_form_dm_readiness import FormDmReadinessResult
+from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
 from app.model_form_observation_job import FormObservationJobEvent
 from app.model_lead_completion import (
