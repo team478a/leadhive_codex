@@ -115,9 +115,7 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
             if proposal.channel != "form":
                 reasons.append("OTHER_UNSUPPORTED")
         except HTTPException as exc:
-            mapped = _preparation_reason(
-                f"{exc.detail} {profile.review_reason or ''}"
-            )
+            mapped = _preparation_reason(f"{exc.detail} {profile.review_reason or ''}")
             if mapped not in reasons:
                 reasons.append(mapped)
 
