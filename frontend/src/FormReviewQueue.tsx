@@ -19,7 +19,11 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
   const load = useCallback(async () => {
     if (!projectId) return
     setBusy(true); setError('')
-    try { const result = await api<Queue>(`/projects/${projectId}/form-review-queue`); setItems(result.items); setTotal(result.total); setIndex(0) }
+    try {
+      const result = await api<Queue>(`/projects/${projectId}/form-review-queue`)
+      const queueItems = Array.isArray(result?.items) ? result.items : []
+      setItems(queueItems); setTotal(Number.isFinite(result?.total) ? result.total : queueItems.length); setIndex(0)
+    }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }, [projectId])
   useEffect(() => { void load() }, [load])
