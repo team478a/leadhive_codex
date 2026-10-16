@@ -189,7 +189,7 @@ export interface OperationJob {
   condition_request_id?: string | null
   condition_version?: number | null
   id: string; project_id: string
-  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'extract_articles'
+  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'extract_articles' | 'form_dm_readiness'
   source_operation_ids?: string[]; article_saved_count?: number
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_count: number; processed_count: number; success_count: number; failed_count: number

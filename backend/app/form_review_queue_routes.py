@@ -6,14 +6,15 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, StrictBool
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.form_dm_readiness_routes import _rows, classify_profile
+from app.form_dm_readiness_routes import BLOCKING_REASONS, REVIEW_REASONS, latest_completed_job
 from app.models import (
     Company,
     FormAnalysisLog,
+    FormDmReadinessResult,
     FormProfile,
     FormProfileField,
     FormSenderSettings,
@@ -47,23 +48,6 @@ from app.services.form_saved_choice_reviews import (
 
 router = APIRouter(prefix="/api", tags=["Form review queue"])
 PAGE_SIZE = 20
-REVIEW_REASONS = {
-    "NEEDS_CONSENT_REVIEW",
-    "NEEDS_CHOICE_REVIEW",
-    "NEEDS_MAPPING_REVIEW",
-}
-BLOCKING_REASONS = {
-    "CONTACT_PROHIBITED",
-    "ALREADY_SENT_OR_UNKNOWN",
-    "CAPTCHA",
-    "CF7",
-    "JS_SUBMIT",
-    "EXTERNAL_ACTION",
-    "MULTIPART_OR_FILE",
-    "OTHER_UNSUPPORTED",
-    "CONFIRMATION_PAGE",
-    "CONFIRMATION_UNKNOWN",
-}
 
 
 class FieldDecision(Input):
@@ -212,12 +196,36 @@ def get_form_review_queue(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user, write=False)
+    snapshot = latest_completed_job(db, project_id)
+    if snapshot is None:
+        return {
+            "total": 0,
+            "offset": offset,
+            "limit": PAGE_SIZE,
+            "items": [],
+            "read_only": True,
+            "external_requests": 0,
+        }
+    base = select(FormDmReadinessResult).where(
+        FormDmReadinessResult.job_id == snapshot.id,
+        FormDmReadinessResult.review_queue_eligible.is_(True),
+    )
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    rows = db.execute(
+        select(FormDmReadinessResult, Company, FormProfile)
+        .join(Company, Company.id == FormDmReadinessResult.company_id)
+        .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
+        .where(
+            FormDmReadinessResult.job_id == snapshot.id,
+            FormDmReadinessResult.review_queue_eligible.is_(True),
+        )
+        .order_by(Company.company_name, Company.id)
+        .offset(offset)
+        .limit(PAGE_SIZE)
+    ).all()
     items = []
-    for company, profile in _rows(db, project_id):
-        if profile.is_primary is not True or len(profile.fingerprint or "") != 64:
-            continue
-        result = classify_profile(db, company, profile)
-        codes = [result["primary_reason"], *result["secondary_reasons"]]
+    for result, company, profile in rows:
+        codes = [result.primary_reason, *result.secondary_reasons]
         if not REVIEW_REASONS.intersection(codes) or BLOCKING_REASONS.intersection(codes):
             continue
         fields = _field_rows(db, profile.id)
@@ -225,10 +233,10 @@ def get_form_review_queue(
             continue
         items.append(_queue_item(db, company, profile, codes))
     return {
-        "total": len(items),
+        "total": total,
         "offset": offset,
         "limit": PAGE_SIZE,
-        "items": items[offset : offset + PAGE_SIZE],
+        "items": items,
         "read_only": True,
         "external_requests": 0,
     }
@@ -302,6 +310,11 @@ def save_form_review_decision(
                     "send_authorized": False,
                 },
             )
+        )
+        db.execute(
+            update(FormDmReadinessResult)
+            .where(FormDmReadinessResult.profile_id == profile.id)
+            .values(review_queue_eligible=False)
         )
         db.commit()
         return {"status": "DO_NOT_SEND", "company_id": str(company.id)}
@@ -474,6 +487,11 @@ def save_form_review_decision(
                 "execution_allowed": False,
             },
         )
+    )
+    db.execute(
+        update(FormDmReadinessResult)
+        .where(FormDmReadinessResult.profile_id == profile.id)
+        .values(review_queue_eligible=False)
     )
     db.commit()
     return {"status": "CONFIRMED", "company_id": str(company.id), "profile_id": str(profile.id)}

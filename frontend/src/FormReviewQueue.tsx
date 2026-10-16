@@ -52,9 +52,13 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
         saved_group_decisions: item.saved_groups.map(g => ({ group_id: g.group_id, expected_source_hash: g.source_hash, rule: rule[g.group_id] || (g.required_observed ? 'AT_LEAST_ONE' : 'OPTIONAL'), options: g.options.map(o => ({ option_id: o.option_id, checked: checked[o.option_id] === true })) })),
       })
       setNotice(action === 'CONFIRM' ? '確認を記録しました。送信・承認は行っていません。' : 'この企業を連絡対象外にしました。')
-      await load()
+      const remaining = items.filter(candidate => candidate.profile_id !== item.profile_id)
+      setItems(remaining)
+      setTotal(value => Math.max(0, value - 1))
+      setIndex(value => Math.min(value, Math.max(0, remaining.length - 1)))
+      if (remaining.length === 0 && total > 1) await load()
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
-  }, [busy, canWrite, checked, doNotSendReason, item, load, mapping, noProhibition, rule, values])
+  }, [busy, canWrite, checked, doNotSendReason, item, items, load, mapping, noProhibition, rule, total, values])
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (!item || event.defaultPrevented || event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(event.target.tagName)) return

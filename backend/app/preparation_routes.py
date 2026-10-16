@@ -1,11 +1,10 @@
 """Human-only preparation APIs; never authorize or send outreach."""
 
-from collections import Counter
 from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -100,40 +99,77 @@ def list_preparation(
             .limit(10)
         )
     )
-    results = []
-    for job in jobs:
-        rows = db.execute(
-            select(SalesPreparationItem, Company.company_name)
-            .join(Company, Company.id == SalesPreparationItem.company_id)
-            .where(SalesPreparationItem.job_id == job.id)
-            .order_by(Company.created_at, Company.id)
+    job_ids = [job.id for job in jobs]
+    status_rows = (
+        db.execute(
+            select(SalesPreparationItem.job_id, SalesPreparationItem.status, func.count())
+            .where(SalesPreparationItem.job_id.in_(job_ids))
+            .group_by(SalesPreparationItem.job_id, SalesPreparationItem.status)
         ).all()
-        results.append(
+        if job_ids
+        else []
+    )
+    counts_by_job: dict[UUID, dict[str, int]] = {job_id: {} for job_id in job_ids}
+    for job_id, status, count in status_rows:
+        counts_by_job[job_id][status] = count
+    return [
+        {
+            "job": OperationJobOut.model_validate(job),
+            "counts": counts_by_job[job.id],
+            "used_search_requests": job.payload["used_search_requests"],
+            "used_ai_requests": job.payload["used_ai_requests"],
+            "max_search_requests": job.payload["max_search_requests"],
+            "max_ai_requests": job.payload["max_ai_requests"],
+            "item_count": sum(counts_by_job[job.id].values()),
+        }
+        for job in jobs
+    ]
+
+
+@router.get("/sales-preparation/{job_id}/items")
+def list_preparation_items(
+    job_id: UUID,
+    offset: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    if offset < 0 or limit < 1 or limit > 20:
+        raise HTTPException(422, "表示件数は1〜20件で指定してください。")
+    job = db.get(OperationJob, job_id)
+    if job is None or job.operation_type != "prepare_outreach":
+        raise HTTPException(404, "営業準備が見つかりません。")
+    project_access(job.project_id, db, user, write=False)
+    base = select(SalesPreparationItem).where(SalesPreparationItem.job_id == job.id)
+    total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
+    rows = db.execute(
+        select(SalesPreparationItem, Company.company_name)
+        .join(Company, Company.id == SalesPreparationItem.company_id)
+        .where(SalesPreparationItem.job_id == job.id)
+        .order_by(Company.created_at, Company.id)
+        .offset(offset)
+        .limit(limit)
+    ).all()
+    return {
+        "total": total,
+        "offset": offset,
+        "limit": limit,
+        "items": [
             {
-                "job": OperationJobOut.model_validate(job),
-                "counts": dict(Counter(item.status for item, _ in rows)),
-                "used_search_requests": job.payload["used_search_requests"],
-                "used_ai_requests": job.payload["used_ai_requests"],
-                "max_search_requests": job.payload["max_search_requests"],
-                "max_ai_requests": job.payload["max_ai_requests"],
-                "items": [
-                    {
-                        "id": item.id,
-                        "company_id": item.company_id,
-                        "company_name": name,
-                        "status": item.status,
-                        "stage": item.stage,
-                        "reason": item.reason,
-                        "channel": item.channel,
-                        "draft_id": item.draft_id,
-                        "details": item.details,
-                        "updated_at": item.updated_at,
-                    }
-                    for item, name in rows
-                ],
+                "id": item.id,
+                "company_id": item.company_id,
+                "company_name": name,
+                "status": item.status,
+                "stage": item.stage,
+                "reason": item.reason,
+                "channel": item.channel,
+                "draft_id": item.draft_id,
+                "details": item.details,
+                "updated_at": item.updated_at,
             }
-        )
-    return results
+            for item, name in rows
+        ],
+    }
 
 
 @router.post("/sales-preparation/{job_id}/resume", response_model=OperationJobOut, status_code=202)

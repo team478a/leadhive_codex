@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, download, errorMessage } from './api'
+import type { OperationJob } from './types'
 
 type ReadinessItem = {
   company_id: string
@@ -14,6 +15,8 @@ type Readiness = {
   offset: number
   limit: number
   items: ReadinessItem[]
+  last_aggregated_at: string | null
+  active_job: OperationJob | null
   read_only: boolean
   external_requests: number
 }
@@ -42,8 +45,9 @@ export function FormDmReadinessPanel({ projectId }: { projectId: string }) {
   const [data, setData] = useState<Readiness | null>(null)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [starting, setStarting] = useState(false)
   const refresh = useCallback(async () => {
-    if (!projectId) { setData(null); return }
+    if (!projectId) { setData(null); return null }
     setBusy(true); setError('')
     try {
       const result = await api<Readiness>(`/projects/${projectId}/form-dm-readiness?offset=${offset}`)
@@ -51,17 +55,38 @@ export function FormDmReadinessPanel({ projectId }: { projectId: string }) {
         throw new Error('フォームDM診断の応答形式が不正です。再読み込みしてください。')
       }
       setData(result)
+      return result
     }
-    catch (e) { setError(errorMessage(e)) }
+    catch (e) { setError(errorMessage(e)); return null }
     finally { setBusy(false) }
   }, [projectId, offset])
-  useEffect(() => { void refresh() }, [refresh])
+  const recalculate = useCallback(async () => {
+    if (!projectId) return
+    setStarting(true); setError('')
+    try {
+      await api(`/projects/${projectId}/form-dm-readiness/recalculate`, 'POST')
+      await refresh()
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setStarting(false) }
+  }, [projectId, refresh])
+  useEffect(() => {
+    void refresh().then(result => {
+      if (result && !result.last_aggregated_at && !result.active_job) void recalculate()
+    })
+  }, [recalculate, refresh])
+  useEffect(() => {
+    if (!data?.active_job) return
+    const timer = window.setInterval(() => { void refresh() }, 3000)
+    return () => window.clearInterval(timer)
+  }, [data?.active_job, refresh])
   return <section className="panel mb-5" aria-label="フォームDM送信可否">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2>フォームDMの送信可否</h2>
       <p className="muted mt-2 text-sm">フォームが見つかった企業を、既存の承認準備判定で分類します。保存済み情報のみを使い、外部アクセス・送信・設定変更は行いません。</p></div>
-      <button className="secondary" disabled={busy || !data?.total} onClick={() => void download(`/projects/${projectId}/form-dm-readiness?format=csv`, 'form-dm-readiness.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button>
+      <div className="flex gap-2"><button className="secondary" disabled={starting || Boolean(data?.active_job)} onClick={() => void recalculate()}>{data?.last_aggregated_at ? '再集計' : '集計開始'}</button><button className="secondary" disabled={busy || !data?.total} onClick={() => void download(`/projects/${projectId}/form-dm-readiness?format=csv`, 'form-dm-readiness.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div>
     </div>
     {error && <p className="error mt-3" role="alert">{error}</p>}
+    {data?.last_aggregated_at && <p className="muted mt-3 text-sm">最終集計：{new Date(data.last_aggregated_at).toLocaleString('ja-JP')}</p>}
+    {data?.active_job && <p className="muted mt-3 text-sm">再集計中：{data.active_job.processed_count}/{data.active_job.total_count}社</p>}
     {data && <><div className="mt-4 flex flex-wrap gap-2" aria-label="送信可否の理由別件数">
       {Object.entries(data.counts).map(([code, count]) => <span className="badge" key={code}>{labels[code] ?? code}: {count}社</span>)}
     </div><p className="muted mt-3 text-sm">対象 {data.total}社 · 表示 {Math.min(offset + data.items.length, data.total)} / {data.total}社 · 読み取り専用</p>

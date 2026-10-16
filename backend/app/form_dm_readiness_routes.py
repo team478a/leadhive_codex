@@ -5,21 +5,26 @@ import io
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
     Company,
+    FormDmReadinessResult,
     FormProfile,
+    OperationJob,
     OutreachDraft,
     User,
 )
 from app.project_access import project_access
+from app.schemas import OperationJobOut
 from app.security import current_user
 from app.services.approved_form import duplicate
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_approval_preparation import preparation
+from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api", tags=["Form DM readiness"])
 PAGE_SIZE = 20
@@ -41,6 +46,23 @@ REASONS = (
     "SENDER_SETTINGS",
     "READY",
 )
+REVIEW_REASONS = {
+    "NEEDS_CONSENT_REVIEW",
+    "NEEDS_CHOICE_REVIEW",
+    "NEEDS_MAPPING_REVIEW",
+}
+BLOCKING_REASONS = {
+    "CONTACT_PROHIBITED",
+    "ALREADY_SENT_OR_UNKNOWN",
+    "CAPTCHA",
+    "CF7",
+    "JS_SUBMIT",
+    "EXTERNAL_ACTION",
+    "MULTIPART_OR_FILE",
+    "OTHER_UNSUPPORTED",
+    "CONFIRMATION_PAGE",
+    "CONFIRMATION_UNKNOWN",
+}
 
 
 def _compatibility_reason(profile: FormProfile) -> str | None:
@@ -128,7 +150,7 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
     return {"primary_reason": reasons[0], "secondary_reasons": reasons[1:]}
 
 
-def _rows(db: Session, project_id: UUID) -> list[tuple[Company, FormProfile]]:
+def _ranked_form_rows(project_id: UUID):
     ranked = (
         select(
             FormProfile.id.label("profile_id"),
@@ -148,14 +170,25 @@ def _rows(db: Session, project_id: UUID) -> list[tuple[Company, FormProfile]]:
         .where(Company.project_id == project_id)
         .subquery()
     )
-    return list(
-        db.execute(
-            select(Company, FormProfile)
-            .join(ranked, (ranked.c.company_id == Company.id) & (ranked.c.position == 1))
-            .join(FormProfile, FormProfile.id == ranked.c.profile_id)
-            .where(Company.project_id == project_id, FormProfile.form_found.is_(True))
-            .order_by(Company.company_name, Company.id)
-        ).all()
+    return (
+        select(Company, FormProfile)
+        .join(ranked, (ranked.c.company_id == Company.id) & (ranked.c.position == 1))
+        .join(FormProfile, FormProfile.id == ranked.c.profile_id)
+        .where(Company.project_id == project_id, FormProfile.form_found.is_(True))
+        .order_by(Company.company_name, Company.id)
+    )
+
+
+def latest_completed_job(db: Session, project_id: UUID) -> OperationJob | None:
+    return db.scalar(
+        select(OperationJob)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.status == "completed",
+        )
+        .order_by(OperationJob.finished_at.desc(), OperationJob.id.desc())
+        .limit(1)
     )
 
 
@@ -168,50 +201,126 @@ def form_dm_readiness(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user, write=False)
-    rows = _rows(db, project_id)
-    classified = []
     counts = {reason: 0 for reason in REASONS}
-    for company, profile in rows:
-        result = classify_profile(db, company, profile)
-        counts[result["primary_reason"]] += 1
-        classified.append(
-            {
-                "company_id": str(company.id),
-                "company_name": company.company_name,
-                "form_url": profile.form_url,
-                "primary_reason": result["primary_reason"],
-                "secondary_reasons": result["secondary_reasons"],
-            }
+    snapshot = latest_completed_job(db, project_id)
+    active_job = db.scalar(
+        select(OperationJob)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.status.in_(("queued", "running")),
         )
+        .order_by(OperationJob.created_at.desc())
+        .limit(1)
+    )
+    total = 0
+    items = []
+    if snapshot:
+        grouped_counts = db.execute(
+            select(FormDmReadinessResult.primary_reason, func.count())
+            .where(FormDmReadinessResult.job_id == snapshot.id)
+            .group_by(FormDmReadinessResult.primary_reason)
+        ).all()
+        counts.update({reason: count for reason, count in grouped_counts})
+        total = sum(counts.values())
+        if format == "json":
+            rows = db.execute(
+                select(FormDmReadinessResult, Company, FormProfile)
+                .join(Company, Company.id == FormDmReadinessResult.company_id)
+                .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
+                .where(FormDmReadinessResult.job_id == snapshot.id)
+                .order_by(Company.company_name, Company.id)
+                .offset(offset)
+                .limit(PAGE_SIZE)
+            ).all()
+            items = [
+                {
+                    "company_id": str(result.company_id),
+                    "company_name": company.company_name,
+                    "form_url": profile.form_url,
+                    "primary_reason": result.primary_reason,
+                    "secondary_reasons": result.secondary_reasons,
+                }
+                for result, company, profile in rows
+            ]
     if format == "csv":
-        output = io.StringIO(newline="")
-        writer = csv.writer(output)
-        writer.writerow(
-            ["company_id", "company_name", "form_url", "primary_reason", "secondary_reasons"]
-        )
-        for item in classified:
-            writer.writerow(
-                [
-                    item["company_id"],
-                    item["company_name"],
-                    item["form_url"],
-                    item["primary_reason"],
-                    ",".join(item["secondary_reasons"]),
-                ]
-            )
-        from fastapi.responses import Response
 
-        return Response(
-            output.getvalue(),
+        def csv_rows():
+            output = io.StringIO(newline="")
+            writer = csv.writer(output)
+            writer.writerow(
+                ["company_id", "company_name", "form_url", "primary_reason", "secondary_reasons"]
+            )
+            yield output.getvalue()
+            output.seek(0)
+            output.truncate(0)
+            if snapshot:
+                result_rows = db.execute(
+                    select(FormDmReadinessResult, Company, FormProfile)
+                    .join(Company, Company.id == FormDmReadinessResult.company_id)
+                    .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
+                    .where(FormDmReadinessResult.job_id == snapshot.id)
+                    .order_by(Company.company_name, Company.id)
+                    .execution_options(stream_results=True, yield_per=200)
+                )
+                for result, company, profile in result_rows:
+                    writer.writerow(
+                        [
+                            result.company_id,
+                            company.company_name,
+                            profile.form_url,
+                            result.primary_reason,
+                            ",".join(result.secondary_reasons),
+                        ]
+                    )
+                    yield output.getvalue()
+                    output.seek(0)
+                    output.truncate(0)
+
+        return StreamingResponse(
+            csv_rows(),
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=form-dm-readiness.csv"},
         )
     return {
         "counts": counts,
-        "total": len(classified),
+        "total": total,
         "offset": offset,
         "limit": PAGE_SIZE,
-        "items": classified[offset : offset + PAGE_SIZE],
+        "items": items,
+        "last_aggregated_at": snapshot.finished_at if snapshot else None,
+        "active_job": OperationJobOut.model_validate(active_job) if active_job else None,
         "read_only": True,
         "external_requests": 0,
     }
+
+
+@router.post("/projects/{project_id}/form-dm-readiness/recalculate", status_code=202)
+def recalculate_form_dm_readiness(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user)
+    active_job = db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    )
+    if active_job:
+        job = db.get(OperationJob, active_job)
+    else:
+        job = OperationJob(
+            project_id=project_id,
+            operation_type="form_dm_readiness",
+            payload={"requested_by_user_id": str(user.id)},
+        )
+        if not add_operation_job(db, job):
+            raise HTTPException(409, "フォームDMの再集計がすでに実行中です。")
+        db.commit()
+        db.refresh(job)
+    return OperationJobOut.model_validate(job)
