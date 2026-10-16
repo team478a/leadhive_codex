@@ -3,6 +3,7 @@ import { allPages, api, errorMessage } from './api'
 import { CompanyCollectionFeedback } from './CompanyCollectionFeedback'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
 import { CleanListSendPanel } from './CleanListSendPanel'
+import { FormDmReadinessPanel } from './FormDmReadinessPanel'
 import type { Company, CompanyPage, Profile, Project, ProjectMember } from './types'
 
 type Roles = Record<string, ProjectMember['role']>
@@ -124,6 +125,7 @@ export function SalesWorkspace({ projects, roles, initialProjectId, onNavigate, 
         </ol>
       </> : <p className="mt-3">収集ターゲットを設定し、リストを収集してから営業作業を始めてください。</p>}
     </div>
+    {project && <FormDmReadinessPanel key={`form-readiness-${project.id}`} projectId={project.id} />}
     {project && roles[project.id] !== 'viewer' && roles[project.id] && <><SalesPreparationPanel key={project.id} projectId={project.id} /><CleanListSendPanel key={`send-${project.id}`} projectId={project.id} canWrite onBusyChange={setSending} onNavigate={destination => onNavigate(destination, project.id)} /></>}
     {project && roles[project.id] === 'viewer' && <p className="panel">閲覧のみです。営業準備の実行は所有者・編集者へ依頼してください。</p>}
   </section>

@@ -376,6 +376,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 - [207_ARTICLE_COMPANY_EXTRACTION.md](207_ARTICLE_COMPANY_EXTRACTION.md): まとめ記事掲載企業の出典付き抽出計画とPR4実装仕様
 
+- [210_FORM_DM_AUTOMATION.md](210_FORM_DM_AUTOMATION.md): フォームDMの送信不可理由を読み取り専用で分類し、段階的なHuman確認を整備
+
 - [COLLECTION_QUERY_SCHEDULER.md](COLLECTION_QUERY_SCHEDULER.md): 工程2・公平な検索配分、停滞2回、永続予算、再開と部分結果
 
 - [COLLECTION_SITE_EXTRACTION.md](COLLECTION_SITE_EXTRACTION.md): 工程3・企業情報の根拠、公式照合、段階的問い合わせ探索と取得診断
