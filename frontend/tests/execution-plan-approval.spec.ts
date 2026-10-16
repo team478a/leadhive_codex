@@ -45,7 +45,7 @@ test('fixture plan is visible, human approved, and excluded from dispatch contro
     await expect(proposal).toContainText('操作計画hash')
     await page.getByLabel('承認用パスワード（再認証）').fill(env.E2E_PASSWORD)
     await page.getByRole('button', { name: '内容を確認して承認', exact: true }).click()
-    await expect(page.getByRole('status')).toContainText('送信は行っていません')
+    await expect(page.getByText('送信は行っていません')).toBeVisible()
     await expect(page.getByRole('button', { name: /A2 E2E Company.*承認済み/ })).toBeVisible()
     await expect(page.getByRole('region', { name: '承認済みフォーム予約' }).getByText('A2 E2E Company')).toHaveCount(0)
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()

@@ -34,6 +34,7 @@ from app.external_presence_routes import router as external_presence_router
 from app.feedback_evaluation_routes import router as feedback_evaluation_router
 from app.feedback_export_routes import router as feedback_export_router
 from app.feedback_review_routes import router as feedback_review_router
+from app.form_approval_bulk_routes import router as form_approval_bulk_router
 from app.form_batch_routes import router as form_batch_router
 from app.form_dm_readiness_routes import router as form_dm_readiness_router
 from app.form_intelligence_routes import router as form_intelligence_router
@@ -248,6 +249,7 @@ app.include_router(operation_router)
 app.include_router(notification_router)
 app.include_router(improvement_router)
 app.include_router(form_batch_router)
+app.include_router(form_approval_bulk_router)
 app.include_router(form_dm_readiness_router)
 app.include_router(form_review_queue_router)
 app.include_router(form_intelligence_router)

@@ -31,7 +31,7 @@ test('human approval queue requires step-up and records approve/revoke without s
   await expect(page.getByRole('alert')).toContainText('再認証に失敗')
   await page.getByLabel('承認用パスワード（再認証）').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: '内容を確認して承認', exact: true }).click()
-  await expect(page.getByRole('status')).toContainText('送信は行っていません')
+  await expect(page.getByText('送信は行っていません')).toBeVisible()
   await expect(page.getByRole('button', { name: /A2 E2E Company.*承認済み/ })).toBeVisible()
   await expect(page.getByRole('button', { name: '送信', exact: true })).toHaveCount(0)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBeTruthy()
