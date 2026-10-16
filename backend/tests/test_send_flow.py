@@ -17,6 +17,7 @@ from app.models import (
     SuppressionEntry,
 )
 from app.services import bulk_template_drafts
+from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
 
 
@@ -80,9 +81,7 @@ def run_queued_job(db, job_id):
     return db.get(OperationJob, UUID(job_id))
 
 
-def test_bulk_template_drafts_caps_at_500_and_commits_in_chunks(
-    auth, db, monkeypatch
-):
+def test_bulk_template_drafts_caps_at_500_and_commits_in_chunks(auth, db, monkeypatch):
     project = make_project(auth)
     companies = add_companies(db, UUID(project["id"]), 500)
     template = make_template(auth, project["id"])
@@ -107,18 +106,25 @@ def test_bulk_template_drafts_caps_at_500_and_commits_in_chunks(
     job = run_queued_job(db, response.json()["id"])
     assert job.processed_count == 500
     assert job.success_count == 500
-    assert db.scalar(
-        select(func.count()).select_from(OutreachDraft).join(Company).where(
-            Company.project_id == UUID(project["id"])
+    assert (
+        db.scalar(
+            select(func.count())
+            .select_from(OutreachDraft)
+            .join(Company)
+            .where(Company.project_id == UUID(project["id"]))
         )
-    ) == 500
+        == 500
+    )
 
 
 def test_bulk_template_drafts_can_select_saved_no_form_draft_readiness(auth, db, form_source):
     project, company, draft, profile, _sender, _fields = form_source
+    project_id = project.id
+    company_id = company.id
+    profile_id = profile.id
     db.delete(draft)
     snapshot = OperationJob(
-        project_id=project.id,
+        project_id=project_id,
         operation_type="form_dm_readiness",
         status="completed",
         finished_at=datetime.now(timezone.utc),
@@ -128,8 +134,8 @@ def test_bulk_template_drafts_can_select_saved_no_form_draft_readiness(auth, db,
     db.add(
         FormDmReadinessResult(
             job_id=snapshot.id,
-            company_id=company.id,
-            profile_id=profile.id,
+            company_id=company_id,
+            profile_id=profile_id,
             primary_reason="NO_FORM_DRAFT",
             secondary_reasons=[],
             review_queue_eligible=False,
@@ -137,9 +143,9 @@ def test_bulk_template_drafts_can_select_saved_no_form_draft_readiness(auth, db,
         )
     )
     db.commit()
-    template = make_template(auth, str(project.id), channel="form")
+    template = make_template(auth, str(project_id), channel="form")
     response = auth.post(
-        f"/api/projects/{project.id}/outreach-drafts/bulk-from-template",
+        f"/api/projects/{project_id}/outreach-drafts/bulk-from-template",
         json={
             "template_id": template["id"],
             "channel": "form",
@@ -149,14 +155,19 @@ def test_bulk_template_drafts_can_select_saved_no_form_draft_readiness(auth, db,
     assert response.status_code == 202, response.text
     job = db.get(OperationJob, UUID(response.json()["id"]))
     assert job.payload["targets"] == [
-        {"company_id": str(company.id), "profile_id": str(profile.id)}
+        {"company_id": str(company_id), "profile_id": str(profile_id)}
     ]
 
 
 def test_bulk_template_drafts_skip_existing_and_exclude_contact_prohibitions(auth, db):
     project = make_project(auth)
     permitted, prohibited, suppressed, existing = add_companies(db, UUID(project["id"]), 4)
-    permitted.company_name = ""
+    permitted_id, prohibited_id, suppressed_id, existing_id = (
+        permitted.id,
+        prohibited.id,
+        suppressed.id,
+        existing.id,
+    )
     prohibited.do_not_contact = True
     db.add(
         SuppressionEntry(
@@ -183,24 +194,31 @@ def test_bulk_template_drafts_skip_existing_and_exclude_contact_prohibitions(aut
             "template_id": template["id"],
             "channel": "email",
             "company_ids": [
-                str(company.id) for company in (permitted, prohibited, suppressed, existing)
+                str(company_id)
+                for company_id in (permitted_id, prohibited_id, suppressed_id, existing_id)
             ],
         },
     )
     assert response.status_code == 202, response.text
     job = run_queued_job(db, response.json()["id"])
     result = job.payload["bulk_template_results"]
-    assert result["created"] == [str(permitted.id)]
-    assert result["skipped_existing"] == [str(existing.id)]
+    assert result["created"] == [str(permitted_id)], {
+        "created": result["created"],
+        "skipped_existing": result["skipped_existing"],
+        "excluded": [(item["company_id"], item["reason_code"]) for item in result["excluded"]],
+        "processed_count": job.processed_count,
+        "total_count": job.total_count,
+    }
+    assert result["skipped_existing"] == [str(existing_id)]
     assert {item["reason_code"] for item in result["excluded"]} == {
         "company_do_not_contact",
         "suppression_domain",
     }
 
-    draft = db.scalar(select(OutreachDraft).where(OutreachDraft.company_id == permitted.id))
-    assert "bulk-0.example.test" in draft.subject
+    draft = db.scalar(select(OutreachDraft).where(OutreachDraft.company_id == permitted_id))
+    assert "テスト企業0000" in draft.subject
     assert "今後のご案内が不要な場合はご返信ください" in draft.body
-    preserved = db.scalar(select(OutreachDraft).where(OutreachDraft.company_id == existing.id))
+    preserved = db.scalar(select(OutreachDraft).where(OutreachDraft.company_id == existing_id))
     assert preserved.body == "上書きしてはいけない本文"
     assert db.scalar(select(func.count()).select_from(ApprovalRequest)) == 0
     assert db.scalar(select(func.count()).select_from(ApprovedFormDispatch)) == 0
@@ -215,15 +233,13 @@ def test_bulk_template_drafts_skip_existing_and_exclude_contact_prohibitions(aut
         json={
             "template_id": template["id"],
             "channel": "email",
-            "company_ids": [str(permitted.id)],
+            "company_ids": [str(permitted_id)],
         },
     )
     assert repeated.status_code == 202
     repeated_job = run_queued_job(db, repeated.json()["id"])
     assert repeated_job.payload["bulk_template_results"]["created"] == []
-    assert repeated_job.payload["bulk_template_results"]["skipped_existing"] == [
-        str(permitted.id)
-    ]
+    assert repeated_job.payload["bulk_template_results"]["skipped_existing"] == [str(permitted_id)]
 
 
 def test_send_flow_summary_uses_bounded_queries_for_large_project(auth, db):
