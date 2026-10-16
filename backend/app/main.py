@@ -216,7 +216,15 @@ async def validation_error(request: Request, exc: RequestValidationError):
 
 @app.exception_handler(IntegrityError)
 async def conflict_error(request: Request, exc: IntegrityError):
-    logger.warning("database error: integrity constraint")
+    original = exc.orig
+    diagnostic = getattr(original, "diag", None)
+    constraint = getattr(diagnostic, "constraint_name", None)
+    sqlstate = getattr(original, "sqlstate", None) or getattr(original, "pgcode", None)
+    logger.warning(
+        "database error: integrity constraint name=%s sqlstate=%s",
+        constraint or "unknown",
+        sqlstate or "unknown",
+    )
     return JSONResponse(status_code=409, content={"detail": "関連データと競合しています。"})
 
 

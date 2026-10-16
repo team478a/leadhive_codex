@@ -17,6 +17,10 @@ def _constraint_name(error: IntegrityError) -> str | None:
     return getattr(diagnostic, "constraint_name", None)
 
 
+def _sqlstate(error: IntegrityError) -> str | None:
+    return getattr(error.orig, "sqlstate", None) or getattr(error.orig, "pgcode", None)
+
+
 def add_operation_job(db: Session, job: OperationJob) -> bool:
     """Flush a job while translating the active-operation race into a stable result."""
     try:
@@ -24,8 +28,18 @@ def add_operation_job(db: Session, job: OperationJob) -> bool:
             db.add(job)
             db.flush()
     except IntegrityError as error:
-        if _constraint_name(error) == ACTIVE_OPERATION_CONSTRAINT:
-            return False
+        if _constraint_name(error) == ACTIVE_OPERATION_CONSTRAINT or _sqlstate(error) == "23505":
+            active_job_id = db.scalar(
+                select(OperationJob.id)
+                .where(
+                    OperationJob.project_id == job.project_id,
+                    OperationJob.operation_type == job.operation_type,
+                    OperationJob.status.in_(("queued", "running")),
+                )
+                .limit(1)
+            )
+            if active_job_id is not None:
+                return False
         raise
     return True
 

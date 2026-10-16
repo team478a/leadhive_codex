@@ -68,9 +68,10 @@ def delete_project(project_id: uuid.UUID, user_id: uuid.UUID) -> None:
         db.commit()
 
 
-def test_concurrent_enqueue_keeps_one_active_operation():
+def test_concurrent_enqueue_keeps_one_active_operation(monkeypatch):
     project_id, user_id = create_project()
     barrier = Barrier(2)
+    monkeypatch.setattr("app.services.operations._constraint_name", lambda _error: None)
 
     def enqueue() -> bool:
         with SessionLocal() as db:

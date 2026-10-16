@@ -320,7 +320,23 @@ def recalculate_form_dm_readiness(
             payload={"requested_by_user_id": str(user.id)},
         )
         if not add_operation_job(db, job):
-            raise HTTPException(409, "フォームDMの再集計がすでに実行中です。")
-        db.commit()
-        db.refresh(job)
+            # A concurrent request may have inserted the active job after the
+            # initial lookup. Return that job so the caller can follow progress.
+            job = db.scalar(
+                select(OperationJob)
+                .where(
+                    OperationJob.project_id == project_id,
+                    OperationJob.operation_type == "form_dm_readiness",
+                    OperationJob.status.in_(("queued", "running")),
+                )
+                .order_by(OperationJob.created_at.desc())
+                .limit(1)
+            )
+            if job is None:
+                raise HTTPException(
+                    409, "フォームDMの再集計を開始できませんでした。再試行してください。"
+                )
+        else:
+            db.commit()
+            db.refresh(job)
     return OperationJobOut.model_validate(job)
