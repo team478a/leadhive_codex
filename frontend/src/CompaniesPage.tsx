@@ -147,11 +147,15 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   const [notice, setNotice] = useState('')
   const openedReplyInboundEmailId = useRef<string | null>(null)
   const openedFollowupCompanyId = useRef<string | null>(null)
+  const reloadRequestId = useRef(0)
   const query = useMemo(() => companyQueryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
+    const requestId = ++reloadRequestId.current
     if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setFormCodexTasks([]); setEmailCampaigns([]); setFormProfileSummaries({}); setDealPipeline(null); return }
-    const [result, nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextFormCodexTasks, nextDealPipeline, nextFormProfileSummaries] = await Promise.all([
-      api<CompanyPage>(`/projects/${projectId}/company-list?${query}`),
+    const result = await api<CompanyPage>(`/projects/${projectId}/company-list?${query}`)
+    if (requestId !== reloadRequestId.current) return
+    setCompanies(result.items); setTotal(result.total); setChecked([])
+    const [nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextFormCodexTasks, nextDealPipeline, nextFormProfileSummaries] = await Promise.all([
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
       api<SavedCompanyFilter[]>(`/projects/${projectId}/saved-company-filters`),
@@ -167,7 +171,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       api<DealPipeline>(`/projects/${projectId}/deal-pipeline`),
       api<FormProfileSummary[]>(`/projects/${projectId}/form-profiles/summary`),
     ])
-    setCompanies(result.items); setTotal(result.total); setQuality(nextQuality)
+    if (requestId !== reloadRequestId.current) return
+    setQuality(nextQuality)
     setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
     setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setFollowupTasks(nextFollowupTasks); setReplyQueue(nextReplyQueue); setChecked([])
     setFormBatches(nextFormBatches); setFormCodexTasks(nextFormCodexTasks); setOutreachTemplates(nextOutreachTemplates); setEmailCampaigns(nextEmailCampaigns); setDealPipeline(nextDealPipeline); setRefreshSchedule(nextRefreshSchedule)
