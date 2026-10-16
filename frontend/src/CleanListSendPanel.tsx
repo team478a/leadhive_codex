@@ -77,8 +77,8 @@ export function CleanListSendPanel({ projectId, canWrite, onBusyChange, onNaviga
       setNotice(`${count}件の予約を確認しました。未完了の予約は同じ予約キーで再試行します。接続エラーでも予約済みの場合があります。`)
     } finally { locked.current = false; setBusy(false); onBusyChange(false) }
   }
-  return <section id="clean-list-send-panel" className="panel mb-5 space-y-3 scroll-mt-4" aria-label="クリーニング済みリストの一括送信">
-    <h2>3. 承認済みの内容を一括送信</h2>
+  return <section id="clean-list-send-panel" className="panel mb-5 space-y-3 scroll-mt-4" aria-label="承認済み内容の一括送信">
+    <h2>5. 承認済みの内容を一括送信</h2>
     <p>営業NG・まとめサイトを除外します。人が承認した宛先と文面だけが対象です。</p>
     {preview && <p className="send-count">今回送信する内容：メール {emails}件 / フォーム {forms}件</p>}
     {preview && Object.entries(preview.skipped ?? {}).map(([reason, n]) => <p className="muted text-sm" key={reason}>{reason}：{n}件</p>)}

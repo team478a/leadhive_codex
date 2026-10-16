@@ -22,6 +22,8 @@ for (const role of ['owner', 'viewer'] as const) {
       else if (path === '/api/dashboard') data = { total_companies: 1 }
       else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
       else if (path.endsWith('/bulk-send-preview')) data = { items: [], skipped: {}, email_enabled: false, form_enabled: false }
+      else if (path.endsWith('/send-flow-summary')) data = { readiness_completed_at: null, target_company_count: 1, draft_counts: { email: 0, form: 0 }, form_reviewed_count: 0, approval_counts: { pending: { email: 0, form: 0 }, approved_unsent: { email: 0, form: 0 } }, today: { sent: 0, reserved: 0 }, results: { sent: 0, failed: 0, unknown: 0 } }
+      else if (path.endsWith('/outreach-templates')) data = []
       else if (path === '/api/target-profiles') data = [profile]
       else if (path === '/api/projects' && method === 'POST') {
         const created = { ...body, id: 'project-2' } as typeof projects[number]
@@ -96,15 +98,19 @@ for (const role of ['owner', 'viewer'] as const) {
     await result.screenshot({ path: info.outputPath('collection-results.png') })
     await navigateWorkspace(page, '▶ 送信の準備・実行')
     const sales = page.getByRole('region', { name: '営業作業', exact: true })
-    await expect(sales).toContainText('DM準備')
+    await expect(sales.getByRole('heading', { name: '送信までの流れ' })).toBeVisible()
     if (role === 'owner') {
       await expect(sales.getByRole('combobox', { name: '対象プロジェクト', exact: true })).toHaveValue('project-2')
-      await expect(sales.getByRole('heading', { name: '送信までの流れ' })).toBeVisible()
-      await expect(sales.getByRole('region', { name: 'クリーニング済みリストの一括送信' })).toBeVisible()
+      await expect(sales.getByRole('heading', { name: '1. 文面テンプレート' })).toBeVisible()
+      await expect(sales.getByRole('heading', { name: '2. 送信先と文面を用意' })).toHaveCount(1)
+      await expect(sales.getByRole('region', { name: '承認済み内容の一括送信' })).toHaveCount(0)
+      await sales.getByRole('heading', { name: '5. 送信' }).click()
+      await expect(sales.getByRole('region', { name: '承認済み内容の一括送信' })).toBeVisible()
       await expect(sales.getByRole('button', { name: '0件の送信を開始' })).toBeDisabled()
-      await sales.getByRole('button', { name: '承認キューを開く', exact: true }).click()
+      await sales.getByRole('heading', { name: '4. 承認' }).click()
+      await sales.getByRole('button', { name: '承認キューを別画面で開く' }).click()
       await expect(page.getByLabel('承認プロジェクト')).toHaveValue('project-2').catch(e => { throw new Error(errors.join('; ') || String(e)) })
-    } else await expect(page.getByRole('region', { name: '営業準備', exact: true })).toHaveCount(0)
+    } else await expect(sales.getByText('閲覧のみです。営業準備の実行は所有者・編集者へ依頼してください。')).toBeVisible()
     expect(calls.filter(c => c.method === 'POST' && !['/api/projects', '/api/projects/project-2/operations'].includes(c.path))).toEqual([])
     expect(errors).toEqual([])
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
