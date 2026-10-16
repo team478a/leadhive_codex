@@ -23,7 +23,7 @@ httpx2==2.13.1
 idna==3.20
 iniconfig==2.3.0
 jiter==0.17.0
--e git+https://github.com/team478a/leadhive_codex.git@c413ac9f1c0b6dfd0fbe6cd1b1d2cf1868d993d4#egg=leadhive_backend&subdirectory=backend
+-e ./backend
 Mako==1.4.1
 MarkupSafe==3.0.3
 openai==2.54.0
