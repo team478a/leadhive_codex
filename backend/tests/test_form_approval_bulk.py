@@ -1,4 +1,4 @@
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
@@ -20,17 +20,10 @@ def test_bulk_request_queues_ready_companies_and_worker_is_idempotent(auth, form
     assert queued["operation_type"] == "form_approval_batch"
     assert queued["total_count"] == 1
 
-    actor = db.scalar(select(User).order_by(User.id))
     worker_id = uuid4()
-    job = OperationJob(
-        project_id=project.id,
-        operation_type="form_approval_batch",
-        payload={"company_ids": [str(company.id)], "user_id": str(actor.id), "results": []},
-        total_count=1,
-        status="running",
-        worker_id=worker_id,
-    )
-    db.add(job)
+    job = db.get(OperationJob, UUID(queued["id"]))
+    job.status = "running"
+    job.worker_id = worker_id
     db.commit()
 
     from app.worker import run_form_approval_batch
@@ -99,7 +92,7 @@ def test_bulk_all_ready_only_queues_preparation_ready_companies(auth, form_sourc
 
 def test_bulk_worker_reports_pr0_reason_for_blocked_company(form_source, db):
     project, company, _, profile = form_source[:4]
-    profile.captcha_type = "RECAPTCHA"
+    profile.captcha_type = "CAPTCHA_RECAPTCHA"
     actor = db.scalar(select(User).order_by(User.id))
     worker_id = uuid4()
     job = OperationJob(
