@@ -44,7 +44,7 @@ REASONS = (
 
 
 def _compatibility_reason(profile: FormProfile) -> str | None:
-    text = (profile.compatibility_reason or "").casefold()
+    text = (profile.review_reason or "").casefold()
     if "contact form 7" in text or "wpcf7" in text:
         return "CF7"
     if "javascript" in text or "非同期" in text or "ajax" in text:
