@@ -25,9 +25,7 @@ def upgrade():
             sa.PrimaryKeyConstraint("instance_id"),
         )
 
-    index_names = {
-        index["name"] for index in sa.inspect(bind).get_indexes("worker_heartbeats")
-    }
+    index_names = {index["name"] for index in sa.inspect(bind).get_indexes("worker_heartbeats")}
     if "ix_worker_heartbeats_last_seen_at" not in index_names:
         op.create_index(
             "ix_worker_heartbeats_last_seen_at",
