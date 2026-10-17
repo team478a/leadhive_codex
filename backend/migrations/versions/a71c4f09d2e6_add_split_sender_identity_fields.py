@@ -17,26 +17,19 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "form_sender_settings",
+    existing_columns = {
+        column["name"] for column in sa.inspect(op.get_bind()).get_columns("form_sender_settings")
+    }
+    columns = (
         sa.Column("last_name_furigana", sa.String(length=200), server_default="", nullable=False),
-    )
-    op.add_column(
-        "form_sender_settings",
         sa.Column("first_name_furigana", sa.String(length=200), server_default="", nullable=False),
-    )
-    op.add_column(
-        "form_sender_settings",
         sa.Column("phone_area_code", sa.String(length=20), server_default="", nullable=False),
-    )
-    op.add_column(
-        "form_sender_settings",
         sa.Column("phone_exchange_code", sa.String(length=20), server_default="", nullable=False),
-    )
-    op.add_column(
-        "form_sender_settings",
         sa.Column("phone_line_number", sa.String(length=20), server_default="", nullable=False),
     )
+    for column in columns:
+        if column.name not in existing_columns:
+            op.add_column("form_sender_settings", column)
 
 
 def downgrade() -> None:
