@@ -11,6 +11,9 @@ class WorkerHeartbeat(Base):
     __table_args__ = (Index("ix_worker_heartbeats_last_seen_at", "last_seen_at"),)
 
     instance_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    worker_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, server_default="application"
+    )
     host_name: Mapped[str] = mapped_column(String(255), nullable=False)
     commit_id: Mapped[str] = mapped_column(String(40), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(

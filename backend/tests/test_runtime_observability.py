@@ -13,15 +13,24 @@ def test_short_commit_uses_seven_hex_characters():
 
 def test_worker_heartbeat_upserts_latest_version_and_host(db):
     record_worker_heartbeat(
-        db, instance_id="test-worker", host_name="host-one", commit_id="abc1234"
+        db,
+        instance_id="test-worker",
+        host_name="host-one",
+        commit_id="abc1234",
+        worker_type="application",
     )
     record_worker_heartbeat(
-        db, instance_id="test-worker", host_name="host-two", commit_id="def5678"
+        db,
+        instance_id="test-worker",
+        host_name="host-two",
+        commit_id="def5678",
+        worker_type="browser",
     )
 
     rows = db.query(WorkerHeartbeat).filter_by(instance_id="test-worker").all()
     assert len(rows) == 1
     assert rows[0].commit_id == "def5678"
+    assert rows[0].worker_type == "browser"
     assert rows[0].host_name == "host-two"
     assert rows[0].last_seen_at.tzinfo is not None
 
@@ -48,9 +57,17 @@ def test_runtime_info_shows_recent_worker_and_omits_stale(auth, db):
     db.add_all(
         [
             WorkerHeartbeat(
-                instance_id="recent-worker",
+                instance_id="browser-prefix-as-application",
+                worker_type="application",
                 host_name="recent-host",
                 commit_id="abc1234",
+                last_seen_at=now,
+            ),
+            WorkerHeartbeat(
+                instance_id="worker-without-browser-prefix",
+                worker_type="browser",
+                host_name="browser-host",
+                commit_id="def5678",
                 last_seen_at=now,
             ),
             WorkerHeartbeat(
@@ -68,6 +85,12 @@ def test_runtime_info_shows_recent_worker_and_omits_stale(auth, db):
     assert response.status_code == 200
     assert response.json()["api_commit"]
     workers = response.json()["workers"]
-    assert len(workers) == 1
-    assert workers[0]["commit_id"] == "abc1234"
-    assert workers[0]["host_name"] == "recent-host"
+    assert len(workers) == 2
+    workers_by_id = {worker["instance_id"]: worker for worker in workers}
+    assert workers_by_id["worker-without-browser-prefix"]["worker_type"] == "browser"
+    assert workers_by_id["worker-without-browser-prefix"]["commit_id"] == "def5678"
+    assert workers_by_id["worker-without-browser-prefix"]["host_name"] == "browser-host"
+    assert workers_by_id["browser-prefix-as-application"]["worker_type"] == "application"
+    assert workers_by_id["browser-prefix-as-application"]["commit_id"] == "abc1234"
+    assert workers_by_id["browser-prefix-as-application"]["host_name"] == "recent-host"
+    assert "stale-worker" not in workers_by_id

@@ -52,6 +52,8 @@ def runtime_info(db: Session = Depends(get_db), _user: User = Depends(current_us
         "api_commit": RUNTIME_COMMIT,
         "workers": [
             {
+                "instance_id": worker.instance_id,
+                "worker_type": worker.worker_type,
                 "commit_id": worker.commit_id,
                 "host_name": worker.host_name,
                 "last_seen_at": worker.last_seen_at,

@@ -25,6 +25,7 @@ def heartbeat_once() -> None:
             instance_id=BROWSER_WORKER_INSTANCE_ID,
             host_name=WORKER_HOST,
             commit_id=RUNTIME_COMMIT,
+            worker_type="browser",
         )
 
 
