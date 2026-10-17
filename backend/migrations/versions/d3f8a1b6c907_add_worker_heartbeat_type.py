@@ -12,16 +12,22 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column(
-        "worker_heartbeats",
-        sa.Column(
-            "worker_type",
-            sa.String(length=32),
-            server_default="application",
-            nullable=False,
-        ),
-    )
+    inspector = sa.inspect(op.get_bind())
+    column_names = {column["name"] for column in inspector.get_columns("worker_heartbeats")}
+    if "worker_type" not in column_names:
+        op.add_column(
+            "worker_heartbeats",
+            sa.Column(
+                "worker_type",
+                sa.String(length=32),
+                server_default="application",
+                nullable=False,
+            ),
+        )
 
 
 def downgrade() -> None:
-    op.drop_column("worker_heartbeats", "worker_type")
+    inspector = sa.inspect(op.get_bind())
+    column_names = {column["name"] for column in inspector.get_columns("worker_heartbeats")}
+    if "worker_type" in column_names:
+        op.drop_column("worker_heartbeats", "worker_type")
