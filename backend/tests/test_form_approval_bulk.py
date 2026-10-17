@@ -115,9 +115,13 @@ def test_bulk_all_ready_only_queues_preparation_ready_companies(auth, form_sourc
     assert response.json()["operation_type"] == "form_approval_batch"
 
 
-def test_bulk_worker_reports_pr0_reason_for_blocked_company(form_source, db):
+@pytest.mark.parametrize(
+    "captcha_type",
+    ["CAPTCHA_RECAPTCHA", "CAPTCHA_RECAPTCHA_V2", "CAPTCHA_RECAPTCHA_V3"],
+)
+def test_bulk_worker_reports_pr0_reason_for_blocked_company(form_source, db, captcha_type):
     project, company, _, profile = form_source[:4]
-    profile.captcha_type = "CAPTCHA_RECAPTCHA"
+    profile.captcha_type = captcha_type
     actor = db.scalar(select(User).order_by(User.id))
     worker_id = uuid4()
     job = OperationJob(
