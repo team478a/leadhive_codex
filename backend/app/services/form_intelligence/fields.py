@@ -151,9 +151,12 @@ def _selector(element: Tag, position: int) -> str:
 
 
 def _control_maxlength(element: Tag) -> int | None:
+    maxlength = element.get("maxlength")
+    if not isinstance(maxlength, str):
+        return None
     try:
-        return int(element.get("maxlength"))
-    except (TypeError, ValueError):
+        return int(maxlength)
+    except ValueError:
         return None
 
 
