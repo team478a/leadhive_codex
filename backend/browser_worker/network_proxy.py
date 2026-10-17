@@ -120,10 +120,15 @@ class AllowlistProxy:
             if len(request_line) > 4096:
                 raise ProxyBlocked("CONNECT request is too large")
             parts = request_line.decode("ascii", errors="strict").strip().split()
-            if len(parts) != 3 or parts[0] != "CONNECT" or parts[2] not in {
-                "HTTP/1.0",
-                "HTTP/1.1",
-            }:
+            if (
+                len(parts) != 3
+                or parts[0] != "CONNECT"
+                or parts[2]
+                not in {
+                    "HTTP/1.0",
+                    "HTTP/1.1",
+                }
+            ):
                 raise ProxyBlocked("Only HTTPS CONNECT is supported")
             for _ in range(64):
                 header = await asyncio.wait_for(client_reader.readline(), self.connect_timeout)
@@ -180,9 +185,7 @@ class AllowlistProxy:
         upstream_reader: asyncio.StreamReader,
         upstream_writer: asyncio.StreamWriter,
     ) -> None:
-        async def relay(
-            reader: asyncio.StreamReader, writer: asyncio.StreamWriter
-        ) -> None:
+        async def relay(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
             while data := await reader.read(65536):
                 writer.write(data)
                 await writer.drain()

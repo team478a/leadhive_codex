@@ -90,11 +90,7 @@ def claim_browser_job(db) -> OperationJob | None:
 
 def _cancel_or_renew(job_id: uuid.UUID, worker_id: uuid.UUID) -> bool:
     with SessionLocal() as db:
-        job = db.scalar(
-            select(OperationJob)
-            .where(OperationJob.id == job_id)
-            .with_for_update()
-        )
+        job = db.scalar(select(OperationJob).where(OperationJob.id == job_id).with_for_update())
         if job is None or job.status != "running" or job.worker_id != worker_id:
             return True
         if job.cancel_requested:
@@ -106,11 +102,7 @@ def _cancel_or_renew(job_id: uuid.UUID, worker_id: uuid.UUID) -> bool:
 
 def _finish(job_id: uuid.UUID, worker_id: uuid.UUID, *, result=None, error: str = "") -> None:
     with SessionLocal() as db:
-        job = db.scalar(
-            select(OperationJob)
-            .where(OperationJob.id == job_id)
-            .with_for_update()
-        )
+        job = db.scalar(select(OperationJob).where(OperationJob.id == job_id).with_for_update())
         if job is None or job.status != "running" or job.worker_id != worker_id:
             return
         if job.cancel_requested:

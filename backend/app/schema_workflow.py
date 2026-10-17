@@ -170,9 +170,7 @@ class BrowserFormAnalysisInput(Input):
     @classmethod
     def validate_synthetic_fields(cls, fields: dict[str, str]) -> dict[str, str]:
         if any(
-            not selector
-            or len(selector) > 300
-            or len(value) > 4000
+            not selector or len(selector) > 300 or len(value) > 4000
             for selector, value in fields.items()
         ):
             raise ValueError("Synthetic browser fields exceed the allowed size.")

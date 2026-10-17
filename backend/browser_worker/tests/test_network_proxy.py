@@ -20,9 +20,7 @@ async def _connect(proxy_url, authority):
     host_port = proxy_url.removeprefix("http://")
     host, port = host_port.rsplit(":", 1)
     reader, writer = await asyncio.open_connection(host, int(port))
-    writer.write(
-        f"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n".encode("ascii")
-    )
+    writer.write(f"CONNECT {authority} HTTP/1.1\r\nHost: {authority}\r\n\r\n".encode("ascii"))
     await writer.drain()
     response = await reader.readline()
     while await reader.readline() not in {b"\r\n", b"\n", b""}:
