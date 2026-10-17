@@ -54,6 +54,12 @@ def test_runtime_info_shows_recent_worker_and_omits_stale(auth, db):
                 last_seen_at=now,
             ),
             WorkerHeartbeat(
+                instance_id="browser-recent-worker",
+                host_name="browser-host",
+                commit_id="def5678",
+                last_seen_at=now,
+            ),
+            WorkerHeartbeat(
                 instance_id="stale-worker",
                 host_name="stale-host",
                 commit_id="def5678",
@@ -68,6 +74,12 @@ def test_runtime_info_shows_recent_worker_and_omits_stale(auth, db):
     assert response.status_code == 200
     assert response.json()["api_commit"]
     workers = response.json()["workers"]
-    assert len(workers) == 1
-    assert workers[0]["commit_id"] == "abc1234"
-    assert workers[0]["host_name"] == "recent-host"
+    assert len(workers) == 2
+    workers_by_id = {worker["instance_id"]: worker for worker in workers}
+    assert workers_by_id["browser-recent-worker"]["worker_type"] == "browser"
+    assert workers_by_id["browser-recent-worker"]["commit_id"] == "def5678"
+    assert workers_by_id["browser-recent-worker"]["host_name"] == "browser-host"
+    assert workers_by_id["recent-worker"]["worker_type"] == "application"
+    assert workers_by_id["recent-worker"]["commit_id"] == "abc1234"
+    assert workers_by_id["recent-worker"]["host_name"] == "recent-host"
+    assert "stale-worker" not in workers_by_id
