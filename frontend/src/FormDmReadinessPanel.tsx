@@ -20,6 +20,18 @@ type Readiness = {
   last_aggregated_by_commit: string | null
   last_aggregated_by_host: string | null
   active_job: OperationJob | null
+  browser_analysis_enabled: boolean
+  browser_analysis_job: OperationJob | null
+  browser_analysis_counts: {
+    total: number
+    contact_page_no_form: number
+    embed_unverified: number
+    contact_form_7: number
+    multipart: number
+    confirmation: number
+    javascript_submission: number
+    last_analyzed_at: string | null
+  }
   read_only: boolean
   external_requests: number
 }
@@ -67,6 +79,7 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [browserJob, setBrowserJob] = useState<OperationJob | null>(null)
   const [reviewingCompanyId, setReviewingCompanyId] = useState('')
   const [reviewNotice, setReviewNotice] = useState('')
   const refresh = useCallback(async () => {
@@ -93,6 +106,15 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
     } catch (e) { setError(errorMessage(e)) }
     finally { setStarting(false) }
   }, [projectId, refresh])
+  const startBrowserAnalysis = useCallback(async () => {
+    if (!projectId) return
+    setStarting(true); setError('')
+    try {
+      const job = await api<OperationJob>(`/projects/${projectId}/browser-form-analysis/recalculate`, 'POST')
+      setBrowserJob(job)
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setStarting(false) }
+  }, [projectId])
   async function reviewCompany(item: ReadinessItem, confirmed: boolean) {
     setReviewingCompanyId(item.company_id); setError(''); setReviewNotice('')
     try {
@@ -117,6 +139,21 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
     const timer = window.setInterval(() => { void refresh() }, 3000)
     return () => window.clearInterval(timer)
   }, [data?.active_job, refresh])
+  useEffect(() => {
+    if (data?.browser_analysis_job) setBrowserJob(data.browser_analysis_job)
+  }, [data?.browser_analysis_job])
+  useEffect(() => {
+    if (!browserJob?.id || !['queued', 'running'].includes(browserJob.status)) return
+    const timer = window.setInterval(() => {
+      api<OperationJob[]>(`/projects/${projectId}/operations?limit=100`).then(rows => {
+        const current = rows.find(job => job.id === browserJob.id)
+        if (!current) return
+        setBrowserJob(current)
+        if (['completed', 'failed', 'cancelled'].includes(current.status)) void refresh()
+      }).catch(e => setError(errorMessage(e)))
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [browserJob?.id, browserJob?.status, projectId, refresh])
   return <section className="panel mb-5" aria-label="フォームDM送信可否">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2>フォームDMの送信可否</h2>
       <p className="muted mt-2 text-sm">フォームが見つかった企業を、既存の承認準備判定で分類します。非企業の疑いを人が確認した結果は収集リスト確認に記録します。自動で外部アクセス・送信は行いません。</p></div>
@@ -126,6 +163,26 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
     {reviewNotice && <p className="muted mt-3" role="status">{reviewNotice}</p>}
     {data?.last_aggregated_at && <p className="muted mt-3 text-sm">最終集計：{new Date(data.last_aggregated_at).toLocaleString('ja-JP')} · Worker版 {data.last_aggregated_by_commit || 'unknown'}（{data.last_aggregated_by_host || 'host不明'}）</p>}
     {data?.active_job && <p className="muted mt-3 text-sm">再集計中：{data.active_job.processed_count}/{data.active_job.total_count}社</p>}
+    {data?.browser_analysis_counts && <div className="mt-3 rounded border p-3" aria-label="ブラウザ解析の集計">
+      <p className="font-semibold">ブラウザ解析済み：{data.browser_analysis_counts.total}社</p>
+      <div className="mt-2 flex flex-wrap gap-2 text-sm">
+        <span className="badge">問い合わせページ到達・フォームなし：{data.browser_analysis_counts.contact_page_no_form}社</span>
+        <span className="badge">埋め込み未確認：{data.browser_analysis_counts.embed_unverified}社</span>
+        <span className="badge">Contact Form 7：{data.browser_analysis_counts.contact_form_7}社</span>
+        <span className="badge">multipart：{data.browser_analysis_counts.multipart}社</span>
+        <span className="badge">確認画面：{data.browser_analysis_counts.confirmation}社</span>
+        <span className="badge">JavaScript送信：{data.browser_analysis_counts.javascript_submission}社</span>
+      </div>
+      <p className="muted mt-2 text-xs">表示後DOMの解析は読み取り専用です。フォームへの入力・送信、外部埋め込み先への接続は行いません。</p>
+      <div className="actions mt-2">
+        <button type="button" className="secondary" disabled={!canWrite || !data.browser_analysis_enabled || starting || Boolean(browserJob && ['queued', 'running'].includes(browserJob.status))} onClick={() => void startBrowserAnalysis()}>
+          {browserJob && ['queued', 'running'].includes(browserJob.status) ? `ブラウザ解析中 ${browserJob.processed_count}/${browserJob.total_count}社` : 'ブラウザで最大100社を解析'}
+        </button>
+      </div>
+      {!data.browser_analysis_enabled && <p className="muted text-xs">実サイト解析は既定でOFFです。田中さんの承認後に管理者がAPI・Worker双方の設定を有効化します。</p>}
+      {browserJob && ['failed', 'cancelled'].includes(browserJob.status) && <p className="error text-sm" role="alert">{browserJob.error_message || 'ブラウザ解析が完了しませんでした。'}</p>}
+      {data.browser_analysis_counts.last_analyzed_at && <p className="muted text-xs">最終ブラウザ解析：{new Date(data.browser_analysis_counts.last_analyzed_at).toLocaleString('ja-JP')}</p>}
+    </div>}
     {data && <><div className="mt-4 flex flex-wrap gap-2" aria-label="送信可否の理由別件数">
       {Object.entries(data.counts).map(([code, count]) => code === 'NON_COMPANY_SUSPECTED'
         ? <button type="button" className="badge" key={code} aria-pressed={suspectedOnly} onClick={() => { setSuspectedOnly(value => !value); setOffset(0) }}>{labels[code] ?? code}: {count}社</button>
