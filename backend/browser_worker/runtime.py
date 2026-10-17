@@ -9,6 +9,7 @@ from typing import Mapping
 from playwright.async_api import Browser, BrowserContext, async_playwright
 
 from browser_worker import MAX_TASK_SECONDS
+from browser_worker.network_proxy import AllowlistProxy, BrowserNetworkPolicy
 
 logger = logging.getLogger("leadhive.browser_worker")
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -24,6 +25,7 @@ FIXTURE_NAMES = frozenset(
         "popup_probe",
         "file_chooser_probe",
         "download_probe",
+        "login_navigation",
     }
 )
 MAX_FIELDS = 100
@@ -92,6 +94,48 @@ _SAFE_SCRIPT = """
 })();
 """
 
+_LOGIN_DETECTION_SCRIPT = """() => {
+  const path = location.pathname || '';
+  const password = document.querySelector(
+    'input[type="password"], input[autocomplete="current-password"]'
+  );
+  const loginText = /ログイン|サインイン|sign\\s?in|log\\s?in/i;
+  const title = document.title || '';
+  const headings = Array.from(document.querySelectorAll('h1, h2, [role="heading"]'))
+    .map(element => element.innerText || '');
+  const loginForm = Array.from(document.forms).some(form => loginText.test(form.innerText || ''));
+  return Boolean(window.__leadhiveLoginDetected)
+    || Boolean(password)
+    || loginText.test(title)
+    || headings.some(text => loginText.test(text))
+    || loginForm
+    || /(?:^|\\/)(?:login|log-in|signin|sign-in)(?:\\/|$)/i.test(path);
+}"""
+
+_LOGIN_GUARD_SCRIPT = """
+(() => {
+  const inspect = () => {
+    const loginText = /ログイン|サインイン|sign\\s?in|log\\s?in/i;
+    const password = document.querySelector(
+      'input[type="password"], input[autocomplete="current-password"]'
+    );
+    const headings = Array.from(document.querySelectorAll('h1, h2, [role="heading"]'))
+      .map(element => element.innerText || '');
+    const loginForm = Array.from(document.forms).some(form => loginText.test(form.innerText || ''));
+    if (password || loginText.test(document.title || '')
+        || headings.some(text => loginText.test(text)) || loginForm
+        || /(?:^|\\/)(?:login|log-in|signin|sign-in)(?:\\/|$)/i.test(location.pathname || '')) {
+      window.__leadhiveLoginDetected = true;
+    }
+  };
+  new MutationObserver(inspect).observe(document, {
+    subtree: true, childList: true, attributes: true, characterData: true
+  });
+  document.addEventListener('DOMContentLoaded', inspect);
+  window.addEventListener('pageshow', inspect);
+})();
+"""
+
 
 class BrowserWorkerError(RuntimeError):
     pass
@@ -102,6 +146,10 @@ class SubmissionBlockedError(BrowserWorkerError):
 
 
 class ConcurrentBrowserTaskError(BrowserWorkerError):
+    pass
+
+
+class BrowserTaskCancelled(BrowserWorkerError):
     pass
 
 
@@ -144,11 +192,21 @@ def _install_submission_guard(html: str) -> str:
     return "<!doctype html>" + guard_script + html
 
 
-async def _fill_task(task: SyntheticFormTask, html: str) -> FillResult:
+async def _fill_task(
+    task: SyntheticFormTask,
+    html: str,
+    *,
+    network_policy: BrowserNetworkPolicy,
+    cancellation_check=None,
+) -> FillResult:
     blocked_requests: list[str] = []
     blocked_websockets: list[str] = []
     browser: Browser | None = None
     context: BrowserContext | None = None
+    navigation_checks: set[asyncio.Task] = set()
+    login_detected = asyncio.Event()
+    cancellation_detected = asyncio.Event()
+    cancellation_monitor: asyncio.Task | None = None
 
     async def block_request(route) -> None:
         blocked_requests.append(route.request.url)
@@ -158,7 +216,7 @@ async def _fill_task(task: SyntheticFormTask, html: str) -> FillResult:
         blocked_websockets.append(websocket_route.url)
         await websocket_route.close(code=1000, reason="offline synthetic worker")
 
-    async with async_playwright() as playwright:
+    async with AllowlistProxy(network_policy) as proxy, async_playwright() as playwright:
         try:
             browser = await playwright.chromium.launch(
                 headless=True,
@@ -167,6 +225,9 @@ async def _fill_task(task: SyntheticFormTask, html: str) -> FillResult:
                     "--disable-component-update",
                     "--disable-sync",
                     "--disable-webrtc",
+                    "--disable-quic",
+                    f"--proxy-server={proxy.proxy_url}",
+                    "--proxy-bypass-list=<-loopback>",
                     "--host-resolver-rules=MAP * ~NOTFOUND",
                 ],
             )
@@ -180,28 +241,61 @@ async def _fill_task(task: SyntheticFormTask, html: str) -> FillResult:
             page = await context.new_page()
             page.on("download", lambda download: asyncio.create_task(download.cancel()))
             page.on("popup", lambda popup: asyncio.create_task(popup.close()))
+
+            async def inspect_navigation(frame) -> None:
+                if frame != page.main_frame:
+                    return
+                try:
+                    found = await frame.evaluate(_LOGIN_DETECTION_SCRIPT)
+                except Exception:
+                    return
+                if found:
+                    login_detected.set()
+
+            def on_frame_navigated(frame) -> None:
+                check = asyncio.create_task(inspect_navigation(frame))
+                navigation_checks.add(check)
+                check.add_done_callback(navigation_checks.discard)
+
+            page.on("framenavigated", on_frame_navigated)
+
+            async def stop_if_unsafe() -> None:
+                if cancellation_detected.is_set():
+                    raise BrowserTaskCancelled("Browser analysis job was cancelled.")
+                if login_detected.is_set():
+                    raise BrowserWorkerError("Login pages are not supported.")
+                if await page.evaluate(_LOGIN_DETECTION_SCRIPT):
+                    raise BrowserWorkerError("Login pages are not supported.")
+
+            async def monitor_cancellation() -> None:
+                while True:
+                    await asyncio.sleep(1)
+                    if cancellation_check is not None and await asyncio.to_thread(
+                        cancellation_check
+                    ):
+                        cancellation_detected.set()
+                        if context is not None:
+                            await context.close()
+                        return
+
+            if cancellation_check is not None:
+                cancellation_monitor = asyncio.create_task(monitor_cancellation())
+
             await page.add_init_script(_SAFE_SCRIPT)
+            await page.add_init_script(_LOGIN_GUARD_SCRIPT)
             await page.set_content(
                 _install_submission_guard(html),
                 wait_until="load",
                 timeout=MAX_TASK_SECONDS * 1000,
             )
+            if task.fixture == "login_navigation":
+                await page.wait_for_timeout(100)
 
-            is_login_page = await page.evaluate(
-                """() => {
-                  const password = document.querySelector(
-                    'input[type="password"], input[autocomplete="current-password"]'
-                  );
-                  const text = document.body?.innerText || '';
-                  const loginHeading = /ログイン|サインイン|sign\\s?in|log\\s?in/i.test(text);
-                  return Boolean(password) || (loginHeading && document.querySelector('form'));
-                }"""
-            )
-            if is_login_page:
-                raise BrowserWorkerError("Login pages are not supported.")
+            await stop_if_unsafe()
 
             values: dict[str, str] = {}
             for selector, value in task.fields.items():
+                await stop_if_unsafe()
                 locator = page.locator(selector)
                 if await locator.count() != 1:
                     raise BrowserWorkerError("Each field selector must match exactly once.")
@@ -224,6 +318,7 @@ async def _fill_task(task: SyntheticFormTask, html: str) -> FillResult:
                 if actual != value:
                     raise BrowserWorkerError("Filled value did not match the approved value.")
                 values[selector] = actual
+                await stop_if_unsafe()
 
             blocked_submit_count = await page.evaluate("window.__leadhiveBlockedSubmits || 0")
             if blocked_submit_count:
@@ -244,19 +339,42 @@ async def _fill_task(task: SyntheticFormTask, html: str) -> FillResult:
                 blocked_file_chooser_count=blocked_file_chooser_count,
                 blocked_download_count=blocked_download_count,
             )
+        except Exception:
+            if cancellation_detected.is_set():
+                raise BrowserTaskCancelled("Browser analysis job was cancelled.") from None
+            raise
         finally:
+            if cancellation_monitor is not None:
+                cancellation_monitor.cancel()
+            for check in navigation_checks:
+                check.cancel()
             if context is not None:
                 await context.close()
             if browser is not None:
                 await browser.close()
 
 
-def run_synthetic_task(task: SyntheticFormTask) -> FillResult:
+def run_synthetic_task(
+    task: SyntheticFormTask,
+    *,
+    network_policy: BrowserNetworkPolicy | None = None,
+    cancellation_check=None,
+) -> FillResult:
     html = _validate_task(task)
     if not _TASK_LOCK.acquire(blocking=False):
         raise ConcurrentBrowserTaskError("Only one browser job may run at a time.")
     try:
-        return asyncio.run(asyncio.wait_for(_fill_task(task, html), timeout=MAX_TASK_SECONDS))
+        return asyncio.run(
+            asyncio.wait_for(
+                _fill_task(
+                    task,
+                    html,
+                    network_policy=network_policy or BrowserNetworkPolicy(),
+                    cancellation_check=cancellation_check,
+                ),
+                timeout=MAX_TASK_SECONDS,
+            )
+        )
     except TimeoutError as exc:
         raise BrowserWorkerError("Browser task exceeded the 90-second limit.") from exc
     finally:

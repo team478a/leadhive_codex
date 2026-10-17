@@ -1,6 +1,7 @@
 import argparse
 import logging
 import signal
+import time
 from threading import Event
 
 from app.config import settings
@@ -8,7 +9,9 @@ from app.database import SessionLocal
 from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST, WORKER_INSTANCE_ID
 from app.services.worker_heartbeat import record_worker_heartbeat
 from browser_worker import HEARTBEAT_INTERVAL_SECONDS
+from browser_worker.jobs import run_browser_job_once
 from browser_worker.runtime import (
+    BrowserWorkerError,
     SubmissionBlockedError,
     SyntheticFormTask,
     run_synthetic_task,
@@ -55,6 +58,13 @@ def run_self_test() -> None:
         if getattr(result, result_field) < 1:
             raise SystemExit(f"Synthetic browser safety self-test failed: {fixture}")
     try:
+        run_synthetic_task(SyntheticFormTask(fixture="login_navigation", fields={}))
+    except BrowserWorkerError as exc:
+        if "Login pages" not in str(exc):
+            raise
+    else:
+        raise SystemExit("Synthetic navigation login guard self-test failed.")
+    try:
         run_synthetic_task(SyntheticFormTask(fixture="blocked_submit", fields={}))
     except SubmissionBlockedError:
         pass
@@ -76,11 +86,21 @@ def run_forever() -> None:
     for signal_name in (signal.SIGINT, signal.SIGTERM):
         signal.signal(signal_name, lambda *_: stop_event.set())
     heartbeat_once()
-    while not stop_event.wait(HEARTBEAT_INTERVAL_SECONDS):
+    last_heartbeat = time.monotonic()
+    while not stop_event.is_set():
         try:
-            heartbeat_once()
+            processed = run_browser_job_once()
         except Exception as exc:
-            logger.warning("browser worker heartbeat failed: %s", type(exc).__name__)
+            logger.warning("browser worker loop failed: %s", type(exc).__name__)
+            processed = False
+        if time.monotonic() - last_heartbeat >= HEARTBEAT_INTERVAL_SECONDS:
+            try:
+                heartbeat_once()
+            except Exception as exc:
+                logger.warning("browser worker heartbeat failed: %s", type(exc).__name__)
+            last_heartbeat = time.monotonic()
+        if not processed:
+            stop_event.wait(2)
 
 
 def main() -> None:

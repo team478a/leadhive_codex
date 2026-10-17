@@ -114,6 +114,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
         .where(
             OperationJob.status == "running",
             OperationJob.operation_type != "cf7_observation",
+            OperationJob.operation_type != "browser_form_analysis",
             OperationJob.operation_type.in_(
                 (
                     "collect_search",
@@ -530,6 +531,7 @@ def claim_job(db) -> OperationJob | None:
         .where(
             OperationJob.status == "queued",
             OperationJob.operation_type != "cf7_observation",
+            OperationJob.operation_type != "browser_form_analysis",
             OperationJob.operation_type != "form_delivery" if not sending_allowed else True,
             OperationJob.operation_type.in_(
                 (

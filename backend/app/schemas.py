@@ -117,6 +117,7 @@ from app.schema_settings import (
 from app.schema_workflow import (
     AnalysisRefreshScheduleInput,
     AnalysisRefreshScheduleOut,
+    BrowserFormAnalysisInput,
     CollectionPerformanceOut,
     DashboardOut,
     FollowupTaskOut,
@@ -223,6 +224,7 @@ __all__ = [
     "ReplyResponseInput",
     "ReplyQueueItemOut",
     "OperationJobInput",
+    "BrowserFormAnalysisInput",
     "OperationJobOut",
     "DashboardOut",
     "SearchScheduleInput",
