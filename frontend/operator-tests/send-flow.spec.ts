@@ -176,7 +176,7 @@ test('one action approves and reserves; reservation retry reuses its original id
   const { calls, reservations, pageErrors } = await setup(page, { pending: true, failFirstReservation: true })
   const sales = page.getByRole('region', { name: '営業作業', exact: true })
   const approval = sales.getByRole('region', { name: '承認して送る' })
-  await expect(approval.getByText('承認待ち 1件')).toBeVisible()
+  await expect(approval.getByRole('heading', { name: /承認待ち 1件/ })).toBeVisible()
   await approval.locator('details').filter({ hasText: '確認候補株式会社' }).first().locator('summary').click()
   await approval.getByLabel('承認・予約対象にする').check()
   await expect(approval.getByRole('region', { name: '承認前の抜き取り確認' })).toContainText('ご不要の場合はこのメールにご返信ください。')
