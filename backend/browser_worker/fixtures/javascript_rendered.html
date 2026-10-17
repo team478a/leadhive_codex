@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>Synthetic JavaScript form</title></head>
+<body><div id="mount"></div><script>
+  const form = document.createElement('form');
+  form.innerHTML = '<label>会社名<input name="company" type="text"></label>';
+  document.querySelector('#mount').append(form);
+</script></body></html>

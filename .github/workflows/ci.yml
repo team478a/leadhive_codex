@@ -304,6 +304,25 @@ jobs:
             frontend/test-results/form-browser-poc
             frontend/test-results/operator-guide
 
+  browser-worker-offline:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build isolated browser worker image
+        run: >-
+          docker build
+          --build-arg LEADHIVE_GIT_COMMIT=${{ github.sha }}
+          -f backend/browser_worker/Dockerfile
+          -t leadhive-browser-worker:ci .
+      - name: Run synthetic browser self-test as non-root
+        run: docker run --rm leadhive-browser-worker:ci python -m browser_worker --self-test
+      - name: Run offline browser unit tests
+        run: >-
+          docker run --rm --user root leadhive-browser-worker:ci
+          sh -c "python -m pip install pytest==9.1.1 &&
+          python -m pytest browser_worker/tests -q"
+
   windows-package:
     runs-on: windows-latest
     steps:

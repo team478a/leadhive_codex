@@ -1,0 +1,6 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>Synthetic blocked request</title></head>
+<body><img src="https://example.invalid/blocked.png" alt="offline probe"><script>
+  const socket = new WebSocket('wss://example.invalid/blocked');
+  socket.addEventListener('error', () => {});
+</script></body></html>
