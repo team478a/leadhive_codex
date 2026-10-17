@@ -2,11 +2,12 @@ import re
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, not_, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.models import (
     Company,
+    ContactPerson,
     FormDmReadinessResult,
     FormProfile,
     FormSenderSettings,
@@ -14,6 +15,7 @@ from app.models import (
     OutreachDraft,
     OutreachTemplate,
     SmtpSettings,
+    SuppressionEntry,
 )
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_profile_delivery import primary_form_profile, sender_values
@@ -44,6 +46,81 @@ def readiness_targets(db: Session, project_id: UUID) -> list[dict[str, str | Non
         {"company_id": str(company_id), "profile_id": str(profile_id)}
         for company_id, profile_id in rows
     ]
+
+
+def email_draft_targets(db: Session, project_id: UUID) -> list[dict[str, str | None]]:
+    peer_company = aliased(Company)
+    email_domain = func.split_part(func.lower(func.trim(Company.email)), "@", 2)
+    suppressed = (
+        select(SuppressionEntry.id)
+        .where(
+            SuppressionEntry.project_id == Company.project_id,
+            or_(
+                and_(
+                    SuppressionEntry.email != "",
+                    func.lower(func.trim(SuppressionEntry.email))
+                    == func.lower(func.trim(Company.email)),
+                ),
+                and_(
+                    SuppressionEntry.domain != "",
+                    func.lower(func.trim(SuppressionEntry.domain)).in_(
+                        (func.lower(func.trim(Company.domain)), email_domain)
+                    ),
+                ),
+                and_(
+                    SuppressionEntry.phone != "",
+                    SuppressionEntry.phone == func.trim(Company.phone),
+                ),
+            ),
+        )
+        .correlate(Company)
+        .exists()
+    )
+    shared_location_destination = or_(
+        func.lower(func.trim(peer_company.email)) == func.lower(func.trim(Company.email)),
+        select(ContactPerson.id)
+        .where(
+            ContactPerson.company_id == peer_company.id,
+            func.lower(func.trim(ContactPerson.email)) == func.lower(func.trim(Company.email)),
+        )
+        .correlate(peer_company, Company)
+        .exists(),
+    )
+    shared_location = (
+        select(peer_company.id)
+        .where(
+            peer_company.project_id == Company.project_id,
+            peer_company.id != Company.id,
+            peer_company.record_type == "location",
+            or_(Company.record_type == "location", shared_location_destination),
+        )
+        .correlate(Company)
+        .exists()
+    )
+    existing_email_draft = (
+        select(OutreachDraft.id)
+        .where(
+            OutreachDraft.company_id == Company.id,
+            OutreachDraft.channel == "email",
+        )
+        .correlate(Company)
+        .exists()
+    )
+    company_ids = db.scalars(
+        select(Company.id)
+        .where(
+            Company.project_id == project_id,
+            func.trim(Company.email) != "",
+            Company.do_not_contact.is_(False),
+            Company.contact_quality_status != "invalid",
+            not_(suppressed),
+            not_(shared_location),
+            not_(existing_email_draft),
+        )
+        .order_by(Company.company_name, Company.id)
+        .limit(500)
+    ).all()
+    return [{"company_id": str(company_id), "profile_id": None} for company_id in company_ids]
 
 
 def _sender_placeholders(db: Session, channel: str) -> dict[str, str]:
@@ -121,7 +198,10 @@ def run_bulk_template_drafts(
         }
         existing_draft_company_ids = set(
             db.scalars(
-                select(OutreachDraft.company_id).where(OutreachDraft.company_id.in_(chunk_ids))
+                select(OutreachDraft.company_id).where(
+                    OutreachDraft.company_id.in_(chunk_ids),
+                    OutreachDraft.channel == channel,
+                )
             ).all()
         )
         saved_results = job.payload["bulk_template_results"]

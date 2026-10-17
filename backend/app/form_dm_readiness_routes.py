@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -32,7 +32,9 @@ PAGE_SIZE = 20
 REASONS = (
     "CONTACT_PROHIBITED",
     "ALREADY_SENT_OR_UNKNOWN",
-    "CAPTCHA",
+    "CAPTCHA_VISIBLE",
+    "CAPTCHA_INVISIBLE",
+    "CAPTCHA_LEGACY",
     "CF7",
     "JS_SUBMIT",
     "EXTERNAL_ACTION",
@@ -64,7 +66,9 @@ REVIEW_REASONS = {
 BLOCKING_REASONS = {
     "CONTACT_PROHIBITED",
     "ALREADY_SENT_OR_UNKNOWN",
-    "CAPTCHA",
+    "CAPTCHA_VISIBLE",
+    "CAPTCHA_INVISIBLE",
+    "CAPTCHA_LEGACY",
     "CF7",
     "JS_SUBMIT",
     "EXTERNAL_ACTION",
@@ -136,10 +140,10 @@ def _compatibility_reason(db: Session, profile: FormProfile) -> str | None:
     return None
 
 
-def _preparation_reason(message: str) -> str:
+def _preparation_reason(message: str, captcha_reason: str | None = None) -> str:
     text = message.casefold()
     if "captcha" in text:
-        return "CAPTCHA"
+        return captcha_reason or "OTHER_UNSUPPORTED"
     if any(word in text for word in ("連絡禁止", "送信できません", "suppression")):
         return "CONTACT_PROHIBITED"
     if any(word in text for word in ("同意", "consent", "個人情報", "メルマガ")):
@@ -173,8 +177,17 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
         db, company.id, profile.form_url
     ):
         reasons.append("ALREADY_SENT_OR_UNKNOWN")
-    if profile.captcha_type != "CAPTCHA_NONE":
-        reasons.append("CAPTCHA")
+    captcha_type = profile.captcha_type
+    if captcha_type == "CAPTCHA_RECAPTCHA":
+        captcha_reason = "CAPTCHA_LEGACY"
+    elif captcha_type in {"CAPTCHA_RECAPTCHA_V3", "CAPTCHA_CF7_RECAPTCHA"}:
+        captcha_reason = "CAPTCHA_INVISIBLE"
+    elif captcha_type != "CAPTCHA_NONE":
+        captcha_reason = "CAPTCHA_VISIBLE"
+    else:
+        captcha_reason = None
+    if captcha_reason:
+        reasons.append(captcha_reason)
     compatibility = _compatibility_reason(db, profile)
     if compatibility:
         reasons.append(compatibility)
@@ -197,7 +210,9 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
             if proposal.channel != "form":
                 reasons.append("OTHER_UNSUPPORTED")
         except HTTPException as exc:
-            mapped = _preparation_reason(f"{exc.detail} {profile.review_reason or ''}")
+            mapped = _preparation_reason(
+                f"{exc.detail} {profile.review_reason or ''}", captcha_reason
+            )
             if mapped not in reasons:
                 reasons.append(mapped)
 
@@ -279,6 +294,30 @@ def form_dm_readiness(
         ).all()
         counts.update({reason: count for reason, count in grouped_counts})
         total = sum(counts.values())
+        captcha_counts = db.execute(
+            select(
+                *[
+                    func.sum(
+                        case(
+                            (
+                                or_(
+                                    FormDmReadinessResult.primary_reason == reason,
+                                    FormDmReadinessResult.secondary_reasons.contains([reason]),
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ).label(reason)
+                    for reason in (
+                        "CAPTCHA_VISIBLE",
+                        "CAPTCHA_INVISIBLE",
+                        "CAPTCHA_LEGACY",
+                    )
+                ]
+            ).where(FormDmReadinessResult.job_id == snapshot.id)
+        ).one()
+        counts.update({reason: value or 0 for reason, value in captcha_counts._mapping.items()})
         if format == "json":
             rows = db.execute(
                 select(FormDmReadinessResult, Company, FormProfile)

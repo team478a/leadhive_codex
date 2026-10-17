@@ -26,6 +26,7 @@ export function SendFlowDraftPanel({ projectId, canWrite, onContinue, onNeedTemp
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
+  const [selectEligibleEmailCompanies, setSelectEligibleEmailCompanies] = useState(false)
   const [formTargetCount, setFormTargetCount] = useState<number | null>(null)
   const [readinessDetailsOpen, setReadinessDetailsOpen] = useState(false)
   const [job, setJob] = useState<BulkJob | null>(null)
@@ -75,7 +76,8 @@ export function SendFlowDraftPanel({ projectId, canWrite, onContinue, onNeedTemp
     try {
       const createdJob = await api<BulkJob>(`/projects/${projectId}/outreach-drafts/bulk-from-template`, 'POST', {
         template_id: templateId, channel,
-        ...(channel === 'form' ? { readiness_reason: 'NO_FORM_DRAFT' } : { company_ids: selectedIds }),
+        ...(channel === 'form' ? { readiness_reason: 'NO_FORM_DRAFT' } : selectEligibleEmailCompanies
+          ? { readiness_reason: 'NO_EMAIL_DRAFT' } : { company_ids: selectedIds }),
       })
       setJob(createdJob)
       if (createdJob.status === 'completed') {
@@ -98,7 +100,7 @@ export function SendFlowDraftPanel({ projectId, canWrite, onContinue, onNeedTemp
   return <section className="space-y-4" aria-label="送信先と文面の準備">
     <div className="detail-grid">
       <label className="field">連絡方法<select disabled={activeJob} value={channel} onChange={event => {
-        setChannel(event.target.value as 'email' | 'form'); setOffset(0); setSelectedIds([]); setJob(null); setNotice('')
+        setChannel(event.target.value as 'email' | 'form'); setOffset(0); setSelectedIds([]); setSelectEligibleEmailCompanies(false); setJob(null); setNotice('')
       }}><option value="email">メール</option><option value="form">フォーム</option></select></label>
       <label className="field">文面の作り方<select disabled={activeJob} value={mode} onChange={event => setMode(event.target.value as 'template' | 'ai')}><option value="template">テンプレートで一括作成（AIを使わない）</option><option value="ai">AIで会社ごとに作成</option></select></label>
     </div>
@@ -107,13 +109,15 @@ export function SendFlowDraftPanel({ projectId, canWrite, onContinue, onNeedTemp
       <label className="field">使用するテンプレート<select disabled={activeJob} value={templateId} onChange={event => setTemplateId(event.target.value)}><option value="">選択してください</option>{filteredTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
       {!filteredTemplates.length && <p className="panel">{channel === 'email' ? 'メール用' : 'フォーム用'}テンプレートがありません。<button type="button" className="secondary ml-2" onClick={onNeedTemplate}>テンプレートを作る</button></p>}
       {channel === 'email' ? <>
-        <p>連絡先メールがあり、連絡禁止ではない会社を選択してください（最大500社）。表示 {companies.length} / {total}社 · 選択 {selectedIds.length} / 500社</p>
+        <p>連絡先メールがあり、連絡禁止ではなく、メール下書きがない会社を対象にします（最大500社）。表示 {companies.length} / {total}社 · 手動選択 {selectedIds.length} / 500社</p>
+        <div className="actions"><button type="button" className="secondary" aria-pressed={selectEligibleEmailCompanies} disabled={!canWrite || activeJob} onClick={() => { setSelectEligibleEmailCompanies(true); setSelectedIds([]) }}>条件に合う会社をすべて選択（最大500社）</button></div>
+        {selectEligibleEmailCompanies && <p role="status" className="muted text-sm">下書き作成時にサーバーが条件に合う会社を最大500社選択します。</p>}
         <div className="border rounded-lg divide-y">
           {companies.map(company => {
             const eligible = Boolean(company.email?.trim()) && !company.do_not_contact
             const selected = selectedIds.includes(company.id)
             return <label key={company.id} className="flex items-start gap-3 p-3">
-              <input type="checkbox" disabled={!canWrite || !eligible || activeJob || (!selected && selectedIds.length >= 500)} checked={selected} onChange={() => setSelectedIds(current => selected ? current.filter(id => id !== company.id) : [...current, company.id])} />
+              <input type="checkbox" disabled={!canWrite || !eligible || activeJob || selectEligibleEmailCompanies || (!selected && selectedIds.length >= 500)} checked={selected} onChange={() => { setSelectEligibleEmailCompanies(false); setSelectedIds(current => selected ? current.filter(id => id !== company.id) : [...current, company.id]) }} />
               <span><strong>{company.company_name}</strong><span className="block muted text-sm">{company.email || 'メール未登録'}{company.do_not_contact ? ' · 連絡禁止' : ''}</span></span>
             </label>
           })}
@@ -129,7 +133,7 @@ export function SendFlowDraftPanel({ projectId, canWrite, onContinue, onNeedTemp
         </>}
       </div>}
       <div className="actions flex-wrap">
-        <button disabled={!canWrite || busy || activeJob || !templateId || (channel === 'email' && !selectedIds.length) || (channel === 'form' && !formTargetCount)} onClick={() => void createDrafts()}>{busy ? '登録中…' : activeJob ? 'バックグラウンド処理中…' : channel === 'form' ? `フォーム下書きを一括作成（最大${Math.min(formTargetCount ?? 0, 500)}社）` : `選択した${selectedIds.length}社に下書きを作成`}</button>
+        <button disabled={!canWrite || busy || activeJob || !templateId || (channel === 'email' && !selectedIds.length && !selectEligibleEmailCompanies) || (channel === 'form' && !formTargetCount)} onClick={() => void createDrafts()}>{busy ? '登録中…' : activeJob ? 'バックグラウンド処理中…' : channel === 'form' ? `フォーム下書きを一括作成（最大${Math.min(formTargetCount ?? 0, 500)}社）` : selectEligibleEmailCompanies ? '条件一致企業に下書きを作成（最大500社）' : `選択した${selectedIds.length}社に下書きを作成`}</button>
         <button type="button" className="secondary" onClick={() => onContinue(channel)}>次へ：{channel === 'form' ? 'フォーム確認' : '承認'}</button>
       </div>
       <details className="mt-4" onToggle={event => setReadinessDetailsOpen(event.currentTarget.open)}><summary>フォームの送信可否集計・詳細</summary>{readinessDetailsOpen && <div className="mt-4"><p className="muted text-sm mb-3">フォーム文面なしの一括作成対象と、送信可否の理由を確認できます。</p><FormDmReadinessPanel projectId={projectId} /></div>}</details>

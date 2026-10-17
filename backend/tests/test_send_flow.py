@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
@@ -7,6 +7,8 @@ from sqlalchemy import event, func, select
 from app.database import engine
 from app.models import (
     ApprovalRequest,
+    ApprovedEmailBatch,
+    ApprovedEmailReservation,
     ApprovedFormDispatch,
     Company,
     EmailDelivery,
@@ -17,8 +19,10 @@ from app.models import (
     SuppressionEntry,
 )
 from app.services import bulk_template_drafts
+from tests import test_approval_foundation as approval_foundation
 from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
+from tests.test_form_approval_preparation import prepare as prepare_form_approval
 
 
 def make_project(auth):
@@ -157,6 +161,150 @@ def test_bulk_template_drafts_can_select_saved_no_form_draft_readiness(auth, db,
     assert job.payload["targets"] == [
         {"company_id": str(company_id), "profile_id": str(profile_id)}
     ]
+
+
+def test_bulk_template_drafts_server_selects_email_companies_without_email_drafts(auth, db):
+    project = make_project(auth)
+    eligible, no_email, prohibited, suppressed, drafted, form_draft = add_companies(
+        db, UUID(project["id"]), 6
+    )
+    no_email.email = ""
+    prohibited.do_not_contact = True
+    db.add(
+        SuppressionEntry(
+            project_id=UUID(project["id"]),
+            domain=suppressed.domain,
+            email="",
+            phone="",
+            reason="suppressed",
+        )
+    )
+    db.add_all(
+        [
+            OutreachDraft(company_id=drafted.id, channel="email", subject="既存", body="既存"),
+            OutreachDraft(company_id=form_draft.id, channel="form", subject="", body="既存"),
+        ]
+    )
+    db.commit()
+    template = make_template(auth, project["id"])
+
+    response = auth.post(
+        f"/api/projects/{project['id']}/outreach-drafts/bulk-from-template",
+        json={
+            "template_id": template["id"],
+            "channel": "email",
+            "readiness_reason": "NO_EMAIL_DRAFT",
+        },
+    )
+
+    assert response.status_code == 202, response.text
+    job = db.get(OperationJob, UUID(response.json()["id"]))
+    assert job.payload["targets"] == [
+        {"company_id": str(eligible.id), "profile_id": None},
+        {"company_id": str(form_draft.id), "profile_id": None},
+    ]
+
+
+def test_send_flow_summary_counts_only_unexpired_unreserved_approvals(
+    auth, db, workspace, form_source, monkeypatch
+):
+    project, company = workspace
+    company.email = "recipient@example.com"
+    db.commit()
+    unreserved_item = approval_foundation.create(auth, workspace)
+    reserved_item = approval_foundation.create(auth, workspace)
+    for item in (unreserved_item, reserved_item):
+        assert (
+            approval_foundation.approve(
+                auth, item, approval_foundation.challenge(auth, item)
+            ).status_code
+            == 200
+        )
+
+    approved_request = db.get(ApprovalRequest, UUID(reserved_item["id"]))
+    now = datetime.now(timezone.utc)
+    batch = ApprovedEmailBatch(
+        project_id=project.id,
+        created_by_user_id=project.user_id,
+        idempotency_key=uuid4(),
+        request_hash="a" * 64,
+        name="reserved",
+    )
+    draft = OutreachDraft(company_id=company.id, channel="email", subject="承認済み", body="本文")
+    db.add_all([batch, draft])
+    db.flush()
+    delivery = EmailDelivery(
+        draft_id=draft.id,
+        company_id=company.id,
+        recipient_email="recipient@example.com",
+        subject="承認済み",
+        body="本文",
+        scheduled_for=now,
+        confirmed_at=now,
+    )
+    db.add(delivery)
+    db.flush()
+    db.add(
+        ApprovedEmailReservation(
+            batch_id=batch.id,
+            approval_id=approved_request.id,
+            delivery_id=delivery.id,
+            envelope={},
+            envelope_hash="b" * 64,
+            sender_email="sender@example.com",
+            recipient_email="recipient@example.com",
+        )
+    )
+
+    form_item = prepare_form_approval(auth, form_source)
+    assert (
+        approval_foundation.approve(
+            auth, form_item, approval_foundation.challenge(auth, form_item)
+        ).status_code
+        == 200
+    )
+    form_project, form_company, form_draft, form_profile, *_ = form_source
+    form_request = db.get(ApprovalRequest, UUID(form_item["id"]))
+    db.add(
+        ApprovedFormDispatch(
+            approval_id=form_request.id,
+            project_id=form_project.id,
+            company_id=form_company.id,
+            draft_id=form_draft.id,
+            created_by_user_id=form_project.user_id,
+            idempotency_key=uuid4(),
+            request_hash="c" * 64,
+            payload_snapshot={"delivery_method": "direct"},
+            payload_hash="d" * 64,
+            form_url=form_profile.form_url,
+        )
+    )
+    db.commit()
+
+    response = auth.get(f"/api/projects/{project.id}/send-flow-summary")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["approval_counts"]["approved_unsent"] == {
+        "email": 1,
+        "form": 0,
+    }
+
+    class FutureDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            future = now + timedelta(days=3)
+            return future.astimezone(tz) if tz else future.replace(tzinfo=None)
+
+    from app import send_flow_routes
+
+    monkeypatch.setattr(send_flow_routes, "datetime", FutureDateTime)
+    expired_response = auth.get(f"/api/projects/{project.id}/send-flow-summary")
+
+    assert expired_response.status_code == 200, expired_response.text
+    assert expired_response.json()["approval_counts"]["approved_unsent"] == {
+        "email": 0,
+        "form": 0,
+    }
 
 
 def test_bulk_template_drafts_skip_existing_and_exclude_contact_prohibitions(auth, db):
