@@ -37,7 +37,9 @@ def readiness_targets(db: Session, project_id: UUID) -> list[dict[str, str | Non
         .where(
             FormDmReadinessResult.job_id == snapshot.id,
             FormDmReadinessResult.primary_reason == "NO_FORM_DRAFT",
+            ~FormDmReadinessResult.secondary_reasons.contains(["NON_COMPANY_SUSPECTED"]),
             Company.project_id == project_id,
+            Company.status != "excluded",
         )
         .order_by(Company.company_name, Company.id)
         .limit(500)

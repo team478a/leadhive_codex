@@ -163,6 +163,43 @@ def test_bulk_template_drafts_can_select_saved_no_form_draft_readiness(auth, db,
     ]
 
 
+def test_bulk_template_drafts_excludes_non_company_suspected_readiness(auth, db, form_source):
+    project, company, _draft, profile, _sender, _fields = form_source
+    snapshot = OperationJob(
+        project_id=project.id,
+        operation_type="form_dm_readiness",
+        status="completed",
+        finished_at=datetime.now(timezone.utc),
+    )
+    db.add(snapshot)
+    db.flush()
+    db.add(
+        FormDmReadinessResult(
+            job_id=snapshot.id,
+            company_id=company.id,
+            profile_id=profile.id,
+            primary_reason="NO_FORM_DRAFT",
+            secondary_reasons=["NON_COMPANY_SUSPECTED", "NON_COMPANY_PUBLIC_DOMAIN"],
+            review_queue_eligible=False,
+            classified_at=datetime.now(timezone.utc),
+        )
+    )
+    db.commit()
+    template = make_template(auth, str(project.id), channel="form")
+
+    response = auth.post(
+        f"/api/projects/{project.id}/outreach-drafts/bulk-from-template",
+        json={
+            "template_id": template["id"],
+            "channel": "form",
+            "readiness_reason": "NO_FORM_DRAFT",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "一括作成できる企業がありません" in response.json()["detail"]
+
+
 def test_bulk_template_drafts_server_selects_email_companies_without_email_drafts(auth, db):
     project = make_project(auth)
     eligible, no_email, prohibited, suppressed, drafted, form_draft = add_companies(
