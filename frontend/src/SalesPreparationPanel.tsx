@@ -20,15 +20,16 @@ const names: Record<string, string> = {
   cancelled: '停止済み', failed: '一部失敗',
 }
 
-export function SalesPreparationPanel({ projectId }: { projectId: string }) {
+export function SalesPreparationPanel({ projectId, fixedChannel }: { projectId: string; fixedChannel?: 'email' | 'form' }) {
   const [limit, setLimit] = useState(300)
   const [offset, setOffset] = useState(0)
   const [search, setSearch] = useState(30)
   const [ai, setAi] = useState(60)
   const [score, setScore] = useState(60)
-  const [channel, setChannel] = useState('auto')
+  const [channel, setChannel] = useState(fixedChannel ?? 'auto')
   const [drafts, setDrafts] = useState(true)
   const [jobs, setJobs] = useState<Preparation[]>([])
+  const [visibleJobIds, setVisibleJobIds] = useState<string[]>([])
   const [itemPages, setItemPages] = useState<Record<string, { offset: number; total: number; items: Item[] }>>({})
   const [detailsOpen, setDetailsOpen] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState(false)
@@ -39,9 +40,13 @@ export function SalesPreparationPanel({ projectId }: { projectId: string }) {
   }, [projectId])
   useEffect(() => { void refresh().catch(e => setError(errorMessage(e))) }, [refresh])
 
-  async function action(path: string, body?: unknown) {
+  async function action(path: string, body?: unknown, trackCurrent = false) {
     setBusy(true); setError('')
-    try { await api(path, 'POST', body); await refresh() }
+    try {
+      const created = await api<OperationJob>(path, 'POST', body)
+      if (trackCurrent) setVisibleJobIds([created.id])
+      await refresh()
+    }
     catch (e) { setError(errorMessage(e)) }
     finally { setBusy(false) }
   }
@@ -50,7 +55,7 @@ export function SalesPreparationPanel({ projectId }: { projectId: string }) {
     void action(`/projects/${projectId}/sales-preparation`, {
       limit, offset, channel, minimum_score: score, max_search_requests: search,
       max_ai_requests: ai, generate_drafts: drafts,
-    })
+    }, true)
   }
   const active = jobs.some(({ job }) => ['queued', 'running'].includes(job.status))
   useEffect(() => {
@@ -97,14 +102,16 @@ export function SalesPreparationPanel({ projectId }: { projectId: string }) {
           <Field label="検索回数の上限"><input required type="number" min={0} max={300} value={search} onChange={e => setSearch(Number(e.target.value))} /></Field>
           <Field label="AI回数の上限"><input required type="number" min={0} max={600} value={ai} onChange={e => setAi(Number(e.target.value))} /></Field>
         </div>
-        <Field label="準備する連絡方法"><select value={channel} onChange={e => setChannel(e.target.value)}><option value="auto">メール優先、メール未登録ならフォーム</option><option value="email">メール</option><option value="form">フォーム</option></select></Field>
+        {fixedChannel ? <p className="muted">準備する連絡方法：{fixedChannel === 'email' ? 'メール' : 'フォーム'}</p>
+          : <Field label="準備する連絡方法"><select value={channel} onChange={e => setChannel(e.target.value)}><option value="auto">メール優先、メール未登録ならフォーム</option><option value="email">メール</option><option value="form">フォーム</option></select></Field>}
         <label className="flex items-center gap-2 my-3"><input type="checkbox" checked={drafts} onChange={e => setDrafts(e.target.checked)} />会社別の文面を作成する</label>
         <p className="muted text-sm">既定では登録順の先頭300件が対象です。次の300件は「先頭から除く件数」を300にします。AI判定と文面生成は別々に回数を消費します。300件すべてを判定・文面作成する場合は最大600回が必要です。上限を超える企業は要確認として残します。</p>
         <button type="submit">営業準備を開始</button>
       </fieldset>
     </form>
     <p className="muted text-sm mt-3">公式サイトの一致が曖昧な場合は候補URLを保存します。停止後の再開では完了済みの企業と消費済みの回数を引き継ぎます。文面は企業一覧の営業文面で確認できます。</p>
-    {jobs.map(result => <article key={result.job.id} className="border-t mt-4 pt-4 min-w-0">
+    {fixedChannel && <p className="muted text-sm">この表示では選択した連絡方法で今回開始した準備だけを表示します。</p>}
+    {jobs.filter(result => !fixedChannel || visibleJobIds.includes(result.job.id)).map(result => <article key={result.job.id} className="border-t mt-4 pt-4 min-w-0">
       <strong>{names[result.job.status]} · {result.job.processed_count}/{result.job.total_count}件</strong>
       <p className="muted text-sm">検索 {result.used_search_requests}/{result.max_search_requests}回 · AI {result.used_ai_requests}/{result.max_ai_requests}回</p>
       <p className="text-sm">{Object.entries(result.counts).map(([status, count]) => `${names[status]} ${count}件`).join(' / ')}</p>

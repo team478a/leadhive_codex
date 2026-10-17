@@ -3,11 +3,6 @@ import { api, errorMessage } from './api'
 import { Field } from './forms'
 import type { ApprovalProposal } from './ApprovedEmailPanel'
 
-interface Limits {
-  daily_limit: number; hourly_limit: number; minimum_interval_seconds: number
-  site_interval_seconds: number
-  paused: boolean; version: number; can_manage: boolean; execution_enabled: boolean
-}
 interface DailySummary {
   daily_limit: number; started_last_24h: number; approved_unsent: number
   pending_approvals: number; remaining_quota: number; paused: boolean; within_send_window: boolean
@@ -20,27 +15,21 @@ interface ApprovalBatchJob {
 export function FormDispatchGovernancePanel({ projectId, items, canWrite, refresh }: {
   projectId: string; items: ApprovalProposal[]; canWrite: boolean; refresh: () => Promise<void>
 }) {
-  const [limits, setLimits] = useState<Limits | null>(null)
-  const [savedLimits, setSavedLimits] = useState<Limits | null>(null)
   const [dailySummary, setDailySummary] = useState<DailySummary | null>(null)
   const [batchJob, setBatchJob] = useState<ApprovalBatchJob | null>(null)
   const [selected, setSelected] = useState<string[]>([])
   const [password, setPassword] = useState('')
-  const [adminPassword, setAdminPassword] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const key = useRef<string | null>(null)
+  const batchJobId = batchJob?.id
+  const batchJobStatus = batchJob?.status
   const candidates = items.filter(i => i.channel === 'form' && i.delivery_method === 'form_direct' && ['PENDING', 'APPROVED'].includes(i.status))
   const chosen = candidates.filter(i => selected.includes(i.id))
   const pending = chosen.filter(i => i.status === 'PENDING')
   const approved = chosen.filter(i => i.status === 'APPROVED')
   const selections = (rows: ApprovalProposal[]) => rows.map(i => ({ request_id: i.id, expected_hash: i.payload_hash, expected_version: i.payload_version }))
-  useEffect(() => {
-    let live = true
-    api<Limits>('/form-dispatch-limits').then(v => { if (live) { setLimits(v); setSavedLimits(v) } }).catch(e => { if (live) setError(errorMessage(e)) })
-    return () => { live = false }
-  }, [])
   useEffect(() => {
     let live = true
     api<DailySummary>(`/projects/${projectId}/form-approval-daily-summary`).then(value => {
@@ -49,15 +38,15 @@ export function FormDispatchGovernancePanel({ projectId, items, canWrite, refres
     return () => { live = false }
   }, [projectId, items])
   useEffect(() => {
-    if (!batchJob || !['queued', 'running'].includes(batchJob.status)) return
+    if (!batchJobId || !['queued', 'running'].includes(batchJobStatus ?? '')) return
     const timer = window.setInterval(() => {
       api<ApprovalBatchJob[]>(`/projects/${projectId}/operations?limit=20`).then(rows => {
-        const current = rows.find(row => row.id === batchJob.id)
+        const current = rows.find(row => row.id === batchJobId)
         if (current) setBatchJob(current)
       }).catch(e => setError(errorMessage(e)))
     }, 2000)
     return () => window.clearInterval(timer)
-  }, [batchJob?.id, batchJob?.status, projectId])
+  }, [batchJobId, batchJobStatus, projectId])
   function choose(ids: string[]) {
     setSelected(ids)
     key.current = null
@@ -69,7 +58,7 @@ export function FormDispatchGovernancePanel({ projectId, items, canWrite, refres
   async function act(fn: () => Promise<void>) {
     setBusy(true); setError(''); setNotice('')
     try { await fn(); await refresh() } catch (e) { setError(errorMessage(e)) }
-    finally { setBusy(false); setPassword(''); setAdminPassword('') }
+    finally { setBusy(false); setPassword('') }
   }
   return <section className="panel mt-4" aria-label="フォーム一括承認と上限管理">
     <h2>フォームの一括Human承認・予約</h2>
@@ -119,28 +108,9 @@ export function FormDispatchGovernancePanel({ projectId, items, canWrite, refres
         key.current ??= crypto.randomUUID()
         const result = await api<{ results: { request_id: string; reservation: unknown; error: string | null }[] }>(`/projects/${projectId}/approved-form-dispatches`, 'POST', { items: selections(approved), idempotency_key: key.current })
         const failures = result.results.filter(r => r.error)
-        setNotice(`${result.results.length - failures.length}件を予約済みとして確認しました。${failures.length}件は未予約です。${limits?.execution_enabled ? '' : '実送信はOFFです。'}`)
+        setNotice(`${result.results.length - failures.length}件を予約済みとして確認しました。${failures.length}件は未予約です。送信設定が無効の場合は実送信されません。`)
         if (failures.length) setError(failures.map(r => `${r.request_id}: ${r.error}`).join(' / '))
       })}>承認済みフォーム{approved.length}件を一括予約</button>
     </fieldset>
-    {limits && <div className="mt-4">
-      <h3>環境全体のフォーム送信上限</h3>
-      <p>保存済み: 直近24時間{savedLimits?.daily_limit}件・直近1時間{savedLimits?.hourly_limit}件・間隔{savedLimits?.minimum_interval_seconds}秒・同じサイト{savedLimits?.site_interval_seconds ?? 300}秒 / {savedLimits?.paused ? '一時停止中' : '上限に従って実行'} / 実行{savedLimits?.execution_enabled ? '有効' : 'OFF'}</p>
-      <p>上限変更では実送信を有効化しません。結果不明・失敗した試行も上限に数えます。承認期限内に処理できる件数を予約してください。</p>
-      {limits.can_manage && <fieldset disabled={busy}>
-        <Field label="フォーム24時間上限"><input type="number" min="1" max="1000" value={limits.daily_limit} onChange={e => setLimits({ ...limits, daily_limit: Number(e.target.value) })} /></Field>
-        <Field label="フォーム1時間上限"><input type="number" min="1" max="100" value={limits.hourly_limit} onChange={e => setLimits({ ...limits, hourly_limit: Number(e.target.value) })} /></Field>
-        <Field label="フォーム試行間隔（秒）"><input type="number" min="60" max="86400" value={limits.minimum_interval_seconds} onChange={e => setLimits({ ...limits, minimum_interval_seconds: Number(e.target.value) })} /></Field>
-        <Field label="同じサイトへの試行間隔（秒）"><input type="number" min="60" max="86400" value={limits.site_interval_seconds ?? 300} onChange={e => setLimits({ ...limits, site_interval_seconds: Number(e.target.value) })} /></Field>
-        <label><input type="checkbox" checked={limits.paused} onChange={e => setLimits({ ...limits, paused: e.target.checked })} /> フォーム実行を一時停止</label>
-        <Field label="上限変更用管理者パスワード"><input type="password" autoComplete="current-password" value={adminPassword} onChange={e => setAdminPassword(e.target.value)} /></Field>
-        <p>上限の増加・停止解除は今後の予約実行に反映されます。内容を確認して保存してください。</p>
-        <button type="button" disabled={!adminPassword} onClick={() => act(async () => {
-          const updated = await api<Limits>('/form-dispatch-limits', 'PUT', { daily_limit: limits.daily_limit, hourly_limit: limits.hourly_limit, minimum_interval_seconds: limits.minimum_interval_seconds, site_interval_seconds: limits.site_interval_seconds ?? 300, paused: limits.paused, expected_version: limits.version, password: adminPassword })
-          setLimits(updated); setSavedLimits(updated); setNotice('フォーム上限を保存しました。実送信設定は変更していません。')
-        })}>管理者再認証してフォーム上限を保存</button>{' '}
-        <button type="button" className="secondary" onClick={() => act(async () => { const next = await api<Limits>('/form-dispatch-limits'); setLimits(next); setSavedLimits(next) })}>保存済み上限を再取得</button>
-      </fieldset>}
-    </div>}
   </section>
 }

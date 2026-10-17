@@ -7,10 +7,9 @@ const stopMethod = (body: string) => body.split(/[。.!?！？\n]+/).some(senten
   /不要|停止|解除|受け取らない|unsubscribe|opt[- ]?out/i.test(sentence)
   && /返信|連絡|メール|リンク|こちら|下記|フォーム|unsubscribe|opt[- ]?out/i.test(sentence))
 
-export function SendFlowTemplatePanel({ projectId, canWrite, onContinue, onTemplateCountChange }: {
-  projectId: string; canWrite: boolean; onContinue: () => void; onTemplateCountChange: (count: number) => void
+export function SendFlowTemplatePanel({ projectId, channel, canWrite, initialTemplateId = '', onTemplateCountChange }: {
+  projectId: string; channel: 'email' | 'form'; canWrite: boolean; initialTemplateId?: string; onTemplateCountChange: (count: number) => void
 }) {
-  const [channel, setChannel] = useState<'email' | 'form'>('email')
   const [templates, setTemplates] = useState<OutreachTemplate[]>([])
   const [samples, setSamples] = useState<Company[]>([])
   const [sampleId, setSampleId] = useState('')
@@ -36,9 +35,14 @@ export function SendFlowTemplatePanel({ projectId, canWrite, onContinue, onTempl
       setTemplates(nextTemplates)
       setSamples(page.items)
       setSampleId(page.items[0]?.id ?? '')
+      const initialTemplate = nextTemplates.find(template => template.id === initialTemplateId && template.channel === channel)
+      setTemplateId(initialTemplate?.id ?? '')
+      setName(initialTemplate?.name ?? '')
+      setSubject(initialTemplate?.subject ?? '')
+      setBody(initialTemplate?.body ?? '')
     }).catch(e => { if (live) setError(errorMessage(e)) })
     return () => { live = false }
-  }, [projectId])
+  }, [channel, initialTemplateId, projectId])
 
   function selectTemplate(id: string) {
     setTemplateId(id)
@@ -69,7 +73,7 @@ export function SendFlowTemplatePanel({ projectId, canWrite, onContinue, onTempl
       const payload = { name: name.trim(), channel, subject: channel === 'email' ? subject : '', body: body.trim() }
       const saved = await api<OutreachTemplate>(templateId ? `/outreach-templates/${templateId}` : `/projects/${projectId}/outreach-templates`, templateId ? 'PUT' : 'POST', payload)
       const next = templateId ? templates.map(item => item.id === saved.id ? saved : item) : [...templates, saved]
-      setTemplates(next); onTemplateCountChange(next.length)
+      setTemplates(next); onTemplateCountChange(next.filter(item => item.channel === channel).length)
       setTemplateId(saved.id); setNotice('テンプレートを保存しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
@@ -80,7 +84,7 @@ export function SendFlowTemplatePanel({ projectId, canWrite, onContinue, onTempl
     try {
       await api(`/outreach-templates/${selectedTemplate.id}`, 'DELETE')
       const next = templates.filter(item => item.id !== selectedTemplate.id)
-      setTemplates(next); onTemplateCountChange(next.length)
+      setTemplates(next); onTemplateCountChange(next.filter(item => item.channel === channel).length)
       setTemplateId(''); setName(''); setSubject(''); setBody(''); setNotice('テンプレートを削除しました。')
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
@@ -91,10 +95,7 @@ export function SendFlowTemplatePanel({ projectId, canWrite, onContinue, onTempl
 
   return <section aria-label="文面テンプレート" className="space-y-4">
     <p className="muted text-sm">テンプレートは企業別の下書き作成に使います。メールの配信停止リンクは送信時に既存処理が付与します。</p>
-    <div className="actions justify-start border-0 p-0" role="tablist" aria-label="テンプレートの連絡方法">
-      <button type="button" className={channel === 'email' ? '' : 'secondary'} role="tab" aria-selected={channel === 'email'} onClick={() => { setChannel('email'); setTemplateId(''); setName(''); setSubject(''); setBody('') }}>メール用</button>
-      <button type="button" className={channel === 'form' ? '' : 'secondary'} role="tab" aria-selected={channel === 'form'} onClick={() => { setChannel('form'); setTemplateId(''); setName(''); setSubject(''); setBody('') }}>フォーム用</button>
-    </div>
+    <p className="badge">{channel === 'email' ? 'メール' : 'フォーム'}用テンプレート</p>
     {error && <p role="alert" className="error">{error}</p>}{notice && <p role="status">{notice}</p>}
     <label className="field">既存テンプレート<select disabled={busy} value={templateId} onChange={event => selectTemplate(event.target.value)}>
       <option value="">新しいテンプレートを作成</option>{matchingTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}
@@ -119,7 +120,6 @@ export function SendFlowTemplatePanel({ projectId, canWrite, onContinue, onTempl
     </div>
     <div className="actions flex-wrap">
       {canWrite && <><button type="button" disabled={busy || !name.trim() || !body.trim() || !stopMethod(body)} onClick={() => void save()}>{busy ? '保存中…' : templateId ? '変更を保存' : 'テンプレートを保存'}</button>{selectedTemplate && <button type="button" className="danger" disabled={busy} onClick={() => void remove()}>削除</button>}</>}
-      <button type="button" className="secondary" onClick={onContinue}>次へ：送信先と文面を用意</button>
     </div>
     {!canWrite && <p className="muted">閲覧のみです。テンプレートの作成・編集は所有者または編集者が行えます。</p>}
   </section>
