@@ -1,9 +1,10 @@
 """Read-only stored analysis overview; never authorizes or prepares a send."""
 
+from urllib.parse import urlsplit
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -16,7 +17,9 @@ from app.services.form_intelligence.analyzer import ANALYSIS_VERSION
 router = APIRouter(prefix="/api", tags=["Form readiness"])
 CATEGORIES = (
     "all|candidate|unanalyzed|prohibited|review|captcha|confirmation|"
-    "stale|error|missing_form|legacy|do_not_contact"
+    "stale|error|missing_form|legacy|do_not_contact|OTHER_UNSUPPORTED|NON_POST_METHOD|"
+    "DUPLICATE_INPUTS|MISSING_NAME_ATTRIBUTE|NO_NATIVE_SUBMIT|CUSTOM_SUBMIT_HANDLER|"
+    "NO_INPUT_FIELDS|JAVASCRIPT_CONFIRMATION|FILE_ATTACHMENT|MULTIPART_ONLY"
 )
 
 
@@ -59,6 +62,56 @@ def overview_query(project_id):
         )
         .exists()
     )
+    file_input = (
+        select(FormProfileField.id)
+        .where(
+            FormProfileField.form_profile_id == FormProfile.id,
+            FormProfileField.field_type == "file",
+        )
+        .exists()
+    )
+    compatibility_category = case(
+        (
+            and_(FormProfile.compatibility_reason_code == "MULTIPART_OR_FILE", file_input),
+            "FILE_ATTACHMENT",
+        ),
+        (FormProfile.compatibility_reason_code == "MULTIPART_OR_FILE", "MULTIPART_ONLY"),
+        (FormProfile.compatibility_reason_code == "NON_POST_METHOD", "NON_POST_METHOD"),
+        (FormProfile.compatibility_reason_code == "DUPLICATE_INPUTS", "DUPLICATE_INPUTS"),
+        (
+            FormProfile.compatibility_reason_code == "MISSING_NAME_ATTRIBUTE",
+            "MISSING_NAME_ATTRIBUTE",
+        ),
+        (FormProfile.compatibility_reason_code == "NO_NATIVE_SUBMIT", "NO_NATIVE_SUBMIT"),
+        (
+            FormProfile.compatibility_reason_code == "CUSTOM_SUBMIT_HANDLER",
+            "CUSTOM_SUBMIT_HANDLER",
+        ),
+        (FormProfile.compatibility_reason_code == "NO_INPUT_FIELDS", "NO_INPUT_FIELDS"),
+        (
+            FormProfile.compatibility_reason_code == "JAVASCRIPT_CONFIRMATION",
+            "JAVASCRIPT_CONFIRMATION",
+        ),
+        (
+            and_(
+                FormProfile.compatibility_reason_code != "",
+                FormProfile.compatibility_reason_code.not_in(
+                    (
+                        "MULTIPART_OR_FILE",
+                        "NON_POST_METHOD",
+                        "DUPLICATE_INPUTS",
+                        "MISSING_NAME_ATTRIBUTE",
+                        "NO_NATIVE_SUBMIT",
+                        "CUSTOM_SUBMIT_HANDLER",
+                        "NO_INPUT_FIELDS",
+                        "JAVASCRIPT_CONFIRMATION",
+                    )
+                ),
+            ),
+            "OTHER_UNSUPPORTED",
+        ),
+        else_=None,
+    )
     category = case(
         (
             Company.do_not_contact.is_(True) & Company.exclusion_reason.startswith("営業NG："),
@@ -77,6 +130,7 @@ def overview_query(project_id):
         (FormProfile.form_status == "STALE", "stale"),
         (FormProfile.form_found.is_(False), "missing_form"),
         (FormProfile.captcha_type != "CAPTCHA_NONE", "captcha"),
+        (compatibility_category.is_not(None), compatibility_category),
         (
             or_(
                 FormProfile.form_status != "READY",
@@ -151,7 +205,12 @@ def listing(
         items.append(
             {
                 "company_id": company.id,
-                "company_name": company.company_name,
+                "company_name": (
+                    (company.company_name or "").strip()
+                    or company.domain
+                    or (urlsplit(company.website_url).hostname if company.website_url else "")
+                    or "—"
+                ),
                 "category": group,
                 "form_url": profile.form_url if profile else company.contact_url,
                 "form_status": profile.form_status if profile else "UNANALYZED",

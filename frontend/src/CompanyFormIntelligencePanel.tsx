@@ -17,8 +17,11 @@ const salesNames: Record<FormProfile['sales_contact_status'], string> = {
   ALLOWED: '営業禁止表記は未検出', PROHIBITED: '営業禁止', UNCERTAIN: '要確認',
 }
 const captchaNames: Record<FormProfile['captcha_type'], string> = {
-  CAPTCHA_NONE: 'なし', CAPTCHA_RECAPTCHA: 'reCAPTCHA', CAPTCHA_HCAPTCHA: 'hCaptcha',
-  CAPTCHA_TURNSTILE: 'Turnstile', CAPTCHA_OTHER: 'その他',
+  CAPTCHA_NONE: 'なし', CAPTCHA_RECAPTCHA: 'reCAPTCHA（旧解析）',
+  CAPTCHA_RECAPTCHA_V2: 'reCAPTCHA v2（チェックボックス）',
+  CAPTCHA_RECAPTCHA_V3: 'reCAPTCHA v3（非表示）',
+  CAPTCHA_CF7_RECAPTCHA: 'Contact Form 7 reCAPTCHA', CAPTCHA_HCAPTCHA: 'hCaptcha',
+  CAPTCHA_TURNSTILE: 'Turnstile', CAPTCHA_IMAGE: '画像認証', CAPTCHA_OTHER: 'その他',
 }
 
 type Props = {

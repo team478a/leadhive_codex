@@ -96,7 +96,13 @@ def mock_page(monkeypatch, profile, html=HTML, url=None, failure=False):
             False,
         ),
         ("<p>フォームなし</p>", "FORM_NOT_FOUND", "NOT_DETECTED_STATIC", False),
-        (HTML + '<script src="recaptcha.js"></script>', "SAME_STRUCTURE", "DETECTED", False),
+        (
+            HTML
+            + '<script src="https://www.google.com/recaptcha/api.js?render=site-key"></script>',
+            "SAME_STRUCTURE",
+            "DETECTED",
+            False,
+        ),
         (HTML + "営業メールはご遠慮ください", "SAME_STRUCTURE", "NOT_DETECTED_STATIC", True),
         (
             HTML + "営業・勧誘を目的としたお問い合わせはご遠慮ください。",

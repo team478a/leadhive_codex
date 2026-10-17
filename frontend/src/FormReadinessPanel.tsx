@@ -22,6 +22,11 @@ const labels: Record<string, string> = {
   candidate: '解析条件の候補', unanalyzed: '未解析', prohibited: '営業NGリスト', do_not_contact: '連絡禁止',
   review: '内容・項目の確認', captcha: 'CAPTCHA・人の操作が必要', confirmation: '確認画面・段階の確認',
   stale: '変更検出・再解析', error: '解析エラー', missing_form: 'フォーム未発見', legacy: '旧解析・再解析',
+  OTHER_UNSUPPORTED: 'その他の非対応', NON_POST_METHOD: 'POST以外',
+  DUPLICATE_INPUTS: '同名の複数入力', MISSING_NAME_ATTRIBUTE: 'name属性なし',
+  NO_NATIVE_SUBMIT: '標準の送信ボタンなし', CUSTOM_SUBMIT_HANDLER: '送信ボタンの独自処理',
+  NO_INPUT_FIELDS: '入力項目なし', JAVASCRIPT_CONFIRMATION: '確認ボタンがJavaScript',
+  FILE_ATTACHMENT: 'ファイル添付欄あり', MULTIPART_ONLY: 'multipart形式のみ（添付欄なし）',
 }
 
 const nextActions: Record<string, string> = {
