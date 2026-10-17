@@ -297,9 +297,7 @@ def browser_analysis_summary(db: Session, project_id: UUID) -> dict:
             func.count(func.distinct(FormProfile.company_id)).label("total"),
             func.max(FormProfile.last_analyzed_at).label("last_analyzed_at"),
             func.count(
-                func.distinct(
-                    case((and_(no_form, ~embed_unverified), FormProfile.company_id))
-                )
+                func.distinct(case((and_(no_form, ~embed_unverified), FormProfile.company_id)))
             ).label("contact_page_no_form"),
             func.count(
                 func.distinct(case((and_(no_form, embed_unverified), FormProfile.company_id)))
