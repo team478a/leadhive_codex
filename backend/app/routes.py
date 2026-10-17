@@ -10,8 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
-from app.models import AuthSession, Project, ProjectMember, TargetProfile, User
+from app.models import AuthSession, Project, ProjectMember, TargetProfile, User, WorkerHeartbeat
 from app.project_access import accessible_project_condition, project_access
+from app.runtime_version import RUNTIME_COMMIT
 from app.schemas import (
     Login,
     ProfileInput,
@@ -35,7 +36,29 @@ def health(db: Session = Depends(get_db)):
     except SQLAlchemyError:
         logger.error("database error: health check failed")
         raise HTTPException(503, "データベースに接続できません。") from None
-    return {"status": "ok", "database": "ok"}
+    return {"status": "ok", "database": "ok", "api_commit": RUNTIME_COMMIT}
+
+
+@router.get("/runtime-info")
+def runtime_info(db: Session = Depends(get_db), _user: User = Depends(current_user)):
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
+    workers = db.scalars(
+        select(WorkerHeartbeat)
+        .where(WorkerHeartbeat.last_seen_at >= cutoff)
+        .order_by(WorkerHeartbeat.last_seen_at.desc(), WorkerHeartbeat.instance_id)
+        .limit(20)
+    ).all()
+    return {
+        "api_commit": RUNTIME_COMMIT,
+        "workers": [
+            {
+                "commit_id": worker.commit_id,
+                "host_name": worker.host_name,
+                "last_seen_at": worker.last_seen_at,
+            }
+            for worker in workers
+        ],
+    }
 
 
 @router.post("/auth/login", response_model=UserOut)

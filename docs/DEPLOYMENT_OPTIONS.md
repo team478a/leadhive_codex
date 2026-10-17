@@ -46,6 +46,24 @@ Native版の制限は同梱README-FIRST.txtを優先してください。
 配置手順はrepositoryの`docs/RENDER_STAGING_SETUP.md`にあります。
 クラウド管理用設定や秘密値はローカル配布ZIPへ同梱しません。
 
+## 本番のワーカーの場所と更新手順
+
+2026-10-17時点で、リポジトリにある配置定義から実際の本番ワーカーの場所は確認できません。
+`deploy/cloud/render-staging.yaml` はWeb/API/DBのみで、APIの`WORKER_PAUSED`も`true`です。
+`compose.yaml`はDBのみ、`deploy/leadhive-worker.service.example`はsystemd用の例です。
+したがって、実際の本番ワーカーがRender、PCのDocker、systemdのどれで稼働しているかは未確認です。
+本番の配置先を変更する前に、Render Dashboardと稼働PC/VMのDocker・systemd状態を管理者が確認してください。
+
+確認できる環境では、ログイン後の画面下部にAPI版と直近5分以内のワーカー版・ホスト名が表示されます。
+フォームDMの最終集計には、そのOperationJobを実行したワーカー版・ホスト名も表示されます。
+版が異なる場合は、APIと同じGit commitへワーカーを更新し、再度heartbeatと画面表示を確認してください。
+
+- Renderにワーカーサービスが実在する場合：Dashboardでそのサービスを特定し、APIと同じブランチ・commitを選んで手動Deployします。現在のBlueprintにはworkerサービスがないため、サービスの存在を推測して追加・起動しないでください。
+- Dockerの場合：同一commitを使い、PowerShellで`$commit = git rev-parse --short=7 HEAD`を取得してから`docker build --build-arg "LEADHIVE_GIT_COMMIT=$commit" -f backend/Dockerfile backend`でイメージを作成し、実際の配置定義に従ってworkerコンテナを更新します。
+- systemdの場合：`/opt/leadhive`のコードと依存関係をAPIと同じcommitに更新し、`sudo systemctl restart leadhive-worker`後に`sudo journalctl -u leadhive-worker -n 100`と画面のheartbeatを確認します。
+
+再起動前に実行中ジョブ・送信停止状態・バックアップを確認してください。GitHubのmergeだけでは、Renderやローカルworkerは更新されません。
+
 ## Codexとの接続
 
 クラウド本体とPC側Codexを組み合わせる構成を準備しています。

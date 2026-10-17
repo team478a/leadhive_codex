@@ -436,6 +436,12 @@ def form_dm_readiness(
         "limit": PAGE_SIZE,
         "items": items,
         "last_aggregated_at": snapshot.finished_at if snapshot else None,
+        "last_aggregated_by_commit": (snapshot.payload or {}).get("executed_by_commit", "unknown")
+        if snapshot
+        else None,
+        "last_aggregated_by_host": (snapshot.payload or {}).get("executed_by_host", "unknown")
+        if snapshot
+        else None,
         "active_job": OperationJobOut.model_validate(active_job) if active_job else None,
         "read_only": True,
         "external_requests": 0,
