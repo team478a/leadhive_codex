@@ -172,9 +172,7 @@ def sender_values(settings: FormSenderSettings | None) -> dict[str, str]:
             if value
         )
     postal_digits = "".join(
-        character
-        for character in normalize(values["postal_code"])
-        if character.isdigit()
+        character for character in normalize(values["postal_code"]) if character.isdigit()
     )
     if len(postal_digits) == 7:
         values["postal_code_first"] = postal_digits[:3]
@@ -190,12 +188,10 @@ def sender_values(settings: FormSenderSettings | None) -> dict[str, str]:
         ):
             values[key] = values[key] or value
     elif not values["phone"] and all(
-        values[key]
-        for key in ("phone_area_code", "phone_exchange_code", "phone_line_number")
+        values[key] for key in ("phone_area_code", "phone_exchange_code", "phone_line_number")
     ):
         values["phone"] = "-".join(
-            values[key]
-            for key in ("phone_area_code", "phone_exchange_code", "phone_line_number")
+            values[key] for key in ("phone_area_code", "phone_exchange_code", "phone_line_number")
         )
     return values
 

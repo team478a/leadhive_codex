@@ -156,18 +156,28 @@ def dom_mapping(field_type: str, name: str) -> tuple[str, float] | None:
     joined_name = "_".join(name_parts)
     name_part_set = set(name_parts)
 
-    has_family_name = bool(name_part_set & {"lastname", "surname", "sei", "familyname"}) or {
-        "last",
-        "name",
-    } <= name_part_set or {"family", "name"} <= name_part_set
+    has_family_name = (
+        bool(name_part_set & {"lastname", "surname", "sei", "familyname"})
+        or {
+            "last",
+            "name",
+        }
+        <= name_part_set
+        or {"family", "name"} <= name_part_set
+    )
     if has_family_name:
         if any(marker in joined_name for marker in ("kana", "furigana")):
             return "last_name_furigana", 0.98
         return "last_name", 0.98
-    has_given_name = bool(name_part_set & {"firstname", "givenname", "mei"}) or {
-        "first",
-        "name",
-    } <= name_part_set or {"given", "name"} <= name_part_set
+    has_given_name = (
+        bool(name_part_set & {"firstname", "givenname", "mei"})
+        or {
+            "first",
+            "name",
+        }
+        <= name_part_set
+        or {"given", "name"} <= name_part_set
+    )
     if has_given_name:
         if any(marker in joined_name for marker in ("kana", "furigana")):
             return "first_name_furigana", 0.98
