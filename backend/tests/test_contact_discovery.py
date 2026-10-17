@@ -257,7 +257,7 @@ FIXTURES = Path(__file__).parent / "fixtures" / "contact_recall"
 
 
 def test_contact_recall_changes_bump_form_analysis_version():
-    assert ANALYSIS_VERSION == "2.5"
+    assert ANALYSIS_VERSION == "2.6"
 
 
 def fixture(name):

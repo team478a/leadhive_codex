@@ -193,12 +193,23 @@ def test_admin_can_manage_form_sender_settings(auth, users, db):
         json={
             "company_name": "LeadHive株式会社",
             "department": "営業部",
+            "position": "部長",
             "contact_name": "蜂須賀 太郎",
+            "last_name": "蜂須賀",
+            "first_name": "太郎",
+            "last_name_furigana": "ハチスカ",
+            "first_name_furigana": "タロウ",
             "email": "sales@example.com",
             "phone": "03-1234-5678",
+            "phone_area_code": "03",
+            "phone_exchange_code": "1234",
+            "phone_line_number": "5678",
             "website": "https://example.com",
         },
     )
     assert saved.status_code == 200
     assert saved.json()["company_name"] == "LeadHive株式会社"
+    assert saved.json()["last_name_furigana"] == "ハチスカ"
+    assert saved.json()["phone_exchange_code"] == "1234"
     assert db.get(FormSenderSettings, 1).email == "sales@example.com"
+    assert db.get(FormSenderSettings, 1).phone_line_number == "5678"

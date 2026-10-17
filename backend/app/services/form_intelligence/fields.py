@@ -150,8 +150,73 @@ def _selector(element: Tag, position: int) -> str:
     return f"{element.name}:nth-of-type({position + 1})"
 
 
+def _control_maxlength(element: Tag) -> int | None:
+    maxlength = element.get("maxlength")
+    if not isinstance(maxlength, str):
+        return None
+    try:
+        return int(maxlength)
+    except ValueError:
+        return None
+
+
+def _map_split_groups(fields: list[dict], elements: list[Tag]) -> None:
+    for index in range(len(fields) - 1):
+        first, second = fields[index : index + 2]
+        first_element, second_element = elements[index : index + 2]
+        if first_element.name != "input" or second_element.name != "input":
+            continue
+        if first.get("mapped_key") != "postal_code" or second.get("mapped_key") != "postal_code":
+            continue
+        context = normalize(
+            " ".join(
+                str(value or "")
+                for value in (
+                    first.get("surrounding_text"),
+                    first.get("label"),
+                    second.get("surrounding_text"),
+                    second.get("label"),
+                )
+            )
+        )
+        if not any(marker in context for marker in ("郵便番号", "postal", "zip", "〒")):
+            continue
+        if _control_maxlength(first_element) == 3 and _control_maxlength(second_element) == 4:
+            first["mapped_key"] = "postal_code_first"
+            second["mapped_key"] = "postal_code_last"
+
+    for index in range(len(fields) - 2):
+        group = fields[index : index + 3]
+        group_elements = elements[index : index + 3]
+        if any(element.name != "input" for element in group_elements):
+            continue
+        if any(field.get("mapped_key") != "phone" for field in group):
+            continue
+        context = normalize(
+            " ".join(
+                str(value or "")
+                for field in group
+                for value in (field.get("surrounding_text"), field.get("label"))
+            )
+        )
+        if not any(marker in context for marker in ("電話", "tel", "phone")):
+            continue
+        lengths = [_control_maxlength(element) for element in group_elements]
+        if (
+            lengths[0] is not None
+            and 2 <= lengths[0] <= 5
+            and lengths[1] is not None
+            and 2 <= lengths[1] <= 4
+            and lengths[2] == 4
+        ):
+            group[0]["mapped_key"] = "phone_area_code"
+            group[1]["mapped_key"] = "phone_exchange_code"
+            group[2]["mapped_key"] = "phone_line_number"
+
+
 def parse_form_fields(form: Tag) -> list[dict]:
     fields: list[dict[str, Any]] = []
+    field_elements: list[Tag] = []
     grouped = set()
     for element in form.select("input,textarea,select,button"):
         if element.has_attr("disabled"):
@@ -206,6 +271,11 @@ def parse_form_fields(form: Tag) -> list[dict]:
             mapped_key, confidence, source = "other", 1.0, "DOM"
         elif mapped:
             mapped_key, confidence, source = mapped[0], mapped[1], "DOM"
+            segment_mapping = rule_mapping(
+                " ".join(filter(None, (surrounding or label, name))), field_type
+            )
+            if mapped_key == "phone" and segment_mapping[0].startswith("phone_"):
+                mapped_key, confidence, source = segment_mapping[0], segment_mapping[1], "RULE"
         else:
             # Choice labels such as 電話/メール are values, not field purposes.
             mapping_text = " ".join(
@@ -254,6 +324,8 @@ def parse_form_fields(form: Tag) -> list[dict]:
                 "surrounding_text": surrounding,
             }
         )
+        field_elements.append(element)
+    _map_split_groups(fields, field_elements)
     return fields
 
 

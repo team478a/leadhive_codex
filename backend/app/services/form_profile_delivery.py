@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass, replace
 from uuid import UUID
 
@@ -15,6 +16,7 @@ from app.services.form_choice_groups import inventory as choice_group_inventory
 from app.services.form_delivery import FormDeliveryError, FormPreview, inspect_form
 from app.services.form_intelligence.contact_method import sender_contact_review_reason
 from app.services.form_intelligence.fields import GROUP_REVIEW_MARKER, mapping_review_reason
+from app.services.form_intelligence.rules import normalize
 
 
 @dataclass(frozen=True)
@@ -144,8 +146,13 @@ def sender_values(settings: FormSenderSettings | None) -> dict[str, str]:
             "last_name",
             "first_name",
             "furigana",
+            "last_name_furigana",
+            "first_name_furigana",
             "email",
             "phone",
+            "phone_area_code",
+            "phone_exchange_code",
+            "phone_line_number",
             "postal_code",
             "prefecture",
             "city",
@@ -157,6 +164,34 @@ def sender_values(settings: FormSenderSettings | None) -> dict[str, str]:
     if not values["contact_name"]:
         values["contact_name"] = " ".join(
             value for value in (values["last_name"], values["first_name"]) if value
+        )
+    if not values["furigana"]:
+        values["furigana"] = " ".join(
+            value
+            for value in (values["last_name_furigana"], values["first_name_furigana"])
+            if value
+        )
+    postal_digits = "".join(
+        character for character in normalize(values["postal_code"]) if character.isdigit()
+    )
+    if len(postal_digits) == 7:
+        values["postal_code_first"] = postal_digits[:3]
+        values["postal_code_last"] = postal_digits[3:]
+    phone_parts = re.fullmatch(
+        r"\s*(\d+)\s*[-‐‑‒–—−ー－]\s*(\d+)\s*[-‐‑‒–—−ー－]\s*(\d+)\s*",
+        values["phone"],
+    )
+    if phone_parts:
+        for key, value in zip(
+            ("phone_area_code", "phone_exchange_code", "phone_line_number"),
+            phone_parts.groups(),
+        ):
+            values[key] = values[key] or value
+    elif not values["phone"] and all(
+        values[key] for key in ("phone_area_code", "phone_exchange_code", "phone_line_number")
+    ):
+        values["phone"] = "-".join(
+            values[key] for key in ("phone_area_code", "phone_exchange_code", "phone_line_number")
         )
     return values
 
