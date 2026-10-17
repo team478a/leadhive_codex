@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models import Activity
 
@@ -92,6 +92,38 @@ def latest_company_feedback(db, company):
             if is_current(event, company):
                 return event
     return None
+
+
+def latest_company_feedbacks(db, companies):
+    if not companies:
+        return {}
+    company_by_id = {company.id: company for company in companies}
+    row_number = func.row_number().over(
+        partition_by=Activity.company_id,
+        order_by=(Activity.created_at.desc(), Activity.id.desc()),
+    )
+    recent = (
+        select(Activity.company_id, Activity.note, row_number.label("row_number"))
+        .where(
+            Activity.company_id.in_(company_by_id),
+            Activity.note.startswith(PREFIX),
+        )
+        .subquery()
+    )
+    rows = db.execute(
+        select(recent.c.company_id, recent.c.note, recent.c.row_number)
+        .where(recent.c.row_number <= 100)
+        .order_by(recent.c.company_id, recent.c.row_number)
+    ).all()
+    feedback = {}
+    for company_id, note, _row_number in rows:
+        if company_id in feedback:
+            continue
+        event = decode(note)
+        company = company_by_id[company_id]
+        if event and event.get("subject") == "company" and is_current(event, company):
+            feedback[company_id] = event
+    return feedback
 
 
 def decode(note: str):

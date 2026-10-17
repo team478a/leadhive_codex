@@ -12,6 +12,7 @@ const exclusionLabels: Record<string, string> = {
   suppression_email: 'メール抑止', suppression_domain: 'ドメイン抑止',
   suppression_phone: '電話番号抑止', destination_missing: '送信先なし',
   form_sales_prohibited: 'フォームでの営業禁止', rendered_content_too_long: '本文が長すぎます',
+  non_company_suspected: '非企業の疑い',
 }
 
 export function SendFlowDraftPanel({ projectId, canWrite, onContinue, onNeedTemplate, onCreated }: {
