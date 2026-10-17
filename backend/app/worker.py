@@ -1001,7 +1001,13 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
                     else {"primary_reason": "OTHER_UNSUPPORTED"}
                 )
                 if readiness["primary_reason"] != "READY":
-                    outcome["reason_code"] = readiness["primary_reason"]
+                    readiness_reason = readiness["primary_reason"]
+                    outcome["reason_code"] = (
+                        "CAPTCHA"
+                        if readiness_reason
+                        in {"CAPTCHA_VISIBLE", "CAPTCHA_INVISIBLE", "CAPTCHA_LEGACY"}
+                        else readiness_reason
+                    )
                 else:
                     draft = db.scalar(
                         select(OutreachDraft)
