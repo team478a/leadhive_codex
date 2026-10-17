@@ -81,14 +81,15 @@ def test_sales_ng_and_captcha_are_preserved(auth, db, monkeypatch):
         monkeypatch,
         {
             company.website_url.rstrip("/"): HTML
-            + '<p>営業目的のお問い合わせはお断りします</p><script src="recaptcha.js"></script>'
+            + '<p>営業目的のお問い合わせはお断りします</p>'
+            '<script src="https://www.google.com/recaptcha/api.js?render=site-key"></script>'
         },
     )
     profile = analyzer.analyze_company_forms(db, company, allow_ai=False)[0]
     assert profile.form_status == "BLOCKED"
     assert profile.sales_contact_status == "PROHIBITED"
     assert profile.delivery_supported is False
-    assert profile.captcha_type == "CAPTCHA_RECAPTCHA"
+    assert profile.captcha_type == "CAPTCHA_RECAPTCHA_V3"
     assert company.do_not_contact is True
 
 

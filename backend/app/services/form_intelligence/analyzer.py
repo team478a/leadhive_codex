@@ -104,6 +104,15 @@ def _captcha_type(html: str, form: Tag | None = None) -> str:
     forms = [form] if form is not None else page.select("form")
     page_value = str(page).lower()
     if not forms:
+        if "wpcf7" in page_value and any(
+            marker in page_value
+            for marker in ("wpcf7-recaptcha", "_wpcf7_recaptcha", "wpcf7recaptcha")
+        ):
+            return "CAPTCHA_CF7_RECAPTCHA"
+        if "grecaptcha.execute" in page_value or re.search(
+            r"recaptcha/api(?:\.js)?[^\"']*[?&]render=", page_value
+        ):
+            return "CAPTCHA_RECAPTCHA_V3"
         if "hcaptcha" in page_value or "h-captcha" in page_value:
             return "CAPTCHA_HCAPTCHA"
         if "turnstile" in page_value or "cf-turnstile" in page_value:

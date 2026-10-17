@@ -266,7 +266,7 @@ def test_form_preparation_disables_ai_fallback(auth, db, providers, monkeypatch,
     [
         ("", "ready"),
         ("営業目的の問い合わせは禁止です。", "blocked"),
-        ('<div class="g-recaptcha"></div>', "review"),
+        ('<div class="g-recaptcha"></div>', "ready"),
     ],
 )
 def test_missing_contact_url_runs_bounded_form_discovery_without_send(

@@ -66,7 +66,7 @@ def test_readiness_splits_unsupported_reasons_and_multipart_files(auth, workspac
             project_id=project.id,
             company_name="" if index == 0 else label,
             domain="fallback.example" if index == 0 else f"{index}.example",
-            source="test",
+            source="url",
             website_url=f"https://{index}.example",
         )
         db.add(company)
