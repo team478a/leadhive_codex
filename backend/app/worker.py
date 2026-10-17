@@ -7,7 +7,6 @@ from datetime import datetime, timedelta, timezone
 from threading import Event, Thread
 
 from sqlalchemy import func, or_, select
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.config import settings
 from app.database import SessionLocal
@@ -30,9 +29,8 @@ from app.models import (
     Project,
     SearchSchedule,
     TargetProfile,
-    WorkerHeartbeat,
 )
-from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST, WORKER_INSTANCE_ID
+from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST
 from app.services.ai_analysis import analyze_company_ai
 from app.services.application_settings import apply_application_settings
 from app.services.bulk_form_delivery import process_form_batch_item
@@ -51,6 +49,7 @@ from app.services.operations import add_operation_job, refresh_company_ids
 from app.services.outbound_guard import require_legacy_form_enabled, require_outbound_enabled
 from app.services.processing_usage import capture_usage, measured_search, persist_usage
 from app.services.web_analysis import analyze
+from app.services.worker_heartbeat import record_worker_heartbeat
 
 logger = logging.getLogger("leadhive")
 EMAIL_CLAIM_LOCK_ID = 4_781_001
@@ -59,33 +58,6 @@ HEARTBEAT_INTERVAL_SECONDS = 30
 
 def lease_deadline() -> datetime:
     return datetime.now(timezone.utc) + timedelta(seconds=settings.worker_lease_seconds)
-
-
-def record_worker_heartbeat(
-    db,
-    *,
-    instance_id: str = WORKER_INSTANCE_ID,
-    host_name: str = WORKER_HOST,
-    commit_id: str = RUNTIME_COMMIT,
-) -> None:
-    now = datetime.now(timezone.utc)
-    statement = pg_insert(WorkerHeartbeat).values(
-        instance_id=instance_id,
-        host_name=host_name,
-        commit_id=commit_id,
-        last_seen_at=now,
-    )
-    db.execute(
-        statement.on_conflict_do_update(
-            index_elements=[WorkerHeartbeat.instance_id],
-            set_={
-                "host_name": statement.excluded.host_name,
-                "commit_id": statement.excluded.commit_id,
-                "last_seen_at": statement.excluded.last_seen_at,
-            },
-        )
-    )
-    db.commit()
 
 
 def _heartbeat_once() -> None:
