@@ -218,17 +218,17 @@ def _control_signature(control: Tag) -> dict:
             for option in control.select("option")[:100]
         ]
     if control.name in {"button", "input"} and signature["type"] in {"submit", "button"}:
-        signature["label"] = control.get_text(" ", strip=True) or str(
-            control.get("value") or ""
-        )
+        signature["label"] = control.get_text(" ", strip=True) or str(control.get("value") or "")
     return signature
 
 
 def rendered_dom_fingerprint(
     url: str, form: Tag | None, fields: list[dict], page: BeautifulSoup
 ) -> str:
-    controls = form.select("input, textarea, select, button") if form else page.select(
-        "input, textarea, select, button, [role='textbox']"
+    controls = (
+        form.select("input, textarea, select, button")
+        if form
+        else page.select("input, textarea, select, button, [role='textbox']")
     )
     form_signature = None
     if form is not None:
@@ -453,8 +453,7 @@ def save_rendered_analysis(
             sales_status=item.sales_contact_status,
             captcha=(
                 original.captcha_type
-                if item.captcha_type == "CAPTCHA_NONE"
-                and original.captcha_type != "CAPTCHA_NONE"
+                if item.captcha_type == "CAPTCHA_NONE" and original.captcha_type != "CAPTCHA_NONE"
                 else item.captcha_type
             ),
             confirmation=None,

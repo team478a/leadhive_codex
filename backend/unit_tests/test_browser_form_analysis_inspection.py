@@ -14,7 +14,9 @@ FIXTURE = Path(__file__).parents[1] / "browser_worker" / "fixtures" / "browser_a
 
 
 def test_rendered_dom_reuses_form_compatibility_captcha_and_confirmation_rules():
-    results = inspect_rendered_dom(FIXTURE.read_text(encoding="utf-8"), "https://fixture.example/contact")
+    results = inspect_rendered_dom(
+        FIXTURE.read_text(encoding="utf-8"), "https://fixture.example/contact"
+    )
 
     assert [result.compatibility.reason_code for result in results] == [
         "CONTACT_FORM_7",
@@ -130,8 +132,12 @@ def test_browser_analysis_preserves_known_captcha_when_rendered_dom_cannot_see_i
 def test_rendered_dom_fingerprint_ignores_prefilled_values():
     template = """<!doctype html><form method="post"><textarea name="message">{value}</textarea>
     <input name="email" value="{value}"><button type="submit">送信</button></form>"""
-    first = inspect_rendered_dom(template.format(value="sensitive one"), "https://fixture.example/contact")[0]
-    second = inspect_rendered_dom(template.format(value="sensitive two"), "https://fixture.example/contact")[0]
+    first = inspect_rendered_dom(
+        template.format(value="sensitive one"), "https://fixture.example/contact"
+    )[0]
+    second = inspect_rendered_dom(
+        template.format(value="sensitive two"), "https://fixture.example/contact"
+    )[0]
 
     assert first.fingerprint == second.fingerprint
 
@@ -205,4 +211,4 @@ def test_dom_snapshot_redacts_fields_without_mutating_or_submitting_the_page():
     assert current_value == "private@example.invalid"
     assert "private@example.invalid" not in html
     assert "private text" not in html
-    assert soup.select_one('input[type="submit"]')['value'] == "送信"
+    assert soup.select_one('input[type="submit"]')["value"] == "送信"

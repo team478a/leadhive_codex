@@ -295,7 +295,9 @@ def _upsert_profile(
     fingerprint = (
         fingerprint_override
         if fingerprint_override is not None
-        else form_fingerprint(fields) if fields else ""
+        else form_fingerprint(fields)
+        if fields
+        else ""
     )
     status = (
         "ERROR"
