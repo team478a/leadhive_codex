@@ -24,6 +24,7 @@ async function setup(page: Page, count = 2, role = 'editor', openGuide = true, a
     else if (path.endsWith('/members')) body = [{ email: 'operator@example.test', role }]
     else if (path === '/api/dashboard') body = { total_companies: 10 }
     else if (path === '/api/outreach-execution-status') body = { outbound_enabled: false }
+    else if (path === '/api/runtime-info') body = { api_commit: 'test-commit', workers: [] }
     else if (path.endsWith('/company-list')) body = { items: [], total: 0 }
     else if (path.endsWith('/data-quality') || path.endsWith('/deal-pipeline') || path.endsWith('/analysis-refresh-schedule')) body = null
     else if (path.endsWith('/form-readiness')) body = { counts: {}, items: [], total: 0, company_total: 0 }

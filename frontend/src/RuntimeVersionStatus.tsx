@@ -4,6 +4,15 @@ import { api, errorMessage } from './api'
 type WorkerVersion = { commit_id: string; host_name: string; last_seen_at: string }
 type RuntimeInfo = { api_commit: string; workers: WorkerVersion[] }
 
+function normalizeRuntimeInfo(value: unknown): RuntimeInfo {
+  if (!value || typeof value !== 'object') return { api_commit: 'unknown', workers: [] }
+  const candidate = value as Partial<RuntimeInfo>
+  return {
+    api_commit: typeof candidate.api_commit === 'string' ? candidate.api_commit : 'unknown',
+    workers: Array.isArray(candidate.workers) ? candidate.workers : [],
+  }
+}
+
 export function RuntimeVersionStatus() {
   const [info, setInfo] = useState<RuntimeInfo | null>(null)
   const [error, setError] = useState('')
@@ -11,7 +20,7 @@ export function RuntimeVersionStatus() {
   useEffect(() => {
     let active = true
     const refresh = () => api<RuntimeInfo>('/runtime-info')
-      .then(value => { if (active) { setInfo(value); setError('') } })
+      .then(value => { if (active) { setInfo(normalizeRuntimeInfo(value)); setError('') } })
       .catch(reason => { if (active) setError(errorMessage(reason)) })
     void refresh()
     const timer = window.setInterval(() => { void refresh() }, 60_000)
