@@ -4,7 +4,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import object_session
 
-from app.models import FormAnalysisLog, OperationJob
+from app.models import FormAnalysisLog, FormDmReadinessResult, OperationJob
 from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
 
@@ -170,3 +170,68 @@ def test_confirm_requires_no_sales_prohibition_confirmation(auth, form_source):
     response = auth.post(f"/api/form-profiles/{item['profile_id']}/review-decision", json=payload)
 
     assert response.status_code == 422
+
+
+def test_unreviewed_ready_form_uses_only_sales_prohibition_confirmation(auth, form_source, db):
+    project, company, _, profile = form_source[:4]
+    profile.form_status = "READY"
+    profile.delivery_supported = True
+    profile.sales_contact_status = "ALLOWED"
+    profile.captcha_type = "CAPTCHA_NONE"
+    profile.confirmation_page = False
+    snapshot = OperationJob(
+        project_id=project.id,
+        operation_type="form_dm_readiness",
+        status="completed",
+        payload={},
+        total_count=1,
+        processed_count=1,
+        success_count=1,
+        finished_at=datetime.now(timezone.utc),
+    )
+    db.add(snapshot)
+    db.flush()
+    db.add(
+        FormDmReadinessResult(
+            job_id=snapshot.id,
+            company_id=company.id,
+            profile_id=profile.id,
+            primary_reason="READY",
+            secondary_reasons=[],
+            review_queue_eligible=False,
+        )
+    )
+    db.commit()
+    endpoint = f"/api/projects/{project.id}/form-review-queue"
+
+    queue = auth.get(endpoint).json()
+
+    assert queue["total"] == 1
+    item = queue["items"][0]
+    assert item["ready_confirmation_only"] is True
+    assert item["fields"] == []
+    assert item["groups"] == []
+    assert item["saved_groups"] == []
+    decision_url = f"/api/form-profiles/{profile.id}/review-decision"
+    payload = {
+        "action": "CONFIRM",
+        "expected_fingerprint": item["fingerprint"],
+        "expected_fields_hash": item["fields_hash"],
+        "confirmed_no_sales_prohibition": False,
+    }
+    assert auth.post(decision_url, json=payload).status_code == 422
+
+    payload["confirmed_no_sales_prohibition"] = True
+    response = auth.post(decision_url, json=payload)
+
+    assert response.status_code == 200, response.text
+    log = db.scalar(
+        select(FormAnalysisLog).where(
+            FormAnalysisLog.form_profile_id == profile.id,
+            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+        )
+    )
+    assert log.details["review_mode"] == "READY_CONFIRMATION_ONLY"
+    assert log.details["send_authorized"] is False
+    assert log.details["execution_allowed"] is False
+    assert auth.get(endpoint).json()["total"] == 0

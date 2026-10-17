@@ -22,7 +22,7 @@ for (const role of ['owner', 'viewer'] as const) {
       else if (path === '/api/dashboard') data = { total_companies: 1 }
       else if (path === '/api/outreach-execution-status') data = { outbound_enabled: false }
       else if (path.endsWith('/bulk-send-preview')) data = { items: [], skipped: {}, email_enabled: false, form_enabled: false }
-      else if (path.endsWith('/send-flow-summary')) data = { readiness_completed_at: null, target_company_count: 1, draft_counts: { email: 0, form: 0 }, form_reviewed_count: 0, approval_counts: { pending: { email: 0, form: 0 }, approved_unsent: { email: 0, form: 0 } }, today: { sent: 0, reserved: 0 }, results: { sent: 0, failed: 0, unknown: 0 } }
+      else if (path.endsWith('/send-flow-summary')) data = { readiness_completed_at: null, latest_form_draft_updated_at: null, target_company_count: 1, draft_counts: { email: 0, form: 0 }, form_reviewed_count: 0, approval_counts: { pending: { email: 0, form: 0 }, approved_unsent: { email: 0, form: 0 } }, today: { sent: 0, reserved: 0 }, results: { sent: 0, failed: 0, unknown: 0 } }
       else if (path.endsWith('/outreach-templates')) data = []
       else if (path === '/api/target-profiles') data = [profile]
       else if (path === '/api/projects' && method === 'POST') {

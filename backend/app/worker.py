@@ -936,6 +936,7 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         _ranked_form_rows,
         classify_profile,
     )
+    from app.models import FormAnalysisLog
 
     original_job = job
     query = _ranked_form_rows(job.project_id)
@@ -952,14 +953,36 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         if not rows:
             break
         classified_at = datetime.now(timezone.utc)
+        profile_fingerprints = {
+            profile.id: profile.fingerprint for _, profile in rows if profile is not None
+        }
+        confirmed_review_pairs = {
+            (profile_id, fingerprint)
+            for profile_id, fingerprint, confirmed in db.execute(
+                select(
+                    FormAnalysisLog.form_profile_id,
+                    FormAnalysisLog.details["profile_fingerprint"].astext,
+                    FormAnalysisLog.details["confirmed_no_sales_prohibition"].astext,
+                ).where(
+                    FormAnalysisLog.form_profile_id.in_(profile_fingerprints),
+                    FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+                )
+            ).all()
+            if confirmed == "true"
+        }
         results = []
         for company, profile in rows:
             outcome = classify_profile(db, company, profile)
             reasons = [outcome["primary_reason"], *outcome["secondary_reasons"]]
+            ready_confirmation_required = (
+                outcome["primary_reason"] == "READY"
+                and profile.is_primary is True
+                and (profile.id, profile.fingerprint) not in confirmed_review_pairs
+            )
             queue_eligible = (
                 profile.is_primary is True
                 and len(profile.fingerprint or "") == 64
-                and bool(REVIEW_REASONS.intersection(reasons))
+                and (bool(REVIEW_REASONS.intersection(reasons)) or ready_confirmation_required)
                 and not bool(BLOCKING_REASONS.intersection(reasons))
             )
             results.append(
@@ -989,7 +1012,7 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
     from fastapi import HTTPException
 
     from app.form_dm_readiness_routes import _preparation_reason, classify_profile
-    from app.models import ApprovalRequest, FormProfile, OutreachDraft, User
+    from app.models import ApprovalRequest, FormAnalysisLog, FormProfile, OutreachDraft, User
     from app.services import human_approval
     from app.services.form_approval_preparation import preparation
 
@@ -1027,6 +1050,21 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
                     if profile
                     else {"primary_reason": "OTHER_UNSUPPORTED"}
                 )
+                if readiness["primary_reason"] == "READY" and profile:
+                    review_confirmed = db.scalar(
+                        select(FormAnalysisLog.id)
+                        .where(
+                            FormAnalysisLog.form_profile_id == profile.id,
+                            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+                            FormAnalysisLog.details["profile_fingerprint"].astext
+                            == profile.fingerprint,
+                            FormAnalysisLog.details["confirmed_no_sales_prohibition"].astext
+                            == "true",
+                        )
+                        .limit(1)
+                    )
+                    if not review_confirmed:
+                        readiness = {"primary_reason": "FORM_REVIEW_REQUIRED"}
                 if readiness["primary_reason"] != "READY":
                     readiness_reason = readiness["primary_reason"]
                     outcome["reason_code"] = (

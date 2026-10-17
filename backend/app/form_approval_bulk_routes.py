@@ -13,7 +13,9 @@ from app.models import (
     ApprovalRequest,
     ApprovedFormDispatch,
     Company,
+    FormAnalysisLog,
     FormDmReadinessResult,
+    FormProfile,
     OperationJob,
     User,
 )
@@ -57,12 +59,24 @@ def create_form_approval_batch(
         snapshot = latest_completed_job(db, project_id)
         if snapshot is None:
             raise HTTPException(409, "フォーム可否の集計を先に完了してください。")
+        confirmed_review_exists = (
+            select(FormAnalysisLog.id)
+            .where(
+                FormAnalysisLog.form_profile_id == FormProfile.id,
+                FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+                FormAnalysisLog.details["profile_fingerprint"].astext == FormProfile.fingerprint,
+                FormAnalysisLog.details["confirmed_no_sales_prohibition"].astext == "true",
+            )
+            .exists()
+        )
         company_ids = list(
             db.scalars(
                 select(FormDmReadinessResult.company_id)
+                .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
                 .where(
                     FormDmReadinessResult.job_id == snapshot.id,
                     FormDmReadinessResult.primary_reason == "READY",
+                    confirmed_review_exists,
                 )
                 .order_by(FormDmReadinessResult.company_id)
             ).all()

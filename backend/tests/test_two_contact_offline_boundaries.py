@@ -98,26 +98,35 @@ def review(html):
     return form, result
 
 
-def test_multipart_without_upload_remains_blocked_before_dispatch():
+def test_multipart_without_upload_is_eligible_for_standard_form_delivery():
     html = multipart_confirmation()
     form, result = review(html)
     assert not form.select('input[type="file"]')
     assert form.button["type"] == "submit"
     compatibility = assess_delivery_compatibility(form, URL)
-    assert not compatibility.supported
-    # Multipart is an unverified transport, not evidence of a file input.
-    assert "multipart" in compatibility.reason
-    assert "未検証" in compatibility.reason
-    assert "ファイル送信用" not in compatibility.reason
-    with pytest.raises(FormDeliveryError) as error:
-        _parse_form(html, URL)
-    assert error.value.code == "manual_required"
+    assert compatibility.supported
+    preview = _parse_form(html, URL)
+    assert preview.enctype == "multipart/form-data"
     items = {item["name"]: item for item in result["items"]}
     for name in ("category", "budget", "discovery"):
         assert items[name]["review_state"] == "CHOICE_REVIEW_REQUIRED"
         assert items[name]["proposed_value"] is None
     assert items["furigana"]["review_state"] == "SENDER_VALUE_MISSING"
     assert items["submitConfirm"]["review_state"] == "DO_NOT_FILL"
+
+
+def test_multipart_with_upload_remains_blocked_before_dispatch():
+    html = multipart_confirmation().replace(
+        "</form>", '<input type="file" name="attachment"></form>'
+    )
+    form, _ = review(html)
+
+    compatibility = assess_delivery_compatibility(form, URL)
+
+    assert not compatibility.supported
+    assert compatibility.reason_code == "MULTIPART_OR_FILE"
+    with pytest.raises(FormDeliveryError, match="ファイル"):
+        _parse_form(html, URL)
 
 
 def test_removing_enctype_is_not_proof_of_confirmed_confirmation_protocol():

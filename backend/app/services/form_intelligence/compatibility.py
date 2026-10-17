@@ -17,16 +17,6 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
         return DeliveryCompatibility(
             False, "POST形式ではないためCodex支援が必要です。", "NON_POST_METHOD"
         )
-    if str(form.get("enctype") or "").lower() == "multipart/form-data":
-        has_file = form.select_one('input[type="file"]:not([disabled])') is not None
-        return DeliveryCompatibility(
-            False,
-            "ファイル送信用フォームはCodex支援が必要です。"
-            if has_file
-            else "multipart形式の送信経路は未検証です。ブラウザでの確認が必要です。",
-            "MULTIPART_OR_FILE",
-        )
-
     action_url = urljoin(page_url, str(form.get("action") or page_url))
     action = urlsplit(action_url)
     page = urlsplit(page_url)
@@ -60,6 +50,14 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
             False,
             "JavaScript・非同期の送信経路は未検証です。ブラウザでの確認が必要です。",
             "ASYNC_SUBMISSION",
+        )
+    if str(
+        form.get("enctype") or "application/x-www-form-urlencoded"
+    ).lower() == "multipart/form-data" and form.select_one('input[type="file"]'):
+        return DeliveryCompatibility(
+            False,
+            "ファイル添付欄があるためCodex支援が必要です。",
+            "MULTIPART_OR_FILE",
         )
     native_submit = []
     for control in form.select("button, input"):
