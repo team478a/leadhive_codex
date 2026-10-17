@@ -80,8 +80,7 @@ def test_sales_ng_and_captcha_are_preserved(auth, db, monkeypatch):
     install_pages(
         monkeypatch,
         {
-            company.website_url.rstrip("/"): HTML
-            + '<p>営業目的のお問い合わせはお断りします</p>'
+            company.website_url.rstrip("/"): HTML + "<p>営業目的のお問い合わせはお断りします</p>"
             '<script src="https://www.google.com/recaptcha/api.js?render=site-key"></script>'
         },
     )

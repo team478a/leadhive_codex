@@ -13,9 +13,7 @@ def upgrade():
         "ALTER TABLE form_profiles ADD COLUMN IF NOT EXISTS "
         "compatibility_reason_code VARCHAR(50) DEFAULT '' NOT NULL"
     )
-    op.execute(
-        "ALTER TABLE form_profiles DROP CONSTRAINT IF EXISTS ck_form_profile_captcha_type"
-    )
+    op.execute("ALTER TABLE form_profiles DROP CONSTRAINT IF EXISTS ck_form_profile_captcha_type")
     op.create_check_constraint(
         "ck_form_profile_captcha_type",
         "form_profiles",
@@ -72,15 +70,11 @@ def downgrade():
         END
         """
     )
-    op.execute(
-        "ALTER TABLE form_profiles DROP CONSTRAINT IF EXISTS ck_form_profile_captcha_type"
-    )
+    op.execute("ALTER TABLE form_profiles DROP CONSTRAINT IF EXISTS ck_form_profile_captcha_type")
     op.create_check_constraint(
         "ck_form_profile_captcha_type",
         "form_profiles",
         "captcha_type IN ('CAPTCHA_NONE', 'CAPTCHA_RECAPTCHA', 'CAPTCHA_HCAPTCHA', "
         "'CAPTCHA_TURNSTILE', 'CAPTCHA_OTHER')",
     )
-    op.execute(
-        "ALTER TABLE form_profiles DROP COLUMN IF EXISTS compatibility_reason_code"
-    )
+    op.execute("ALTER TABLE form_profiles DROP COLUMN IF EXISTS compatibility_reason_code")
