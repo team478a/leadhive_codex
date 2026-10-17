@@ -2,9 +2,13 @@
 
 import ipaddress
 import json
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 from fastapi import HTTPException
+from sqlalchemy import select
+
+from app.models import Activity
 
 PREFIX = "[collection-feedback-v1] "
 
@@ -35,12 +39,14 @@ def correction_url(value: str) -> str:
     return value
 
 
-def apply_feedback(company, subject: str, outcome: str, corrected_url: str):
+def apply_feedback(company, subject: str, outcome: str, corrected_url: str, reason: str = ""):
     if subject == "company":
         if outcome == "CORRECTED" or corrected_url:
             raise HTTPException(422, "企業の判定にはURL修正を指定できません。")
         if outcome == "NG":
             company.status = "excluded"
+        elif outcome == "OK" and reason == "company_verified":
+            company.status = "target"
         return
     if outcome == "OK" and not company.contact_url:
         raise HTTPException(422, "問い合わせURLが未検出です。正しいURLを入力してください。")
@@ -55,6 +61,37 @@ def apply_feedback(company, subject: str, outcome: str, corrected_url: str):
     company.protected_fields = list(
         dict.fromkeys([*(company.protected_fields or []), "contact_url"])
     )
+
+
+def _utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def is_current(event: dict, company) -> bool:
+    value = event.get("after_updated_at")
+    if not value or not company.updated_at:
+        return False
+    try:
+        return _utc(datetime.fromisoformat(value)) == _utc(company.updated_at)
+    except (TypeError, ValueError):
+        return False
+
+
+def latest_company_feedback(db, company):
+    rows = db.scalars(
+        select(Activity)
+        .where(Activity.company_id == company.id, Activity.note.startswith(PREFIX))
+        .order_by(Activity.created_at.desc(), Activity.id.desc())
+        .limit(100)
+    ).all()
+    for row in rows:
+        event = decode(row.note)
+        if event and event.get("subject") == "company":
+            if is_current(event, company):
+                return event
+    return None
 
 
 def decode(note: str):

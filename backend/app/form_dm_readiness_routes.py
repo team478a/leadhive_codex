@@ -23,14 +23,18 @@ from app.project_access import project_access
 from app.schemas import OperationJobOut
 from app.security import current_user
 from app.services.approved_form import duplicate
+from app.services.collection_feedback import latest_company_feedback
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_approval_preparation import preparation
+from app.services.non_company_suspected import display_name
+from app.services.non_company_suspected import evidence as non_company_evidence
 from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api", tags=["Form DM readiness"])
 PAGE_SIZE = 20
 REASONS = (
     "CONTACT_PROHIBITED",
+    "NON_COMPANY_SUSPECTED",
     "ALREADY_SENT_OR_UNKNOWN",
     "CAPTCHA_VISIBLE",
     "CAPTCHA_INVISIBLE",
@@ -65,6 +69,7 @@ REVIEW_REASONS = {
 }
 BLOCKING_REASONS = {
     "CONTACT_PROHIBITED",
+    "NON_COMPANY_SUSPECTED",
     "ALREADY_SENT_OR_UNKNOWN",
     "CAPTCHA_VISIBLE",
     "CAPTCHA_INVISIBLE",
@@ -173,6 +178,25 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
         "destination_missing",
     }:
         reasons.append("CONTACT_PROHIBITED")
+    company_evidence = non_company_evidence(company)
+    company_feedback = (
+        latest_company_feedback(db, company)
+        if company_evidence or company.status == "excluded"
+        else None
+    )
+    if not (
+        company_feedback
+        and company_feedback.get("outcome") == "OK"
+        and company_feedback.get("reason") == "company_verified"
+    ):
+        if (
+            company_feedback
+            and company_feedback.get("outcome") == "NG"
+            and company_feedback.get("reason") == "wrong_company"
+        ):
+            company_evidence = list(dict.fromkeys(["NON_COMPANY_REVIEW_NG", *company_evidence]))
+        if company_evidence:
+            reasons.extend(["NON_COMPANY_SUSPECTED", *company_evidence])
     if permission.reason_code == "form_result_unknown" or duplicate(
         db, company.id, profile.form_url
     ):
@@ -268,6 +292,7 @@ def form_dm_readiness(
     project_id: UUID,
     offset: int = Query(0, ge=0),
     format: str = Query("json", pattern="^(json|csv)$"),
+    suspected_only: bool = Query(False),
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
@@ -293,7 +318,24 @@ def form_dm_readiness(
             .group_by(FormDmReadinessResult.primary_reason)
         ).all()
         counts.update({reason: count for reason, count in grouped_counts})
-        total = sum(counts.values())
+        suspected_filter = or_(
+            FormDmReadinessResult.primary_reason == "NON_COMPANY_SUSPECTED",
+            FormDmReadinessResult.secondary_reasons.contains(["NON_COMPANY_SUSPECTED"]),
+        )
+        result_filters = [FormDmReadinessResult.job_id == snapshot.id]
+        if suspected_only:
+            result_filters.append(suspected_filter)
+            total = (
+                db.scalar(
+                    select(func.count()).where(
+                        FormDmReadinessResult.job_id == snapshot.id,
+                        suspected_filter,
+                    )
+                )
+                or 0
+            )
+        else:
+            total = sum(counts.values())
         captcha_counts = db.execute(
             select(
                 *[
@@ -318,12 +360,21 @@ def form_dm_readiness(
             ).where(FormDmReadinessResult.job_id == snapshot.id)
         ).one()
         counts.update({reason: value or 0 for reason, value in captcha_counts._mapping.items()})
+        counts["NON_COMPANY_SUSPECTED"] = (
+            db.scalar(
+                select(func.count()).where(
+                    FormDmReadinessResult.job_id == snapshot.id,
+                    suspected_filter,
+                )
+            )
+            or 0
+        )
         if format == "json":
             rows = db.execute(
                 select(FormDmReadinessResult, Company, FormProfile)
                 .join(Company, Company.id == FormDmReadinessResult.company_id)
                 .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
-                .where(FormDmReadinessResult.job_id == snapshot.id)
+                .where(*result_filters)
                 .order_by(Company.company_name, Company.id)
                 .offset(offset)
                 .limit(PAGE_SIZE)
@@ -331,7 +382,8 @@ def form_dm_readiness(
             items = [
                 {
                     "company_id": str(result.company_id),
-                    "company_name": ((company.company_name or "").strip() or company.domain or "—"),
+                    "company_name": display_name(company),
+                    "company_updated_at": company.updated_at,
                     "form_url": profile.form_url,
                     "primary_reason": result.primary_reason,
                     "secondary_reasons": result.secondary_reasons,
@@ -354,7 +406,7 @@ def form_dm_readiness(
                     select(FormDmReadinessResult, Company, FormProfile)
                     .join(Company, Company.id == FormDmReadinessResult.company_id)
                     .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
-                    .where(FormDmReadinessResult.job_id == snapshot.id)
+                    .where(*result_filters)
                     .order_by(Company.company_name, Company.id)
                     .execution_options(stream_results=True, yield_per=200)
                 )
@@ -362,7 +414,7 @@ def form_dm_readiness(
                     writer.writerow(
                         [
                             result.company_id,
-                            (company.company_name or "").strip() or company.domain or "—",
+                            display_name(company),
                             profile.form_url,
                             result.primary_reason,
                             ",".join(result.secondary_reasons),

@@ -15,7 +15,7 @@ from app.models import Activity, Company, User
 from app.project_access import company_access
 from app.schema_core import CompanyOut
 from app.security import current_user
-from app.services.collection_feedback import PREFIX, apply_feedback, decode
+from app.services.collection_feedback import PREFIX, apply_feedback, decode, is_current
 from app.services.feedback_provenance import bound_decision
 from app.services.field_feedback import bound_web
 
@@ -37,15 +37,16 @@ class FeedbackInput(BaseModel):
         "broken_link",
         "wrong_destination",
         "other",
+        "company_verified",
     ]
     corrected_url: str = Field(default="", max_length=2048)
     note: str = Field(default="", max_length=1000)
 
     @model_validator(mode="after")
     def check_reason(self):
-        if self.outcome == "OK" and self.reason != "confirmed":
+        if self.outcome == "OK" and self.reason not in {"confirmed", "company_verified"}:
             raise ValueError("OK requires confirmed reason")
-        if self.outcome != "OK" and self.reason == "confirmed":
+        if self.outcome != "OK" and self.reason in {"confirmed", "company_verified"}:
             raise ValueError("NG/correction requires a reason")
         if self.expected_updated_at.tzinfo is None:
             raise ValueError("Timezone is required")
@@ -65,7 +66,7 @@ def read_feedback(
     ).all()
     return {
         "items": [
-            {**value, "current": value.get("after_updated_at") == company.updated_at.isoformat()}
+            {**value, "current": is_current(value, company)}
             for row in rows
             if (value := decode(row.note)) is not None
         ]
@@ -89,7 +90,7 @@ def record_feedback(
     before = company.contact_url
     decision = bound_decision(db, company) if body.subject == "company" else None
     field_decision = bound_web(db, company) if body.subject == "contact_url" else None
-    apply_feedback(company, body.subject, body.outcome, body.corrected_url)
+    apply_feedback(company, body.subject, body.outcome, body.corrected_url, body.reason)
     now = datetime.now(timezone.utc)
     event = {
         "subject": body.subject,

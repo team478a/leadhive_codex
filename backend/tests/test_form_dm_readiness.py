@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytest
 
-from app.models import FormProfile, FormProfileField, ProjectMember
+from app.models import Company, FormProfile, FormProfileField, Project, ProjectMember
 from tests.test_approval_foundation import workspace as workspace  # noqa: F401
 from tests.test_form_approval_preparation import form_source as form_source
 
@@ -176,6 +176,153 @@ def test_form_dm_readiness_splits_compatibility_reasons(
 
     assert expected_reason in [item["primary_reason"], *item["secondary_reasons"]]
     assert item["company_name"] == "fallback.example"
+
+
+@pytest.mark.parametrize(
+    ("company_name", "domain", "expected_evidence"),
+    [
+        ("2025年度版を調べてみた記事", "news.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("横浜市公式サイト", "city.yokohama.jp", "NON_COMPANY_PUBLIC_DOMAIN"),
+        ("自治体ページ", "www.example.lg.jp", "NON_COMPANY_PUBLIC_DOMAIN"),
+        ("行政機関案内", "www.example.go.jp", "NON_COMPANY_PUBLIC_DOMAIN"),
+        ("学校案内", "school.example.ed.jp", "NON_COMPANY_PUBLIC_DOMAIN"),
+        ("大学案内", "university.example.ac.jp", "NON_COMPANY_PUBLIC_DOMAIN"),
+        ("2025年版の調査結果", "news.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("»今週のイベント", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("・イベント募集情報", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("【横浜市のお知らせ】", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("新店舗の内覧会がスタート", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("新商品説明会を開催", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("地域の取り組みとは", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("地域イベント募集", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("地域イベント｜横浜市", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        (
+            "地域イベントのお知らせと観光案内をまとめた長い記事タイトルです、詳しくは公式サイトをご覧ください。",
+            "event.example",
+            "NON_COMPANY_ARTICLE_STYLE_NAME",
+        ),
+        ("2026年度採用募集", "event.example", "NON_COMPANY_ARTICLE_STYLE_NAME"),
+        ("", "empty-name.example", "NON_COMPANY_NAME_MISSING"),
+        ("-", "dash-name.example", "NON_COMPANY_NAME_MISSING"),
+        ("—", "dash-name.example", "NON_COMPANY_NAME_MISSING"),
+    ],
+)
+def test_form_dm_readiness_marks_non_company_signals_and_uses_domain_name(
+    auth, form_source, db, company_name, domain, expected_evidence
+):
+    project, company, _draft, _profile, _sender, _fields = form_source
+    company.company_name = company_name
+    company.domain = domain
+    db.commit()
+
+    project_id = aggregate(auth, db, project)
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    item = result["items"][0]
+
+    assert item["primary_reason"] == "NON_COMPANY_SUSPECTED"
+    assert expected_evidence in item["secondary_reasons"]
+    expected_name = company_name.strip() or domain
+    if expected_name in {"-", "—"}:
+        expected_name = domain
+    assert item["company_name"] == expected_name
+    assert result["counts"]["NON_COMPANY_SUSPECTED"] == 1
+
+
+def test_form_dm_readiness_does_not_misclassify_company_name(auth, form_source, db):
+    project, company, _draft, _profile, _sender, _fields = form_source
+    company.company_name = "株式会社〇〇"
+    company.domain = "sample.co.jp"
+    company.website_url = "https://sample.co.jp"
+    db.commit()
+
+    project_id = aggregate(auth, db, project)
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    item = result["items"][0]
+
+    assert "NON_COMPANY_SUSPECTED" not in [
+        item["primary_reason"],
+        *item["secondary_reasons"],
+    ]
+    assert item["company_name"] == "株式会社〇〇"
+
+
+def test_location_record_is_marked_as_non_company(auth, form_source, db):
+    project, company, _draft, _profile, _sender, _fields = form_source
+    company.record_type = "location"
+    company.location_key = "a" * 64
+    company.company_name = "株式会社〇〇 横浜店"
+    company.domain = "shop.example"
+    db.commit()
+
+    project_id = aggregate(auth, db, project)
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    item = result["items"][0]
+
+    assert item["primary_reason"] == "NON_COMPANY_SUSPECTED"
+    assert "NON_COMPANY_LOCATION_RECORD" in item["secondary_reasons"]
+
+
+def test_contact_prohibition_precedes_non_company_suspicion(auth, form_source, db):
+    project, company, _draft, _profile, _sender, _fields = form_source
+    company_id = company.id
+    company.do_not_contact = True
+    company.company_name = "【横浜市】2025年度のお知らせ"
+    company.domain = "city.yokohama.lg.jp"
+    db.commit()
+
+    project_id = aggregate(auth, db, project)
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    item = result["items"][0]
+
+    assert item["primary_reason"] == "CONTACT_PROHIBITED"
+    assert "NON_COMPANY_SUSPECTED" in item["secondary_reasons"]
+    assert "NON_COMPANY_PUBLIC_DOMAIN" in item["secondary_reasons"]
+    assert result["counts"]["NON_COMPANY_SUSPECTED"] == 1
+    filtered = auth.get(f"/api/projects/{project_id}/form-dm-readiness?suspected_only=true").json()
+    assert filtered["total"] == 1
+    assert filtered["items"][0]["company_id"] == str(company_id)
+
+
+def test_current_company_review_controls_non_company_suspicion(auth, form_source, db):
+    project, company, _draft, _profile, _sender, _fields = form_source
+    project_id = project.id
+    company_id = company.id
+    company.company_name = "2025年度版を調べてみた記事"
+    company.domain = "news.example"
+    db.commit()
+    feedback_path = f"/api/companies/{company.id}/collection-feedback"
+
+    confirmed = auth.post(
+        feedback_path,
+        json={
+            "subject": "company",
+            "outcome": "OK",
+            "reason": "company_verified",
+            "expected_updated_at": company.updated_at.isoformat(),
+        },
+    )
+    assert confirmed.status_code == 201, confirmed.text
+    aggregate(auth, db, project)
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    assert result["counts"]["NON_COMPANY_SUSPECTED"] == 0
+
+    company = db.get(Company, company_id)
+    excluded = auth.post(
+        feedback_path,
+        json={
+            "subject": "company",
+            "outcome": "NG",
+            "reason": "wrong_company",
+            "expected_updated_at": company.updated_at.isoformat(),
+        },
+    )
+    assert excluded.status_code == 201, excluded.text
+    project = db.get(Project, project_id)
+    project_id = aggregate(auth, db, project)
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    item = result["items"][0]
+    assert item["primary_reason"] == "NON_COMPANY_SUSPECTED"
+    assert "NON_COMPANY_REVIEW_NG" in item["secondary_reasons"]
 
 
 def test_form_dm_readiness_viewer_can_read_and_agent_is_not_authorized(

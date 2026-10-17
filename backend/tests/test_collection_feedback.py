@@ -77,6 +77,29 @@ def test_company_ng_is_excluded_and_ok_does_not_restore_it(auth, db):
     assert company.status == "excluded"
 
 
+def test_company_verified_feedback_restores_target_and_uses_existing_feedback_record(auth, db):
+    company = company_fixture(auth, db)
+    company.status = "excluded"
+    db.commit()
+    path = f"/api/companies/{company.id}/collection-feedback"
+
+    response = auth.post(
+        path,
+        json=body(company, subject="company", outcome="OK", reason="company_verified"),
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["execution_allowed"] is False
+    db.refresh(company)
+    assert company.status == "target"
+    history = auth.get(path).json()["items"]
+    assert len(history) == 1
+    assert history[0]["subject"] == "company"
+    assert history[0]["outcome"] == "OK"
+    assert history[0]["reason"] == "company_verified"
+    assert history[0]["current"] is True
+
+
 @pytest.mark.parametrize(
     "url",
     [
