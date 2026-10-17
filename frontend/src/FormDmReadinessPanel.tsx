@@ -24,7 +24,9 @@ type Readiness = {
 const labels: Record<string, string> = {
   CONTACT_PROHIBITED: '連絡禁止・営業NG',
   ALREADY_SENT_OR_UNKNOWN: '送信済み・予約済み・結果不明',
-  CAPTCHA: 'CAPTCHA',
+  CAPTCHA_VISIBLE: 'CAPTCHA（表示型）',
+  CAPTCHA_INVISIBLE: 'CAPTCHA（非表示型）',
+  CAPTCHA_LEGACY: 'CAPTCHA（旧解析結果・再解析が必要）',
   CF7: 'Contact Form 7',
   JS_SUBMIT: 'JavaScript送信',
   EXTERNAL_ACTION: '外部送信先',
@@ -98,7 +100,7 @@ export function FormDmReadinessPanel({ projectId }: { projectId: string }) {
     {data?.active_job && <p className="muted mt-3 text-sm">再集計中：{data.active_job.processed_count}/{data.active_job.total_count}社</p>}
     {data && <><div className="mt-4 flex flex-wrap gap-2" aria-label="送信可否の理由別件数">
       {Object.entries(data.counts).map(([code, count]) => <span className="badge" key={code}>{labels[code] ?? code}: {count}社</span>)}
-    </div><p className="muted mt-3 text-sm">対象 {data.total}社 · 表示 {Math.min(offset + data.items.length, data.total)} / {data.total}社 · 読み取り専用</p>
+    </div><p className="muted mt-2 text-xs">CAPTCHAの該当数は、他の主理由がある企業も含む参考値です。</p><p className="muted mt-3 text-sm">対象 {data.total}社 · 表示 {Math.min(offset + data.items.length, data.total)} / {data.total}社 · 読み取り専用</p>
     {data.items.map(item => <article className="border-t py-3" key={item.company_id}>
       <strong>{item.company_name}</strong><p className="mt-1">主な理由：{labels[item.primary_reason] ?? item.primary_reason}</p>
       {item.secondary_reasons.length > 0 && <p className="muted text-sm">他の理由：{item.secondary_reasons.map(reason => labels[reason] ?? reason).join('、')}</p>}

@@ -88,8 +88,38 @@ def test_form_dm_readiness_classifies_prohibition_before_captcha(auth, form_sour
     result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
 
     assert result["counts"]["CONTACT_PROHIBITED"] == 1
+    assert result["counts"]["CAPTCHA_LEGACY"] == 1
     assert result["items"][0]["primary_reason"] == "CONTACT_PROHIBITED"
-    assert result["items"][0]["secondary_reasons"] == ["CAPTCHA"]
+    assert result["items"][0]["secondary_reasons"] == ["CAPTCHA_LEGACY"]
+
+
+@pytest.mark.parametrize(
+    ("captcha_type", "expected_reason"),
+    [
+        ("CAPTCHA_RECAPTCHA_V2", "CAPTCHA_VISIBLE"),
+        ("CAPTCHA_HCAPTCHA", "CAPTCHA_VISIBLE"),
+        ("CAPTCHA_TURNSTILE", "CAPTCHA_VISIBLE"),
+        ("CAPTCHA_IMAGE", "CAPTCHA_VISIBLE"),
+        ("CAPTCHA_OTHER", "CAPTCHA_VISIBLE"),
+        ("CAPTCHA_RECAPTCHA_V3", "CAPTCHA_INVISIBLE"),
+        ("CAPTCHA_CF7_RECAPTCHA", "CAPTCHA_INVISIBLE"),
+        ("CAPTCHA_RECAPTCHA", "CAPTCHA_LEGACY"),
+    ],
+)
+def test_form_dm_readiness_classifies_captcha_type(
+    auth, form_source, db, captcha_type, expected_reason
+):
+    project, _company, _draft, profile, _sender, _fields = form_source
+    profile.captcha_type = captcha_type
+    project_id = aggregate(auth, db, project)
+
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+
+    assert result["counts"][expected_reason] == 1
+    assert expected_reason in [
+        result["items"][0]["primary_reason"],
+        *result["items"][0]["secondary_reasons"],
+    ]
 
 
 def test_form_dm_readiness_excludes_profiles_without_a_found_form(auth, form_source, db):

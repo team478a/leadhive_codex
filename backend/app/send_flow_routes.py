@@ -2,13 +2,14 @@ from datetime import datetime, time, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import case, func, select
+from sqlalchemy import case, func, not_, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.form_dm_readiness_routes import latest_completed_job
 from app.models import (
     ApprovalRequest,
+    ApprovedEmailReservation,
     ApprovedFormDispatch,
     Company,
     EmailDelivery,
@@ -25,7 +26,7 @@ from app.project_access import project_access
 from app.schema_outreach import BulkOutreachDraftInput
 from app.schema_workflow import OperationJobOut
 from app.security import current_user
-from app.services.bulk_template_drafts import readiness_targets
+from app.services.bulk_template_drafts import email_draft_targets, readiness_targets
 from app.services.operations import add_operation_job
 from app.services.outreach_template_validation import has_stop_method
 
@@ -61,8 +62,10 @@ def enqueue_bulk_template_drafts(
             "テンプレートを編集し、配信停止・連絡辞退の方法を追加してください。",
         )
 
-    if body.readiness_reason:
+    if body.readiness_reason == "NO_FORM_DRAFT":
         targets = readiness_targets(db, project_id)
+    elif body.readiness_reason == "NO_EMAIL_DRAFT":
+        targets = email_draft_targets(db, project_id)
     else:
         rows = db.scalars(
             select(Company.id).where(
@@ -162,17 +165,44 @@ def send_flow_summary(
         "pending": {"email": 0, "form": 0},
         "approved_unsent": {"email": 0, "form": 0},
     }
-    approval_rows = db.execute(
-        select(ApprovalRequest.status, ApprovalRequest.channel, func.count())
+    now = datetime.now(timezone.utc)
+    reserved_email = (
+        select(ApprovedEmailReservation.id)
+        .where(ApprovedEmailReservation.approval_id == ApprovalRequest.id)
+        .exists()
+    )
+    reserved_form = (
+        select(ApprovedFormDispatch.id)
+        .where(ApprovedFormDispatch.approval_id == ApprovalRequest.id)
+        .exists()
+    )
+    approved_rows = db.execute(
+        select(
+            ApprovalRequest.channel,
+            func.sum(case((ApprovalRequest.status == "PENDING", 1), else_=0)).label("pending"),
+            func.sum(
+                case(
+                    (
+                        (ApprovalRequest.status == "APPROVED")
+                        & (ApprovalRequest.expires_at > now)
+                        & not_(reserved_email)
+                        & not_(reserved_form),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("approved_unsent"),
+        )
         .where(
             ApprovalRequest.project_id == project_id,
             ApprovalRequest.status.in_(("PENDING", "APPROVED")),
             ApprovalRequest.channel.in_(("email", "form")),
         )
-        .group_by(ApprovalRequest.status, ApprovalRequest.channel)
+        .group_by(ApprovalRequest.channel)
     ).all()
-    for status, channel, count in approval_rows:
-        approval_counts["pending" if status == "PENDING" else "approved_unsent"][channel] = count
+    for channel, pending, approved_unsent in approved_rows:
+        approval_counts["pending"][channel] = pending or 0
+        approval_counts["approved_unsent"][channel] = approved_unsent or 0
 
     start, end = _tokyo_day_bounds()
     email_metrics = db.execute(
