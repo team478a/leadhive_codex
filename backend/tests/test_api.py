@@ -36,7 +36,10 @@ def project_body(profile_id):
 
 
 def test_health_and_private_routes(client):
-    assert client.get("/api/health").json() == {"status": "ok", "database": "ok"}
+    health = client.get("/api/health").json()
+    assert health["status"] == "ok"
+    assert health["database"] == "ok"
+    assert isinstance(health["api_commit"], str)
     for path in ("/auth/me", "/projects", "/target-profiles"):
         assert client.get("/api" + path).status_code == 401
     assert client.post("/api/projects", json=project_body(str(uuid4()))).status_code == 401

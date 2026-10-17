@@ -15,6 +15,7 @@ import { InstallationGuide } from './InstallationGuide'
 import { FeedbackProposalsPage } from './FeedbackProposalsPage'
 import { CollectionResults, CollectionTargets, SalesWorkspace } from './Workspaces'
 import { SmtpSettingsPage } from './SmtpSettingsPage'
+import { RuntimeVersionStatus } from './RuntimeVersionStatus'
 import type { Dashboard, Notification, Profile, Project, ProjectMember, User } from './types'
 
 function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: string }) {
@@ -297,6 +298,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
               </div></div>
           </article>)}</div>
         </>}
+      <RuntimeVersionStatus />
     </main>
     <OnboardingGuide open={loaded && guideOpen} projectCount={currentProjects.length} totalCompanies={totalCompanies}
       isAdmin={user.is_admin} onClose={closeGuide} onCreateProject={openProjectCreator} onNavigate={navigateFromGuide} />

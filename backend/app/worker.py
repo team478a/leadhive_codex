@@ -4,8 +4,10 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
+from threading import Event, Thread
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from app.config import settings
 from app.database import SessionLocal
@@ -28,7 +30,9 @@ from app.models import (
     Project,
     SearchSchedule,
     TargetProfile,
+    WorkerHeartbeat,
 )
+from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST, WORKER_INSTANCE_ID
 from app.services.ai_analysis import analyze_company_ai
 from app.services.application_settings import apply_application_settings
 from app.services.bulk_form_delivery import process_form_batch_item
@@ -50,10 +54,59 @@ from app.services.web_analysis import analyze
 
 logger = logging.getLogger("leadhive")
 EMAIL_CLAIM_LOCK_ID = 4_781_001
+HEARTBEAT_INTERVAL_SECONDS = 30
 
 
 def lease_deadline() -> datetime:
     return datetime.now(timezone.utc) + timedelta(seconds=settings.worker_lease_seconds)
+
+
+def record_worker_heartbeat(
+    db,
+    *,
+    instance_id: str = WORKER_INSTANCE_ID,
+    host_name: str = WORKER_HOST,
+    commit_id: str = RUNTIME_COMMIT,
+) -> None:
+    now = datetime.now(timezone.utc)
+    statement = pg_insert(WorkerHeartbeat).values(
+        instance_id=instance_id,
+        host_name=host_name,
+        commit_id=commit_id,
+        last_seen_at=now,
+    )
+    db.execute(
+        statement.on_conflict_do_update(
+            index_elements=[WorkerHeartbeat.instance_id],
+            set_={
+                "host_name": statement.excluded.host_name,
+                "commit_id": statement.excluded.commit_id,
+                "last_seen_at": statement.excluded.last_seen_at,
+            },
+        )
+    )
+    db.commit()
+
+
+def _heartbeat_once() -> None:
+    try:
+        with SessionLocal() as db:
+            record_worker_heartbeat(db)
+    except Exception as exc:
+        logger.warning("worker heartbeat failed: %s", type(exc).__name__)
+
+
+def _heartbeat_loop(stop_event: Event) -> None:
+    while not stop_event.wait(HEARTBEAT_INTERVAL_SECONDS):
+        _heartbeat_once()
+
+
+def stamp_operation_runtime(job: OperationJob) -> None:
+    job.payload = {
+        **(job.payload or {}),
+        "executed_by_commit": RUNTIME_COMMIT,
+        "executed_by_host": WORKER_HOST,
+    }
 
 
 def notify_email_delivery_failure(db, delivery: EmailDelivery) -> None:
@@ -1313,6 +1366,8 @@ def run_once() -> bool:
             return False
         worker_id = job.worker_id
         logger.info("operation start: id=%s type=%s", job.id, job.operation_type)
+        stamp_operation_runtime(job)
+        db.commit()
         try:
             from app.services.bulk_template_drafts import run_bulk_template_drafts
             from app.services.sales_preparation import run_preparation
@@ -1334,6 +1389,7 @@ def run_once() -> bool:
                 ),
             }[job.operation_type](db, job, worker_id)
             db.refresh(job)
+            stamp_operation_runtime(job)
             if job.status == "running" and job.worker_id == worker_id:
                 job.status = (
                     "cancelled"
@@ -1379,6 +1435,7 @@ def run_once() -> bool:
         except Exception as exc:
             db.rollback()
             job = db.get(OperationJob, job.id)
+            stamp_operation_runtime(job)
             if job.status == "running" and job.worker_id == worker_id:
                 job.status = "failed"
                 job.worker_id = None
@@ -1404,12 +1461,20 @@ def main():
     args = parser.parse_args()
     if settings.worker_paused:
         raise SystemExit("Worker is paused for maintenance. Review recovery before resuming.")
-    while True:
-        worked = run_once()
-        if args.once:
-            return
-        if not worked:
-            time.sleep(max(0.5, min(args.poll_seconds, 30)))
+    _heartbeat_once()
+    stop_event = Event()
+    heartbeat_thread = Thread(target=_heartbeat_loop, args=(stop_event,), daemon=True)
+    heartbeat_thread.start()
+    try:
+        while True:
+            worked = run_once()
+            if args.once:
+                return
+            if not worked:
+                time.sleep(max(0.5, min(args.poll_seconds, HEARTBEAT_INTERVAL_SECONDS)))
+    finally:
+        stop_event.set()
+        heartbeat_thread.join(timeout=5)
 
 
 if __name__ == "__main__":

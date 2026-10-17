@@ -102,6 +102,7 @@ from app.model_settings import (
 )
 from app.model_site_identity_review import SiteIdentityReviewEvent
 from app.model_source_exclusion import SourceDomainExclusion
+from app.model_worker_heartbeat import WorkerHeartbeat
 
 __all__ = [
     "FeedbackProposal",
@@ -159,6 +160,7 @@ __all__ = [
     "Timestamps",
     "User",
     "TargetProfile",
+    "WorkerHeartbeat",
     "Project",
     "ProjectMember",
     "AuthSession",

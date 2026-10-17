@@ -17,6 +17,8 @@ type Readiness = {
   limit: number
   items: ReadinessItem[]
   last_aggregated_at: string | null
+  last_aggregated_by_commit: string | null
+  last_aggregated_by_host: string | null
   active_job: OperationJob | null
   read_only: boolean
   external_requests: number
@@ -122,7 +124,7 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
     </div>
     {error && <p className="error mt-3" role="alert">{error}</p>}
     {reviewNotice && <p className="muted mt-3" role="status">{reviewNotice}</p>}
-    {data?.last_aggregated_at && <p className="muted mt-3 text-sm">最終集計：{new Date(data.last_aggregated_at).toLocaleString('ja-JP')}</p>}
+    {data?.last_aggregated_at && <p className="muted mt-3 text-sm">最終集計：{new Date(data.last_aggregated_at).toLocaleString('ja-JP')} · Worker版 {data.last_aggregated_by_commit || 'unknown'}（{data.last_aggregated_by_host || 'host不明'}）</p>}
     {data?.active_job && <p className="muted mt-3 text-sm">再集計中：{data.active_job.processed_count}/{data.active_job.total_count}社</p>}
     {data && <><div className="mt-4 flex flex-wrap gap-2" aria-label="送信可否の理由別件数">
       {Object.entries(data.counts).map(([code, count]) => code === 'NON_COMPANY_SUSPECTED'
