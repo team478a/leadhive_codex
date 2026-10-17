@@ -66,10 +66,15 @@ class FormProfileOut(BaseModel):
     captcha_type: Literal[
         "CAPTCHA_NONE",
         "CAPTCHA_RECAPTCHA",
+        "CAPTCHA_RECAPTCHA_V2",
+        "CAPTCHA_RECAPTCHA_V3",
+        "CAPTCHA_CF7_RECAPTCHA",
         "CAPTCHA_HCAPTCHA",
         "CAPTCHA_TURNSTILE",
+        "CAPTCHA_IMAGE",
         "CAPTCHA_OTHER",
     ]
+    compatibility_reason_code: str
     confirmation_page: bool | None
     is_primary: bool
     form_found: bool
@@ -94,6 +99,7 @@ class FormProfileSummaryOut(BaseModel):
     form_found: bool
     sales_contact_status: str
     captcha_type: str
+    compatibility_reason_code: str
     last_analyzed_at: datetime | None
 
 

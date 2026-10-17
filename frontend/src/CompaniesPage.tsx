@@ -315,7 +315,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       setFormProfileSummaries(current => ({ ...current, [company.id]: {
         company_id: company.id, profile_id: primary.id, form_status: primary.form_status,
         form_found: primary.form_found, sales_contact_status: primary.sales_contact_status,
-        captcha_type: primary.captcha_type, last_analyzed_at: primary.last_analyzed_at,
+        captcha_type: primary.captcha_type, compatibility_reason_code: primary.compatibility_reason_code,
+        last_analyzed_at: primary.last_analyzed_at,
       } }))
     }
   }
@@ -327,7 +328,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       setFormProfiles(profiles)
       const primary = profiles.find(item => item.is_primary) ?? profiles[0]
       setFormAnalysisLogs(primary ? await api<FormAnalysisLog[]>(`/form-profiles/${primary.id}/logs`) : [])
-      if (primary) setFormProfileSummaries(current => ({ ...current, [selected.id]: { company_id: selected.id, profile_id: primary.id, form_status: primary.form_status, form_found: primary.form_found, sales_contact_status: primary.sales_contact_status, captcha_type: primary.captcha_type, last_analyzed_at: primary.last_analyzed_at } }))
+      if (primary) setFormProfileSummaries(current => ({ ...current, [selected.id]: { company_id: selected.id, profile_id: primary.id, form_status: primary.form_status, form_found: primary.form_found, sales_contact_status: primary.sales_contact_status, captcha_type: primary.captcha_type, compatibility_reason_code: primary.compatibility_reason_code, last_analyzed_at: primary.last_analyzed_at } }))
       setNotice(`${profiles.length}件のフォーム候補を解析しました。`)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }

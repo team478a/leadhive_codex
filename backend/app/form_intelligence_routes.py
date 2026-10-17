@@ -211,6 +211,7 @@ def list_form_profile_summaries(
                 form_found=profile.form_found,
                 sales_contact_status=profile.sales_contact_status,
                 captcha_type=profile.captcha_type,
+                compatibility_reason_code=profile.compatibility_reason_code,
                 last_analyzed_at=profile.last_analyzed_at,
             )
     return list(summaries.values())

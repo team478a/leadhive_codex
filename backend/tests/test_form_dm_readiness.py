@@ -1,7 +1,9 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.models import FormProfile, ProjectMember
+import pytest
+
+from app.models import FormProfile, FormProfileField, ProjectMember
 from tests.test_approval_foundation import workspace as workspace  # noqa: F401
 from tests.test_form_approval_preparation import form_source as form_source
 
@@ -100,6 +102,50 @@ def test_form_dm_readiness_excludes_profiles_without_a_found_form(auth, form_sou
     assert result.status_code == 200, result.text
     assert result.json()["total"] == 0
     assert sum(result.json()["counts"].values()) == 0
+
+
+@pytest.mark.parametrize(
+    ("reason_code", "expected_reason", "has_file"),
+    [
+        ("NON_POST_METHOD", "NON_POST_METHOD", False),
+        ("DUPLICATE_INPUTS", "DUPLICATE_INPUTS", False),
+        ("MISSING_NAME_ATTRIBUTE", "MISSING_NAME_ATTRIBUTE", False),
+        ("NO_NATIVE_SUBMIT", "NO_NATIVE_SUBMIT", False),
+        ("CUSTOM_SUBMIT_HANDLER", "CUSTOM_SUBMIT_HANDLER", False),
+        ("NO_INPUT_FIELDS", "NO_INPUT_FIELDS", False),
+        ("JAVASCRIPT_CONFIRMATION", "JAVASCRIPT_CONFIRMATION", False),
+        ("MULTIPART_OR_FILE", "MULTIPART_ONLY", False),
+        ("MULTIPART_OR_FILE", "FILE_ATTACHMENT", True),
+        ("PASSWORD_FIELD", "OTHER_UNSUPPORTED", False),
+    ],
+)
+def test_form_dm_readiness_splits_compatibility_reasons(
+    auth, form_source, db, reason_code, expected_reason, has_file
+):
+    project, company, _draft, profile, _sender, _fields = form_source
+    company.company_name = ""
+    company.domain = "fallback.example"
+    profile.compatibility_reason_code = reason_code
+    if has_file:
+        db.add(
+            FormProfileField(
+                form_profile_id=profile.id,
+                position=99,
+                name="attachment",
+                field_type="file",
+                required=False,
+                mapped_key="other",
+                confidence=1,
+            )
+        )
+    db.commit()
+    project_id = aggregate(auth, db, project)
+
+    result = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    item = result["items"][0]
+
+    assert expected_reason in [item["primary_reason"], *item["secondary_reasons"]]
+    assert item["company_name"] == "fallback.example"
 
 
 def test_form_dm_readiness_viewer_can_read_and_agent_is_not_authorized(

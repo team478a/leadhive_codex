@@ -15,6 +15,7 @@ from app.services.form_intelligence.analyzer import (
     _confirmation_page,
     _upsert_profile,
 )
+from app.services.form_intelligence.compatibility import assess_delivery_compatibility
 from app.services.form_intelligence.fields import parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.rules import sales_contact_status
@@ -54,6 +55,7 @@ def refresh(db: Session, profile: FormProfile, user: User | None) -> dict:
     fingerprint = form_fingerprint(fields)
     action = urlsplit(urljoin(page.url, str(form.get("action") or page.url)))
     action_url = urlunsplit((action.scheme, action.netloc, action.path, action.query, ""))
+    compatibility = assess_delivery_compatibility(form, page.url)
     same_fields = bool(profile.fingerprint) and fingerprint == profile.fingerprint
     manual = any(field.decision_source == "MANUAL" for field in stored)
     prohibited = (
@@ -82,7 +84,7 @@ def refresh(db: Session, profile: FormProfile, user: User | None) -> dict:
         )
         _log(db, profile, user, result, before_hash)
         return result
-    captcha = _captcha_type(page.html)
+    captcha = _captcha_type(page.html, form)
     if captcha == "CAPTCHA_NONE" and profile.captcha_type != "CAPTCHA_NONE":
         captcha = profile.captcha_type
     if not same_fields:
@@ -102,6 +104,8 @@ def refresh(db: Session, profile: FormProfile, user: User | None) -> dict:
             duration_ms=0,
             provider_name="rule-target-refresh",
             delivery_supported=False,
+            compatibility_reason=compatibility.reason,
+            compatibility_reason_code=compatibility.reason_code,
             action_url=action_url,
         )
     profile.fingerprint = fingerprint
@@ -112,6 +116,7 @@ def refresh(db: Session, profile: FormProfile, user: User | None) -> dict:
     profile.confirmation_page = _confirmation_page(form)
     profile.form_status = "BLOCKED" if prohibited else "REVIEW_REQUIRED"
     profile.delivery_supported = False
+    profile.compatibility_reason_code = compatibility.reason_code
     profile.analysis_version = ANALYSIS_VERSION
     profile.analysis_provider = "rule-target-refresh"
     profile.last_analyzed_at = datetime.now(timezone.utc)
@@ -149,7 +154,7 @@ def refresh(db: Session, profile: FormProfile, user: User | None) -> dict:
             sales_prohibition_detected=sales_contact_status(soup.get_text(" ", strip=True), True)[0]
             == "PROHIBITED",
             captcha_state="NOT_DETECTED_STATIC"
-            if _captcha_type(page.html) == "CAPTCHA_NONE"
+            if _captcha_type(page.html, form) == "CAPTCHA_NONE"
             else "DETECTED",
             execution_allowed=False,
             message="対象ページの再解析時の観測です。営業許可・送信承認ではありません。",

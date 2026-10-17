@@ -31,8 +31,12 @@ SALES_CONTACT_STATUSES = ("ALLOWED", "PROHIBITED", "UNCERTAIN")
 CAPTCHA_TYPES = (
     "CAPTCHA_NONE",
     "CAPTCHA_RECAPTCHA",
+    "CAPTCHA_RECAPTCHA_V2",
+    "CAPTCHA_RECAPTCHA_V3",
+    "CAPTCHA_CF7_RECAPTCHA",
     "CAPTCHA_HCAPTCHA",
     "CAPTCHA_TURNSTILE",
+    "CAPTCHA_IMAGE",
     "CAPTCHA_OTHER",
 )
 DECISION_SOURCES = ("DOM", "RULE", "JEV", "OPENAI", "MANUAL")
@@ -54,8 +58,9 @@ class FormProfile(Timestamps, Base):
             name="ck_form_profile_sales_contact_status",
         ),
         CheckConstraint(
-            "captcha_type IN ('CAPTCHA_NONE', 'CAPTCHA_RECAPTCHA', 'CAPTCHA_HCAPTCHA', "
-            "'CAPTCHA_TURNSTILE', 'CAPTCHA_OTHER')",
+            "captcha_type IN ('CAPTCHA_NONE', 'CAPTCHA_RECAPTCHA', 'CAPTCHA_RECAPTCHA_V2', "
+            "'CAPTCHA_RECAPTCHA_V3', 'CAPTCHA_CF7_RECAPTCHA', 'CAPTCHA_HCAPTCHA', "
+            "'CAPTCHA_TURNSTILE', 'CAPTCHA_IMAGE', 'CAPTCHA_OTHER')",
             name="ck_form_profile_captcha_type",
         ),
         CheckConstraint("form_index >= 0", name="ck_form_profile_form_index"),
@@ -71,6 +76,9 @@ class FormProfile(Timestamps, Base):
     form_status: Mapped[str] = mapped_column(String(30), default="UNANALYZED", index=True)
     sales_contact_status: Mapped[str] = mapped_column(String(20), default="UNCERTAIN", index=True)
     captcha_type: Mapped[str] = mapped_column(String(30), default="CAPTCHA_NONE")
+    compatibility_reason_code: Mapped[str] = mapped_column(
+        String(50), default="", server_default=""
+    )
     confirmation_page: Mapped[bool | None] = mapped_column(Boolean)
     is_primary: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     form_found: Mapped[bool] = mapped_column(Boolean, default=False)

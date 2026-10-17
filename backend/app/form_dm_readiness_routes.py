@@ -14,6 +14,7 @@ from app.models import (
     Company,
     FormDmReadinessResult,
     FormProfile,
+    FormProfileField,
     OperationJob,
     OutreachDraft,
     User,
@@ -36,6 +37,15 @@ REASONS = (
     "JS_SUBMIT",
     "EXTERNAL_ACTION",
     "MULTIPART_OR_FILE",
+    "FILE_ATTACHMENT",
+    "MULTIPART_ONLY",
+    "NON_POST_METHOD",
+    "DUPLICATE_INPUTS",
+    "MISSING_NAME_ATTRIBUTE",
+    "NO_NATIVE_SUBMIT",
+    "CUSTOM_SUBMIT_HANDLER",
+    "NO_INPUT_FIELDS",
+    "JAVASCRIPT_CONFIRMATION",
     "OTHER_UNSUPPORTED",
     "CONFIRMATION_PAGE",
     "CONFIRMATION_UNKNOWN",
@@ -59,13 +69,50 @@ BLOCKING_REASONS = {
     "JS_SUBMIT",
     "EXTERNAL_ACTION",
     "MULTIPART_OR_FILE",
+    "FILE_ATTACHMENT",
+    "MULTIPART_ONLY",
+    "NON_POST_METHOD",
+    "DUPLICATE_INPUTS",
+    "MISSING_NAME_ATTRIBUTE",
+    "NO_NATIVE_SUBMIT",
+    "CUSTOM_SUBMIT_HANDLER",
+    "NO_INPUT_FIELDS",
+    "JAVASCRIPT_CONFIRMATION",
     "OTHER_UNSUPPORTED",
     "CONFIRMATION_PAGE",
     "CONFIRMATION_UNKNOWN",
 }
 
 
-def _compatibility_reason(profile: FormProfile) -> str | None:
+COMPATIBILITY_REASONS = {
+    "NON_POST_METHOD": "NON_POST_METHOD",
+    "DUPLICATE_INPUTS": "DUPLICATE_INPUTS",
+    "MISSING_NAME_ATTRIBUTE": "MISSING_NAME_ATTRIBUTE",
+    "NO_NATIVE_SUBMIT": "NO_NATIVE_SUBMIT",
+    "CUSTOM_SUBMIT_HANDLER": "CUSTOM_SUBMIT_HANDLER",
+    "NO_INPUT_FIELDS": "NO_INPUT_FIELDS",
+    "JAVASCRIPT_CONFIRMATION": "JAVASCRIPT_CONFIRMATION",
+    "CONTACT_FORM_7": "CF7",
+    "ASYNC_SUBMISSION": "JS_SUBMIT",
+    "EXTERNAL_ACTION": "EXTERNAL_ACTION",
+    "INSECURE_ACTION": "EXTERNAL_ACTION",
+}
+
+
+def _compatibility_reason(db: Session, profile: FormProfile) -> str | None:
+    reason_code = profile.compatibility_reason_code or ""
+    if reason_code == "MULTIPART_OR_FILE":
+        file_field = db.scalar(
+            select(FormProfileField.id)
+            .where(
+                FormProfileField.form_profile_id == profile.id,
+                FormProfileField.field_type == "file",
+            )
+            .limit(1)
+        )
+        return "FILE_ATTACHMENT" if file_field else "MULTIPART_ONLY"
+    if reason_code in COMPATIBILITY_REASONS:
+        return COMPATIBILITY_REASONS[reason_code]
     text = (profile.review_reason or "").casefold()
     if "contact form 7" in text or "wpcf7" in text:
         return "CF7"
@@ -74,7 +121,15 @@ def _compatibility_reason(profile: FormProfile) -> str | None:
     if "外部サイト" in text or "external" in text:
         return "EXTERNAL_ACTION"
     if "multipart" in text or "ファイル" in text or "添付" in text:
-        return "MULTIPART_OR_FILE"
+        file_field = db.scalar(
+            select(FormProfileField.id)
+            .where(
+                FormProfileField.form_profile_id == profile.id,
+                FormProfileField.field_type == "file",
+            )
+            .limit(1)
+        )
+        return "FILE_ATTACHMENT" if file_field else "MULTIPART_ONLY"
     if not profile.delivery_supported:
         return "OTHER_UNSUPPORTED"
     return None
@@ -119,7 +174,7 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
         reasons.append("ALREADY_SENT_OR_UNKNOWN")
     if profile.captcha_type != "CAPTCHA_NONE":
         reasons.append("CAPTCHA")
-    compatibility = _compatibility_reason(profile)
+    compatibility = _compatibility_reason(db, profile)
     if compatibility:
         reasons.append(compatibility)
     if profile.confirmation_page is True:
@@ -236,7 +291,9 @@ def form_dm_readiness(
             items = [
                 {
                     "company_id": str(result.company_id),
-                    "company_name": company.company_name,
+                    "company_name": (
+                        (company.company_name or "").strip() or company.domain or "—"
+                    ),
                     "form_url": profile.form_url,
                     "primary_reason": result.primary_reason,
                     "secondary_reasons": result.secondary_reasons,
@@ -267,7 +324,7 @@ def form_dm_readiness(
                     writer.writerow(
                         [
                             result.company_id,
-                            company.company_name,
+                            (company.company_name or "").strip() or company.domain or "—",
                             profile.form_url,
                             result.primary_reason,
                             ",".join(result.secondary_reasons),

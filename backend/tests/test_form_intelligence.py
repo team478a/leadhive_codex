@@ -548,7 +548,7 @@ def test_prohibition_captcha_and_fingerprint_change(auth, db, monkeypatch, prohi
     first = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
     assert first["form_status"] == "BLOCKED"
     assert first["sales_contact_status"] == "PROHIBITED"
-    assert first["captcha_type"] == "CAPTCHA_RECAPTCHA"
+    assert first["captcha_type"] == "CAPTCHA_RECAPTCHA_V2"
     assert first["confirmation_page"] is True
     original_fingerprint = first["fingerprint"]
 
@@ -565,8 +565,8 @@ def test_prohibition_captcha_and_fingerprint_change(auth, db, monkeypatch, prohi
     [
         ('<div class="h-captcha"></div>', "CAPTCHA_HCAPTCHA"),
         ('<div class="cf-turnstile"></div>', "CAPTCHA_TURNSTILE"),
-        ('<div class="g-recaptcha"></div>', "CAPTCHA_RECAPTCHA"),
-        ("<label>画像認証</label>", "CAPTCHA_OTHER"),
+        ('<div class="g-recaptcha"></div>', "CAPTCHA_RECAPTCHA_V2"),
+        ("<label>画像認証</label>", "CAPTCHA_NONE"),
         ("<form><input name=message></form>", "CAPTCHA_NONE"),
     ],
 )

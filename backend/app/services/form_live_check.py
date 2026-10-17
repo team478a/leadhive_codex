@@ -110,10 +110,13 @@ def check(profile: FormProfile) -> dict:
             sales_contact_status(soup.get_text(" ", strip=True), bool(soup.select("form")))[0]
             == "PROHIBITED"
         )
-        result["captcha_state"] = (
-            "NOT_DETECTED_STATIC" if _captcha_type(page.html) == "CAPTCHA_NONE" else "DETECTED"
-        )
         forms = soup.select("form")
+        target_form = forms[profile.form_index] if profile.form_index < len(forms) else None
+        result["captcha_state"] = (
+            "NOT_DETECTED_STATIC"
+            if _captcha_type(page.html, target_form) == "CAPTCHA_NONE"
+            else "DETECTED"
+        )
         if page.url != profile.form_url:
             result["structure_status"] = "REDIRECTED"
         elif profile.form_index >= len(forms):

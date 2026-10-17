@@ -37,7 +37,7 @@ from app.services.scraper import CONTACT_HINTS, ScrapeError
 from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
 logger = logging.getLogger("leadhive")
-ANALYSIS_VERSION = "2.4"
+ANALYSIS_VERSION = "2.5"
 MAX_CONTACT_PAGES = 8
 MAX_GUESSED_PATHS = 6
 MAX_EXTERNAL_CONTACT_PAGES = 3
@@ -99,16 +99,47 @@ def _candidate_pages(company: Company, root_url: str, root_html: str) -> list[tu
     return candidates[:MAX_CONTACT_PAGES]
 
 
-def _captcha_type(html: str) -> str:
-    value = html.lower()
-    if "hcaptcha" in value or "h-captcha" in value:
-        return "CAPTCHA_HCAPTCHA"
-    if "turnstile" in value or "cf-turnstile" in value:
-        return "CAPTCHA_TURNSTILE"
-    if "recaptcha" in value or "g-recaptcha" in value:
-        return "CAPTCHA_RECAPTCHA"
-    if "captcha" in value or "画像認証" in value or "認証コード" in value:
-        return "CAPTCHA_OTHER"
+def _captcha_type(html: str, form: Tag | None = None) -> str:
+    page = BeautifulSoup(html, "html.parser")
+    forms = [form] if form is not None else page.select("form")
+    page_value = str(page).lower()
+    if not forms:
+        if "hcaptcha" in page_value or "h-captcha" in page_value:
+            return "CAPTCHA_HCAPTCHA"
+        if "turnstile" in page_value or "cf-turnstile" in page_value:
+            return "CAPTCHA_TURNSTILE"
+        if "g-recaptcha" in page_value or "g-recaptcha-response" in page_value:
+            return "CAPTCHA_RECAPTCHA_V2"
+        return "CAPTCHA_NONE"
+
+    for target in forms:
+        value = str(target).lower()
+        classes = set(target.get("class") or [])
+        is_cf7 = (
+            "wpcf7-form" in classes
+            or target.select_one('input[name="_wpcf7"]') is not None
+            or target.find_parent(class_="wpcf7") is not None
+        )
+        if "hcaptcha" in value or "h-captcha" in value:
+            return "CAPTCHA_HCAPTCHA"
+        if "turnstile" in value or "cf-turnstile" in value:
+            return "CAPTCHA_TURNSTILE"
+        if is_cf7 and any(
+            marker in page_value
+            for marker in ("wpcf7-recaptcha", "_wpcf7_recaptcha", "wpcf7recaptcha")
+        ):
+            return "CAPTCHA_CF7_RECAPTCHA"
+        if (
+            "grecaptcha.execute" in page_value
+            or re.search(r"recaptcha/api(?:\.js)?[^\"']*[?&]render=", page_value)
+        ):
+            return "CAPTCHA_RECAPTCHA_V3"
+        if "g-recaptcha" in value or "g-recaptcha-response" in value:
+            return "CAPTCHA_RECAPTCHA_V2"
+        if re.search(r"画像認証|認証コード|image\s+captcha", value):
+            return "CAPTCHA_IMAGE"
+        if "captcha" in value:
+            return "CAPTCHA_OTHER"
     return "CAPTCHA_NONE"
 
 
@@ -216,6 +247,7 @@ def _upsert_profile(
     provider_name: str,
     delivery_supported: bool = False,
     compatibility_reason: str = "",
+    compatibility_reason_code: str = "",
     error_message: str = "",
     action_url: str = "",
 ) -> FormProfile:
@@ -278,6 +310,7 @@ def _upsert_profile(
     profile.last_analyzed_at = datetime.now(timezone.utc)
     profile.analysis_duration_ms = max(0, duration_ms)
     profile.delivery_supported = delivery_supported
+    profile.compatibility_reason_code = compatibility_reason_code
     profile.review_reason = (
         _review_reason(
             form_found,
@@ -564,7 +597,7 @@ def analyze_company_forms(
                         # Provider form existence does not prove company identity
                         # or permission to use a shared service for sales.
                         sales_status = "UNCERTAIN"
-                    captcha = _captcha_type(str(form) + html)
+                    captcha = _captcha_type(html, form)
                     confirmation = _confirmation_page(form)
                     provider_name = "rule"
                     ambiguous = [
@@ -671,6 +704,7 @@ def analyze_company_forms(
                         provider_name=provider_name,
                         delivery_supported=compatibility.supported,
                         compatibility_reason=compatibility.reason,
+                        compatibility_reason_code=compatibility.reason_code,
                         action_url=_clean_url(str(form.get("action") or url), url),
                     )
                     profiles.append(profile)
