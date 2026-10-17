@@ -291,9 +291,7 @@ def form_dm_readiness(
             items = [
                 {
                     "company_id": str(result.company_id),
-                    "company_name": (
-                        (company.company_name or "").strip() or company.domain or "—"
-                    ),
+                    "company_name": ((company.company_name or "").strip() or company.domain or "—"),
                     "form_url": profile.form_url,
                     "primary_reason": result.primary_reason,
                     "secondary_reasons": result.secondary_reasons,

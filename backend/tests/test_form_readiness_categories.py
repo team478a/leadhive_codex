@@ -26,27 +26,22 @@ def parse_form(markup):
         ),
         ('<form method="post"><input name="email"></form>', "NO_NATIVE_SUBMIT"),
         (
-            '<form method="post"><input name="email">'
-            '<button onclick="send()">送信</button></form>',
+            '<form method="post"><input name="email"><button onclick="send()">送信</button></form>',
             "CUSTOM_SUBMIT_HANDLER",
         ),
         ('<form method="post"><input type="hidden" name="token"></form>', "NO_INPUT_FIELDS"),
         (
-            '<form method="post"><input name="email">'
-            '<button type="button">確認</button></form>',
+            '<form method="post"><input name="email"><button type="button">確認</button></form>',
             "JAVASCRIPT_CONFIRMATION",
         ),
         (
-            '<form method="post" enctype="multipart/form-data">'
-            '<input name="email"></form>',
+            '<form method="post" enctype="multipart/form-data"><input name="email"></form>',
             "MULTIPART_OR_FILE",
         ),
     ],
 )
 def test_compatibility_reports_stable_reason_codes(markup, expected):
-    result = assess_delivery_compatibility(
-        parse_form(markup), "https://fixture.example/contact"
-    )
+    result = assess_delivery_compatibility(parse_form(markup), "https://fixture.example/contact")
     assert not result.supported
     assert result.reason_code == expected
 
@@ -119,7 +114,5 @@ def test_readiness_splits_unsupported_reasons_and_multipart_files(auth, workspac
     ]
     for category in expected_categories:
         assert result["counts"][category] == 1
-    fallback = next(
-        row for row in result["items"] if row["company_id"] == str(companies[0].id)
-    )
+    fallback = next(row for row in result["items"] if row["company_id"] == str(companies[0].id))
     assert fallback["company_name"] == "fallback.example"

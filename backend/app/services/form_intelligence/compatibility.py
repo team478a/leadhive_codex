@@ -69,9 +69,7 @@ def assess_delivery_compatibility(form: Tag, page_url: str) -> DeliveryCompatibi
             control.get("type") or ("submit" if control.name == "button" else "text")
         ).lower()
         label = control.get_text(" ", strip=True) or str(control.get("value") or "")
-        if kind == "button" and re.search(
-            r"確認|送信|次へ|confirm|submit|send|next", label, re.I
-        ):
+        if kind == "button" and re.search(r"確認|送信|次へ|confirm|submit|send|next", label, re.I):
             return DeliveryCompatibility(
                 False,
                 "確認・送信ボタンがJavaScript操作を必要とします。確認経路は未検証です。",

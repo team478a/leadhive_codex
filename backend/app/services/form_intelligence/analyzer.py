@@ -129,9 +129,8 @@ def _captcha_type(html: str, form: Tag | None = None) -> str:
             for marker in ("wpcf7-recaptcha", "_wpcf7_recaptcha", "wpcf7recaptcha")
         ):
             return "CAPTCHA_CF7_RECAPTCHA"
-        if (
-            "grecaptcha.execute" in page_value
-            or re.search(r"recaptcha/api(?:\.js)?[^\"']*[?&]render=", page_value)
+        if "grecaptcha.execute" in page_value or re.search(
+            r"recaptcha/api(?:\.js)?[^\"']*[?&]render=", page_value
         ):
             return "CAPTCHA_RECAPTCHA_V3"
         if "g-recaptcha" in value or "g-recaptcha-response" in value:
