@@ -36,7 +36,7 @@ test('sales preparation can queue cancel and resume without sending', async ({ p
     if (route.request().method() === 'POST') {
       preparationCreated = true
       preparationStatus = 'queued'
-      await route.fulfill({ status: 202, json: {} })
+      await route.fulfill({ status: 202, json: preparation().job })
     } else {
       await route.fulfill({ json: preparationCreated ? [preparation()] : [] })
     }
@@ -59,24 +59,14 @@ test('sales preparation can queue cancel and resume without sending', async ({ p
   await navigateWorkspace(page, '▶ 送信の準備・実行')
   const projectSelect = page.getByRole('combobox', { name: '対象プロジェクト', exact: true })
   await expect(projectSelect.locator('option', { hasText: projectName })).toHaveCount(1)
-  const summaryResponse = page.waitForResponse(response =>
-    response.request().method() === 'GET'
-      && new URL(response.url()).pathname === `/api/projects/${projectId}/send-flow-summary`,
-  )
-  const templatesResponse = page.waitForResponse(response =>
-    response.request().method() === 'GET'
-      && new URL(response.url()).pathname === `/api/projects/${projectId}/outreach-templates`,
-  )
   await projectSelect.selectOption(projectId)
-  await Promise.all([summaryResponse, templatesResponse])
   await expect(projectSelect).toHaveValue(projectId)
-  await expect(page.getByRole('region', { name: '送信フローの進捗' })).toContainText('送信可否集計なし')
-  const draftStage = page.getByRole('region', { name: '2. 送信先と文面を用意', exact: true })
+  await page.getByRole('group', { name: '連絡方法' }).getByRole('button', { name: 'メール', exact: true }).click()
+  const draftStage = page.getByRole('region', { name: '1. 文面をつくる', exact: true })
+  const draftHeader = draftStage.getByRole('button').first()
+  if (await draftHeader.getAttribute('aria-expanded') !== 'true') await draftHeader.click()
   const draftPanel = draftStage.getByRole('region', { name: '送信先と文面の準備' })
-  if (!await draftPanel.isVisible()) {
-    await draftStage.getByRole('button', { name: /2\. 送信先と文面を用意/ }).click()
-  }
-  await draftPanel.getByLabel('文面の作り方').selectOption('ai')
+  await draftPanel.locator('summary', { hasText: 'AIで会社ごとに文面を作成' }).click()
   const panel = page.getByRole('region', { name: '営業準備', exact: true })
   await panel.getByRole('button', { name: '営業準備を開始', exact: true }).click()
   await expect.poll(() => preparationCreated).toBe(true)
