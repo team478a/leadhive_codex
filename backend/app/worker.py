@@ -63,7 +63,7 @@ def lease_deadline() -> datetime:
 def _heartbeat_once() -> None:
     try:
         with SessionLocal() as db:
-            record_worker_heartbeat(db)
+            record_worker_heartbeat(db, worker_type="application")
     except Exception as exc:
         logger.warning("worker heartbeat failed: %s", type(exc).__name__)
 

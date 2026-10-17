@@ -39,7 +39,7 @@ export function RuntimeVersionStatus() {
 
   const applicationWorkers = info?.workers.filter(worker => worker.worker_type === 'application') ?? []
   const browserWorkers = info?.workers.filter(worker => worker.worker_type === 'browser') ?? []
-  const mismatch = info !== null && applicationWorkers.some(worker =>
+  const mismatch = info !== null && info.workers.some(worker =>
     info.api_commit !== 'unknown' && worker.commit_id !== 'unknown' && worker.commit_id !== info.api_commit,
   )
 

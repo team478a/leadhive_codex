@@ -53,9 +53,7 @@ def runtime_info(db: Session = Depends(get_db), _user: User = Depends(current_us
         "workers": [
             {
                 "instance_id": worker.instance_id,
-                "worker_type": (
-                    "browser" if worker.instance_id.startswith("browser-") else "application"
-                ),
+                "worker_type": worker.worker_type,
                 "commit_id": worker.commit_id,
                 "host_name": worker.host_name,
                 "last_seen_at": worker.last_seen_at,

@@ -19,5 +19,5 @@ test('runtime status distinguishes application and browser workers', async ({ pa
   const status = page.getByRole('region', { name: '稼働バージョン' })
   await expect(status).toContainText('本体ワーカー版: abc1234 · api-host')
   await expect(status).toContainText('ブラウザーワーカー版: def5678 · browser-host')
-  await expect(status.getByRole('alert')).toHaveCount(0)
+  await expect(status.getByRole('alert')).toHaveText('APIとワーカーの版が違います。ワーカーを更新してください')
 })
