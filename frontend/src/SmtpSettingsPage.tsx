@@ -17,7 +17,9 @@ const inboundEmpty = {
 }
 const formSenderEmpty = {
   company_name: '', department: '', position: '', contact_name: '', last_name: '', first_name: '',
-  furigana: '', email: '', phone: '', postal_code: '', prefecture: '', city: '', address: '', building: '', website: '',
+  furigana: '', last_name_furigana: '', first_name_furigana: '', email: '', phone: '',
+  phone_area_code: '', phone_exchange_code: '', phone_line_number: '',
+  postal_code: '', prefecture: '', city: '', address: '', building: '', website: '',
 }
 
 export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: string }) {
@@ -183,8 +185,30 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
     <div className="actions"><button disabled={busy} onClick={() => void saveApplication()}>全体設定を保存</button></div>
     <div className="mt-7 border-t pt-5"><h2>フォーム送信者情報</h2>
     <p className="muted mt-2">問い合わせフォームへ入力する自社情報です。Form Intelligenceの項目判定に合わせて単発送信の初期値と一括フォームDMへ使用します。</p>
+    <p className="muted mt-2 text-sm">郵便番号は7桁の値を3桁・4桁に分けて入力できます。電話番号の3分割欄は「03-1234-5678」のような区切りがあれば自動分割し、区切りがない場合は市外局番・市内局番・加入者番号を個別に設定してください。</p>
     <div className="settings-save-status ready"><div><strong>保存状態</strong><p>空欄の項目は自動入力されず、必須の場合はCodex支援へ回ります。</p></div><span>{formSenderUpdatedAt ? `最終保存：${new Date(formSenderUpdatedAt).toLocaleString('ja-JP')}` : 'DB保存：まだありません'}</span></div>
-    <div className="detail-grid mt-5"><label className="field">会社名<input value={formSender.company_name} onChange={e => setFormSender({ ...formSender, company_name: e.target.value })} /></label><label className="field">部署<input value={formSender.department} onChange={e => setFormSender({ ...formSender, department: e.target.value })} /></label><label className="field">役職<input value={formSender.position} onChange={e => setFormSender({ ...formSender, position: e.target.value })} /></label><label className="field">担当者名<input value={formSender.contact_name} onChange={e => setFormSender({ ...formSender, contact_name: e.target.value })} /></label><label className="field">姓<input value={formSender.last_name} onChange={e => setFormSender({ ...formSender, last_name: e.target.value })} /></label><label className="field">名<input value={formSender.first_name} onChange={e => setFormSender({ ...formSender, first_name: e.target.value })} /></label><label className="field">フリガナ<input value={formSender.furigana} onChange={e => setFormSender({ ...formSender, furigana: e.target.value })} /></label><label className="field">メールアドレス<input type="email" value={formSender.email} onChange={e => setFormSender({ ...formSender, email: e.target.value })} /></label><label className="field">電話番号<input type="tel" value={formSender.phone} onChange={e => setFormSender({ ...formSender, phone: e.target.value })} /></label><label className="field">郵便番号<input value={formSender.postal_code} onChange={e => setFormSender({ ...formSender, postal_code: e.target.value })} /></label><label className="field">都道府県<input value={formSender.prefecture} onChange={e => setFormSender({ ...formSender, prefecture: e.target.value })} /></label><label className="field">市区町村<input value={formSender.city} onChange={e => setFormSender({ ...formSender, city: e.target.value })} /></label><label className="field">住所<input value={formSender.address} onChange={e => setFormSender({ ...formSender, address: e.target.value })} /></label><label className="field">建物名<input value={formSender.building} onChange={e => setFormSender({ ...formSender, building: e.target.value })} /></label><label className="field">Webサイト<input type="url" value={formSender.website} onChange={e => setFormSender({ ...formSender, website: e.target.value })} /></label></div>
+    <div className="detail-grid mt-5">
+      <label className="field">会社名<input value={formSender.company_name} onChange={e => setFormSender({ ...formSender, company_name: e.target.value })} /></label>
+      <label className="field">部署<input value={formSender.department} onChange={e => setFormSender({ ...formSender, department: e.target.value })} /></label>
+      <label className="field">役職<input value={formSender.position} onChange={e => setFormSender({ ...formSender, position: e.target.value })} /></label>
+      <label className="field">担当者名<input value={formSender.contact_name} onChange={e => setFormSender({ ...formSender, contact_name: e.target.value })} /></label>
+      <label className="field">姓<input value={formSender.last_name} onChange={e => setFormSender({ ...formSender, last_name: e.target.value })} /></label>
+      <label className="field">名<input value={formSender.first_name} onChange={e => setFormSender({ ...formSender, first_name: e.target.value })} /></label>
+      <label className="field">フリガナ（全体）<input value={formSender.furigana} onChange={e => setFormSender({ ...formSender, furigana: e.target.value })} /></label>
+      <label className="field">セイ（フリガナ）<input value={formSender.last_name_furigana} onChange={e => setFormSender({ ...formSender, last_name_furigana: e.target.value })} /></label>
+      <label className="field">メイ（フリガナ）<input value={formSender.first_name_furigana} onChange={e => setFormSender({ ...formSender, first_name_furigana: e.target.value })} /></label>
+      <label className="field">メールアドレス<input type="email" value={formSender.email} onChange={e => setFormSender({ ...formSender, email: e.target.value })} /></label>
+      <label className="field">電話番号<input type="tel" value={formSender.phone} onChange={e => setFormSender({ ...formSender, phone: e.target.value })} /></label>
+      <label className="field">市外局番<input value={formSender.phone_area_code} onChange={e => setFormSender({ ...formSender, phone_area_code: e.target.value })} /></label>
+      <label className="field">市内局番<input value={formSender.phone_exchange_code} onChange={e => setFormSender({ ...formSender, phone_exchange_code: e.target.value })} /></label>
+      <label className="field">加入者番号<input value={formSender.phone_line_number} onChange={e => setFormSender({ ...formSender, phone_line_number: e.target.value })} /></label>
+      <label className="field">郵便番号<input value={formSender.postal_code} onChange={e => setFormSender({ ...formSender, postal_code: e.target.value })} /></label>
+      <label className="field">都道府県<input value={formSender.prefecture} onChange={e => setFormSender({ ...formSender, prefecture: e.target.value })} /></label>
+      <label className="field">市区町村<input value={formSender.city} onChange={e => setFormSender({ ...formSender, city: e.target.value })} /></label>
+      <label className="field">住所・番地<input value={formSender.address} onChange={e => setFormSender({ ...formSender, address: e.target.value })} /></label>
+      <label className="field">建物名<input value={formSender.building} onChange={e => setFormSender({ ...formSender, building: e.target.value })} /></label>
+      <label className="field">Webサイト<input type="url" value={formSender.website} onChange={e => setFormSender({ ...formSender, website: e.target.value })} /></label>
+    </div>
     <div className="actions"><button disabled={busy} onClick={() => void saveFormSender()}>フォーム送信者情報を保存</button></div></div>
     <div className="mt-7 border-t pt-5"><h2>メール送信設定</h2>
     <p className="muted mt-2">承認済みメールとテストメールに使うSMTPサーバーを設定します。パスワードは暗号化して保存され、画面には再表示されません。</p>

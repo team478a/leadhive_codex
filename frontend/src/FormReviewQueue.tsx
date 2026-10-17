@@ -6,7 +6,7 @@ type ChoiceGroup = { group_id: string; source_hash: string; label: string; suppo
 type SavedGroup = { group_id: string; source_hash: string; label: string; required_observed: boolean; reviewable: boolean; options: { option_id: string; label: string; value: string }[] }
 type Item = { company_id: string; company_name: string; profile_id: string; form_url: string; fingerprint: string; fields_hash: string; reason_codes: string[]; fields: Field[]; groups: ChoiceGroup[]; saved_groups: SavedGroup[] }
 type Queue = { total: number; offset: number; limit: number; items: Item[] }
-const keys = ['company_name', 'department', 'position', 'contact_name', 'last_name', 'first_name', 'furigana', 'email', 'phone', 'postal_code', 'prefecture', 'city', 'address', 'building', 'website', 'contact_category', 'contact_method', 'subject', 'message', 'privacy_consent', 'newsletter_consent', 'other', 'unknown']
+const keys = ['company_name', 'department', 'position', 'contact_name', 'last_name', 'first_name', 'furigana', 'last_name_furigana', 'first_name_furigana', 'email', 'phone', 'phone_area_code', 'phone_exchange_code', 'phone_line_number', 'postal_code', 'postal_code_first', 'postal_code_last', 'prefecture', 'city', 'address', 'building', 'website', 'contact_category', 'contact_method', 'subject', 'message', 'privacy_consent', 'newsletter_consent', 'other', 'unknown']
 
 export function FormReviewQueue({ projectId, canWrite }: { projectId: string; canWrite: boolean }) {
   const [items, setItems] = useState<Item[]>([]); const [total, setTotal] = useState(0); const [index, setIndex] = useState(0)

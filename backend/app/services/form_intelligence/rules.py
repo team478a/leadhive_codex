@@ -9,9 +9,16 @@ STANDARD_KEYS = {
     "last_name",
     "first_name",
     "furigana",
+    "last_name_furigana",
+    "first_name_furigana",
     "email",
     "phone",
+    "phone_area_code",
+    "phone_exchange_code",
+    "phone_line_number",
     "postal_code",
+    "postal_code_first",
+    "postal_code_last",
     "prefecture",
     "city",
     "address",
@@ -32,17 +39,45 @@ FIELD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("company_name", ("会社名", "貴社名", "御社名", "法人名", "企業名", "company", "organization")),
     ("department", ("部署", "部門", "所属", "department", "division")),
     ("position", ("役職", "肩書", "position", "title")),
-    ("furigana", ("ふりがな", "フリガナ", "カナ", "kana")),
-    ("last_name", ("姓", "苗字", "名字", "last name", "lastname", "family name")),
-    ("first_name", ("名", "first name", "firstname", "given name")),
+    (
+        "last_name_furigana",
+        ("姓のふりがな", "ふりがな（姓）", "フリガナ（姓）", "last name kana"),
+    ),
+    (
+        "first_name_furigana",
+        ("名のふりがな", "ふりがな（名）", "フリガナ（名）", "first name kana"),
+    ),
+    ("furigana", ("ふりがな", "フリガナ")),
+    (
+        "last_name",
+        (
+            "お名前（姓）",
+            "氏名（姓）",
+            "姓",
+            "苗字",
+            "名字",
+            "last name",
+            "lastname",
+            "family name",
+        ),
+    ),
+    (
+        "first_name",
+        ("お名前（名）", "氏名（名）", "名", "first name", "firstname", "given name"),
+    ),
     ("contact_name", ("氏名", "お名前", "名前", "担当者名", "ご担当者", "your name", "fullname")),
     ("email", ("メールアドレス", "メール", "e-mail", "email", "mail address")),
+    ("phone_area_code", ("市外局番", "area code")),
+    ("phone_exchange_code", ("市内局番", "exchange code")),
+    ("phone_line_number", ("加入者番号", "subscriber number")),
     ("phone", ("電話番号", "電話", "tel", "telephone", "phone")),
+    ("postal_code_first", ("郵便番号前半", "郵便番号（前半）", "zip first")),
+    ("postal_code_last", ("郵便番号後半", "郵便番号（後半）", "zip second")),
     ("postal_code", ("郵便番号", "〒", "postal", "zip")),
     ("prefecture", ("都道府県", "prefecture")),
     ("city", ("市区町村", "市町村", "city")),
     ("building", ("建物名", "ビル名", "building")),
-    ("address", ("住所", "所在地", "address")),
+    ("address", ("番地", "丁目", "住所", "所在地", "address", "street")),
     ("website", ("webサイト", "ウェブサイト", "ホームページ", "website", "url")),
     (
         "contact_category",
@@ -116,6 +151,52 @@ def normalize(value: str) -> str:
 
 def dom_mapping(field_type: str, name: str) -> tuple[str, float] | None:
     normalized_name = normalize(name)
+    normalized_name = re.sub(r"([a-z])(\d)", r"\1_\2", normalized_name)
+    name_parts = tuple(filter(None, re.split(r"[^a-z0-9]+", normalized_name)))
+    joined_name = "_".join(name_parts)
+    name_part_set = set(name_parts)
+
+    has_family_name = bool(name_part_set & {"lastname", "surname", "sei", "familyname"}) or {
+        "last",
+        "name",
+    } <= name_part_set or {"family", "name"} <= name_part_set
+    if has_family_name:
+        if any(marker in joined_name for marker in ("kana", "furigana")):
+            return "last_name_furigana", 0.98
+        return "last_name", 0.98
+    has_given_name = bool(name_part_set & {"firstname", "givenname", "mei"}) or {
+        "first",
+        "name",
+    } <= name_part_set or {"given", "name"} <= name_part_set
+    if has_given_name:
+        if any(marker in joined_name for marker in ("kana", "furigana")):
+            return "first_name_furigana", 0.98
+        return "first_name", 0.98
+
+    if normalized_name in {"kana", "furigana", "name_kana", "name_furigana"}:
+        return "furigana", 0.98
+
+    if any(marker in joined_name for marker in ("postal", "zip")):
+        if re.search(r"(?:^|_)(?:2|last|second)(?:_|$)", joined_name):
+            return "postal_code_last", 0.98
+        if re.search(r"(?:^|_)(?:1|first)(?:_|$)", joined_name):
+            return "postal_code_first", 0.98
+        return "postal_code", 0.95
+
+    if any(marker in joined_name for marker in ("phone", "tel")):
+        if any(marker in joined_name for marker in ("area", "city")):
+            return "phone_area_code", 0.98
+        if any(marker in joined_name for marker in ("exchange", "middle")):
+            return "phone_exchange_code", 0.98
+        if any(marker in joined_name for marker in ("subscriber", "line")):
+            return "phone_line_number", 0.98
+        if re.search(r"(?:^|_)(?:1|first)(?:_|$)", joined_name):
+            return "phone_area_code", 0.95
+        if re.search(r"(?:^|_)(?:2|second)(?:_|$)", joined_name):
+            return "phone_exchange_code", 0.95
+        if re.search(r"(?:^|_)(?:3|third)(?:_|$)", joined_name):
+            return "phone_line_number", 0.95
+
     exact_names = {
         "name": "contact_name",
         "your-name": "contact_name",
@@ -148,6 +229,20 @@ def dom_mapping(field_type: str, name: str) -> tuple[str, float] | None:
 
 def rule_mapping(text: str, field_type: str) -> tuple[str, float]:
     normalized = normalize(text)
+    compact = re.sub(r"[\s:：()（）・_-]+", "", normalized)
+    kana_boundary = r"[\s:：()（）・_-]"
+    if compact in {"セイ", "せい", "ふりがなせい", "フリガナセイ", "カナセイ"} or re.search(
+        rf"(?:^|{kana_boundary})(?:セイ|せい)(?:$|{kana_boundary})", normalized
+    ):
+        return "last_name_furigana", 0.9
+    if compact in {"メイ", "めい", "ふりがなめい", "フリガナメイ", "カナメイ"} or re.search(
+        rf"(?:^|{kana_boundary})(?:メイ|めい)(?:$|{kana_boundary})", normalized
+    ):
+        return "first_name_furigana", 0.9
+    if normalized in {"カナ", "kana"} or re.search(
+        rf"(?:^|{kana_boundary})(?:カナ|kana)(?:$|{kana_boundary})", normalized
+    ):
+        return "furigana", 0.9
     matches = [
         (len(normalize(alias)), mapped_key)
         for mapped_key, aliases in FIELD_RULES
