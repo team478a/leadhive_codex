@@ -60,3 +60,31 @@ def display_name(company) -> str:
     if name and not re.fullmatch(r"[-—]+", name):
         return name
     return _host(company.domain or "") or _host(company.website_url or "") or "—"
+
+
+def current_suspected_evidence(db, companies) -> dict:
+    from app.services.collection_feedback import latest_company_feedbacks
+
+    candidates = [
+        company for company in companies if evidence(company) or company.status == "excluded"
+    ]
+    feedback_by_company = latest_company_feedbacks(db, candidates)
+    suspected = {}
+    for company in companies:
+        reasons = evidence(company)
+        feedback = feedback_by_company.get(company.id)
+        if (
+            feedback
+            and feedback.get("outcome") == "OK"
+            and feedback.get("reason") == "company_verified"
+        ):
+            continue
+        if (
+            feedback
+            and feedback.get("outcome") == "NG"
+            and feedback.get("reason") == "wrong_company"
+        ):
+            reasons.insert(0, "NON_COMPANY_REVIEW_NG")
+        if reasons:
+            suspected[company.id] = list(dict.fromkeys(reasons))
+    return suspected

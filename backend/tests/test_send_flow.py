@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import event, func, select
 
 from app.database import engine
@@ -14,6 +15,7 @@ from app.models import (
     EmailDelivery,
     FormDelivery,
     FormDmReadinessResult,
+    FormProfile,
     OperationJob,
     OutreachDraft,
     SuppressionEntry,
@@ -239,6 +241,100 @@ def test_bulk_template_drafts_server_selects_email_companies_without_email_draft
     assert job.payload["targets"] == [
         {"company_id": str(eligible.id), "profile_id": None},
         {"company_id": str(form_draft.id), "profile_id": None},
+    ]
+
+
+def test_bulk_email_target_selection_excludes_suspects_but_honors_company_verification(auth, db):
+    project = make_project(auth)
+    valid, article, public_page, verified = add_companies(db, UUID(project["id"]), 4)
+    article.company_name = "2026年版のイベント募集"
+    public_page.company_name = "横浜市のお知らせ"
+    public_page.domain = "city.yokohama.lg.jp"
+    verified.domain = "verified.lg.jp"
+    db.commit()
+    feedback = auth.post(
+        f"/api/companies/{verified.id}/collection-feedback",
+        json={
+            "subject": "company",
+            "outcome": "OK",
+            "reason": "company_verified",
+            "expected_updated_at": verified.updated_at.isoformat(),
+        },
+    )
+    assert feedback.status_code == 201, feedback.text
+
+    template = make_template(auth, project["id"])
+    response = auth.post(
+        f"/api/projects/{project['id']}/outreach-drafts/bulk-from-template",
+        json={
+            "template_id": template["id"],
+            "channel": "email",
+            "readiness_reason": "NO_EMAIL_DRAFT",
+        },
+    )
+
+    assert response.status_code == 202, response.text
+    job = db.get(OperationJob, UUID(response.json()["id"]))
+    assert {item["company_id"] for item in job.payload["targets"]} == {
+        str(valid.id),
+        str(verified.id),
+    }
+
+
+@pytest.mark.parametrize("channel", ["email", "form"])
+def test_bulk_template_worker_excludes_suspects_from_manual_targets(auth, db, monkeypatch, channel):
+    project = make_project(auth)
+    valid, suspect = add_companies(db, UUID(project["id"]), 2)
+    valid_id = str(valid.id)
+    suspect_id = str(suspect.id)
+    suspect.company_name = "2026年度のイベント開催"
+    if channel == "form":
+        valid.contact_url = f"https://{valid.domain}/contact"
+        suspect.contact_url = f"https://{suspect.domain}/contact"
+        db.add_all(
+            [
+                FormProfile(
+                    company_id=company.id,
+                    form_url=company.contact_url,
+                    action_url=f"{company.contact_url}/submit",
+                    form_status="READY",
+                    sales_contact_status="ALLOWED",
+                    captcha_type="CAPTCHA_NONE",
+                    form_found=True,
+                    delivery_supported=True,
+                    fingerprint="a" * 64,
+                    is_primary=True,
+                )
+                for company in (valid, suspect)
+            ]
+        )
+    db.commit()
+    template = make_template(auth, project["id"], channel=channel)
+    monkeypatch.setattr(
+        bulk_template_drafts,
+        "evaluate_contact_permission",
+        lambda *_args: SimpleNamespace(
+            status="ALLOWED", reason_code="allowed", message="送信できます。"
+        ),
+    )
+    response = auth.post(
+        f"/api/projects/{project['id']}/outreach-drafts/bulk-from-template",
+        json={
+            "template_id": template["id"],
+            "channel": channel,
+            "company_ids": [valid_id, suspect_id],
+        },
+    )
+    assert response.status_code == 202, response.text
+
+    job = run_queued_job(db, response.json()["id"])
+
+    assert job.payload["bulk_template_results"]["created"] == [valid_id]
+    assert job.payload["bulk_template_results"]["excluded"] == [
+        {
+            "company_id": suspect_id,
+            "reason_code": "non_company_suspected",
+        }
     ]
 
 

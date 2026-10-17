@@ -19,6 +19,7 @@ from app.models import (
 )
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_profile_delivery import primary_form_profile, sender_values
+from app.services.non_company_suspected import current_suspected_evidence
 from app.services.outreach_template_validation import has_stop_method
 
 CHUNK_SIZE = 100
@@ -108,8 +109,8 @@ def email_draft_targets(db: Session, project_id: UUID) -> list[dict[str, str | N
         .correlate(Company)
         .exists()
     )
-    company_ids = db.scalars(
-        select(Company.id)
+    statement = (
+        select(Company)
         .where(
             Company.project_id == project_id,
             func.trim(Company.email) != "",
@@ -120,9 +121,21 @@ def email_draft_targets(db: Session, project_id: UUID) -> list[dict[str, str | N
             not_(existing_email_draft),
         )
         .order_by(Company.company_name, Company.id)
-        .limit(500)
-    ).all()
-    return [{"company_id": str(company_id), "profile_id": None} for company_id in company_ids]
+    )
+    targets = []
+    offset = 0
+    while len(targets) < 500:
+        companies = db.scalars(statement.offset(offset).limit(500)).all()
+        if not companies:
+            break
+        offset += len(companies)
+        suspected = current_suspected_evidence(db, companies)
+        for company in companies:
+            if company.id not in suspected:
+                targets.append({"company_id": str(company.id), "profile_id": None})
+                if len(targets) == 500:
+                    break
+    return targets
 
 
 def _sender_placeholders(db: Session, channel: str) -> dict[str, str]:
@@ -198,6 +211,7 @@ def run_bulk_template_drafts(
                 )
             ).all()
         }
+        suspected = current_suspected_evidence(db, list(companies.values()))
         existing_draft_company_ids = set(
             db.scalars(
                 select(OutreachDraft.company_id).where(
@@ -224,7 +238,6 @@ def run_bulk_template_drafts(
                 results["skipped_existing"].append(str(company_id))
                 job.processed_count += 1
                 continue
-
             destination = company.email if channel == "email" else company.contact_url
             requested_profile_id = profile_ids.get(company_id)
             profile = None
@@ -268,6 +281,15 @@ def run_bulk_template_drafts(
                         "company_id": str(company_id),
                         "reason_code": decision_reason,
                         "reason": decision_message,
+                    }
+                )
+                job.processed_count += 1
+                continue
+            if company_id in suspected:
+                results["excluded"].append(
+                    {
+                        "company_id": str(company_id),
+                        "reason_code": "non_company_suspected",
                     }
                 )
                 job.processed_count += 1
