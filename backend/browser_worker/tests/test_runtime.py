@@ -58,3 +58,8 @@ def test_runner_rejects_unregistered_html_or_real_site_urls():
 def test_runner_rejects_file_input():
     with pytest.raises(BrowserWorkerError, match="Unsupported or unsafe"):
         run_synthetic_task(SyntheticFormTask("file_input", {"input[type=file]": "not-a-file"}))
+
+
+def test_login_page_after_synthetic_navigation_stops_the_job():
+    with pytest.raises(BrowserWorkerError, match="Login pages are not supported"):
+        run_synthetic_task(SyntheticFormTask("login_navigation", {}))

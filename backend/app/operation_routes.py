@@ -17,6 +17,7 @@ from app.project_access import project_access
 from app.schemas import (
     AnalysisRefreshScheduleInput,
     AnalysisRefreshScheduleOut,
+    BrowserFormAnalysisInput,
     CollectionPerformanceOut,
     OperationJobInput,
     OperationJobOut,
@@ -407,6 +408,32 @@ def enqueue_operation(
     from app.services.collection_query_plan import stamp_plan
 
     stamp_plan(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post(
+    "/projects/{project_id}/browser-form-analysis",
+    response_model=OperationJobOut,
+    status_code=202,
+)
+def enqueue_synthetic_browser_form_analysis(
+    project_id: UUID,
+    body: BrowserFormAnalysisInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Queue only packaged synthetic fixtures; this endpoint deliberately has no URL field."""
+    project_access(project_id, db, user)
+    job = OperationJob(
+        project_id=project_id,
+        operation_type="browser_form_analysis",
+        payload=body.model_dump(mode="json"),
+        total_count=1,
+    )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
     db.commit()
     db.refresh(job)
     return job
