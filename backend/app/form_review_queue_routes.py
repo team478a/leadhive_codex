@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, StrictBool
-from sqlalchemy import func, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -133,17 +133,28 @@ def _display_value(mapped_key: str, choices: dict[str, str], draft: OutreachDraf
     return choices.get(mapped_key, "")
 
 
-def _queue_item(db: Session, company: Company, profile: FormProfile, reasons: list[str]) -> dict:
+def _queue_item(
+    db: Session,
+    company: Company,
+    profile: FormProfile,
+    reasons: list[str],
+    *,
+    confirmation_only: bool = False,
+) -> dict:
     fields = _field_rows(db, profile.id)
-    draft = db.scalar(
-        select(OutreachDraft)
-        .where(OutreachDraft.company_id == company.id, OutreachDraft.channel == "form")
-        .order_by(OutreachDraft.updated_at.desc(), OutreachDraft.id.desc())
-        .limit(1)
+    draft = (
+        None
+        if confirmation_only
+        else db.scalar(
+            select(OutreachDraft)
+            .where(OutreachDraft.company_id == company.id, OutreachDraft.channel == "form")
+            .order_by(OutreachDraft.updated_at.desc(), OutreachDraft.id.desc())
+            .limit(1)
+        )
     )
-    choices = sender_values(db.get(FormSenderSettings, 1))
+    choices = {} if confirmation_only else sender_values(db.get(FormSenderSettings, 1))
     output_fields = []
-    for field in fields:
+    for field in [] if confirmation_only else fields:
         row = _field_material(field)
         row["display_value"] = (
             ""
@@ -152,7 +163,7 @@ def _queue_item(db: Session, company: Company, profile: FormProfile, reasons: li
         )
         output_fields.append(row)
     groups = []
-    for group_id, members in grouped_fields(fields).items():
+    for group_id, members in ({} if confirmation_only else grouped_fields(fields)).items():
         groups.append(
             {
                 "group_id": group_id,
@@ -170,10 +181,14 @@ def _queue_item(db: Session, company: Company, profile: FormProfile, reasons: li
                 ],
             }
         )
-    saved_groups = [
-        group | {"reviewable": saved_choice_reviewable(group, profile)}
-        for group in saved_choice_material(db, profile)["groups"]
-    ]
+    saved_groups = (
+        []
+        if confirmation_only
+        else [
+            group | {"reviewable": saved_choice_reviewable(group, profile)}
+            for group in saved_choice_material(db, profile)["groups"]
+        ]
+    )
     return {
         "company_id": str(company.id),
         "company_name": company.company_name,
@@ -182,6 +197,7 @@ def _queue_item(db: Session, company: Company, profile: FormProfile, reasons: li
         "fingerprint": profile.fingerprint,
         "fields_hash": _fields_hash(profile, fields),
         "reason_codes": reasons,
+        "ready_confirmation_only": confirmation_only,
         "fields": output_fields,
         "groups": groups,
         "saved_groups": saved_groups,
@@ -206,9 +222,34 @@ def get_form_review_queue(
             "read_only": True,
             "external_requests": 0,
         }
-    base = select(FormDmReadinessResult).where(
-        FormDmReadinessResult.job_id == snapshot.id,
-        FormDmReadinessResult.review_queue_eligible.is_(True),
+    review_log_exists = (
+        select(FormAnalysisLog.id)
+        .where(
+            FormAnalysisLog.form_profile_id == FormProfile.id,
+            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+            FormAnalysisLog.details["profile_fingerprint"].astext == FormProfile.fingerprint,
+        )
+        .exists()
+    )
+    ready_confirmation_only = and_(
+        FormDmReadinessResult.primary_reason == "READY",
+        FormProfile.form_status == "READY",
+        FormProfile.is_primary.is_(True),
+        FormProfile.delivery_supported.is_(True),
+        FormProfile.sales_contact_status == "ALLOWED",
+        FormProfile.captcha_type == "CAPTCHA_NONE",
+        FormProfile.confirmation_page.is_(False),
+        Company.do_not_contact.is_(False),
+        ~review_log_exists,
+    )
+    queue_filter = or_(
+        FormDmReadinessResult.review_queue_eligible.is_(True), ready_confirmation_only
+    )
+    base = (
+        select(FormDmReadinessResult.id)
+        .join(Company, Company.id == FormDmReadinessResult.company_id)
+        .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
+        .where(FormDmReadinessResult.job_id == snapshot.id, queue_filter)
     )
     total = db.scalar(select(func.count()).select_from(base.subquery())) or 0
     rows = db.execute(
@@ -217,7 +258,7 @@ def get_form_review_queue(
         .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
         .where(
             FormDmReadinessResult.job_id == snapshot.id,
-            FormDmReadinessResult.review_queue_eligible.is_(True),
+            queue_filter,
         )
         .order_by(Company.company_name, Company.id)
         .offset(offset)
@@ -226,12 +267,15 @@ def get_form_review_queue(
     items = []
     for result, company, profile in rows:
         codes = [result.primary_reason, *result.secondary_reasons]
-        if not REVIEW_REASONS.intersection(codes) or BLOCKING_REASONS.intersection(codes):
+        ready_only = result.primary_reason == "READY"
+        if not ready_only and (
+            not REVIEW_REASONS.intersection(codes) or BLOCKING_REASONS.intersection(codes)
+        ):
             continue
         fields = _field_rows(db, profile.id)
-        if _current_review_log(db, profile, fields):
+        if not ready_only and _current_review_log(db, profile, fields):
             continue
-        items.append(_queue_item(db, company, profile, codes))
+        items.append(_queue_item(db, company, profile, codes, confirmation_only=ready_only))
     return {
         "total": total,
         "offset": offset,
@@ -327,6 +371,63 @@ def save_form_review_decision(
         raise HTTPException(409, "営業可否またはCAPTCHAを安全に確認できないフォームです。")
     if not profile.delivery_supported or profile.confirmation_page is not False:
         raise HTTPException(409, "このフォームは本確認キューの対象外です。")
+    snapshot = latest_completed_job(db, company.project_id)
+    readiness_result = (
+        db.scalar(
+            select(FormDmReadinessResult).where(
+                FormDmReadinessResult.job_id == snapshot.id,
+                FormDmReadinessResult.profile_id == profile.id,
+            )
+        )
+        if snapshot
+        else None
+    )
+    if readiness_result and readiness_result.primary_reason == "READY":
+        if profile.form_status != "READY":
+            raise HTTPException(409, "準備状態が変更されています。集計し直してください。")
+        if body.field_decisions or body.group_decisions or body.saved_group_decisions:
+            raise HTTPException(422, "準備可能フォームの確認は営業禁止表記の確認だけです。")
+        existing_review = db.scalar(
+            select(FormAnalysisLog.id)
+            .where(
+                FormAnalysisLog.form_profile_id == profile.id,
+                FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+                FormAnalysisLog.details["profile_fingerprint"].astext == profile.fingerprint,
+            )
+            .limit(1)
+        )
+        if existing_review:
+            raise HTTPException(409, "このフォームはすでに確認済みです。")
+        now = datetime.now(timezone.utc)
+        db.add(
+            FormAnalysisLog(
+                company_id=company.id,
+                form_profile_id=profile.id,
+                actor_user_id=user.id,
+                created_at=now,
+                event_type="manual_corrected",
+                provider="manual",
+                confidence=1.0,
+                details={
+                    "operation": "form_review_confirmed",
+                    "profile_fingerprint": profile.fingerprint,
+                    "fields_hash": _fields_hash(profile, fields),
+                    "confirmed_no_sales_prohibition": True,
+                    "confirmed_at": now.isoformat(),
+                    "review_mode": "READY_CONFIRMATION_ONLY",
+                    "send_authorized": False,
+                    "execution_allowed": False,
+                },
+            )
+        )
+        db.execute(
+            update(FormDmReadinessResult)
+            .where(FormDmReadinessResult.profile_id == profile.id)
+            .values(review_queue_eligible=False)
+        )
+        db.commit()
+        return {"status": "CONFIRMED", "company_id": str(company.id), "profile_id": str(profile.id)}
+
     by_id = {field.id: field for field in fields}
     decisions = {item.field_id: item for item in body.field_decisions}
     if len(decisions) != len(body.field_decisions) or set(decisions) != set(by_id):

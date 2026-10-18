@@ -5,11 +5,13 @@ from dataclasses import dataclass
 from pathlib import Path
 from threading import Lock
 from typing import Mapping
+from urllib.parse import urlsplit
 
 from playwright.async_api import Browser, BrowserContext, async_playwright
 
 from browser_worker import MAX_TASK_SECONDS
 from browser_worker.network_proxy import AllowlistProxy, BrowserNetworkPolicy
+from browser_worker.safety import BrowserPreflightBlocked, open_page_after_preflight
 
 logger = logging.getLogger("leadhive.browser_worker")
 FIXTURE_DIR = Path(__file__).resolve().parent / "fixtures"
@@ -160,6 +162,12 @@ class SyntheticFormTask:
 
 
 @dataclass(frozen=True)
+class RenderedPageTask:
+    url: str
+    site_host: str
+
+
+@dataclass(frozen=True)
 class FillResult:
     fixture: str
     values: dict[str, str]
@@ -168,6 +176,62 @@ class FillResult:
     blocked_popup_count: int
     blocked_file_chooser_count: int
     blocked_download_count: int
+
+
+@dataclass(frozen=True)
+class RenderedPageResult:
+    final_url: str
+    html: str
+    blocked_non_get_count: int
+
+
+def _validate_rendered_task(task: RenderedPageTask) -> BrowserNetworkPolicy:
+    from app.services.pinned_read_transport import TransportBlocked, target
+
+    try:
+        site_host = target(f"https://{task.site_host}/")
+        target_host = target(task.url)
+        parsed = urlsplit(task.url)
+    except (TransportBlocked, TypeError, ValueError) as exc:
+        raise BrowserWorkerError("Only public HTTPS pages can be analyzed.") from exc
+    policy = BrowserNetworkPolicy(site_host)
+    if (
+        not policy.allows(target_host)
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.port not in {None, 443}
+        or parsed.fragment
+    ):
+        raise BrowserWorkerError("The analysis URL is outside its approved site host.")
+    return policy
+
+
+def _safe_dom_script() -> str:
+    return """() => {
+      const root = document.documentElement.cloneNode(true);
+      for (const field of root.querySelectorAll('input, textarea, select')) {
+        if (!['submit', 'button', 'reset'].includes((field.type || '').toLowerCase())) {
+          field.removeAttribute('value');
+        }
+        if (field instanceof HTMLTextAreaElement) field.textContent = '';
+        for (const option of field.querySelectorAll('option[selected]')) {
+          option.removeAttribute('selected');
+        }
+      }
+      return '<!doctype html>' + root.outerHTML;
+    }"""
+
+
+def is_read_only_request(method: str, url: str, policy: BrowserNetworkPolicy) -> bool:
+    parsed = urlsplit(url)
+    return (
+        method.upper() == "GET"
+        and parsed.scheme == "https"
+        and bool(parsed.hostname)
+        and parsed.username is None
+        and parsed.password is None
+        and policy.allows(parsed.hostname or "")
+    )
 
 
 def _validate_task(task: SyntheticFormTask) -> str:
@@ -377,5 +441,169 @@ def run_synthetic_task(
         )
     except TimeoutError as exc:
         raise BrowserWorkerError("Browser task exceeded the 90-second limit.") from exc
+    finally:
+        _TASK_LOCK.release()
+
+
+async def _render_page_task(
+    task: RenderedPageTask,
+    *,
+    network_policy: BrowserNetworkPolicy,
+    cancellation_check=None,
+) -> RenderedPageResult:
+    blocked_requests: list[str] = []
+    browser: Browser | None = None
+    context: BrowserContext | None = None
+    navigation_checks: set[asyncio.Task] = set()
+    login_detected = asyncio.Event()
+    cancellation_detected = asyncio.Event()
+    cancellation_monitor: asyncio.Task | None = None
+
+    async def route_read_only_request(route) -> None:
+        request = route.request
+        if not is_read_only_request(request.method, request.url, network_policy):
+            blocked_requests.append(request.url)
+            await route.abort("blockedbyclient")
+            return
+        await route.continue_()
+
+    async def block_websocket(websocket_route) -> None:
+        await websocket_route.close(code=1000, reason="browser analysis does not use websockets")
+
+    async with AllowlistProxy(network_policy) as proxy, async_playwright() as playwright:
+        try:
+            browser = await playwright.chromium.launch(
+                headless=True,
+                args=[
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-sync",
+                    "--disable-webrtc",
+                    "--disable-quic",
+                    f"--proxy-server={proxy.proxy_url}",
+                    "--proxy-bypass-list=<-loopback>",
+                    "--host-resolver-rules=MAP * ~NOTFOUND",
+                ],
+            )
+            context = await browser.new_context(
+                accept_downloads=False,
+                service_workers="block",
+                locale="ja-JP",
+            )
+            await context.route("**/*", route_read_only_request)
+            await context.route_web_socket("**/*", block_websocket)
+            page = await context.new_page()
+            page.on("download", lambda download: asyncio.create_task(download.cancel()))
+            page.on("popup", lambda popup: asyncio.create_task(popup.close()))
+
+            async def inspect_navigation(frame) -> None:
+                if frame != page.main_frame:
+                    return
+                try:
+                    found = await frame.evaluate(_LOGIN_DETECTION_SCRIPT)
+                except Exception:
+                    return
+                if found:
+                    login_detected.set()
+
+            def on_frame_navigated(frame) -> None:
+                check = asyncio.create_task(inspect_navigation(frame))
+                navigation_checks.add(check)
+                check.add_done_callback(navigation_checks.discard)
+
+            page.on("framenavigated", on_frame_navigated)
+
+            async def stop_if_unsafe() -> None:
+                if cancellation_detected.is_set():
+                    raise BrowserTaskCancelled("Browser analysis job was cancelled.")
+                if login_detected.is_set() or await page.evaluate(_LOGIN_DETECTION_SCRIPT):
+                    raise BrowserWorkerError("Login pages are not supported.")
+
+            async def monitor_cancellation() -> None:
+                while True:
+                    await asyncio.sleep(1)
+                    if cancellation_check is not None and await asyncio.to_thread(
+                        cancellation_check
+                    ):
+                        cancellation_detected.set()
+                        if context is not None:
+                            await context.close()
+                        return
+
+            if cancellation_check is not None:
+                cancellation_monitor = asyncio.create_task(monitor_cancellation())
+
+            await page.add_init_script(_SAFE_SCRIPT)
+            await page.add_init_script(_LOGIN_GUARD_SCRIPT)
+            response = await open_page_after_preflight(
+                page,
+                task.url,
+                network_policy,
+                proxy.proxy_url,
+            )
+            await stop_if_unsafe()
+            try:
+                await page.wait_for_load_state("networkidle", timeout=5000)
+            except Exception:
+                pass
+            await page.wait_for_timeout(500)
+            await stop_if_unsafe()
+            final_url = page.url
+            final_policy = _validate_rendered_task(RenderedPageTask(final_url, task.site_host))
+            if final_policy.site_host != network_policy.site_host:
+                raise BrowserWorkerError("Navigation left the approved site host.")
+            if response is not None and response.status >= 400:
+                raise BrowserWorkerError("The contact page returned an error status.")
+            if await page.evaluate("window.__leadhiveBlockedSubmits || 0"):
+                raise SubmissionBlockedError("A page attempted to submit a form; it was blocked.")
+            html = await page.evaluate(_safe_dom_script())
+            if len(html.encode("utf-8")) > 2_000_000:
+                raise BrowserWorkerError("Rendered DOM exceeded the size limit.")
+            return RenderedPageResult(
+                final_url=final_url,
+                html=html,
+                blocked_non_get_count=len(blocked_requests),
+            )
+        except BrowserPreflightBlocked as exc:
+            raise BrowserWorkerError("robots.txt or network preflight blocked this page.") from exc
+        except Exception:
+            if cancellation_detected.is_set():
+                raise BrowserTaskCancelled("Browser analysis job was cancelled.") from None
+            raise
+        finally:
+            if cancellation_monitor is not None:
+                cancellation_monitor.cancel()
+            for check in navigation_checks:
+                check.cancel()
+            if context is not None:
+                await context.close()
+            if browser is not None:
+                await browser.close()
+
+
+def run_rendered_page_task(
+    task: RenderedPageTask,
+    *,
+    network_policy: BrowserNetworkPolicy | None = None,
+    cancellation_check=None,
+) -> RenderedPageResult:
+    policy = _validate_rendered_task(task)
+    if network_policy is not None and network_policy != policy:
+        raise BrowserWorkerError("A rendered page task must use its own same-site policy.")
+    if not _TASK_LOCK.acquire(blocking=False):
+        raise ConcurrentBrowserTaskError("Only one browser job may run at a time.")
+    try:
+        return asyncio.run(
+            asyncio.wait_for(
+                _render_page_task(
+                    task,
+                    network_policy=policy,
+                    cancellation_check=cancellation_check,
+                ),
+                timeout=MAX_TASK_SECONDS,
+            )
+        )
+    except TimeoutError as exc:
+        raise BrowserWorkerError("Browser page analysis exceeded the 90-second limit.") from exc
     finally:
         _TASK_LOCK.release()

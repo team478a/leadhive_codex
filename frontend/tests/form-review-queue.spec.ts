@@ -8,18 +8,26 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   const items = ['先頭のスキップ候補', '次の確認候補', '連絡対象外候補'].map((company_name, index) => ({
     company_id: `company-${index}`, company_name, profile_id: `profile-${index}`,
     form_url: `https://example.com/contact-${index}`, fingerprint: 'a'.repeat(64), fields_hash: 'b'.repeat(64),
-    reason_codes: ['REVIEW_REQUIRED'], fields: [], groups: [], saved_groups: [],
+    reason_codes: ['REVIEW_REQUIRED'], ready_confirmation_only: false, fields: [], groups: [], saved_groups: [],
   }))
+  items.push({
+    company_id: 'company-ready', company_name: '準備可能・未確認候補', profile_id: 'profile-ready',
+    form_url: 'https://example.com/contact-ready', fingerprint: 'c'.repeat(64), fields_hash: 'd'.repeat(64),
+    reason_codes: ['READY'], ready_confirmation_only: true, fields: [], groups: [], saved_groups: [],
+  })
   const submitted: { profile_id: string; action: string; confirmed_no_sales_prohibition: boolean }[] = []
   await page.route(`**/api/projects/${fixture.project_id}/send-flow-summary`, route =>
     route.fulfill({ json: {
       readiness_completed_at: null, target_company_count: 3,
+      latest_form_draft_updated_at: null,
       draft_counts: { email: 0, form: 3 }, form_reviewed_count: 0,
       approval_counts: { pending: { email: 0, form: 0 }, approved_unsent: { email: 0, form: 0 } },
       today: { sent: 0, reserved: 0 }, results: { sent: 0, failed: 0, unknown: 0 },
     } }))
   await page.route(`**/api/projects/${fixture.project_id}/form-review-queue`, route =>
     route.fulfill({ json: { total: items.length, offset: 0, limit: 50, items } }))
+  await page.route(`**/api/projects/${fixture.project_id}/form-dm-readiness`, route =>
+    route.fulfill({ json: { counts: { READY: 1 }, review_queue_eligible: 3, ready_confirmation_pending: 1, total: 4, items: [] } }))
   await page.route('**/api/form-profiles/*/review-decision', async route => {
     const profileId = route.request().url().split('/').at(-2)!
     const body = route.request().postDataJSON()
@@ -40,6 +48,7 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   const queueStage = page.getByRole('region', { name: '2. フォームを確認', exact: true })
   const queueStageHeader = queueStage.getByRole('button').first()
   await expect(queueStageHeader).toHaveAttribute('aria-expanded', 'true')
+  await expect(queueStageHeader).toContainText('確認待ち 3社 · 確認不要：0社')
 
   const panel = page.getByRole('region', { name: 'フォーム確認キュー' })
   await expect(panel.getByRole('heading', { name: 'フォーム確認キュー' })).toBeVisible()
@@ -67,9 +76,17 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   expect(submitted[0]).toMatchObject({ profile_id: 'profile-1', action: 'CONFIRM', confirmed_no_sales_prohibition: true })
   await panel.getByRole('button', { name: '送信しない・連絡対象外' }).focus()
   await page.keyboard.press('Enter')
-  await expect(panel.getByRole('heading', { name: '先頭のスキップ候補' })).toBeVisible()
+  await expect(panel.getByRole('heading', { name: '準備可能・未確認候補' })).toBeVisible()
   await expect(panel.getByText('この企業を連絡対象外にしました。')).toBeVisible()
   expect(submitted[1]).toMatchObject({ profile_id: 'profile-2', action: 'DO_NOT_SEND', confirmed_no_sales_prohibition: false })
   expect(items.some(item => item.profile_id === 'profile-2')).toBe(false)
+  await expect(panel.getByRole('heading', { name: '準備可能・未確認候補' })).toBeVisible()
+  await expect(panel.getByText('解析された入力項目・値')).toHaveCount(0)
+  const readyConfirmation = panel.getByLabel('フォームを開いて営業お断りの表記がないことを確認')
+  await expect(panel.getByRole('button', { name: '確認して次へ' })).toBeDisabled()
+  await readyConfirmation.check()
+  await panel.getByRole('button', { name: '確認して次へ' }).click()
+  expect(submitted[2]).toMatchObject({ profile_id: 'profile-ready', action: 'CONFIRM', confirmed_no_sales_prohibition: true })
+  await expect(panel.getByRole('heading', { name: '先頭のスキップ候補' })).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
 })

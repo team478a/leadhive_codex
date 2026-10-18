@@ -39,6 +39,8 @@ def test_form_dm_readiness_is_read_only_and_exports_csv(auth, form_source, db):
     assert result.status_code == 200, result.text
     body = result.json()
     assert body["counts"]["READY"] == 1
+    assert body["review_queue_eligible"] == 1
+    assert body["ready_confirmation_pending"] == 1
     assert body["total"] == 1
     assert body["items"][0]["company_id"] == str(company_id)
     assert body["items"][0]["primary_reason"] == "READY"

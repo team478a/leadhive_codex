@@ -772,17 +772,41 @@ def test_delivery_compatibility_reports_browser_only_forms():
     assert "name属性" in assess('<form method="post"><input type="text"></form>').reason
 
 
-@pytest.mark.parametrize("file_control", ["", '<input type="file" name="upload" disabled>'])
-def test_multipart_without_enabled_file_input_reports_transport_gap(file_control):
+def test_multipart_without_file_input_is_compatible():
     form = BeautifulSoup(
         '<form method="post" enctype="multipart/form-data">'
-        f'{file_control}<textarea name="message"></textarea><button>送信</button></form>',
+        '<textarea name="message"></textarea><button>送信</button></form>',
         "html.parser",
     ).select_one("form")
     result = assess_delivery_compatibility(form, "https://example.com/contact")
+    assert result.supported is True
+
+
+def test_multipart_with_disabled_file_input_remains_unsupported():
+    form = BeautifulSoup(
+        '<form method="post" enctype="multipart/form-data">'
+        '<input type="file" name="upload" disabled><textarea name="message"></textarea>'
+        "<button>送信</button></form>",
+        "html.parser",
+    ).select_one("form")
+
+    result = assess_delivery_compatibility(form, "https://example.com/contact")
+
     assert result.supported is False
-    assert "multipart" in result.reason
-    assert "ファイル送信" not in result.reason
+    assert result.reason_code == "MULTIPART_OR_FILE"
+
+
+def test_multipart_with_file_input_remains_unsupported():
+    form = BeautifulSoup(
+        '<form method="post" enctype="multipart/form-data"><input name="email">'
+        '<input type="file" name="upload"><button type="submit">送信</button></form>',
+        "html.parser",
+    ).select_one("form")
+
+    result = assess_delivery_compatibility(form, "https://example.com/contact")
+
+    assert result.supported is False
+    assert result.reason_code == "MULTIPART_OR_FILE"
 
 
 def test_field_mapping_prefers_specific_labels_and_common_names():
