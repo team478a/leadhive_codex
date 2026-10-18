@@ -88,9 +88,7 @@ def begin(
     if dry_run:
         if not settings.browser_form_delivery_enabled:
             raise HTTPException(409, "ブラウザーフォーム実行は停止されています。")
-        run = db.scalar(
-            select(BrowserFormRun).where(BrowserFormRun.id == row_id).with_for_update()
-        )
+        run = db.scalar(select(BrowserFormRun).where(BrowserFormRun.id == row_id).with_for_update())
         if (
             run is None
             or run.mode != "dry_run"
@@ -115,10 +113,9 @@ def begin(
         from app.services.browser_form_preparation import preparation
 
         proposal, _preview = preparation(db, company, draft, allow_ai_suggestion=False)
-        if (
-            not proposal.browser_form_plan
-            or canonical_plan(proposal.browser_form_plan) != canonical_plan(plan)
-        ):
+        if not proposal.browser_form_plan or canonical_plan(
+            proposal.browser_form_plan
+        ) != canonical_plan(plan):
             raise HTTPException(409, "確認済みフォームまたは文面が変更されています。")
         store_screenshot(db, run.id, "before_submit", screenshot_before)
         run.started_at = approval.now()
@@ -140,9 +137,7 @@ def begin(
         row.reason = "送信可能時間外のため待機中です。"
         if browser_form:
             run = db.scalar(
-                select(BrowserFormRun)
-                .where(BrowserFormRun.dispatch_id == row.id)
-                .with_for_update()
+                select(BrowserFormRun).where(BrowserFormRun.dispatch_id == row.id).with_for_update()
             )
             if run:
                 run.status, run.worker_id, run.lease_expires_at = "queued", None, None
@@ -212,9 +207,7 @@ def begin(
     row.reason = UNKNOWN_MESSAGE
     if browser_form:
         run = db.scalar(
-            select(BrowserFormRun)
-            .where(BrowserFormRun.dispatch_id == row.id)
-            .with_for_update()
+            select(BrowserFormRun).where(BrowserFormRun.dispatch_id == row.id).with_for_update()
         )
         if (
             run is None
@@ -372,10 +365,9 @@ def run_browser_dry_run(claimed):
             from app.services.browser_form_preparation import preparation
 
             proposal, _ = preparation(session, company, draft, allow_ai_suggestion=False)
-            if (
-                not proposal.browser_form_plan
-                or canonical_plan(proposal.browser_form_plan) != canonical_plan(plan)
-            ):
+            if not proposal.browser_form_plan or canonical_plan(
+                proposal.browser_form_plan
+            ) != canonical_plan(plan):
                 raise HTTPException(409, "確認済みフォームまたは文面が変更されています。")
             session.commit()
         except Exception:
@@ -393,9 +385,10 @@ def run_browser_dry_run(claimed):
 
     def start_dry_run(screenshot):
         with SessionLocal() as session:
-            return begin(
-                session, run_id, worker_id, None, dry_run=True, screenshot_before=screenshot
-            ) is not None
+            return (
+                begin(session, run_id, worker_id, None, dry_run=True, screenshot_before=screenshot)
+                is not None
+            )
 
     def cancelled():
         with SessionLocal() as session:
@@ -444,9 +437,7 @@ def finish(
 ):
     if dry_run:
         db.rollback()
-        run = db.scalar(
-            select(BrowserFormRun).where(BrowserFormRun.id == row_id).with_for_update()
-        )
+        run = db.scalar(select(BrowserFormRun).where(BrowserFormRun.id == row_id).with_for_update())
         if (
             run is None
             or run.mode != "dry_run"
@@ -493,9 +484,7 @@ def finish(
     item = db.get(ApprovalRequest, row.approval_id)
     if item.delivery_method == "browser_form":
         browser_run = db.scalar(
-            select(BrowserFormRun)
-            .where(BrowserFormRun.dispatch_id == row.id)
-            .with_for_update()
+            select(BrowserFormRun).where(BrowserFormRun.dispatch_id == row.id).with_for_update()
         )
         if browser_run:
             browser_run.status, browser_run.reason = result, message[:500]

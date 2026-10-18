@@ -156,7 +156,8 @@ def output(row):
         "reservation_only": method in {"form_adapter", "cf7_real_reservation"},
         "execution_enabled": (
             method == "form_direct"
-            or method == "browser_form" and settings.browser_form_delivery_enabled
+            or method == "browser_form"
+            and settings.browser_form_delivery_enabled
         )
         and settings.outbound_enabled
         and settings.human_approved_form_enabled,

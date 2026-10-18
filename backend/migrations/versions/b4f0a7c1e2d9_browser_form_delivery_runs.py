@@ -34,9 +34,7 @@ def upgrade() -> None:
         sa.Column("created_by_user_id", sa.Uuid(), nullable=False),
         sa.Column("mode", sa.String(length=20), nullable=False),
         sa.Column("status", sa.String(length=30), nullable=False),
-        sa.Column(
-            "payload_snapshot", postgresql.JSONB(astext_type=sa.Text()), nullable=False
-        ),
+        sa.Column("payload_snapshot", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("payload_hash", sa.String(length=64), nullable=False),
         sa.Column("form_url", sa.Text(), nullable=False),
         sa.Column("form_fingerprint", sa.String(length=64), nullable=False),
@@ -107,9 +105,7 @@ def upgrade() -> None:
         "ix_browser_form_screenshots_created_at", "browser_form_screenshots", ["created_at"]
     )
 
-    op.drop_constraint(
-        "ck_outreach_draft_approval_type", "outreach_draft_approvals", type_="check"
-    )
+    op.drop_constraint("ck_outreach_draft_approval_type", "outreach_draft_approvals", type_="check")
     op.create_check_constraint(
         "ck_outreach_draft_approval_type",
         "outreach_draft_approvals",
@@ -118,9 +114,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_constraint(
-        "ck_outreach_draft_approval_type", "outreach_draft_approvals", type_="check"
-    )
+    op.drop_constraint("ck_outreach_draft_approval_type", "outreach_draft_approvals", type_="check")
     op.create_check_constraint(
         "ck_outreach_draft_approval_type",
         "outreach_draft_approvals",

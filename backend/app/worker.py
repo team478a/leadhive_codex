@@ -985,8 +985,7 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                 and len(profile.fingerprint or "") == 64
                 and (bool(REVIEW_REASONS.intersection(reasons)) or ready_confirmation_required)
                 and not bool(
-                    (BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS)
-                    .intersection(reasons)
+                    (BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS).intersection(reasons)
                     if outcome["primary_reason"] == "BROWSER_READY"
                     else BLOCKING_REASONS.intersection(reasons)
                 )

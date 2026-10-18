@@ -138,9 +138,7 @@ def validate(db, item, *, allow_adapter=False):
             raise HTTPException(409, "ブラウザー操作計画を確認できません。再準備してください。")
         from app.services.browser_form_preparation import preparation as browser_preparation
 
-        proposal, _ = browser_preparation(
-            db, company, draft, allow_ai_suggestion=False
-        )
+        proposal, _ = browser_preparation(db, company, draft, allow_ai_suggestion=False)
     else:
         proposal, _ = preparation(db, company, draft)
     data = proposal.model_dump(mode="json", exclude={"expires_in_hours"})
@@ -291,7 +289,8 @@ def claim(db, *, controlled_lab=False, browser_form=False):
     if (
         not settings.outbound_enabled
         or not settings.human_approved_form_enabled
-        or browser_form and not settings.browser_form_delivery_enabled
+        or browser_form
+        and not settings.browser_form_delivery_enabled
     ):
         return None
     lock(db)

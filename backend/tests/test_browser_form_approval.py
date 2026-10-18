@@ -75,9 +75,7 @@ def test_browser_plan_is_bound_into_human_approval_without_external_fetch(
 
     monkeypatch.setattr("app.services.form_delivery.inspect_form", forbidden)
     monkeypatch.setattr("app.services.form_delivery.submit_form", forbidden)
-    preview_response = auth.get(
-        f"/api/outreach-drafts/{draft.id}/browser-form-approval-preview"
-    )
+    preview_response = auth.get(f"/api/outreach-drafts/{draft.id}/browser-form-approval-preview")
 
     assert preview_response.status_code == 200, preview_response.text
     preview = preview_response.json()
@@ -100,9 +98,9 @@ def test_browser_plan_is_bound_into_human_approval_without_external_fetch(
         **plan,
         "fields": sorted(plan["fields"], key=lambda field: field["profile_field_id"]),
     }
-    assert proposal["payload_snapshot"]["browser_form_plan_hash"] == preview[
-        "browser_form_plan_hash"
-    ]
+    assert (
+        proposal["payload_snapshot"]["browser_form_plan_hash"] == preview["browser_form_plan_hash"]
+    )
     assert proposal["status"] == "PENDING"
     assert db.scalar(
         select(ApprovalRequest.id).where(
@@ -113,9 +111,7 @@ def test_browser_plan_is_bound_into_human_approval_without_external_fetch(
     )
     assert all(field.selector for field in fields)
 
-    generic = auth.post(
-        f"/api/projects/{project.id}/approval-requests", json=preview["proposal"]
-    )
+    generic = auth.post(f"/api/projects/{project.id}/approval-requests", json=preview["proposal"])
     assert generic.status_code == 409
 
     stored = db.get(ApprovalRequest, UUID(proposal["id"]))
@@ -211,18 +207,17 @@ def test_uncertain_field_ai_suggestion_is_saved_and_requested_only_once(
         )
     )
     assert logs[0].details["decisions"][str(department_id)]["mapped_key"] == "department"
-    assert first.json()["proposal"]["browser_form_plan"] == second.json()["proposal"][
-        "browser_form_plan"
-    ]
+    assert (
+        first.json()["proposal"]["browser_form_plan"]
+        == second.json()["proposal"]["browser_form_plan"]
+    )
     assert len(fields) == 2
 
     from app.services.browser_form_preparation import preparation as browser_preparation
 
     db.delete(logs[0])
     db.commit()
-    unsuggested, _ = browser_preparation(
-        db, company, draft, allow_ai_suggestion=False
-    )
+    unsuggested, _ = browser_preparation(db, company, draft, allow_ai_suggestion=False)
     assert provider.calls == 1
     department = next(
         field for field in unsuggested.browser_form_plan.fields if field.name == "department"
@@ -230,9 +225,7 @@ def test_uncertain_field_ai_suggestion_is_saved_and_requested_only_once(
     assert department.mapped_key == "unknown"
 
 
-def test_browser_ready_queue_and_bulk_proposal_require_saved_review(
-    auth, db, form_source
-):
+def test_browser_ready_queue_and_bulk_proposal_require_saved_review(auth, db, form_source):
     project, company, draft, profile, fields = make_browser_profile(db, form_source)
     db.delete(
         db.scalar(
@@ -331,9 +324,7 @@ def test_dry_run_can_be_queued_without_approval_and_cancelled(auth, db, form_sou
     assert queued.status_code == 202, queued.text
     run = db.get(BrowserFormRun, UUID(queued.json()["id"]))
     assert run.mode == "dry_run" and run.status == "queued"
-    assert not db.scalar(
-        select(ApprovalRequest).where(ApprovalRequest.company_id == company.id)
-    )
+    assert not db.scalar(select(ApprovalRequest).where(ApprovalRequest.company_id == company.id))
     assert not db.scalar(select(FormDelivery))
 
     from browser_worker.jobs import claim_browser_dry_run

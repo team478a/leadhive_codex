@@ -227,19 +227,26 @@ async def _run_delivery(
             browser = await playwright.chromium.launch(
                 headless=True,
                 args=[
-                    "--disable-background-networking", "--disable-component-update",
-                    "--disable-sync", "--disable-webrtc", "--disable-quic",
-                    f"--proxy-server={proxy.proxy_url}", "--proxy-bypass-list=<-loopback>",
+                    "--disable-background-networking",
+                    "--disable-component-update",
+                    "--disable-sync",
+                    "--disable-webrtc",
+                    "--disable-quic",
+                    f"--proxy-server={proxy.proxy_url}",
+                    "--proxy-bypass-list=<-loopback>",
                     "--host-resolver-rules=MAP * ~NOTFOUND",
                 ],
             )
             context = await browser.new_context(
-                accept_downloads=False, service_workers="block", locale="ja-JP",
+                accept_downloads=False,
+                service_workers="block",
+                locale="ja-JP",
                 viewport={"width": 1024, "height": 768},
             )
             page = await context.new_page()
             await page.add_init_script(_GUARD_SCRIPT)
             await page.add_init_script(_LOGIN_GUARD_SCRIPT)
+
             def on_download(download) -> None:
                 download_attempted.set()
                 asyncio.create_task(download.cancel())
@@ -289,9 +296,8 @@ async def _run_delivery(
                             body=_fixture_html(synthetic_fixture, plan.action_url),
                         )
                         return
-                    if (
-                        request.method.upper() == "POST"
-                        and _same_action(request.url, plan.action_url)
+                    if request.method.upper() == "POST" and _same_action(
+                        request.url, plan.action_url
                     ):
                         allowed_post = post_count == 0 or (
                             plan.confirmation_expected and confirmation_ready and post_count == 1
@@ -338,13 +344,15 @@ async def _run_delivery(
                             )
                         elif synthetic_fixture == "cf7_style":
                             await route.fulfill(
-                                status=200, content_type="text/plain; charset=utf-8",
+                                status=200,
+                                content_type="text/plain; charset=utf-8",
                                 headers={"access-control-allow-origin": "*"},
                                 body="送信が完了しました。",
                             )
                         else:
                             await route.fulfill(
-                                status=200, content_type="text/html; charset=utf-8",
+                                status=200,
+                                content_type="text/html; charset=utf-8",
                                 body="<h1>送信が完了しました。</h1>",
                             )
                         return
@@ -454,8 +462,15 @@ async def _run_delivery(
                 await page.wait_for_timeout(150)
                 after_image = await _jpeg(page)
                 return BrowserDeliveryResult(
-                    "dry_run_completed", "入力値を読み戻し、送信せずに終了しました。",
-                    after_image, None, page.url, False, "dry_run_no_submit", before_image, 0,
+                    "dry_run_completed",
+                    "入力値を読み戻し、送信せずに終了しました。",
+                    after_image,
+                    None,
+                    page.url,
+                    False,
+                    "dry_run_no_submit",
+                    before_image,
+                    0,
                 )
 
             _, initial_button = await _form_and_button(page, plan, confirmation=False)
@@ -505,8 +520,15 @@ async def _run_delivery(
                     "The approved POST was not observed; submission was not started."
                 )
             return BrowserDeliveryResult(
-                status, message, after_image, response_status, page.url,
-                confirmation_used, evidence or "no_terminal_evidence", before_image, post_count,
+                status,
+                message,
+                after_image,
+                response_status,
+                page.url,
+                confirmation_used,
+                evidence or "no_terminal_evidence",
+                before_image,
+                post_count,
             )
         except BrowserPreflightBlocked as exc:
             raise BrowserWorkerError("robots.txt or network preflight blocked this page.") from exc
@@ -520,9 +542,15 @@ async def _run_delivery(
                 except Exception:
                     pass
                 return BrowserDeliveryResult(
-                    "unknown", "送信後に完了状態を確認できません。結果を確認してください。",
-                    after_image, response_status, page.url if page else "", confirmation_used,
-                    "post_started_without_terminal_evidence", before_image, post_count,
+                    "unknown",
+                    "送信後に完了状態を確認できません。結果を確認してください。",
+                    after_image,
+                    response_status,
+                    page.url if page else "",
+                    confirmation_used,
+                    "post_started_without_terminal_evidence",
+                    before_image,
+                    post_count,
                 )
             if isinstance(exc, BrowserWorkerError):
                 raise
@@ -597,33 +625,54 @@ def _fixture_html(name: str, action_url: str) -> str:
 def run_synthetic_delivery_task(fixture: str, *, mode: str = "submit") -> BrowserDeliveryResult:
     """Execute only a packaged fixture; fixture requests are fulfilled locally in Playwright."""
     if fixture not in {
-        "normal", "cf7_style", "confirmation", "javascript_rendered", "error", "no_completion"
+        "normal",
+        "cf7_style",
+        "confirmation",
+        "javascript_rendered",
+        "error",
+        "no_completion",
     }:
         raise BrowserWorkerError("Unknown packaged synthetic delivery fixture.")
     from app.services.browser_form_plan import BrowserFormFieldPlan
 
     action_url = "https://fixture.invalid/submit"
     plan = BrowserFormPlan(
-        project_id=uuid.uuid4(), company_id=uuid.uuid4(), source_draft_id=uuid.uuid4(),
-        form_profile_id=uuid.uuid4(), form_fingerprint="0" * 64,
-        form_url="https://fixture.invalid/contact", action_url=action_url, form_index=0,
+        project_id=uuid.uuid4(),
+        company_id=uuid.uuid4(),
+        source_draft_id=uuid.uuid4(),
+        form_profile_id=uuid.uuid4(),
+        form_fingerprint="0" * 64,
+        form_url="https://fixture.invalid/contact",
+        action_url=action_url,
+        form_index=0,
         confirmation_expected=fixture == "confirmation",
         submission_kind="contact_form_7" if fixture == "cf7_style" else "native",
         fields=(
             BrowserFormFieldPlan(
-                profile_field_id=uuid.uuid4(), selector="input[name='name']", name="name",
-                field_type="text", mapped_key="company_name", value="Synthetic Company",
+                profile_field_id=uuid.uuid4(),
+                selector="input[name='name']",
+                name="name",
+                field_type="text",
+                mapped_key="company_name",
+                value="Synthetic Company",
             ),
             BrowserFormFieldPlan(
-                profile_field_id=uuid.uuid4(), selector="textarea[name='message']", name="message",
-                field_type="textarea", mapped_key="message", value="Synthetic message",
+                profile_field_id=uuid.uuid4(),
+                selector="textarea[name='message']",
+                name="message",
+                field_type="textarea",
+                mapped_key="message",
+                value="Synthetic message",
             ),
         ),
     )
     return asyncio.run(
         asyncio.wait_for(
             _run_delivery(
-                plan, mode=mode, before_post=lambda _image: True, synthetic_fixture=fixture,
+                plan,
+                mode=mode,
+                before_post=lambda _image: True,
+                synthetic_fixture=fixture,
             ),
             timeout=MAX_TASK_SECONDS,
         )
