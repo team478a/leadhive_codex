@@ -35,7 +35,8 @@ def parse_form(markup):
             "JAVASCRIPT_CONFIRMATION",
         ),
         (
-            '<form method="post" enctype="multipart/form-data"><input name="email"></form>',
+            '<form method="post" enctype="multipart/form-data"><input name="email">'
+            '<input type="file" name="upload"><button type="submit">送信</button></form>',
             "MULTIPART_OR_FILE",
         ),
     ],

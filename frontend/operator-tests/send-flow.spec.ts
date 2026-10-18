@@ -24,7 +24,7 @@ const formProposal: Proposal = {
   delivery_method: 'form_direct', recipient: null, form_url: 'https://example.test/contact',
 }
 
-async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; failFirstReservation?: boolean } = {}) {
+async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; failFirstReservation?: boolean; staleFormReadiness?: boolean } = {}) {
   const email = 'send-flow@example.test'
   const projectIds = ['project-1', 'project-2']
   const calls: { path: string; method: string; body: Record<string, unknown> | null }[] = []
@@ -55,7 +55,7 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     let data: unknown = []
     let status = 200
     const summary = (projectId: string) => ({
-      readiness_completed_at: '2026-10-16T00:00:00Z', target_company_count: 1,
+      readiness_completed_at: '2026-10-16T00:00:00Z', latest_form_draft_updated_at: options.staleFormReadiness ? '2026-10-17T00:00:00Z' : null, target_company_count: 1,
       draft_counts: { email: bulkDraftBody ? 1 : options.pending ? 1 : 0, form: options.approvedForm ? 1 : 0 }, form_reviewed_count: options.approvedForm ? 1 : 0,
       approval_counts: { pending: { email: currentProposal?.status === 'PENDING' ? 1 : 0, form: 0 }, approved_unsent: { email: approvedProposal ? 1 : 0, form: approvedFormProposal ? 1 : 0 } },
       today: { sent: 0, reserved: 0 }, results: { sent: 0, failed: 0, unknown: 0 }, project_id: projectId,
@@ -72,7 +72,7 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
       savedTemplate = { ...body, id: 'new-template', project_id: path.split('/')[3], created_by_user_id: 'send-flow-user', created_at: '2026-10-17T00:00:00Z', updated_at: '2026-10-17T00:00:00Z' }
       data = savedTemplate
     } else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', project_id: path.split('/')[3], company_name: '確認候補株式会社', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }], total: 1, offset: 0, limit: 20 }
-    else if (path.endsWith('/form-dm-readiness')) data = { counts: { NO_FORM_DRAFT: 1, READY: 1 }, total: 1, offset: 0, limit: 20, items: [], last_aggregated_at: '2026-10-16T00:00:00Z', active_job: null, read_only: true, external_requests: 0 }
+    else if (path.endsWith('/form-dm-readiness')) data = { counts: { NO_FORM_DRAFT: 1, READY: 1 }, review_queue_eligible: 7, ready_confirmation_pending: 0, total: 2, offset: 0, limit: 20, items: [], last_aggregated_at: '2026-10-16T00:00:00Z', active_job: null, read_only: true, external_requests: 0 }
     else if (path.endsWith('/form-review-queue')) data = { total: 0, offset: 0, limit: 20, items: [], read_only: true, external_requests: 0 }
     else if (path.endsWith('/outreach-drafts/bulk-from-template') && method === 'POST') {
       bulkDraftBody = body
@@ -121,6 +121,7 @@ test('channel is isolated and remembered separately for each project', async ({ 
   await expect(sales.getByRole('heading', { name: '送信の準備・実行' })).toBeVisible()
   await expect(sales.getByRole('button', { name: 'フォーム', exact: true })).toHaveAttribute('aria-pressed', 'true')
   await expect(sales.locator('[aria-label="2. フォームを確認"]')).toHaveCount(1)
+  await expect(sales.locator('[aria-label="2. フォームを確認"]')).toContainText('確認待ち 7社 · 確認不要：1社')
   await expect(sales.getByRole('region', { name: '承認して送る', exact: true })).toHaveCount(0)
   await expect(sales.getByText('メール承認待ちの作成')).toHaveCount(0)
   await expect(sales.getByText('フォームの送信可否集計・詳細')).toHaveCount(1)
@@ -170,6 +171,14 @@ test('email template and bulk draft creation use the server-selected eligible se
   const request = calls.find(call => call.path.endsWith('/outreach-drafts/bulk-from-template'))
   expect(request?.body).toMatchObject({ template_id: 'new-template', channel: 'email', readiness_reason: 'NO_EMAIL_DRAFT' })
   expect(request?.body).not.toHaveProperty('company_ids')
+})
+
+test('form review shows stale aggregation after a newer form draft', async ({ page }) => {
+  await setup(page, { channel: 'form', staleFormReadiness: true })
+  const sales = page.getByRole('region', { name: '営業作業', exact: true })
+  const reviewStep = sales.locator('[aria-label="2. フォームを確認"]')
+  await reviewStep.getByRole('button').first().click()
+  await expect(reviewStep.getByRole('alert')).toHaveText('集計が古いため再集計してください')
 })
 
 test('one action approves and reserves; reservation retry reuses its original idempotency key', async ({ page }) => {

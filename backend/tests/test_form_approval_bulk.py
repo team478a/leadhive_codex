@@ -3,13 +3,36 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import select
 
-from app.models import ApprovalRequest, Company, FormDmReadinessResult, OperationJob, User
+from app.models import (
+    ApprovalRequest,
+    Company,
+    FormAnalysisLog,
+    FormDmReadinessResult,
+    OperationJob,
+    User,
+)
 from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
 
 
 def test_bulk_request_queues_ready_companies_and_worker_is_idempotent(auth, form_source, db):
     project, company = form_source[:2]
+    profile = form_source[3]
+    db.add(
+        FormAnalysisLog(
+            company_id=company.id,
+            form_profile_id=profile.id,
+            actor_user_id=project.user_id,
+            event_type="manual_corrected",
+            provider="manual",
+            details={
+                "operation": "form_review_confirmed",
+                "profile_fingerprint": profile.fingerprint,
+                "confirmed_no_sales_prohibition": True,
+            },
+        )
+    )
+    db.commit()
     response = auth.post(
         f"/api/projects/{project.id}/form-approval-requests/bulk",
         json={"company_ids": [str(company.id)]},
@@ -81,7 +104,7 @@ def test_bulk_request_rejects_more_than_200_company_ids(auth, form_source):
     assert response.status_code == 422
 
 
-def test_bulk_all_ready_only_queues_preparation_ready_companies(auth, form_source, db):
+def test_bulk_all_ready_excludes_unreviewed_ready_companies(auth, form_source, db):
     project, company, _, profile = form_source[:4]
     readiness_job = OperationJob(
         project_id=project.id,
@@ -102,6 +125,53 @@ def test_bulk_all_ready_only_queues_preparation_ready_companies(auth, form_sourc
             primary_reason="READY",
             secondary_reasons=[],
             review_queue_eligible=False,
+        )
+    )
+    db.commit()
+
+    response = auth.post(
+        f"/api/projects/{project.id}/form-approval-requests/bulk", json={"all_ready": True}
+    )
+
+    assert response.status_code == 409, response.text
+    assert "企業がありません" in response.json()["detail"]
+
+
+def test_bulk_all_ready_queues_only_confirmed_ready_companies(auth, form_source, db):
+    project, company, _, profile = form_source[:4]
+    readiness_job = OperationJob(
+        project_id=project.id,
+        operation_type="form_dm_readiness",
+        status="completed",
+        payload={},
+        total_count=1,
+        processed_count=1,
+        success_count=1,
+    )
+    db.add(readiness_job)
+    db.flush()
+    db.add(
+        FormDmReadinessResult(
+            job_id=readiness_job.id,
+            company_id=company.id,
+            profile_id=profile.id,
+            primary_reason="READY",
+            secondary_reasons=[],
+            review_queue_eligible=False,
+        )
+    )
+    db.add(
+        FormAnalysisLog(
+            company_id=company.id,
+            form_profile_id=profile.id,
+            actor_user_id=project.user_id,
+            event_type="manual_corrected",
+            provider="manual",
+            details={
+                "operation": "form_review_confirmed",
+                "profile_fingerprint": profile.fingerprint,
+                "confirmed_no_sales_prohibition": True,
+            },
         )
     )
     db.commit()

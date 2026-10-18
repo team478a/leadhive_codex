@@ -109,7 +109,7 @@ export function CollectionResults({ projects, roles, initialProjectId, onProject
 }
 
 type SendFlowSummary = {
-  readiness_completed_at: string | null; target_company_count: number
+  readiness_completed_at: string | null; latest_form_draft_updated_at: string | null; target_company_count: number
   draft_counts: Record<'email' | 'form', number>; form_reviewed_count: number
   approval_counts: { pending: Record<'email' | 'form', number>; approved_unsent: Record<'email' | 'form', number> }
   today: { sent: number; reserved: number }; results: { sent: number; failed: number; unknown: number }
@@ -196,13 +196,10 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
     let live = true
     setFormReviewPendingCount(null); setFormReadyCount(null)
     if (!projectId || channel !== 'form') return () => { live = false }
-    Promise.all([
-      api<{ counts: Record<string, number> }>(`/projects/${projectId}/form-dm-readiness`),
-      api<{ total: number }>(`/projects/${projectId}/form-review-queue`),
-    ]).then(([readiness, queue]) => {
+    api<{ counts: Record<string, number>; review_queue_eligible: number; ready_confirmation_pending?: number }>(`/projects/${projectId}/form-dm-readiness`).then(readiness => {
       if (!live) return
-      setFormReadyCount(readiness.counts.READY ?? 0)
-      setFormReviewPendingCount(queue.total ?? 0)
+      setFormReadyCount(Math.max(0, (readiness.counts.READY ?? 0) - (readiness.ready_confirmation_pending ?? 0)))
+      setFormReviewPendingCount(readiness.review_queue_eligible ?? 0)
     }).catch(error => { if (live) setSummaryError(errorMessage(error)) })
     return () => { live = false }
   }, [channel, projectId, reviewRevision])
@@ -217,11 +214,17 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
   const pendingApprovals = summary?.approval_counts.pending[channel] ?? 0
   const approvedUnsent = summary?.approval_counts.approved_unsent[channel] ?? 0
   const draftCount = summary?.draft_counts[channel] ?? 0
+  const readinessOlderThanDrafts = Boolean(
+    summary?.latest_form_draft_updated_at
+    && (!summary.readiness_completed_at
+      || new Date(summary.latest_form_draft_updated_at).getTime() > new Date(summary.readiness_completed_at).getTime()),
+  )
+  const formReadinessStale = readinessStale || readinessOlderThanDrafts
   const approvalStep = channel === 'form' ? 3 : 2
   const resultStep = channel === 'form' ? 4 : 3
   const steps = [
     { id: 1, title: '文面をつくる', metric: `${draftCount}社に文面あり`, state: templateCount === null ? '確認中' : templateCount ? `${templateCount}テンプレート` : 'テンプレートを選択' },
-    ...(channel === 'form' ? [{ id: 2, title: 'フォームを確認', metric: `確認待ち ${formReviewPendingCount ?? '…'}社 · 準備できた ${formReadyCount ?? '…'}社`, state: '人の確認が必要' }] : []),
+    ...(channel === 'form' ? [{ id: 2, title: 'フォームを確認', metric: `確認待ち ${formReviewPendingCount ?? '…'}社 · 確認不要：${formReadyCount ?? '…'}社`, state: '人の確認が必要' }] : []),
     { id: approvalStep, title: '承認して送る', metric: `承認待ち ${pendingApprovals}件 · 承認済み未予約 ${approvedUnsent}件`, state: pendingApprovals ? '確認してください' : '予約状況を確認' },
     { id: resultStep, title: '結果', metric: '送信済み・失敗・不明を確認', state: '履歴を確認' },
   ]
@@ -250,7 +253,7 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
           <details className="mt-4" open={templateEditorOpen} onToggle={event => setTemplateEditorOpen(event.currentTarget.open)}><summary>テンプレートを新しく作る・編集する</summary><div className="mt-4"><SendFlowTemplatePanel key={`templates-${project.id}-${channel}-${templateEditorTemplateId}`} projectId={project.id} channel={channel} canWrite={canWrite} initialTemplateId={templateEditorTemplateId} onTemplateCountChange={count => { setTemplateCount(count); setTemplateRevision(value => value + 1) }} /></div></details>
         </>}
         {channel === 'form' && step.id === 2 && <>
-          {readinessStale && <p role="alert" className="error">文面作成後に送信可否の集計が更新されていません。再集計してください。</p>}
+          {formReadinessStale && <p role="alert" className="error">集計が古いため再集計してください</p>}
           <FormReviewQueue key={`form-review-${project.id}-${reviewRevision}`} projectId={project.id} canWrite={canWrite} />
           <div className="actions"><button type="button" className="secondary" disabled={!canWrite || Boolean(readinessJob && ['queued', 'running'].includes(readinessJob.status))} onClick={() => {
             if (!projectId) return

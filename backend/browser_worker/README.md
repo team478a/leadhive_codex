@@ -1,12 +1,11 @@
-# Isolated browser worker (synthetic-only safety foundation)
+# Isolated browser worker (synthetic and gated read-only analysis)
 
-This service is an offline-only foundation. It runs packaged synthetic HTML
-fixtures, fills explicitly selected text-like controls, reads the values back,
-and closes Chromium after every task. The `browser_form_analysis` OperationJob
-uses the existing lease/cancel/recovery and active-job deduplication model, but
-accepts packaged fixture names only. Neither its API nor its worker accepts
-target URLs or external-domain lists. It does not visit real sites or submit
-forms. The browser delivery flag remains fail-closed.
+Synthetic mode runs packaged fixtures and can fill explicitly selected test
+controls for offline tests. Rendered-page mode performs read-only, GET-only
+analysis of server-selected contact-page URLs. It is gated by
+`BROWSER_FORM_ANALYSIS_ENABLED`, which defaults to `false` in the API, worker
+image, and staging configuration. Do not enable it or run real-site jobs until
+Tanaka has approved the target scope. Neither mode submits forms.
 
 ## Safety and resource limits
 
@@ -16,8 +15,9 @@ forms. The browser delivery flag remains fail-closed.
   not carry over between tasks.
 - Chromium is launched with the container-local `--proxy-server`, with proxy
   bypasses for loopback disabled, QUIC/WebRTC disabled, and Chromium hostname
-  resolution blocked. Browser-context routing also aborts every fixture
-  network request. The HTTPS CONNECT proxy only accepts allowlisted hosts on
+  resolution blocked. Browser-context routing aborts every synthetic-fixture
+  network request. Rendered analysis permits only HTTPS GET requests to the
+  target site's host. The HTTPS CONNECT proxy only accepts allowlisted hosts on
   port 443, resolves DNS on each connection using the existing isolated pinned
   DNS resolver, rejects any non-public answer, and connects to the validated
   numeric address. A task without an approved site/domain policy has an empty
@@ -29,9 +29,16 @@ forms. The browser delivery flag remains fail-closed.
   wording, and login paths. A match stops the task. Downloads are disabled and
   cancelled, new windows are closed, file pickers are blocked, and form
   submission methods/events are intercepted.
-- Only fixture names packaged under `fixtures/` can be opened. File inputs,
-  checkboxes, radio buttons, password fields, and other unsupported controls
-  cannot be filled by this B1 runner.
+- The synthetic API accepts only fixture names packaged under `fixtures/`.
+  Rendered-analysis targets are selected server-side from eligible saved
+  `FormProfile` rows, revalidated by the worker, and capped at 100 per job.
+- Rendered DOM snapshots redact input and textarea values before parsing. The
+  existing field, consent/choice, CAPTCHA, sales-prohibition, and Japanese
+  contact-policy checks are reused; fingerprints cover structural DOM only.
+  External embeds are not opened and remain classified as unverified.
+- Same-site analysis is serialized with a database advisory lock and waits at
+  least one second after each page. Rendered-analysis mode never fills
+  controls, clicks submit buttons, or sends form data.
 - A dedicated browser worker claims only `browser_form_analysis` jobs using
   `FOR UPDATE SKIP LOCKED`, renews leases while running, observes cancellation,
   and recovers expired jobs subject to the shared retry limit. The application
@@ -52,21 +59,18 @@ python -m pytest browser_worker/tests -q
 
 The official Playwright Python image already contains Chromium and its system
 dependencies; the Python package is installed separately. The image runs as a
-non-root user. The current endpoint and worker remain synthetic-only, and this
-service is not approved for visiting untrusted sites. The CONNECT proxy and
-preflight helpers are implemented as prerequisites for a later approved phase;
-they do not enable live navigation in this release. The tests use only
-synthetic fixtures and localhost servers.
+non-root user. The synthetic endpoint remains fixture-only. The gated
+rendered-analysis path is implemented but is not approved or enabled for
+real-site use. Tests use only synthetic fixtures and localhost servers.
 
 ## Candidate service settings (not provisioned)
 
-The Render service is intentionally not added to `render-staging.yaml` because
-that file provisions paid resources and the owner has not selected a host or
-budget. A future Blueprint entry will use `type: worker`, the Dockerfile at
-`backend/browser_worker/Dockerfile`, one instance, the same database, and
-`BROWSER_FORM_DELIVERY_ENABLED=false`. The initial planning estimate is one
-vCPU and 2 GB RAM for a single Chromium job; actual plan and monthly cost remain
-an owner decision. Do not synchronize a paid service from this example.
+The proposed Render Background Worker is fully commented out in
+`deploy/cloud/render-staging.yaml`; syncing it would create a paid resource and
+is not part of this change. After separate approval, API and worker settings
+must both explicitly enable `BROWSER_FORM_ANALYSIS_ENABLED`. The browser
+delivery flag remains false. Do not synchronize a paid service before that
+approval.
 
 ## Dependencies and licenses
 

@@ -89,10 +89,13 @@ class FakeClient:
     def __init__(self, responses: list[FakeResponse]):
         self.responses = responses
         self.calls: list[tuple[str, str, dict[str, str] | None]] = []
+        self.multipart_calls = []
 
-    def stream(self, method, url, data=None, follow_redirects=False):
+    def stream(self, method, url, data=None, follow_redirects=False, files=None):
         assert follow_redirects is False
         self.calls.append((method, url, data))
+        if files is not None:
+            self.multipart_calls.append(files)
         return self.responses.pop(0)
 
 
@@ -141,6 +144,50 @@ def test_direct_submission_requires_positive_completion_evidence(monkeypatch):
     assert result.final_url == "https://example.com/thanks"
     assert result.confirmation_used is False
     assert FakeFetcher.instance.client.calls[0][2]["step"] == "confirm"
+
+
+def test_multipart_without_file_input_is_submitted_as_multipart(monkeypatch):
+    html = INITIAL_FORM.replace(
+        '<form action="/contact" method="post">',
+        '<form action="/contact" method="post" enctype="multipart/form-data">',
+    )
+    values = {"name": "営業担当", "message": "お問い合わせ本文"}
+
+    preview, _ = run_submission(
+        monkeypatch,
+        [FakeResponse("https://example.com/thanks", 200, "送信完了しました")],
+        html=html,
+        values=values,
+    )
+
+    assert preview.enctype == "multipart/form-data"
+    assert FakeFetcher.instance.client.calls[0][2] is None
+    assert FakeFetcher.instance.client.multipart_calls == [
+        [
+            ("csrf", (None, "initial-token")),
+            ("name", (None, "営業担当")),
+            ("message", (None, "お問い合わせ本文")),
+            ("step", (None, "confirm")),
+        ]
+    ]
+
+
+def test_multipart_with_file_input_is_blocked_before_post(monkeypatch):
+    html = INITIAL_FORM.replace(
+        '<form action="/contact" method="post">',
+        '<form action="/contact" method="post" enctype="multipart/form-data">',
+    ).replace("</form>", '<input type="file" name="attachment"></form>')
+    FakeFetcher.responses = []
+    FakeFetcher.html = html
+    monkeypatch.setattr(form_delivery, "SafeFetcher", FakeFetcher)
+    monkeypatch.setattr(
+        form_delivery,
+        "submit_and_verify",
+        lambda *args, **kwargs: pytest.fail("No POST"),
+    )
+
+    with pytest.raises(FormDeliveryError, match="ファイル"):
+        submit_form("https://example.com/contact", {"name": "営業担当", "message": "本文"})
 
 
 def test_confirmation_page_is_submitted_once_and_verified(monkeypatch):

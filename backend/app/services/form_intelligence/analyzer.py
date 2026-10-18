@@ -258,6 +258,9 @@ def _upsert_profile(
     compatibility_reason_code: str = "",
     error_message: str = "",
     action_url: str = "",
+    analysis_source: str = "static",
+    fingerprint_override: str | None = None,
+    review_reason_override: str | None = None,
 ) -> FormProfile:
     profile = db.scalar(
         select(FormProfile).where(
@@ -266,7 +269,11 @@ def _upsert_profile(
             FormProfile.form_index == form_index,
         )
     )
-    previous_fingerprint = profile.fingerprint if profile else ""
+    previous_fingerprint = (
+        profile.fingerprint
+        if profile is not None and profile.analysis_source == analysis_source
+        else ""
+    )
     if profile is None:
         profile = FormProfile(company_id=company.id, form_url=url, form_index=form_index)
         db.add(profile)
@@ -285,7 +292,13 @@ def _upsert_profile(
         if manual_value:
             item["mapped_key"], item["recommended_value"] = manual_value
             item["confidence"], item["decision_source"] = 1.0, "MANUAL"
-    fingerprint = form_fingerprint(fields) if fields else ""
+    fingerprint = (
+        fingerprint_override
+        if fingerprint_override is not None
+        else form_fingerprint(fields)
+        if fields
+        else ""
+    )
     status = (
         "ERROR"
         if error_message
@@ -315,18 +328,22 @@ def _upsert_profile(
     profile.action_url = action_url
     profile.analysis_version = ANALYSIS_VERSION
     profile.analysis_provider = provider_name
+    profile.analysis_source = analysis_source
     profile.last_analyzed_at = datetime.now(timezone.utc)
     profile.analysis_duration_ms = max(0, duration_ms)
     profile.delivery_supported = delivery_supported
     profile.compatibility_reason_code = compatibility_reason_code
     profile.review_reason = (
-        _review_reason(
-            form_found,
-            sales_status,
-            captcha,
-            confirmation,
-            fields,
-            compatibility_reason,
+        (
+            review_reason_override
+            or _review_reason(
+                form_found,
+                sales_status,
+                captcha,
+                confirmation,
+                fields,
+                compatibility_reason,
+            )
         )[:500]
         if status in {"REVIEW_REQUIRED", "BLOCKED"}
         else ""
