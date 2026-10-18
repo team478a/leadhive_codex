@@ -26,6 +26,7 @@ from tests.test_form_approval_preparation import form_source as form_source
 
 def test_browser_delivery_is_disabled_by_default():
     assert Settings(_env_file=None).browser_form_delivery_enabled is False
+    assert Settings(_env_file=None).browser_form_dry_run_enabled is False
 
 
 def make_browser_profile(db, source):
@@ -314,10 +315,15 @@ def test_browser_ready_queue_and_bulk_proposal_require_saved_review(auth, db, fo
 def test_dry_run_can_be_queued_without_approval_and_cancelled(auth, db, form_source, monkeypatch):
     project, company, _draft, profile, _fields = make_browser_profile(db, form_source)
     monkeypatch.setattr(settings, "browser_form_delivery_enabled", False)
+    monkeypatch.setattr(settings, "browser_form_dry_run_enabled", False)
     disabled = auth.post(f"/api/form-profiles/{profile.id}/browser-form-dry-run")
     assert disabled.status_code == 409
 
     monkeypatch.setattr(settings, "browser_form_delivery_enabled", True)
+    still_disabled = auth.post(f"/api/form-profiles/{profile.id}/browser-form-dry-run")
+    assert still_disabled.status_code == 409
+    monkeypatch.setattr(settings, "browser_form_delivery_enabled", False)
+    monkeypatch.setattr(settings, "browser_form_dry_run_enabled", True)
     monkeypatch.setattr(settings, "outbound_enabled", False)
     monkeypatch.setattr(settings, "human_approved_form_enabled", False)
     queued = auth.post(f"/api/form-profiles/{profile.id}/browser-form-dry-run")

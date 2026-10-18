@@ -86,8 +86,8 @@ def begin(
     screenshot_before=None,
 ):
     if dry_run:
-        if not settings.browser_form_delivery_enabled:
-            raise HTTPException(409, "ブラウザーフォーム実行は停止されています。")
+        if not settings.browser_form_dry_run_enabled:
+            raise HTTPException(409, "ブラウザーdry-run機能は停止されています。")
         run = db.scalar(select(BrowserFormRun).where(BrowserFormRun.id == row_id).with_for_update())
         if (
             run is None
@@ -353,6 +353,18 @@ def run_browser_dry_run(claimed):
     from browser_worker.delivery import run_browser_delivery_task
 
     run_id, worker_id = claimed.id, claimed.worker_id
+    if not settings.browser_form_dry_run_enabled:
+        with SessionLocal() as session:
+            finish(
+                session,
+                run_id,
+                worker_id,
+                "blocked",
+                "ブラウザーdry-run機能が停止されています。",
+                None,
+                dry_run=True,
+            )
+        return
     with SessionLocal() as session:
         run = session.get(BrowserFormRun, run_id)
         if run is None:

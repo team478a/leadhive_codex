@@ -412,8 +412,6 @@ def _run_browser_job_once_locked() -> bool:
         if settings.browser_form_delivery_enabled:
             from app.services import approved_form, approved_form_worker
 
-            recover_stale_dry_runs(db)
-
             dispatch = approved_form.claim(db, browser_form=True)
             if dispatch is not None and dispatch.status == "checking":
                 claimed = {
@@ -425,6 +423,8 @@ def _run_browser_job_once_locked() -> bool:
                 db.commit()
                 approved_form_worker.run_browser_form(SimpleNamespace(**claimed))
                 return True
+        if settings.browser_form_dry_run_enabled:
+            recover_stale_dry_runs(db)
             dry_run = claim_browser_dry_run(db)
             if dry_run is not None:
                 claimed_run = SimpleNamespace(
@@ -455,7 +455,7 @@ def _run_browser_job_once_locked() -> bool:
 
 
 def claim_browser_dry_run(db) -> BrowserFormRun | None:
-    if not settings.browser_form_delivery_enabled:
+    if not settings.browser_form_dry_run_enabled:
         return None
     run = db.scalar(
         select(BrowserFormRun)
