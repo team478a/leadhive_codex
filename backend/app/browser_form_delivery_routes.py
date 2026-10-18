@@ -24,9 +24,9 @@ from app.services.browser_form_runs import serialized
 router = APIRouter(prefix="/api", tags=["Browser form delivery"])
 
 
-def _enabled():
-    if not settings.browser_form_delivery_enabled:
-        raise HTTPException(409, "ブラウザーフォーム実行は既定でOFFです。")
+def _dry_run_enabled():
+    if not settings.browser_form_dry_run_enabled:
+        raise HTTPException(409, "ブラウザーdry-run機能は既定でOFFです。")
 
 
 def _company_for_profile(db: Session, profile_id: UUID, user: User, *, lock=False):
@@ -49,7 +49,7 @@ def enqueue_browser_dry_run(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    _enabled()
+    _dry_run_enabled()
     company, profile = _company_for_profile(db, profile_id, user, lock=True)
     from app.services.browser_form_preparation import preparation
 

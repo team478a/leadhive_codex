@@ -25,7 +25,7 @@ export function BrowserFormRunsPanel({
   companyId: string; profileId: string | null; canWrite: boolean; doNotContact: boolean
 }) {
   const [runs, setRuns] = useState<BrowserRun[]>([])
-  const [enabled, setEnabled] = useState(false)
+  const [dryRunEnabled, setDryRunEnabled] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -33,10 +33,10 @@ export function BrowserFormRunsPanel({
   const refresh = useCallback(async () => {
     const [nextRuns, limits] = await Promise.all([
       api<BrowserRun[]>(`/companies/${companyId}/browser-form-runs?limit=20`),
-      api<{ browser_form_delivery_enabled: boolean }>('/form-dispatch-limits'),
+      api<{ browser_form_dry_run_enabled: boolean }>('/form-dispatch-limits'),
     ])
     setRuns(nextRuns)
-    setEnabled(limits.browser_form_delivery_enabled)
+    setDryRunEnabled(limits.browser_form_dry_run_enabled)
   }, [companyId])
 
   useEffect(() => {
@@ -76,10 +76,10 @@ export function BrowserFormRunsPanel({
   return <section className="panel mt-5" aria-label="ブラウザーフォーム実行結果">
     <h3>ブラウザーフォーム dry-run・結果</h3>
     <p className="muted text-sm">dry-runは確認済みフォームに入力して読み戻し、画面を保存します。送信ボタンは押しません。実送信は承認済み予約だけが対象です。</p>
-    {!enabled && <p className="muted text-sm">ブラウザーdry-run機能はOFFです。有効になるまで実行できません。</p>}
+    {!dryRunEnabled && <p className="muted text-sm">ブラウザーdry-run機能はOFFです。有効になるまで実行できません。</p>}
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    {canWrite && <button type="button" disabled={busy || !enabled || !profileId || doNotContact} onClick={() => void startDryRun()}>
+    {canWrite && <button type="button" disabled={busy || !dryRunEnabled || !profileId || doNotContact} onClick={() => void startDryRun()}>
       {busy ? '予約中…' : '確認済みフォームでdry-run（送信なし）'}
     </button>}
     {!runs.length ? <p className="muted mt-3">ブラウザーフォーム実行結果はありません。</p> : runs.map(run => <article className="job-row mt-3" key={run.id}>

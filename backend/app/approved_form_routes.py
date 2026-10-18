@@ -33,6 +33,7 @@ def limits(db: Session = Depends(get_db), user: User = Depends(current_user)):
         "can_manage": user.is_admin,
         "execution_enabled": settings.outbound_enabled and settings.human_approved_form_enabled,
         "browser_form_delivery_enabled": settings.browser_form_delivery_enabled,
+        "browser_form_dry_run_enabled": settings.browser_form_dry_run_enabled,
         "browser_form_execution_enabled": settings.outbound_enabled
         and settings.human_approved_form_enabled
         and settings.browser_form_delivery_enabled,

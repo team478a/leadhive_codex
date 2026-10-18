@@ -78,8 +78,9 @@ fixtures and local Playwright request fulfillment only; no real site is sent.
 
 `deploy/cloud/render-staging.yaml` defines one Singapore Background Worker on
 the `1c-2g` plan. Syncing the Blueprint provisions a paid resource. The API
-and worker both explicitly keep `BROWSER_FORM_ANALYSIS_ENABLED=false` and
-`BROWSER_FORM_DELIVERY_ENABLED=false`; the worker may heartbeat but cannot
+and worker both explicitly keep `BROWSER_FORM_ANALYSIS_ENABLED=false`,
+`BROWSER_FORM_DRY_RUN_ENABLED=false`, and `BROWSER_FORM_DELIVERY_ENABLED=false`;
+the worker may heartbeat but cannot
 perform browser analysis or delivery. Do not enable either feature or run
 real-site jobs until separately approved.
 
