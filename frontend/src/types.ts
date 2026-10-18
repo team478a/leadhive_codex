@@ -192,6 +192,8 @@ export interface OperationJob {
   id: string; project_id: string
   operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'extract_articles' | 'form_dm_readiness' | 'form_approval_batch' | 'bulk_template_drafts'
   bulk_template_results?: { created: string[]; skipped_existing: string[]; excluded: { company_id: string; reason_code: string; reason?: string }[] }
+  readiness_reanalysis_reason?: string | null
+  readiness_reanalysis_matched_count?: number | null
   source_operation_ids?: string[]; article_saved_count?: number
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
   total_count: number; processed_count: number; success_count: number; failed_count: number

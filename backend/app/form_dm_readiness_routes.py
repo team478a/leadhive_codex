@@ -32,6 +32,13 @@ from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api", tags=["Form DM readiness"])
 PAGE_SIZE = 20
+MAX_REANALYSIS_COMPANIES = 500
+CAPTCHA_COUNT_REASONS = (
+    "CAPTCHA_VISIBLE",
+    "CAPTCHA_INVISIBLE",
+    "CAPTCHA_LEGACY",
+)
+SECONDARY_COUNT_REASONS = {"NON_COMPANY_SUSPECTED", *CAPTCHA_COUNT_REASONS}
 REASONS = (
     "CONTACT_PROHIBITED",
     "NON_COMPANY_SUSPECTED",
@@ -287,6 +294,29 @@ def latest_completed_job(db: Session, project_id: UUID) -> OperationJob | None:
     )
 
 
+def _reason_filter(reason: str):
+    if reason in SECONDARY_COUNT_REASONS:
+        return or_(
+            FormDmReadinessResult.primary_reason == reason,
+            FormDmReadinessResult.secondary_reasons.contains([reason]),
+        )
+    return FormDmReadinessResult.primary_reason == reason
+
+
+def _active_form_reanalysis(db: Session, project_id: UUID) -> OperationJob | None:
+    job = db.scalar(
+        select(OperationJob)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_intelligence",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .order_by(OperationJob.created_at.desc())
+        .limit(1)
+    )
+    return job if (job and (job.payload or {}).get("readiness_reanalysis_reason")) else None
+
+
 @router.get("/projects/{project_id}/form-dm-readiness")
 def form_dm_readiness(
     project_id: UUID,
@@ -309,6 +339,7 @@ def form_dm_readiness(
         .order_by(OperationJob.created_at.desc())
         .limit(1)
     )
+    active_reanalysis_job = _active_form_reanalysis(db, project_id)
     total = 0
     items = []
     if snapshot:
@@ -351,11 +382,7 @@ def form_dm_readiness(
                             else_=0,
                         )
                     ).label(reason)
-                    for reason in (
-                        "CAPTCHA_VISIBLE",
-                        "CAPTCHA_INVISIBLE",
-                        "CAPTCHA_LEGACY",
-                    )
+                    for reason in CAPTCHA_COUNT_REASONS
                 ]
             ).where(FormDmReadinessResult.job_id == snapshot.id)
         ).one()
@@ -443,6 +470,9 @@ def form_dm_readiness(
         if snapshot
         else None,
         "active_job": OperationJobOut.model_validate(active_job) if active_job else None,
+        "active_reanalysis_job": OperationJobOut.model_validate(active_reanalysis_job)
+        if active_reanalysis_job
+        else None,
         "read_only": True,
         "external_requests": 0,
     }
@@ -455,6 +485,8 @@ def recalculate_form_dm_readiness(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    if _active_form_reanalysis(db, project_id):
+        raise HTTPException(409, "フォーム再解析が実行中です。完了後に再集計してください。")
     active_job = db.scalar(
         select(OperationJob.id)
         .where(
@@ -492,4 +524,136 @@ def recalculate_form_dm_readiness(
         else:
             db.commit()
             db.refresh(job)
+    return OperationJobOut.model_validate(job)
+
+
+@router.post(
+    "/projects/{project_id}/form-dm-readiness/reanalyze",
+    status_code=202,
+)
+def reanalyze_readiness_reason(
+    project_id: UUID,
+    reason: str = Query(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user)
+    if reason not in REASONS:
+        raise HTTPException(422, "指定された送信可否の理由は再解析できません。")
+    if db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    ):
+        raise HTTPException(409, "送信可否の再集計中です。完了後に再解析してください。")
+    snapshot = latest_completed_job(db, project_id)
+    if snapshot is None:
+        raise HTTPException(409, "先に送信可否を集計してください。")
+
+    reason_filter = _reason_filter(reason)
+    matched_count = db.scalar(
+        select(func.count())
+        .select_from(FormDmReadinessResult)
+        .join(Company, Company.id == FormDmReadinessResult.company_id)
+        .where(
+            FormDmReadinessResult.job_id == snapshot.id,
+            Company.project_id == project_id,
+            reason_filter,
+        )
+    ) or 0
+    if matched_count == 0:
+        raise HTTPException(409, "この理由に該当する企業はありません。")
+
+    active_job = db.scalar(
+        select(OperationJob)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_intelligence",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .order_by(OperationJob.created_at.desc())
+        .limit(1)
+    )
+    if active_job:
+        payload = active_job.payload or {}
+        if (
+            payload.get("readiness_reanalysis_reason") == reason
+            and payload.get("readiness_reanalysis_snapshot_job_id") == str(snapshot.id)
+        ):
+            return OperationJobOut.model_validate(active_job)
+        raise HTTPException(409, "フォーム解析が実行中です。完了後に再度お試しください。")
+
+    company_ids = list(
+        db.scalars(
+            select(FormDmReadinessResult.company_id)
+            .join(Company, Company.id == FormDmReadinessResult.company_id)
+            .where(
+                FormDmReadinessResult.job_id == snapshot.id,
+                Company.project_id == project_id,
+                reason_filter,
+            )
+            .order_by(Company.company_name, Company.id)
+            .limit(MAX_REANALYSIS_COMPANIES)
+        ).all()
+    )
+    job = OperationJob(
+        project_id=project_id,
+        operation_type="form_intelligence",
+        total_count=len(company_ids),
+        payload={
+            "company_ids": [str(company_id) for company_id in company_ids],
+            "force": True,
+            "requested_by_user_id": str(user.id),
+            "readiness_reanalysis_reason": reason,
+            "readiness_reanalysis_matched_count": matched_count,
+            "readiness_reanalysis_snapshot_job_id": str(snapshot.id),
+        },
+    )
+    if not add_operation_job(db, job):
+        active_job = db.scalar(
+            select(OperationJob)
+            .where(
+                OperationJob.project_id == project_id,
+                OperationJob.operation_type == "form_intelligence",
+                OperationJob.status.in_(("queued", "running")),
+            )
+            .order_by(OperationJob.created_at.desc())
+            .limit(1)
+        )
+        payload = (active_job.payload or {}) if active_job else {}
+        if (
+            active_job
+            and payload.get("readiness_reanalysis_reason") == reason
+            and payload.get("readiness_reanalysis_snapshot_job_id") == str(snapshot.id)
+        ):
+            return OperationJobOut.model_validate(active_job)
+        raise HTTPException(409, "フォーム解析が実行中です。完了後に再度お試しください。")
+    db.commit()
+    db.refresh(job)
+    return OperationJobOut.model_validate(job)
+
+
+@router.get(
+    "/projects/{project_id}/form-dm-readiness/reanalysis-jobs/{job_id}",
+)
+def get_readiness_reanalysis_job(
+    project_id: UUID,
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    job = db.scalar(
+        select(OperationJob).where(
+            OperationJob.id == job_id,
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_intelligence",
+        )
+    )
+    if job is None or not (job.payload or {}).get("readiness_reanalysis_reason"):
+        raise HTTPException(404, "フォーム再解析ジョブが見つかりません。")
     return OperationJobOut.model_validate(job)

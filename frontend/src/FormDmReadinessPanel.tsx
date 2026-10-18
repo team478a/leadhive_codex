@@ -20,6 +20,7 @@ type Readiness = {
   last_aggregated_by_commit: string | null
   last_aggregated_by_host: string | null
   active_job: OperationJob | null
+  active_reanalysis_job: OperationJob | null
   read_only: boolean
   external_requests: number
 }
@@ -69,6 +70,7 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
   const [starting, setStarting] = useState(false)
   const [reviewingCompanyId, setReviewingCompanyId] = useState('')
   const [reviewNotice, setReviewNotice] = useState('')
+  const [reanalysisJob, setReanalysisJob] = useState<OperationJob | null>(null)
   const refresh = useCallback(async () => {
     if (!projectId) { setData(null); return null }
     setBusy(true); setError('')
@@ -79,6 +81,7 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
         throw new Error('フォームDM診断の応答形式が不正です。再読み込みしてください。')
       }
       setData(result)
+      if (result.active_reanalysis_job) setReanalysisJob(result.active_reanalysis_job)
       return result
     }
     catch (e) { setError(errorMessage(e)); return null }
@@ -93,6 +96,18 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
     } catch (e) { setError(errorMessage(e)) }
     finally { setStarting(false) }
   }, [projectId, refresh])
+  async function reanalyzeReason(reason: string) {
+    if (!projectId) return
+    setStarting(true); setError('')
+    try {
+      const job = await api<OperationJob>(
+        `/projects/${projectId}/form-dm-readiness/reanalyze?reason=${encodeURIComponent(reason)}`,
+        'POST',
+      )
+      setReanalysisJob(job)
+    } catch (e) { setError(errorMessage(e)) }
+    finally { setStarting(false) }
+  }
   async function reviewCompany(item: ReadinessItem, confirmed: boolean) {
     setReviewingCompanyId(item.company_id); setError(''); setReviewNotice('')
     try {
@@ -117,26 +132,53 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
     const timer = window.setInterval(() => { void refresh() }, 3000)
     return () => window.clearInterval(timer)
   }, [data?.active_job, refresh])
+  const reanalysisJobId = reanalysisJob?.id
+  const reanalysisJobStatus = reanalysisJob?.status
+  useEffect(() => {
+    if (!reanalysisJobId || !['queued', 'running'].includes(reanalysisJobStatus ?? '')) return
+    const timer = window.setInterval(() => {
+      void api<OperationJob>(`/projects/${projectId}/form-dm-readiness/reanalysis-jobs/${reanalysisJobId}`)
+        .then(setReanalysisJob)
+        .catch(e => setError(errorMessage(e)))
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [projectId, reanalysisJobId, reanalysisJobStatus])
+  const reanalysisBusy = Boolean(reanalysisJob && ['queued', 'running'].includes(reanalysisJob.status))
   return <section className="panel mb-5" aria-label="フォームDM送信可否">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2>フォームDMの送信可否</h2>
-      <p className="muted mt-2 text-sm">フォームが見つかった企業を、既存の承認準備判定で分類します。非企業の疑いを人が確認した結果は収集リスト確認に記録します。自動で外部アクセス・送信は行いません。</p></div>
-      <div className="flex gap-2"><button className="secondary" disabled={starting || Boolean(data?.active_job)} onClick={() => void recalculate()}>{data?.last_aggregated_at ? '再集計' : '集計開始'}</button><button className="secondary" disabled={busy || !data?.total} onClick={() => void download(`/projects/${projectId}/form-dm-readiness?format=csv${suspectedOnly ? '&suspected_only=true' : ''}`, 'form-dm-readiness.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div>
+      <p className="muted mt-2 text-sm">フォームが見つかった企業を、既存の承認準備判定で分類します。集計自体は保存情報のみを使います。理由別の再解析ボタンを押すと対象企業だけフォーム解析しますが、送信・承認は行いません。非企業の疑いを人が確認した結果は収集リスト確認に記録します。</p></div>
+      <div className="flex gap-2"><button className="secondary" disabled={starting || Boolean(data?.active_job) || reanalysisBusy} onClick={() => void recalculate()}>{data?.last_aggregated_at ? '再集計' : '集計開始'}</button><button className="secondary" disabled={busy || !data?.total} onClick={() => void download(`/projects/${projectId}/form-dm-readiness?format=csv${suspectedOnly ? '&suspected_only=true' : ''}`, 'form-dm-readiness.csv').catch(e => setError(errorMessage(e)))}>CSV出力</button></div>
     </div>
     {error && <p className="error mt-3" role="alert">{error}</p>}
     {reviewNotice && <p className="muted mt-3" role="status">{reviewNotice}</p>}
     {data?.last_aggregated_at && <p className="muted mt-3 text-sm">最終集計：{new Date(data.last_aggregated_at).toLocaleString('ja-JP')} · Worker版 {data.last_aggregated_by_commit || 'unknown'}（{data.last_aggregated_by_host || 'host不明'}）</p>}
     {data?.active_job && <p className="muted mt-3 text-sm">再集計中：{data.active_job.processed_count}/{data.active_job.total_count}社</p>}
+    {reanalysisJob && <p className="muted mt-3 text-sm" role="status">
+      {reanalysisBusy
+        ? `フォーム再解析中（${labels[reanalysisJob.readiness_reanalysis_reason || ''] ?? reanalysisJob.readiness_reanalysis_reason}）：${reanalysisJob.processed_count}/${reanalysisJob.total_count}社（該当 ${reanalysisJob.readiness_reanalysis_matched_count ?? reanalysisJob.total_count}社、1回最大500社。送信・承認なし）`
+        : reanalysisJob.status === 'completed'
+          ? `フォーム再解析が完了しました：${reanalysisJob.success_count}社成功、${reanalysisJob.failed_count}社失敗。送信・承認は行っていません。再解析結果を集計するには「再集計」を押してください。`
+          : `フォーム再解析は${reanalysisJob.status === 'cancelled' ? 'キャンセル' : '失敗'}しました：${reanalysisJob.processed_count}/${reanalysisJob.total_count}社。${reanalysisJob.error_message || ''}`}
+    </p>}
     {data && <><div className="mt-4 flex flex-wrap gap-2" aria-label="送信可否の理由別件数">
-      {Object.entries(data.counts).map(([code, count]) => code === 'NON_COMPANY_SUSPECTED'
-        ? <button type="button" className="badge" key={code} aria-pressed={suspectedOnly} onClick={() => { setSuspectedOnly(value => !value); setOffset(0) }}>{labels[code] ?? code}: {count}社</button>
-        : <span className="badge" key={code}>{labels[code] ?? code}: {count}社</span>)}
+      {Object.entries(data.counts).map(([code, count]) => <div className="flex flex-wrap items-center gap-1" key={code}>
+        {code === 'NON_COMPANY_SUSPECTED'
+          ? <button type="button" className="badge" aria-pressed={suspectedOnly} onClick={() => { setSuspectedOnly(value => !value); setOffset(0) }}>{labels[code] ?? code}: {count}社</button>
+          : <span className="badge">{labels[code] ?? code}: {count}社</span>}
+        {canWrite && count > 0 && <button
+          type="button"
+          className="secondary text-xs"
+          disabled={busy || starting || Boolean(data.active_job) || reanalysisBusy || reviewingCompanyId !== ''}
+          onClick={() => void reanalyzeReason(code)}
+        >この{Math.min(count, 500)}社を再解析{count > 500 ? `（全${count}社）` : ''}</button>}
+      </div>)}
     </div><p className="muted mt-2 text-xs">CAPTCHAの該当数は、他の主理由がある企業も含む参考値です。非企業の疑い件数を押すと対象を絞り込めます。</p><p className="muted mt-3 text-sm">{suspectedOnly ? '非企業の疑い' : '対象'} {data.total}社 · 表示 {Math.min(offset + data.items.length, data.total)} / {data.total}社 · 集計結果（外部送信なし）</p>
     {data.items.map(item => <article className="border-t py-3" key={item.company_id}>
       <strong>{item.company_name}</strong><p className="mt-1">主な理由：{labels[item.primary_reason] ?? item.primary_reason}</p>
       {item.secondary_reasons.length > 0 && <p className="muted text-sm">他の理由：{item.secondary_reasons.map(reason => labels[reason] ?? reason).join('、')}</p>}
       {[item.primary_reason, ...item.secondary_reasons].includes('NON_COMPANY_SUSPECTED') && canWrite && <div className="actions mt-2" aria-label={`${item.company_name}の非企業確認`}>
-        <button type="button" className="secondary" disabled={busy || starting || Boolean(data.active_job) || reviewingCompanyId !== ''} onClick={() => void reviewCompany(item, true)}>会社として確認済み（対象に戻す）</button>
-        <button type="button" className="secondary" disabled={busy || starting || Boolean(data.active_job) || reviewingCompanyId !== ''} onClick={() => void reviewCompany(item, false)}>対象外にする</button>
+        <button type="button" className="secondary" disabled={busy || starting || Boolean(data.active_job) || reanalysisBusy || reviewingCompanyId !== ''} onClick={() => void reviewCompany(item, true)}>会社として確認済み（対象に戻す）</button>
+        <button type="button" className="secondary" disabled={busy || starting || Boolean(data.active_job) || reanalysisBusy || reviewingCompanyId !== ''} onClick={() => void reviewCompany(item, false)}>対象外にする</button>
       </div>}
       {/^https?:\/\//i.test(item.form_url) && <a className="text-sm break-all" href={item.form_url} target="_blank" rel="noreferrer">フォームURLを開く ↗</a>}
     </article>)}
