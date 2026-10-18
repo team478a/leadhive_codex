@@ -89,6 +89,7 @@ class FormProfileOut(BaseModel):
     fingerprint: str
     analysis_version: str
     analysis_provider: str
+    analysis_source: Literal["static", "browser"]
     last_analyzed_at: datetime | None
     analysis_duration_ms: int
     delivery_supported: bool

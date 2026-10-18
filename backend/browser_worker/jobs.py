@@ -5,14 +5,23 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
+from urllib.parse import urlsplit, urlunsplit
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.config import settings
-from app.database import SessionLocal
+from app.database import SessionLocal, engine
 from app.model_operations import OperationJob
+from app.models import Company, FormProfile
 from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST
+from app.services.browser_form_analysis import (
+    MAX_BROWSER_ANALYSIS_TARGETS,
+    eligible_no_form_profile,
+    save_rendered_analysis,
+)
+from app.services.contact_discovery import same_site
 
 logger = logging.getLogger("leadhive.browser_worker")
 POLL_SECONDS = 2
@@ -135,6 +144,210 @@ def _finish(job_id: uuid.UUID, worker_id: uuid.UUID, *, result=None, error: str 
         db.commit()
 
 
+@contextmanager
+def _same_site_interval(site_host: str):
+    lock_host = site_host.removeprefix("www.").lower()
+    connection = engine.connect()
+    locked = False
+    try:
+        connection.execute(
+            text("SELECT pg_advisory_lock(hashtext(:site_host))"), {"site_host": lock_host}
+        )
+        connection.commit()
+        locked = True
+        yield
+    finally:
+        if locked:
+            try:
+                connection.execute(text("SELECT pg_sleep(1)"))
+                connection.commit()
+                connection.execute(
+                    text("SELECT pg_advisory_unlock(hashtext(:site_host))"),
+                    {"site_host": lock_host},
+                )
+                connection.commit()
+            finally:
+                connection.close()
+        else:
+            connection.close()
+
+
+def _target_is_current(job: OperationJob, target: dict) -> bool:
+    with SessionLocal() as db:
+        company = db.get(Company, uuid.UUID(target["company_id"]))
+        profile = db.get(FormProfile, uuid.UUID(target["profile_id"]))
+        if (
+            company is None
+            or profile is None
+            or company.project_id != job.project_id
+            or company.do_not_contact
+            or profile.company_id != company.id
+            or profile.form_index != target["form_index"]
+            or profile.analysis_source == "browser"
+            or profile.sales_contact_status == "PROHIBITED"
+        ):
+            return False
+        stored = urlsplit(profile.form_url)
+        stored_url = urlunsplit(
+            (stored.scheme, stored.netloc, stored.path or "/", stored.query, "")
+        )
+        if stored_url != target["url"]:
+            return False
+        is_eligible_no_form = eligible_no_form_profile(company, profile)
+        is_eligible_form = profile.form_found and (
+            profile.compatibility_reason_code
+            in {
+                "CONTACT_FORM_7",
+                "MULTIPART_OR_FILE",
+                "JAVASCRIPT_CONFIRMATION",
+                "ASYNC_SUBMISSION",
+            }
+            or profile.confirmation_page is True
+        )
+        if not (is_eligible_no_form or is_eligible_form):
+            return False
+        if not same_site(company.website_url or "", target["url"]):
+            return False
+        return True
+
+
+def _record_analysis_progress(
+    job_id: uuid.UUID,
+    worker_id: uuid.UUID,
+    target: dict,
+    *,
+    success: bool,
+    blocked_non_get_count: int = 0,
+) -> None:
+    with SessionLocal() as db:
+        job = db.scalar(select(OperationJob).where(OperationJob.id == job_id).with_for_update())
+        if job is None or job.status != "running" or job.worker_id != worker_id:
+            return
+        job.processed_count += 1
+        if success:
+            job.success_count += 1
+        else:
+            job.failed_count += 1
+        results = list((job.payload or {}).get("browser_analysis_results") or [])
+        results.append(
+            {
+                "company_id": target["company_id"],
+                "status": "completed" if success else "failed",
+                "blocked_non_get_count": blocked_non_get_count,
+            }
+        )
+        job.payload = {**(job.payload or {}), "browser_analysis_results": results}
+        job.lease_expires_at = _deadline()
+        db.commit()
+
+
+def _finish_analysis_batch(job_id: uuid.UUID, worker_id: uuid.UUID) -> None:
+    with SessionLocal() as db:
+        job = db.scalar(select(OperationJob).where(OperationJob.id == job_id).with_for_update())
+        if job is None or job.status != "running" or job.worker_id != worker_id:
+            return
+        if job.cancel_requested:
+            job.status = "cancelled"
+            job.error_message = "キャンセルされました。"
+        else:
+            job.status = "completed"
+            if job.failed_count:
+                job.error_message = f"{job.failed_count}社のブラウザ解析に失敗しました。"
+        job.worker_id = None
+        job.lease_expires_at = None
+        job.finished_at = datetime.now(timezone.utc)
+        db.commit()
+
+
+def _run_rendered_analysis_job(job: OperationJob, cancellation_check) -> None:
+    from browser_worker.runtime import (
+        BrowserTaskCancelled,
+        RenderedPageTask,
+        run_rendered_page_task,
+    )
+
+    worker_id = job.worker_id
+    if worker_id is None:
+        return
+    payload = job.payload or {}
+    targets = payload.get("targets")
+    if (
+        not settings.browser_form_analysis_enabled
+        or not isinstance(targets, list)
+        or not 1 <= len(targets) <= MAX_BROWSER_ANALYSIS_TARGETS
+        or set(payload) - {"mode", "targets", "executed_by_commit", "executed_by_host"}
+    ):
+        _finish(job.id, worker_id, error="実サイトのブラウザ解析は無効か、ジョブ形式が不正です。")
+        return
+    job.total_count = len(targets)
+    for target in targets:
+        if cancellation_check(force=True):
+            _finish(job.id, worker_id, error="キャンセルされました。")
+            return
+        if (
+            not isinstance(target, dict)
+            or set(target) != {"company_id", "profile_id", "url", "site_host", "form_index"}
+            or not all(
+                isinstance(target[key], str)
+                for key in ("company_id", "profile_id", "url", "site_host")
+            )
+            or not isinstance(target["form_index"], int)
+        ):
+            _finish(job.id, worker_id, error="ブラウザ解析対象のジョブ形式が不正です。")
+            return
+        if not _target_is_current(job, target):
+            _record_analysis_progress(job.id, worker_id, target, success=False)
+            continue
+        started = time.monotonic()
+        try:
+            with _same_site_interval(target["site_host"]):
+                rendered = run_rendered_page_task(
+                    RenderedPageTask(url=target["url"], site_host=target["site_host"]),
+                    cancellation_check=cancellation_check,
+                )
+            if not same_site(target["url"], rendered.final_url):
+                raise RuntimeError("Browser navigation left the approved site.")
+            if cancellation_check(force=True):
+                raise BrowserTaskCancelled("Browser analysis job was cancelled.")
+            with SessionLocal() as db:
+                company = db.get(Company, uuid.UUID(target["company_id"]))
+                profile = db.get(FormProfile, uuid.UUID(target["profile_id"]))
+                if (
+                    company is None
+                    or profile is None
+                    or company.project_id != job.project_id
+                    or company.do_not_contact
+                    or profile.form_index != target["form_index"]
+                    or profile.form_url != target["url"]
+                    or profile.analysis_source == "browser"
+                    or not same_site(company.website_url or "", target["url"])
+                ):
+                    raise RuntimeError("Browser analysis target changed before save.")
+                save_rendered_analysis(
+                    db,
+                    company,
+                    profile.id,
+                    target["url"],
+                    rendered.html,
+                    round((time.monotonic() - started) * 1000),
+                )
+                db.commit()
+            _record_analysis_progress(
+                job.id,
+                worker_id,
+                target,
+                success=True,
+                blocked_non_get_count=rendered.blocked_non_get_count,
+            )
+        except BrowserTaskCancelled:
+            _finish(job.id, worker_id, error="キャンセルされました。")
+            return
+        except Exception as exc:
+            logger.warning("rendered browser analysis failed: %s", type(exc).__name__)
+            _record_analysis_progress(job.id, worker_id, target, success=False)
+    _finish_analysis_batch(job.id, worker_id)
+
+
 def run_claimed_browser_job(job: OperationJob) -> None:
     from browser_worker.runtime import (
         BrowserTaskCancelled,
@@ -148,16 +361,19 @@ def run_claimed_browser_job(job: OperationJob) -> None:
         return
     last_check = 0.0
 
-    def cancellation_check() -> bool:
+    def cancellation_check(*, force: bool = False) -> bool:
         nonlocal last_check
         now = time.monotonic()
-        if now - last_check < LEASE_RENEW_SECONDS:
+        if not force and now - last_check < LEASE_RENEW_SECONDS:
             return False
         last_check = now
         return _cancel_or_renew(job.id, worker_id)
 
     try:
         payload = job.payload or {}
+        if payload.get("mode") == "rendered_analysis":
+            _run_rendered_analysis_job(job, cancellation_check)
+            return
         if set(payload) - {"fixture", "fields", "executed_by_commit", "executed_by_host"}:
             raise BrowserWorkerError("Browser analysis payload contains unsupported fields.")
         task = SyntheticFormTask(fixture=payload["fixture"], fields=payload.get("fields", {}))
@@ -179,6 +395,6 @@ def run_browser_job_once() -> bool:
         job = claim_browser_job(db)
     if job is None:
         return False
-    logger.info("synthetic browser analysis started: id=%s", job.id)
+    logger.info("browser analysis started: id=%s", job.id)
     run_claimed_browser_job(job)
     return True

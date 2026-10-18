@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import (
     AnalysisRefreshSchedule,
@@ -26,6 +27,7 @@ from app.schemas import (
     SearchScheduleOut,
 )
 from app.security import current_user
+from app.services.browser_form_analysis import select_browser_analysis_targets
 from app.services.operations import add_operation_job, refresh_company_ids
 
 router = APIRouter(prefix="/api")
@@ -437,6 +439,63 @@ def enqueue_synthetic_browser_form_analysis(
     db.commit()
     db.refresh(job)
     return job
+
+
+@router.post(
+    "/projects/{project_id}/browser-form-analysis/recalculate",
+    response_model=OperationJobOut,
+    status_code=202,
+)
+def enqueue_rendered_browser_form_analysis(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    """Queue at most 100 previously identified same-site contact pages, read-only."""
+    project_access(project_id, db, user)
+    if not settings.browser_form_analysis_enabled:
+        raise HTTPException(
+            409,
+            "実サイトのブラウザ解析は既定で無効です。田中さんの承認後に管理者が有効化してください。",
+        )
+    active = db.scalar(
+        select(OperationJob)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "browser_form_analysis",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    )
+    if active:
+        raise HTTPException(409, "ブラウザ解析ジョブがすでに実行中です。")
+    targets = select_browser_analysis_targets(db, project_id)
+    if not targets:
+        raise HTTPException(409, "安全条件に合う未解析の問い合わせページがありません。")
+    payload = {
+        "mode": "rendered_analysis",
+        "targets": [
+            {
+                "company_id": str(target.company_id),
+                "profile_id": str(target.profile_id),
+                "url": target.url,
+                "site_host": target.site_host,
+                "form_index": target.form_index,
+            }
+            for target in targets
+        ],
+    }
+    job = OperationJob(
+        project_id=project_id,
+        operation_type="browser_form_analysis",
+        payload=payload,
+        total_count=len(targets),
+    )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "ブラウザ解析ジョブを開始できませんでした。")
+    db.commit()
+    db.refresh(job)
+    return OperationJobOut.model_validate(job)
 
 
 @router.get("/collection-jobs/{job_id}/article-extractions")

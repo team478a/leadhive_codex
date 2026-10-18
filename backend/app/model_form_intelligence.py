@@ -65,6 +65,9 @@ class FormProfile(Timestamps, Base):
         ),
         CheckConstraint("form_index >= 0", name="ck_form_profile_form_index"),
         CheckConstraint("analysis_duration_ms >= 0", name="ck_form_profile_duration"),
+        CheckConstraint(
+            "analysis_source IN ('static', 'browser')", name="ck_form_profile_analysis_source"
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     company_id: Mapped[uuid.UUID] = mapped_column(
@@ -86,6 +89,9 @@ class FormProfile(Timestamps, Base):
     fingerprint: Mapped[str] = mapped_column(String(64), default="")
     analysis_version: Mapped[str] = mapped_column(String(30), default="1.0")
     analysis_provider: Mapped[str] = mapped_column(String(50), default="rule")
+    analysis_source: Mapped[str] = mapped_column(
+        String(20), default="static", server_default="static"
+    )
     last_analyzed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), index=True)
     analysis_duration_ms: Mapped[int] = mapped_column(Integer, default=0)
     delivery_supported: Mapped[bool] = mapped_column(Boolean, default=False)

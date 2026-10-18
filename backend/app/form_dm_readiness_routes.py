@@ -6,9 +6,10 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import (
     Company,
@@ -23,6 +24,7 @@ from app.project_access import project_access
 from app.schemas import OperationJobOut
 from app.security import current_user
 from app.services.approved_form import duplicate
+from app.services.browser_form_analysis import EMBED_UNVERIFIED_MARKER
 from app.services.collection_feedback import latest_company_feedback
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_approval_preparation import preparation
@@ -287,6 +289,69 @@ def latest_completed_job(db: Session, project_id: UUID) -> OperationJob | None:
     )
 
 
+def browser_analysis_summary(db: Session, project_id: UUID) -> dict:
+    no_form = FormProfile.form_found.is_(False)
+    embed_unverified = FormProfile.review_reason.ilike(f"%{EMBED_UNVERIFIED_MARKER}%")
+    row = db.execute(
+        select(
+            func.count(func.distinct(FormProfile.company_id)).label("total"),
+            func.max(FormProfile.last_analyzed_at).label("last_analyzed_at"),
+            func.count(
+                func.distinct(case((and_(no_form, ~embed_unverified), FormProfile.company_id)))
+            ).label("contact_page_no_form"),
+            func.count(
+                func.distinct(case((and_(no_form, embed_unverified), FormProfile.company_id)))
+            ).label("embed_unverified"),
+            func.count(
+                func.distinct(
+                    case(
+                        (
+                            FormProfile.compatibility_reason_code == "CONTACT_FORM_7",
+                            FormProfile.company_id,
+                        )
+                    )
+                )
+            ).label("contact_form_7"),
+            func.count(
+                func.distinct(
+                    case(
+                        (
+                            FormProfile.compatibility_reason_code == "MULTIPART_OR_FILE",
+                            FormProfile.company_id,
+                        )
+                    )
+                )
+            ).label("multipart"),
+            func.count(
+                func.distinct(
+                    case((FormProfile.confirmation_page.is_(True), FormProfile.company_id))
+                )
+            ).label("confirmation"),
+            func.count(
+                func.distinct(
+                    case(
+                        (
+                            FormProfile.compatibility_reason_code.in_(
+                                ("ASYNC_SUBMISSION", "JAVASCRIPT_CONFIRMATION")
+                            ),
+                            FormProfile.company_id,
+                        )
+                    )
+                )
+            ).label("javascript_submission"),
+        )
+        .join(Company, Company.id == FormProfile.company_id)
+        .where(
+            Company.project_id == project_id,
+            Company.record_type == "company",
+            FormProfile.analysis_source == "browser",
+        )
+    ).one()
+    return {key: value or 0 for key, value in row._mapping.items() if key != "last_analyzed_at"} | {
+        "last_analyzed_at": row.last_analyzed_at,
+    }
+
+
 @router.get("/projects/{project_id}/form-dm-readiness")
 def form_dm_readiness(
     project_id: UUID,
@@ -309,6 +374,22 @@ def form_dm_readiness(
         .order_by(OperationJob.created_at.desc())
         .limit(1)
     )
+    active_browser_job = next(
+        (
+            job
+            for job in db.scalars(
+                select(OperationJob)
+                .where(
+                    OperationJob.project_id == project_id,
+                    OperationJob.operation_type == "browser_form_analysis",
+                    OperationJob.status.in_(("queued", "running")),
+                )
+                .order_by(OperationJob.created_at.desc())
+            ).all()
+            if (job.payload or {}).get("mode") == "rendered_analysis"
+        ),
+        None,
+    )
     total = 0
     items = []
     if snapshot:
@@ -325,19 +406,11 @@ def form_dm_readiness(
         result_filters = [FormDmReadinessResult.job_id == snapshot.id]
         if suspected_only:
             result_filters.append(suspected_filter)
-            total = (
-                db.scalar(
-                    select(func.count()).where(
-                        FormDmReadinessResult.job_id == snapshot.id,
-                        suspected_filter,
-                    )
-                )
-                or 0
-            )
-        else:
-            total = sum(counts.values())
-        captcha_counts = db.execute(
+        captcha_reasons = ("CAPTCHA_VISIBLE", "CAPTCHA_INVISIBLE", "CAPTCHA_LEGACY")
+        grouped_counts = db.execute(
             select(
+                FormDmReadinessResult.primary_reason,
+                func.count().label("primary_count"),
                 *[
                     func.sum(
                         case(
@@ -351,24 +424,23 @@ def form_dm_readiness(
                             else_=0,
                         )
                     ).label(reason)
-                    for reason in (
-                        "CAPTCHA_VISIBLE",
-                        "CAPTCHA_INVISIBLE",
-                        "CAPTCHA_LEGACY",
-                    )
-                ]
-            ).where(FormDmReadinessResult.job_id == snapshot.id)
-        ).one()
-        counts.update({reason: value or 0 for reason, value in captcha_counts._mapping.items()})
-        counts["NON_COMPANY_SUSPECTED"] = (
-            db.scalar(
-                select(func.count()).where(
-                    FormDmReadinessResult.job_id == snapshot.id,
-                    suspected_filter,
-                )
+                    for reason in captcha_reasons
+                ],
+                func.sum(case((suspected_filter, 1), else_=0)).label("suspected_count"),
             )
-            or 0
-        )
+            .where(FormDmReadinessResult.job_id == snapshot.id)
+            .group_by(FormDmReadinessResult.primary_reason)
+        ).all()
+        captcha_totals = dict.fromkeys(captcha_reasons, 0)
+        suspected_total = 0
+        for row in grouped_counts:
+            counts[row.primary_reason] = row.primary_count
+            for reason in captcha_reasons:
+                captcha_totals[reason] += row._mapping[reason] or 0
+            suspected_total += row.suspected_count or 0
+        counts.update(captcha_totals)
+        counts["NON_COMPANY_SUSPECTED"] = suspected_total
+        total = suspected_total if suspected_only else sum(counts[reason] for reason in REASONS)
         if format == "json":
             rows = db.execute(
                 select(FormDmReadinessResult, Company, FormProfile)
@@ -443,6 +515,11 @@ def form_dm_readiness(
         if snapshot
         else None,
         "active_job": OperationJobOut.model_validate(active_job) if active_job else None,
+        "browser_analysis_enabled": settings.browser_form_analysis_enabled,
+        "browser_analysis_job": (
+            OperationJobOut.model_validate(active_browser_job) if active_browser_job else None
+        ),
+        "browser_analysis_counts": browser_analysis_summary(db, project_id),
         "read_only": True,
         "external_requests": 0,
     }

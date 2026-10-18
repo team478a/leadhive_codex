@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     form_confirmation_lab_enabled: bool = False
     legacy_form_delivery_enabled: bool = False
     browser_form_delivery_enabled: bool = False
+    browser_form_analysis_enabled: bool = False
     email_feedback_webhook_enabled: bool = False
     email_feedback_webhook_secret: str = ""
     serper_api_key: str = ""
