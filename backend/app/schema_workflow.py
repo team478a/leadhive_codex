@@ -113,8 +113,10 @@ class OperationJobInput(Input):
             and self.target_count is None
         ):
             self.target_count = 10000
-        if self.collection_method == "form_first" and self.auto_continue:
-            raise ValueError("フォーム起点の収集では自動継続を指定できません。")
+        if self.collection_method == "form_first" and (
+            self.auto_continue or self.condition_request_id is not None
+        ):
+            raise ValueError("フォーム起点の収集では自動継続・外部情報検索条件を指定できません。")
         if self.collection_method == "company_first" and self.require_corporate_number:
             raise ValueError("法人番号の必須確認はフォーム起点の収集のみ指定できます。")
         if self.region_mode == "prefecture_order" and not (

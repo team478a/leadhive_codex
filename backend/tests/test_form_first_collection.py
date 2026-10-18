@@ -121,6 +121,15 @@ def test_form_first_collection_rejects_unsupported_execution_options():
             collection_method="form_first",
             form_first_query_types=["intitle_contact", "intitle_contact"],
         )
+    with pytest.raises(ValueError):
+        OperationJobInput(
+            operation_type="collect_search",
+            source="serper",
+            keywords=["工務店"],
+            region="東京都",
+            collection_method="form_first",
+            condition_request_id=UUID(int=1),
+        )
 
 
 def test_search_result_classification_uses_contact_and_exclusion_rules(auth, db):

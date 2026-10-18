@@ -39,6 +39,13 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
 }) {
   const [projectId, setProjectId] = useState(initialProjectId || projects[0]?.id || '')
   const [source, setSource] = useState<CollectionSource>('serper')
+  const [collectionMethod, setCollectionMethod] = useState<'company_first' | 'form_first'>(
+    'company_first',
+  )
+  const [formFirstQueryTypes, setFormFirstQueryTypes] = useState([
+    'intitle_contact', 'inurl_contact', 'inurl_inquiry', 'form_words',
+  ])
+  const [requireCorporateNumber, setRequireCorporateNumber] = useState(false)
   const [presencePlan, setPresencePlan] = useState(defaultPresencePlan)
   const [confirmedConditions, setConfirmedConditions] = useState<ConditionRevision | null>(null)
   const [useConditions, setUseConditions] = useState(false)
@@ -91,6 +98,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const aiBusy = aiAnalyzing || !!aiJob
   const formBusy = formAnalyzing || !!formJob
   const project = projects.find(item => item.id === projectId)
+  const formFirstMode = source === 'serper' && collectionMethod === 'form_first'
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
   const analysisCounts = analysisSummary
@@ -184,7 +192,12 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
 
   async function submit(event: FormEvent) {
     event.preventDefault(); setError(''); setNotice('')
-    if (conditionsDirty && source !== 'csv' && source !== 'url') {
+    const formFirst = formFirstMode
+    if (formFirst && formFirstQueryTypes.length === 0) {
+      setError('検索型を1つ以上選択してください。')
+      return
+    }
+    if (conditionsDirty && source !== 'csv' && source !== 'url' && !formFirst) {
       setError('対象条件の変更を確定するか、未確定の変更を取り消してください。')
       return
     }
@@ -207,9 +220,15 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
           operation_type: 'collect_search', source, keywords: values, region, max_results: maxResults,
           ...(source === 'serper' ? { region_mode: 'prefecture_order' } : {}),
-          presence_search: presencePlan,
-          ...(source === 'serper' ? { target_count: targetCount, search_request_limit: searchRequestLimit, auto_continue: autoContinue } : {}),
-          ...(useConditions && confirmedConditions ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
+          ...(!formFirst ? { presence_search: presencePlan } : {}),
+          ...(source === 'serper' ? {
+            target_count: targetCount,
+            collection_method: collectionMethod,
+            ...(formFirst
+              ? { form_first_query_types: formFirstQueryTypes, require_corporate_number: requireCorporateNumber, auto_continue: false }
+              : { search_request_limit: searchRequestLimit, auto_continue: autoContinue }),
+          } : {}),
+          ...(useConditions && confirmedConditions && !formFirst ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
         })
         await reload()
         setNotice('検索収集をバックグラウンド処理へ登録しました。')
@@ -368,6 +387,11 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           setKeywords(next === 'url' ? '' : suggestedKeywordText)
         }}>{Object.entries(sourceNames).map(([value, label]) =>
           <option key={value} value={value}>{label}</option>)}</select></Field>
+        {source === 'serper' && <Field label="収集方法"><select value={collectionMethod} onChange={event => {
+          const method = event.target.value as 'company_first' | 'form_first'
+          setCollectionMethod(method)
+          if (method === 'form_first') setUseConditions(false)
+        }}><option value="company_first">会社起点（従来）</option><option value="form_first">フォーム起点（問い合わせページから探す）</option></select></Field>}
         {source === 'csv' ? <Field label="CSVファイル（UTF-8・最大5MB・1000行）">
           <input type="file" accept=".csv,text/csv" required onChange={e => void selectCsv(e.target.files?.[0] ?? null)} />
         </Field> : <Field label={source === 'url' ? 'URL（1行に1件）' : '検索キーワード（1行に1件）'}>
@@ -386,6 +410,26 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             onChange={e => setMaxResults(Number(e.target.value))} /></Field>}
         </div>}
         {source === 'serper' && <>
+          {collectionMethod === 'form_first' && <section className="rounded border p-3" aria-label="フォーム起点の検索条件">
+            <h3>問い合わせページの検索型</h3>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {[
+                ['intitle_contact', 'ページタイトルに「お問い合わせ」'],
+                ['inurl_contact', 'URLに contact'],
+                ['inurl_inquiry', 'URLに inquiry'],
+                ['form_words', '「お問い合わせフォーム」'],
+              ].map(([value, label]) => <label key={value} className="checkbox-row">
+                <input type="checkbox" checked={formFirstQueryTypes.includes(value)} onChange={event => {
+                  setFormFirstQueryTypes(current => event.target.checked
+                    ? [...current, value] : current.filter(item => item !== value))
+                }} />{label}
+              </label>)}
+            </div>
+            {formFirstQueryTypes.length === 0 && <p role="alert" className="error">検索型を1つ以上選択してください。</p>}
+            <label className="checkbox-row mt-3"><input type="checkbox" checked={requireCorporateNumber}
+              onChange={event => setRequireCorporateNumber(event.target.checked)} />法人番号を確認できた会社だけ登録</label>
+            <p className="muted mb-0 text-sm">最初の検索上限は20回です。ページの確認は同一サイト内のGETのみで、フォーム入力・送信はしません。</p>
+          </section>}
           <section aria-label="検索の組み合わせ" className="muted text-sm">
           <p>{region === '全国' ? '全国は各キーワードに都道府県名を足して検索します。北海道から沖縄県へ、県内の検索語を巡回して次の県へ進みます。' : `${region}と各キーワードを組み合わせて検索します。`}</p>
             <p>目標件数に届く前に検索候補を調べ終えた場合や、総検索上限に達した場合は停止します。</p>
@@ -393,19 +437,19 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
               {(region === '全国' ? prefectures : region.split(/\s*\/\s*/).every(area => prefectures.some(prefecture => prefecture === area)) ? region.split(/\s*\/\s*/) : [region]).map(area => <li key={area}>{keywords.split('\n').map(value => value.trim()).filter(Boolean).map(keyword => `${keyword} ${area}`).join(' / ') || `キーワード未入力 ${area}`}</li>)}
             </ul></details>
           </section>
-          <label className="checkbox-row"><input type="checkbox" checked={autoContinue} disabled={loading} onChange={event => {
+          {collectionMethod === 'company_first' && <><label className="checkbox-row"><input type="checkbox" checked={autoContinue} disabled={loading} onChange={event => {
             const enabled = event.target.checked
             setAutoContinue(enabled)
             setSearchRequestLimit(enabled ? Math.max(searchRequestLimit, 1000) : Math.min(searchRequestLimit, 50))
           }} />目標件数まで50回ごとに自動で続きを実行する（おすすめ）</label>
           <Field label={autoContinue ? '検索の総上限（安全上限）' : '今回の検索回数上限'}><input type="number" min={autoContinue ? 50 : 1} max={autoContinue ? 5000 : 50} required value={searchRequestLimit}
             onChange={event => setSearchRequestLimit(Number(event.target.value))} disabled={loading} /></Field>
-          <p className="muted text-sm">目標件数は最大10,000社です。検索1ジョブは最大50回で区切りますが、自動継続をONにすると総上限{searchRequestLimit}回まで次のジョブへ引き継ぎます。重複・対象外は目標件数に含めません。総上限に達したときは収集画面上部の「続きから収集を再開」から再開できます。検索API費用が発生します。追加調査は別の上限です。</p>
+          <p className="muted text-sm">目標件数は最大10,000社です。検索1ジョブは最大50回で区切りますが、自動継続をONにすると総上限{searchRequestLimit}回まで次のジョブへ引き継ぎます。重複・対象外は目標件数に含めません。総上限に達したときは収集画面上部の「続きから収集を再開」から再開できます。検索API費用が発生します。追加調査は別の上限です。</p></>}
         </>}
         {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
-        {source !== 'csv' && source !== 'url' && <PresenceSearchControls value={presencePlan} onChange={setPresencePlan} />}
-        {source !== 'csv' && source !== 'url' && <label><input type="checkbox" checked={useConditions} disabled={confirmedConditions?.project_id !== projectId} onChange={e => setUseConditions(e.target.checked)} />確定条件を今回の収集に使う{confirmedConditions?.project_id === projectId ? `（第${confirmedConditions.version}版）` : '（先に条件を確定してください）'}<span className="muted block">必須・除外の媒体は追加調査OFFでも、上限内で確認します。未対応・上限不足は確認待ちです。</span></label>}
+        {source !== 'csv' && source !== 'url' && !formFirstMode && <PresenceSearchControls value={presencePlan} onChange={setPresencePlan} />}
+        {source !== 'csv' && source !== 'url' && !formFirstMode && <label><input type="checkbox" checked={useConditions} disabled={confirmedConditions?.project_id !== projectId} onChange={e => setUseConditions(e.target.checked)} />確定条件を今回の収集に使う{confirmedConditions?.project_id === projectId ? `（第${confirmedConditions.version}版）` : '（先に条件を確定してください）'}<span className="muted block">必須・除外の媒体は追加調査OFFでも、上限内で確認します。未対応・上限不足は確認待ちです。</span></label>}
         <div className="actions"><button type="submit">{loading ? (['serper', 'google_places', 'gbizinfo'].includes(source) ? '登録中…' : '収集中…') : '収集を開始'}</button></div>
       </fieldset>
     </form>
