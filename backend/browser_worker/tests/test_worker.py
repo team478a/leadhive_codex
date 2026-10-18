@@ -1,4 +1,3 @@
-import pytest
 from sqlalchemy.dialects import postgresql
 
 from app.config import Settings, settings
@@ -43,8 +42,20 @@ def test_shared_heartbeat_helper_keeps_postgres_upsert_and_commit():
     assert session.commits == 1
 
 
-def test_browser_worker_fails_closed_when_delivery_flag_is_enabled(monkeypatch):
-    monkeypatch.setattr(settings, "browser_form_delivery_enabled", True)
+def test_browser_worker_starts_with_delivery_flag_enabled(monkeypatch):
+    class StopAfterOnePoll:
+        stopped = False
 
-    with pytest.raises(RuntimeError, match="not implemented yet"):
-        browser_worker_main.run_forever()
+        def is_set(self):
+            return self.stopped
+
+        def wait(self, _seconds):
+            self.stopped = True
+
+    monkeypatch.setattr(settings, "browser_form_delivery_enabled", True)
+    monkeypatch.setattr(settings, "worker_paused", False)
+    monkeypatch.setattr(browser_worker_main, "Event", StopAfterOnePoll)
+    monkeypatch.setattr(browser_worker_main, "heartbeat_once", lambda: None)
+    monkeypatch.setattr(browser_worker_main, "run_browser_job_once", lambda: False)
+
+    browser_worker_main.run_forever()
