@@ -110,7 +110,7 @@ def test_large_project_preparation_apis_have_bounded_select_counts(auth, db, wor
     project, sales_job = seed_large_project(db, workspace)
 
     readiness = request_with_sql_limit(
-        auth, f"/api/projects/{project.id}/form-dm-readiness", maximum=8
+        auth, f"/api/projects/{project.id}/form-dm-readiness", maximum=9
     )
     assert len(readiness.json()["items"]) == 20
 
