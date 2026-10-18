@@ -329,17 +329,27 @@ def form_dm_readiness(
     project_access(project_id, db, user, write=False)
     counts = {reason: 0 for reason in REASONS}
     snapshot = latest_completed_job(db, project_id)
-    active_job = db.scalar(
+    active_jobs = db.scalars(
         select(OperationJob)
         .where(
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.operation_type.in_(("form_dm_readiness", "form_intelligence")),
             OperationJob.status.in_(("queued", "running")),
         )
         .order_by(OperationJob.created_at.desc())
-        .limit(1)
+    ).all()
+    active_job = next(
+        (job for job in active_jobs if job.operation_type == "form_dm_readiness"), None
     )
-    active_reanalysis_job = _active_form_reanalysis(db, project_id)
+    active_reanalysis_job = next(
+        (
+            job
+            for job in active_jobs
+            if job.operation_type == "form_intelligence"
+            and (job.payload or {}).get("readiness_reanalysis_reason")
+        ),
+        None,
+    )
     total = 0
     items = []
     if snapshot:
@@ -555,16 +565,19 @@ def reanalyze_readiness_reason(
         raise HTTPException(409, "先に送信可否を集計してください。")
 
     reason_filter = _reason_filter(reason)
-    matched_count = db.scalar(
-        select(func.count())
-        .select_from(FormDmReadinessResult)
-        .join(Company, Company.id == FormDmReadinessResult.company_id)
-        .where(
-            FormDmReadinessResult.job_id == snapshot.id,
-            Company.project_id == project_id,
-            reason_filter,
+    matched_count = (
+        db.scalar(
+            select(func.count())
+            .select_from(FormDmReadinessResult)
+            .join(Company, Company.id == FormDmReadinessResult.company_id)
+            .where(
+                FormDmReadinessResult.job_id == snapshot.id,
+                Company.project_id == project_id,
+                reason_filter,
+            )
         )
-    ) or 0
+        or 0
+    )
     if matched_count == 0:
         raise HTTPException(409, "この理由に該当する企業はありません。")
 
@@ -580,10 +593,9 @@ def reanalyze_readiness_reason(
     )
     if active_job:
         payload = active_job.payload or {}
-        if (
-            payload.get("readiness_reanalysis_reason") == reason
-            and payload.get("readiness_reanalysis_snapshot_job_id") == str(snapshot.id)
-        ):
+        if payload.get("readiness_reanalysis_reason") == reason and payload.get(
+            "readiness_reanalysis_snapshot_job_id"
+        ) == str(snapshot.id):
             return OperationJobOut.model_validate(active_job)
         raise HTTPException(409, "フォーム解析が実行中です。完了後に再度お試しください。")
 

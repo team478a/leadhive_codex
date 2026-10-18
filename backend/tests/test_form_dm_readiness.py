@@ -372,6 +372,7 @@ def test_reason_reanalysis_uses_only_snapshot_matches_and_reports_progress(auth,
     from app.models import OperationJob
 
     project, company, _draft, profile, _sender, _fields = form_source
+    company_id = company.id
     profile.compatibility_reason_code = "MULTIPART_OR_FILE"
     db.commit()
 
@@ -387,7 +388,7 @@ def test_reason_reanalysis_uses_only_snapshot_matches_and_reports_progress(auth,
     assert body["readiness_reanalysis_reason"] == "MULTIPART_ONLY"
     assert body["readiness_reanalysis_matched_count"] == 1
     job = db.get(OperationJob, body["id"])
-    assert job.payload["company_ids"] == [str(company.id)]
+    assert job.payload["company_ids"] == [str(company_id)]
     assert job.payload["force"] is True
     assert job.payload["readiness_reanalysis_snapshot_job_id"]
     assert job.status == "queued"
@@ -397,22 +398,23 @@ def test_reason_reanalysis_uses_only_snapshot_matches_and_reports_progress(auth,
     job.status = "running"
     job.processed_count = 1
     db.commit()
-    progress = auth.get(
-        f"/api/projects/{project_id}/form-dm-readiness/reanalysis-jobs/{job.id}"
-    )
+    progress = auth.get(f"/api/projects/{project_id}/form-dm-readiness/reanalysis-jobs/{job.id}")
     assert progress.status_code == 200, progress.text
     assert progress.json()["processed_count"] == 1
     assert progress.json()["total_count"] == 1
-    assert not db.scalar(select(OperationJob).where(
-        OperationJob.project_id == project_id,
-        OperationJob.operation_type.in_(("form_delivery", "form_approval_batch")),
-    ))
+    assert not db.scalar(
+        select(OperationJob).where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type.in_(("form_delivery", "form_approval_batch")),
+        )
+    )
 
 
 def test_reason_reanalysis_includes_secondary_captcha_matches(auth, form_source, db):
     from app.models import OperationJob
 
     project, company, _draft, profile, _sender, _fields = form_source
+    company_id = company.id
     company.do_not_contact = True
     profile.captcha_type = "CAPTCHA_RECAPTCHA_V2"
     db.commit()
@@ -425,7 +427,7 @@ def test_reason_reanalysis_includes_secondary_captcha_matches(auth, form_source,
     assert response.status_code == 202, response.text
     assert response.json()["readiness_reanalysis_matched_count"] == 1
     job = db.get(OperationJob, response.json()["id"])
-    assert job.payload["company_ids"] == [str(company.id)]
+    assert job.payload["company_ids"] == [str(company_id)]
 
 
 def test_reason_reanalysis_caps_job_at_500_companies(auth, form_source, db):
