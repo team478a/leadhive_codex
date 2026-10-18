@@ -13,6 +13,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import (
     Company,
+    FormAnalysisLog,
     FormDmReadinessResult,
     FormProfile,
     FormProfileField,
@@ -391,17 +392,82 @@ def form_dm_readiness(
         None,
     )
     total = 0
+    review_queue_eligible_count = 0
+    ready_confirmation_pending_count = 0
     items = []
     if snapshot:
-        grouped_counts = db.execute(
-            select(FormDmReadinessResult.primary_reason, func.count())
-            .where(FormDmReadinessResult.job_id == snapshot.id)
-            .group_by(FormDmReadinessResult.primary_reason)
-        ).all()
-        counts.update({reason: count for reason, count in grouped_counts})
+        ready_review_exists = (
+            select(FormAnalysisLog.id)
+            .where(
+                FormAnalysisLog.form_profile_id == FormProfile.id,
+                FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+                FormAnalysisLog.details["profile_fingerprint"].astext == FormProfile.fingerprint,
+            )
+            .exists()
+        )
+        ready_confirmation_pending = and_(
+            FormDmReadinessResult.primary_reason == "READY",
+            FormProfile.form_status == "READY",
+            FormProfile.is_primary.is_(True),
+            FormProfile.delivery_supported.is_(True),
+            FormProfile.sales_contact_status == "ALLOWED",
+            FormProfile.captcha_type == "CAPTCHA_NONE",
+            FormProfile.confirmation_page.is_(False),
+            Company.do_not_contact.is_(False),
+            ~ready_review_exists,
+        )
+        queue_eligible_filter = or_(
+            FormDmReadinessResult.review_queue_eligible.is_(True), ready_confirmation_pending
+        )
         suspected_filter = or_(
             FormDmReadinessResult.primary_reason == "NON_COMPANY_SUSPECTED",
             FormDmReadinessResult.secondary_reasons.contains(["NON_COMPANY_SUSPECTED"]),
+        )
+        captcha_reasons = ("CAPTCHA_VISIBLE", "CAPTCHA_INVISIBLE", "CAPTCHA_LEGACY")
+        grouped_counts = db.execute(
+            select(
+                FormDmReadinessResult.primary_reason,
+                func.count().label("reason_count"),
+                func.sum(case((queue_eligible_filter, 1), else_=0)).label("queue_eligible"),
+                func.sum(case((ready_confirmation_pending, 1), else_=0)).label(
+                    "ready_confirmation_pending"
+                ),
+                *[
+                    func.sum(
+                        case(
+                            (
+                                or_(
+                                    FormDmReadinessResult.primary_reason == reason,
+                                    FormDmReadinessResult.secondary_reasons.contains([reason]),
+                                ),
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ).label(reason)
+                    for reason in captcha_reasons
+                ],
+                func.sum(case((suspected_filter, 1), else_=0)).label("non_company_suspected"),
+            )
+            .select_from(FormDmReadinessResult)
+            .join(Company, Company.id == FormDmReadinessResult.company_id)
+            .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
+            .where(FormDmReadinessResult.job_id == snapshot.id)
+            .group_by(FormDmReadinessResult.primary_reason)
+        ).all()
+        counts.update({row.primary_reason: row.reason_count for row in grouped_counts})
+        review_queue_eligible_count = sum(row.queue_eligible or 0 for row in grouped_counts)
+        ready_confirmation_pending_count = sum(
+            row.ready_confirmation_pending or 0 for row in grouped_counts
+        )
+        counts.update(
+            {
+                reason: sum(getattr(row, reason) or 0 for row in grouped_counts)
+                for reason in captcha_reasons
+            }
+        )
+        counts["NON_COMPANY_SUSPECTED"] = sum(
+            row.non_company_suspected or 0 for row in grouped_counts
         )
         result_filters = [FormDmReadinessResult.job_id == snapshot.id]
         if suspected_only:
@@ -503,6 +569,8 @@ def form_dm_readiness(
         )
     return {
         "counts": counts,
+        "review_queue_eligible": review_queue_eligible_count,
+        "ready_confirmation_pending": ready_confirmation_pending_count,
         "total": total,
         "offset": offset,
         "limit": PAGE_SIZE,

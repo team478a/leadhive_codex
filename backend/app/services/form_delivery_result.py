@@ -112,7 +112,12 @@ def _read_response(response) -> _ResponsePage:
 
 
 def _request_result(
-    fetcher: SafeFetcher, method: str, url: str, payload: dict[str, str]
+    fetcher: SafeFetcher,
+    method: str,
+    url: str,
+    payload: dict[str, str],
+    *,
+    multipart: bool = False,
 ) -> _ResponsePage:
     require_outbound_enabled()
     current_url = url
@@ -123,12 +128,20 @@ def _request_result(
         if current_method == "POST":
             require_sending_time()
         normalized = _same_delivery_origin(current_url, url)
+        request_data = current_payload if current_method == "POST" and not multipart else None
+        request_files = (
+            [(name, (None, value)) for name, value in current_payload.items()]
+            if current_method == "POST" and multipart
+            else None
+        )
+        request_kwargs = {"data": request_data, "follow_redirects": False}
+        if request_files is not None:
+            request_kwargs["files"] = request_files
         try:
             with fetcher.client.stream(
                 current_method,
                 normalized,
-                data=current_payload if current_method == "POST" else None,
-                follow_redirects=False,
+                **request_kwargs,
             ) as response:
                 status_code = response.status_code
                 if status_code in {307, 308}:
@@ -146,6 +159,7 @@ def _request_result(
                     current_url = urljoin(normalized, location)
                     current_method = "GET"
                     current_payload = {}
+                    multipart = False
                     continue
                 page = _read_response(response)
                 _same_delivery_origin(page.url, url)
@@ -179,9 +193,9 @@ def _has_validation_error(page: _ResponsePage) -> bool:
     return any(pattern.search(text) for pattern in _ERROR_PATTERNS)
 
 
-def _confirmation_payload(page: _ResponsePage) -> tuple[str, dict[str, str]] | None:
+def _confirmation_payload(page: _ResponsePage) -> tuple[str, dict[str, str], bool] | None:
     soup = BeautifulSoup(page.html, "html.parser")
-    candidates: list[tuple[str, dict[str, str]]] = []
+    candidates: list[tuple[str, dict[str, str], bool]] = []
     for form in soup.select("form"):
         if (form.get("method") or "get").lower() != "post" or _has_captcha(form):
             continue
@@ -221,7 +235,13 @@ def _confirmation_payload(page: _ResponsePage) -> tuple[str, dict[str, str]] | N
         submit_control = submit_controls[0]
         if submit_control.get("name"):
             payload[str(submit_control.get("name"))] = str(submit_control.get("value") or "")
-        candidates.append((urljoin(page.url, str(form.get("action") or page.url)), payload))
+        candidates.append(
+            (
+                urljoin(page.url, str(form.get("action") or page.url)),
+                payload,
+                str(form.get("enctype") or "").lower() == "multipart/form-data",
+            )
+        )
     return candidates[0] if len(candidates) == 1 else None
 
 
@@ -232,9 +252,10 @@ def _submit_and_verify(
     *,
     original_form_url: str,
     confirmation_expected: bool,
+    multipart: bool = False,
 ) -> FormSubmissionResult:
     require_outbound_enabled()
-    result_page = _request_result(fetcher, "POST", action_url, payload)
+    result_page = _request_result(fetcher, "POST", action_url, payload, multipart=multipart)
     if _has_validation_error(result_page):
         raise FormDeliveryError(
             "フォームの入力エラーが返されました。入力内容を確認してください。",
@@ -255,9 +276,11 @@ def _submit_and_verify(
             "解析時にはなかった確認画面を検出しました。再解析してください。",
             "profile_changed",
         )
-    confirmation_url, confirmation_values = confirmation
+    confirmation_url, confirmation_values, confirmation_multipart = confirmation
     confirmation_url = _same_delivery_origin(confirmation_url, original_form_url)
-    final_page = _request_result(fetcher, "POST", confirmation_url, confirmation_values)
+    final_page = _request_result(
+        fetcher, "POST", confirmation_url, confirmation_values, multipart=confirmation_multipart
+    )
     if _has_validation_error(final_page):
         raise FormDeliveryError(
             "最終送信後に入力エラーが返されました。Codex支援で確認してください。",
@@ -279,6 +302,7 @@ def submit_and_verify(
     *,
     original_form_url: str,
     confirmation_expected: bool,
+    multipart: bool = False,
 ) -> FormSubmissionResult:
     # Once the POST phase begins, failure is not proof that nothing was accepted.
     # Preserve the diagnostic code, but never offer a new send as result verification.
@@ -290,6 +314,7 @@ def submit_and_verify(
             payload,
             original_form_url=original_form_url,
             confirmation_expected=confirmation_expected,
+            multipart=multipart,
         )
     except FormDeliveryError as exc:
         exc.submission_unknown = True

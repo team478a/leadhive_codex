@@ -40,6 +40,7 @@ class FormPreview:
     form_profile_id: UUID | None = None
     form_status: str = "UNANALYZED"
     fingerprint: str = ""
+    enctype: str = "application/x-www-form-urlencoded"
 
 
 def _label(element, form) -> str:
@@ -117,11 +118,6 @@ def _parse_form(
     if _has_captcha(form):
         raise FormDeliveryError(
             "CAPTCHA付きフォームは自動送信できません。Codex支援を利用してください。",
-            "manual_required",
-        )
-    if str(form.get("enctype") or "").lower() == "multipart/form-data":
-        raise FormDeliveryError(
-            "ファイル送信用フォームは自動送信できません。Codex支援を利用してください。",
             "manual_required",
         )
     action_url = urljoin(form_url, str(form.get("action") or form_url))
@@ -244,6 +240,7 @@ def _parse_form(
         form_profile_id=form_profile_id,
         form_status=form_status,
         fingerprint=fingerprint,
+        enctype=str(form.get("enctype") or "application/x-www-form-urlencoded").lower(),
     )
 
 
@@ -335,6 +332,7 @@ def submit_form(
             payload,
             original_form_url=preview.form_url,
             confirmation_expected=confirmation_expected,
+            multipart=preview.enctype == "multipart/form-data",
         )
         return preview, submission
     except ScrapeError as exc:

@@ -139,12 +139,16 @@ def send_flow_summary(
 
     draft_counts = {"email": 0, "form": 0}
     rows = db.execute(
-        select(OutreachDraft.channel, func.count())
+        select(OutreachDraft.channel, func.count(), func.max(OutreachDraft.updated_at))
         .join(Company, Company.id == OutreachDraft.company_id)
         .where(Company.project_id == project_id, OutreachDraft.channel.in_(("email", "form")))
         .group_by(OutreachDraft.channel)
     ).all()
-    draft_counts.update({channel: count for channel, count in rows})
+    draft_counts.update({channel: count for channel, count, _latest_updated_at in rows})
+    latest_form_draft_updated_at = next(
+        (latest_updated_at for channel, _count, latest_updated_at in rows if channel == "form"),
+        None,
+    )
 
     reviewed_count = (
         db.scalar(
@@ -326,6 +330,7 @@ def send_flow_summary(
 
     return {
         "readiness_completed_at": snapshot.finished_at if snapshot else None,
+        "latest_form_draft_updated_at": latest_form_draft_updated_at,
         "target_company_count": target_count,
         "draft_counts": draft_counts,
         "form_reviewed_count": reviewed_count,
