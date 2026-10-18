@@ -10,7 +10,12 @@ from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.form_dm_readiness_routes import BLOCKING_REASONS, REVIEW_REASONS, latest_completed_job
+from app.form_dm_readiness_routes import (
+    BLOCKING_REASONS,
+    BROWSER_REVIEW_DIAGNOSTIC_REASONS,
+    REVIEW_REASONS,
+    latest_completed_job,
+)
 from app.models import (
     Company,
     FormAnalysisLog,
@@ -268,8 +273,14 @@ def get_form_review_queue(
     for result, company, profile in rows:
         codes = [result.primary_reason, *result.secondary_reasons]
         ready_only = result.primary_reason == "READY"
+        browser_ready = result.primary_reason == "BROWSER_READY"
+        blocking_codes = (
+            BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS
+            if browser_ready
+            else BLOCKING_REASONS
+        )
         if not ready_only and (
-            not REVIEW_REASONS.intersection(codes) or BLOCKING_REASONS.intersection(codes)
+            not REVIEW_REASONS.intersection(codes) or blocking_codes.intersection(codes)
         ):
             continue
         fields = _field_rows(db, profile.id)
@@ -369,8 +380,6 @@ def save_form_review_decision(
         raise HTTPException(422, "確認内容が不正です。")
     if profile.sales_contact_status != "ALLOWED" or profile.captcha_type != "CAPTCHA_NONE":
         raise HTTPException(409, "営業可否またはCAPTCHAを安全に確認できないフォームです。")
-    if not profile.delivery_supported or profile.confirmation_page is not False:
-        raise HTTPException(409, "このフォームは本確認キューの対象外です。")
     snapshot = latest_completed_job(db, company.project_id)
     readiness_result = (
         db.scalar(
@@ -382,6 +391,19 @@ def save_form_review_decision(
         if snapshot
         else None
     )
+    browser_ready = bool(
+        readiness_result and readiness_result.primary_reason == "BROWSER_READY"
+    )
+    if browser_ready:
+        from app.services.browser_form_preparation import browser_profile_eligible
+
+        if not browser_profile_eligible(db, company, profile):
+            raise HTTPException(
+                409,
+                "ブラウザー送信の確認条件が変更されています。再集計してください。",
+            )
+    elif not profile.delivery_supported or profile.confirmation_page is not False:
+        raise HTTPException(409, "このフォームは本確認キューの対象外です。")
     if readiness_result and readiness_result.primary_reason == "READY":
         if profile.form_status != "READY":
             raise HTTPException(409, "準備状態が変更されています。集計し直してください。")

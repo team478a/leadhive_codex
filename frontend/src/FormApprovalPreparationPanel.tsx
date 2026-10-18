@@ -6,7 +6,7 @@ import { FormAdapterPlanDetails } from './FormAdapterPlanDetails'
 
 interface Preview {
   preparation_hash: string; company_name: string
-  proposal: { form_url: string; form_action_url?: string; subject: string; body: string; sender: Record<string, string>; adapter_plan?: Record<string, unknown> | null }
+  proposal: { form_url: string; form_action_url?: string; subject: string; body: string; sender: Record<string, string>; adapter_plan?: Record<string, unknown> | null; browser_form_plan?: Record<string, unknown> | null }
   adapter_plan_hash?: string
   fields: { name: string; label: string; required: boolean; value: string }[]
 }
@@ -24,7 +24,7 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
   const [busy, setBusy] = useState(false)
   const [offset, setOffset] = useState(0)
   const [opened, setOpened] = useState(false)
-  const [mode, setMode] = useState<'direct' | 'adapter'>('direct')
+  const [mode, setMode] = useState<'direct' | 'adapter' | 'browser'>('direct')
   const [adapterEnabled, setAdapterEnabled] = useState(false)
   useEffect(() => {
     let live = true
@@ -56,7 +56,10 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
   async function prepare() {
     if (!preview) return
     await act(async () => {
-      await api(`/outreach-drafts/${draftId}/form-${mode === 'adapter' ? 'adapter' : 'approval'}-request`, 'POST', {
+      const endpoint = mode === 'browser'
+        ? 'browser-form-approval-request'
+        : `form-${mode === 'adapter' ? 'adapter' : 'approval'}-request`
+      await api(`/outreach-drafts/${draftId}/${endpoint}`, 'POST', {
         expected_preparation_hash: preview.preparation_hash,
       })
       setPreview(null); setNotice('承認待ちに追加しました。下の一覧で内容を確認し、再認証して承認してください。送信は行っていません。')
@@ -69,10 +72,11 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
     {error && <p className="error" role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     <fieldset disabled={busy || !projectId}>
-      {adapterEnabled && <Field label="フォーム準備方式"><select value={mode} onChange={e => { setMode(e.target.value as 'direct' | 'adapter'); setPreview(null) }}>
+      <Field label="フォーム準備方式"><select value={mode} onChange={e => { setMode(e.target.value as 'direct' | 'adapter' | 'browser'); setPreview(null) }}>
         <option value="direct">通常フォーム</option>
-        <option value="adapter">管理下フォーム・予約のみ（送信不可）</option>
-      </select></Field>}
+        <option value="browser">ブラウザーフォーム（同一サイト内）</option>
+        {adapterEnabled && <option value="adapter">管理下フォーム・予約のみ（送信不可）</option>}
+      </select></Field>
       <button type="button" className="secondary" onClick={() => loadCompanies(0)}>フォーム候補を選ぶ</button>
       {opened && <>
         <Field label="フォーム提案先の会社"><select value={companyId} onChange={e => chooseCompany(e.target.value)}>
@@ -87,7 +91,10 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
           {drafts.map(draft => <option key={draft.id} value={draft.id}>{draft.subject || '件名なし'}</option>)}
         </select></Field>
         <button type="button" disabled={!draftId} onClick={() => act(async () => {
-          setPreview(await api<Preview>(`/outreach-drafts/${draftId}/form-${mode === 'adapter' ? 'adapter' : 'approval'}-preview`))
+          const endpoint = mode === 'browser'
+            ? 'browser-form-approval-preview'
+            : `form-${mode === 'adapter' ? 'adapter' : 'approval'}-preview`
+          setPreview(await api<Preview>(`/outreach-drafts/${draftId}/${endpoint}`))
         })}>保存済みの入力内容を確認</button>
       </>}
       {preview && <section className="mt-4">
@@ -98,6 +105,12 @@ export function FormApprovalPreparationPanel({ projectId, refresh }: {
         <p>件名: {preview.proposal.subject}</p>
         <p className="whitespace-pre-wrap break-words">{preview.proposal.body}</p>
         {preview.proposal.adapter_plan && <FormAdapterPlanDetails plan={preview.proposal.adapter_plan} hash={preview.adapter_plan_hash} />}
+        {preview.proposal.browser_form_plan && <section className="rounded border p-3" aria-label="ブラウザーフォーム操作計画">
+          <strong>ブラウザーフォーム計画</strong>
+          <p className="muted text-sm">同一HTTPSサイトのみ · CAPTCHAなし · {String(preview.proposal.browser_form_plan.submission_kind)} · {preview.proposal.browser_form_plan.confirmation_expected ? '確認画面を想定' : '確認画面なし'}</p>
+          <p className="muted text-xs break-all">Profile {String(preview.proposal.browser_form_plan.form_profile_id)} · Fingerprint {String(preview.proposal.browser_form_plan.form_fingerprint)}</p>
+          <p className="muted text-xs">入力項目 {Array.isArray(preview.proposal.browser_form_plan.fields) ? preview.proposal.browser_form_plan.fields.length : 0}件。送信時にAI判定は行いません。</p>
+        </section>}
         <dl>{preview.fields.map(field => <div key={field.name}>
           <dt>{field.label}{field.required ? '（必須）' : ''}</dt>
           <dd className="whitespace-pre-wrap break-words">{field.value || '未入力'}</dd>

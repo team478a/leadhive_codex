@@ -71,6 +71,7 @@ const labels: Record<string, string> = {
   NO_FORM_DRAFT: 'フォーム文面なし',
   SENDER_SETTINGS: '送信者設定不足',
   READY: '準備可能',
+  BROWSER_READY: 'ブラウザー送信準備可能',
 }
 
 export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: string; canWrite: boolean }) {
@@ -223,7 +224,7 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
         {code === 'NON_COMPANY_SUSPECTED'
           ? <button type="button" className="badge" aria-pressed={suspectedOnly} onClick={() => { setSuspectedOnly(value => !value); setOffset(0) }}>{labels[code] ?? code}: {count}社</button>
           : <span className="badge">{labels[code] ?? code}: {count}社</span>}
-        {canWrite && count > 0 && <button
+        {canWrite && count > 0 && code !== 'BROWSER_READY' && <button
           type="button"
           className="secondary text-xs"
           disabled={busy || starting || Boolean(data.active_job) || reanalysisBusy || browserBusy || reviewingCompanyId !== ''}

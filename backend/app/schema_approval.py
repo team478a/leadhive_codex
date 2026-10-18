@@ -12,6 +12,7 @@ from pydantic import (
     model_validator,
 )
 
+from app.services.browser_form_plan import BrowserFormPlan
 from app.services.form_adapter_contract import ExecutableFormPlan
 from app.services.form_execution_plan import ExecutionPlan
 
@@ -57,7 +58,7 @@ class Proposal(StrictInput):
     company_id: UUID
     channel: Literal["email", "form"]
     delivery_method: Literal[
-        "email", "form_direct", "form_codex", "form_plan_fixture", "form_adapter"
+        "email", "form_direct", "form_codex", "form_plan_fixture", "form_adapter", "browser_form"
     ]
     source_draft_id: UUID | None = None
     recipient: EmailStr | None = None
@@ -71,6 +72,7 @@ class Proposal(StrictInput):
     expires_in_hours: int = Field(default=24, ge=1, le=24)
     execution_plan: ExecutionPlan | None = None
     adapter_plan: ExecutableFormPlan | None = None
+    browser_form_plan: BrowserFormPlan | None = None
 
     @field_validator("adapter_plan", mode="before")
     @classmethod
@@ -84,6 +86,13 @@ class Proposal(StrictInput):
     def parse_plan(cls, value):
         if isinstance(value, dict):
             return ExecutionPlan.model_validate_json(json.dumps(value, default=str))
+        return value
+
+    @field_validator("browser_form_plan", mode="before")
+    @classmethod
+    def parse_browser_plan(cls, value):
+        if isinstance(value, dict):
+            return BrowserFormPlan.model_validate_json(json.dumps(value, default=str))
         return value
 
     @model_validator(mode="after")
@@ -133,6 +142,20 @@ class Proposal(StrictInput):
                 raise ValueError("adapter plan and proposal differ")
         elif self.adapter_plan is not None:
             raise ValueError("adapter plan requires the adapter delivery method")
+        if self.delivery_method == "browser_form":
+            plan = self.browser_form_plan
+            if not plan or not self.source_draft_id or self.attachment_metadata:
+                raise ValueError("browser form plan and saved draft required")
+            if (
+                plan.company_id != self.company_id
+                or plan.source_draft_id != self.source_draft_id
+                or plan.form_url != str(self.form_url)
+                or plan.action_url != str(self.form_action_url)
+                or {field.name: field.value for field in plan.fields} != self.field_values
+            ):
+                raise ValueError("browser plan and proposal differ")
+        elif self.browser_form_plan is not None:
+            raise ValueError("browser form plan requires the browser_form delivery method")
         return self
 
 

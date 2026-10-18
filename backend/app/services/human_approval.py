@@ -26,6 +26,8 @@ from app.models import (
 )
 from app.schema_approval import ExpectedPayload, Proposal, Revision
 from app.security import password_hasher, token_digest
+from app.services.browser_form_plan import canonical_plan as canonical_browser_plan
+from app.services.browser_form_plan import plan_hash as browser_form_plan_hash
 from app.services.form_adapter_contract import adapter_plan_hash, adapter_snapshot, canonical_plan
 from app.services.form_execution_plan import plan_hash
 
@@ -184,6 +186,31 @@ def valid_adapter_plan(item):
         return False
 
 
+def valid_browser_form_plan(item):
+    try:
+        proposal = Proposal.model_validate(
+            {
+                key: value
+                for key, value in item.payload_snapshot.items()
+                if key in Proposal.model_fields
+            }
+        )
+        plan = proposal.browser_form_plan
+        if not plan or proposal.delivery_method != "browser_form":
+            return False
+        canonical = canonical_browser_plan(plan)
+        return (
+            item.channel == "form"
+            and plan.project_id == item.project_id
+            and plan.company_id == item.company_id
+            and plan.source_draft_id == item.source_draft_id
+            and item.payload_snapshot.get("browser_form_plan") == canonical
+            and item.payload_snapshot.get("browser_form_plan_hash") == browser_form_plan_hash(plan)
+        )
+    except (ValidationError, ValueError, TypeError):
+        return False
+
+
 def invalidate_if_needed(db, item):
     if item.status not in {"PENDING", "APPROVED"}:
         return
@@ -197,6 +224,8 @@ def invalidate_if_needed(db, item):
         reason = "fixture execution plan binding mismatch"
     elif item.delivery_method == "form_adapter" and not valid_adapter_plan(item):
         reason = "adapter execution plan binding mismatch"
+    elif item.delivery_method == "browser_form" and not valid_browser_form_plan(item):
+        reason = "browser form execution plan binding mismatch"
     elif item.delivery_method == "cf7_candidate_only":
         from app.services.cf7_candidate_preparation import valid_request
 
@@ -271,6 +300,7 @@ def create_proposal(
     previous=None,
     commit=True,
     allow_adapter_preparation=False,
+    allow_browser_preparation=False,
     lead_dm_binding=None,
     expiry_cap=None,
 ):
@@ -295,6 +325,10 @@ def create_proposal(
         if not allow_adapter_preparation or principal_type != "HUMAN" or previous:
             raise HTTPException(409, "管理下フォームは専用の保存済み準備から作成してください。")
         from app.services.form_adapter_preparation import adapter_preparation
+    if body.delivery_method == "browser_form":
+        if not allow_browser_preparation or principal_type != "HUMAN" or previous:
+            raise HTTPException(409, "ブラウザーフォームは保存済み計画から作成してください。")
+        from app.services.browser_form_preparation import preparation as browser_preparation
     company = db.get(Company, body.company_id)
     if not company or company.project_id != project_id:
         raise HTTPException(404, "企業が見つかりません。")
@@ -311,6 +345,10 @@ def create_proposal(
         prepared, _ = adapter_preparation(db, company, draft)
         if prepared.model_dump(mode="json") != body.model_dump(mode="json"):
             raise HTTPException(409, "保存済み計画と提案が一致しません。")
+    if body.browser_form_plan:
+        prepared, _ = browser_preparation(db, company, draft)
+        if prepared.model_dump(mode="json") != body.model_dump(mode="json"):
+            raise HTTPException(409, "保存済みブラウザー計画と提案が一致しません。")
     proposal_id = previous.proposal_id if previous else uuid4()
     version = previous.payload_version + 1 if previous else 1
     if body.execution_plan and (
@@ -330,6 +368,11 @@ def create_proposal(
         snapshot["adapter_plan_hash"] = adapter_plan_hash(body.adapter_plan)
     else:
         snapshot.pop("adapter_plan", None)
+    if body.browser_form_plan:
+        snapshot["browser_form_plan"] = canonical_browser_plan(body.browser_form_plan)
+        snapshot["browser_form_plan_hash"] = browser_form_plan_hash(body.browser_form_plan)
+    else:
+        snapshot.pop("browser_form_plan", None)
     snapshot.update(
         project_id=str(project_id),
         proposal_id=str(proposal_id),

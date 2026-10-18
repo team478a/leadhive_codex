@@ -58,6 +58,7 @@ def preview(db, project_id):
         elif (item.channel, item.delivery_method) not in {
             ("email", "email"),
             ("form", "form_direct"),
+            ("form", "browser_form"),
         }:
             skipped["手動確認が必要なフォーム"] += 1
         elif not evaluate_contact_permission(
@@ -78,4 +79,7 @@ def preview(db, project_id):
         "skipped": dict(skipped),
         "email_enabled": settings.outbound_enabled and settings.human_approved_email_enabled,
         "form_enabled": settings.outbound_enabled and settings.human_approved_form_enabled,
+        "browser_form_enabled": settings.outbound_enabled
+        and settings.human_approved_form_enabled
+        and settings.browser_form_delivery_enabled,
     }
