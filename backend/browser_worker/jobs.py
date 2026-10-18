@@ -28,7 +28,7 @@ from app.services.contact_discovery import same_site
 logger = logging.getLogger("leadhive.browser_worker")
 POLL_SECONDS = 2
 LEASE_RENEW_SECONDS = 20
-_last_screenshot_cleanup = 0.0
+_last_screenshot_cleanup: float | None = None
 
 
 def _deadline() -> datetime:
@@ -38,7 +38,7 @@ def _deadline() -> datetime:
 def cleanup_expired_screenshots(db) -> bool:
     global _last_screenshot_cleanup
     now = time.monotonic()
-    if now - _last_screenshot_cleanup < 3600:
+    if _last_screenshot_cleanup is not None and now - _last_screenshot_cleanup < 3600:
         return False
     try:
         db.execute(

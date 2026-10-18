@@ -95,7 +95,7 @@ def test_screenshot_retention_runs_before_busy_browser_queue(monkeypatch, busy_q
             events.append("rollback")
 
     monkeypatch.setattr(jobs, "SessionLocal", WorkerSession)
-    monkeypatch.setattr(jobs, "_last_screenshot_cleanup", 0.0)
+    monkeypatch.setattr(jobs, "_last_screenshot_cleanup", None)
 
     if busy_queue == "delivery":
         monkeypatch.setattr(settings, "browser_form_delivery_enabled", True)
