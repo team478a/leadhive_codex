@@ -136,7 +136,7 @@ export interface OutreachDraft {
   ai_provider: string; ai_model: string; created_at: string; updated_at: string
 }
 export interface OutreachTemplate { id: string; project_id: string; created_by_user_id: string | null; name: string; channel: 'email' | 'form' | 'sns'; subject: string; body: string; created_at: string; updated_at: string }
-export interface OutreachDraftApproval { id: string; draft_id: string; approved_by_user_id: string | null; approval_type: 'email' | 'form_direct' | 'form_codex' | 'form_adapter'; subject: string; body: string; approved_at: string; delivered_at: string | null }
+export interface OutreachDraftApproval { id: string; draft_id: string; approved_by_user_id: string | null; approval_type: 'email' | 'form_direct' | 'form_codex' | 'form_adapter' | 'browser_form'; subject: string; body: string; approved_at: string; delivered_at: string | null }
 export interface EmailDelivery {
   id: string; draft_id: string; company_id: string; created_by_user_id: string | null
   recipient_email: string; recipient_name: string; subject: string; body: string

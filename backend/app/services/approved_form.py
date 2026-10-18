@@ -13,6 +13,7 @@ from app.model_approved_form import FormDispatchLimits
 from app.models import (
     ApprovalRequest,
     ApprovedFormDispatch,
+    BrowserFormRun,
     Company,
     FormDelivery,
     FormDispatchSite,
@@ -226,6 +227,28 @@ def reserve(db, item, body, user):
             )
         ]
     )
+    if item.delivery_method == "browser_form":
+        plan = row.payload_snapshot["browser_form_plan"]
+        db.add(
+            BrowserFormRun(
+                project_id=row.project_id,
+                company_id=row.company_id,
+                form_profile_id=plan["form_profile_id"],
+                draft_id=row.draft_id,
+                dispatch_id=row.id,
+                created_by_user_id=user.id,
+                mode="submit",
+                status="queued",
+                payload_snapshot={
+                    "browser_form_plan": plan,
+                    "approval_id": str(item.id),
+                    "approval_payload_hash": item.payload_hash,
+                },
+                payload_hash=item.payload_hash,
+                form_url=row.form_url,
+                form_fingerprint=plan["form_fingerprint"],
+            )
+        )
     approval.audit(db, item, "form dispatch reserved", "HUMAN", user.id, item.status)
     db.commit()
     return row
@@ -248,9 +271,11 @@ def capacity(db):
     )
 
 
-def claim(db, *, controlled_lab=False):
+def claim(db, *, controlled_lab=False, browser_form=False):
     from app.services.sending_window import allowed
 
+    if controlled_lab and browser_form:
+        raise ValueError("A browser delivery cannot use the controlled form adapter.")
     if not allowed(db):
         db.commit()
         return None
@@ -263,7 +288,11 @@ def claim(db, *, controlled_lab=False):
 
     reconcile_locked(db)
     db.commit()
-    if not settings.outbound_enabled or not settings.human_approved_form_enabled:
+    if (
+        not settings.outbound_enabled
+        or not settings.human_approved_form_enabled
+        or browser_form and not settings.browser_form_delivery_enabled
+    ):
         return None
     lock(db)
     if not capacity(db) or db.scalar(
@@ -281,7 +310,13 @@ def claim(db, *, controlled_lab=False):
         .where(
             ApprovedFormDispatch.status == "queued",
             ApprovalRequest.delivery_method
-            == ("form_adapter" if controlled_lab else "form_direct"),
+            == (
+                "form_adapter"
+                if controlled_lab
+                else "browser_form"
+                if browser_form
+                else "form_direct"
+            ),
             select(FormDispatchSite.dispatch_id)
             .where(FormDispatchSite.dispatch_id == ApprovedFormDispatch.id)
             .exists(),
@@ -299,5 +334,25 @@ def claim(db, *, controlled_lab=False):
     if row:
         row.status, row.worker_id = "checking", uuid4()
         row.lease_expires_at = approval.now() + timedelta(seconds=settings.worker_lease_seconds)
+        if browser_form:
+            run = db.scalar(
+                select(BrowserFormRun)
+                .where(
+                    BrowserFormRun.dispatch_id == row.id,
+                    BrowserFormRun.mode == "submit",
+                    BrowserFormRun.status == "queued",
+                )
+                .with_for_update()
+            )
+            if run is None:
+                row.status, row.worker_id, row.lease_expires_at = "blocked", None, None
+                row.finished_at = approval.now()
+                row.reason = "ブラウザー実行記録を確認できません。"
+            else:
+                run.status, run.worker_id, run.lease_expires_at = (
+                    "checking",
+                    row.worker_id,
+                    row.lease_expires_at,
+                )
     db.commit()
     return row

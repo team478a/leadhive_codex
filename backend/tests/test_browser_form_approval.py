@@ -4,15 +4,22 @@ from uuid import UUID, uuid4
 import pytest
 from sqlalchemy import select
 
-from app.config import Settings
+from app.config import Settings, settings
 from app.models import (
     ApprovalRequest,
+    ApprovedFormDispatch,
+    BrowserFormRun,
+    BrowserFormScreenshot,
     FormAnalysisLog,
+    FormDelivery,
     FormDmReadinessResult,
     FormProfileField,
     OperationJob,
 )
+from app.services import approved_form as approved_form_service
+from app.services import approved_form_worker
 from app.services.form_review_binding import fields_hash
+from tests.test_approval_foundation import approve, challenge, expected
 from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
 
@@ -309,3 +316,103 @@ def test_browser_ready_queue_and_bulk_proposal_require_saved_review(
     assert proposal.delivery_method == "browser_form"
     assert proposal.status == "PENDING"
     assert all(field.selector for field in fields)
+
+
+def test_dry_run_can_be_queued_without_approval_and_cancelled(auth, db, form_source, monkeypatch):
+    project, company, _draft, profile, _fields = make_browser_profile(db, form_source)
+    monkeypatch.setattr(settings, "browser_form_delivery_enabled", False)
+    disabled = auth.post(f"/api/form-profiles/{profile.id}/browser-form-dry-run")
+    assert disabled.status_code == 409
+
+    monkeypatch.setattr(settings, "browser_form_delivery_enabled", True)
+    monkeypatch.setattr(settings, "outbound_enabled", False)
+    monkeypatch.setattr(settings, "human_approved_form_enabled", False)
+    queued = auth.post(f"/api/form-profiles/{profile.id}/browser-form-dry-run")
+    assert queued.status_code == 202, queued.text
+    run = db.get(BrowserFormRun, UUID(queued.json()["id"]))
+    assert run.mode == "dry_run" and run.status == "queued"
+    assert not db.scalar(
+        select(ApprovalRequest).where(ApprovalRequest.company_id == company.id)
+    )
+    assert not db.scalar(select(FormDelivery))
+
+    from browser_worker.jobs import claim_browser_dry_run
+
+    claimed = claim_browser_dry_run(db)
+    assert claimed.id == run.id and claimed.status == "checking"
+    cancelled = auth.post(f"/api/browser-form-runs/{run.id}/cancel")
+    assert cancelled.status_code == 200, cancelled.text
+    db.refresh(run)
+    assert run.status == "cancelled"
+    assert project.id == run.project_id
+
+
+def test_browser_dispatch_is_browser_worker_only_and_begin_commits_unknown(
+    auth, db, form_source, monkeypatch
+):
+    project, _company, draft, profile, _fields = make_browser_profile(db, form_source)
+    preview = auth.get(f"/api/outreach-drafts/{draft.id}/browser-form-approval-preview")
+    assert preview.status_code == 200, preview.text
+    proposal_response = auth.post(
+        f"/api/outreach-drafts/{draft.id}/browser-form-approval-request",
+        json={"expected_preparation_hash": preview.json()["preparation_hash"]},
+    )
+    assert proposal_response.status_code == 201, proposal_response.text
+    proposal = proposal_response.json()
+    assert approve(auth, proposal, challenge(auth, proposal)).status_code == 200
+
+    monkeypatch.setattr(settings, "browser_form_delivery_enabled", True)
+    monkeypatch.setattr(settings, "outbound_enabled", True)
+    monkeypatch.setattr(settings, "human_approved_form_enabled", True)
+    monkeypatch.setattr("app.services.sending_window.allowed", lambda _db: True)
+    reserved = auth.post(
+        f"/api/approval-requests/{proposal['id']}/form-dispatch",
+        json={**expected(proposal), "idempotency_key": str(uuid4())},
+    )
+    assert reserved.status_code == 201, reserved.text
+    dispatch_id = UUID(reserved.json()["id"])
+    run = db.scalar(select(BrowserFormRun).where(BrowserFormRun.dispatch_id == dispatch_id))
+    assert run and run.status == "queued"
+
+    assert approved_form_service.claim(db) is None
+    claimed = approved_form_service.claim(db, browser_form=True)
+    assert claimed.id == dispatch_id
+    context = approved_form_worker._browser_context(
+        db, claimed.payload_snapshot["browser_form_plan"]
+    )[1]
+    before = b"\xff\xd8synthetic-jpeg\xff\xd9"
+    assert approved_form_worker.begin(
+        db,
+        claimed.id,
+        claimed.worker_id,
+        context,
+        browser_form=True,
+        screenshot_before=before,
+    )
+    approved_form_worker.finish(
+        db,
+        claimed.id,
+        claimed.worker_id,
+        "unknown",
+        "結果不明",
+        None,
+        screenshot_after=before,
+    )
+
+    db.expire_all()
+    dispatch = db.get(ApprovedFormDispatch, dispatch_id)
+    run = db.get(BrowserFormRun, run.id)
+    delivery = db.scalar(select(FormDelivery))
+    approval_request = db.get(ApprovalRequest, UUID(proposal["id"]))
+    assert dispatch.status == run.status == delivery.status == "unknown"
+    assert delivery.delivery_method == "browser"
+    assert approval_request.status == "CONSUMED"
+    assert run.payload_snapshot == {"mode": "submit"}
+    assert run.started_at is not None
+    screenshots = db.scalars(
+        select(BrowserFormScreenshot).where(BrowserFormScreenshot.run_id == run.id)
+    ).all()
+    assert {screenshot.phase for screenshot in screenshots} == {
+        "before_submit",
+        "after_submit",
+    }

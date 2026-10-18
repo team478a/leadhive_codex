@@ -14,6 +14,7 @@ from app.model_approved_email import (
 )
 from app.model_approved_form import ApprovedFormDispatch, FormDispatchLimits, FormDispatchSite
 from app.model_article_extraction import CollectionArticleExtraction, CollectionExtractedEntry
+from app.model_browser_form_delivery import BrowserFormRun, BrowserFormScreenshot
 from app.model_cf7 import CF7Observation
 from app.model_collection_conditions import CollectionConditionRequest, CollectionFactReview
 from app.model_collection_discovery import CollectionDiscoveryHit
@@ -144,6 +145,8 @@ __all__ = [
     "ApprovedFormDispatch",
     "FormDispatchLimits",
     "FormDispatchSite",
+    "BrowserFormRun",
+    "BrowserFormScreenshot",
     "EmailFeedbackEvent",
     "EmailHealthState",
     "ApprovedEmailBatch",
