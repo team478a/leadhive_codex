@@ -17,6 +17,7 @@ from app.schema_core import CompanyOut, Input, Keyword
 from app.schema_external_presence import PresenceSearchPlan
 
 FormFirstQueryType = Literal["intitle_contact", "inurl_contact", "inurl_inquiry", "form_words"]
+FormFirstIndustry = Literal["general", "restaurant"]
 
 
 def default_form_first_query_types() -> list[FormFirstQueryType]:
@@ -99,6 +100,7 @@ class OperationJobInput(Input):
         min_length=1,
         max_length=4,
     )
+    form_first_industry: FormFirstIndustry = "general"
     require_corporate_number: bool = False
 
     @model_validator(mode="after")
@@ -119,6 +121,8 @@ class OperationJobInput(Input):
             raise ValueError("フォーム起点の収集では自動継続・外部情報検索条件を指定できません。")
         if self.collection_method == "company_first" and self.require_corporate_number:
             raise ValueError("法人番号の必須確認はフォーム起点の収集のみ指定できます。")
+        if self.collection_method == "company_first" and self.form_first_industry != "general":
+            raise ValueError("業種別の除外語はフォーム起点の収集のみ指定できます。")
         if self.region_mode == "prefecture_order" and not (
             self.operation_type == "collect_search"
             and self.source == "serper"
@@ -170,6 +174,7 @@ class OperationJobInput(Input):
                 or self.presence_search
                 or self.collection_method != "company_first"
                 or self.require_corporate_number
+                or self.form_first_industry != "general"
             ):
                 raise ValueError("記事抽出では会社・検索条件を指定できません。")
         elif (
@@ -182,6 +187,7 @@ class OperationJobInput(Input):
             or self.auto_continue
             or self.collection_method != "company_first"
             or self.require_corporate_number
+            or self.form_first_industry != "general"
         ):
             raise ValueError("Analysis operations do not accept search conditions")
         return self

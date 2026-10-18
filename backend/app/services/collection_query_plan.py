@@ -43,6 +43,10 @@ def plan_snapshot(payload):
             payload.get("form_first_industry_keywords") or []
         )
         snapshot["require_corporate_number"] = bool(payload.get("require_corporate_number"))
+        if payload.get("form_first_query_order_version"):
+            snapshot["form_first_query_order_version"] = payload["form_first_query_order_version"]
+        if payload.get("form_first_industry") not in {None, "general"}:
+            snapshot["form_first_industry"] = payload["form_first_industry"]
     # Omit the default so hashes of existing jobs remain unchanged.
     if payload.get("region_mode") == "prefecture_order":
         snapshot["region_mode"] = "prefecture_order"

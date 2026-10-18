@@ -17,7 +17,7 @@ interface ArticleExtraction {
 }
 interface CollectionMetrics {
   collection_method: string; search_request_count: number; contact_page_candidate_count: number
-  form_found_count: number; newly_registered_company_count: number
+  form_found_count: number; reservation_form_count: number; newly_registered_company_count: number
   existing_contact_url_added_company_count: number
   corporate_checks: Record<string, number>; exclusion_reasons: Record<string, number>
   query_types: Record<string, { search_results: number; contact_candidates: number
@@ -36,6 +36,7 @@ const reasons: Record<string, string> = {
   TARGET_LIMIT: '目標件数を超えたため未取込', RESPONSE_LIMIT: '応答の取込上限を超過',
   INVALID_URL: 'URLが無効', NON_COMPANY_SOURCE: 'SNS・掲載媒体などの参考情報',
   INGESTION_CONFLICT: '保存時の競合（確認待ち）',
+  RESERVATION_FORM: '予約専用フォーム（送信対象外）',
 }
 const kinds: Record<string, string> = {
   OFFICIAL_SITE_CANDIDATE: '公式サイト候補（未確認）', ARTICLE: '記事候補',
@@ -116,7 +117,7 @@ export function CollectionDiscovery({ jobId, projectId, sourceOperationId, extra
       <p className="muted">検索結果の分類は正解判定や公式サイトの確認ではありません。</p>
       {metrics && <section className="rounded border p-3 my-3" aria-label="収集成果・比較指標">
         <h3>収集成果・比較</h3>
-        <p>{collectionMethodNames[metrics.collection_method] ?? metrics.collection_method} · Serper検索 {metrics.search_request_count} 回 · 問い合わせページ候補 {metrics.contact_page_candidate_count} 件 · フォームあり {metrics.form_found_count} 件</p>
+        <p>{collectionMethodNames[metrics.collection_method] ?? metrics.collection_method} · Serper検索 {metrics.search_request_count} 回 · 問い合わせページ候補 {metrics.contact_page_candidate_count} 件 · フォームあり {metrics.form_found_count} 件（予約専用 {metrics.reservation_form_count} 件・送信対象外）</p>
         <p>新規登録 {metrics.newly_registered_company_count} 社 · 既存企業に問い合わせURL追加 {metrics.existing_contact_url_added_company_count} 社</p>
         <p>法人番号：一致 {metrics.corporate_checks.MATCHED ?? 0} · 複数候補 {metrics.corporate_checks.AMBIGUOUS ?? 0} · 未検出 {metrics.corporate_checks.NOT_FOUND ?? 0} · 未確認 {metrics.corporate_checks.SKIPPED ?? 0}</p>
         <p>{metrics.sendable_company_count === null

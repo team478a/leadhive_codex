@@ -380,6 +380,7 @@ def enqueue_operation(
             "condition_hash",
             "collection_method",
             "form_first_query_types",
+            "form_first_industry",
             "require_corporate_number",
         },
     )
@@ -387,12 +388,16 @@ def enqueue_operation(
         from app.services.form_first_collection import build_form_first_queries
 
         query_plan = build_form_first_queries(
-            [str(keyword) for keyword in body.keywords], body.form_first_query_types
+            [str(keyword) for keyword in body.keywords],
+            body.form_first_query_types,
+            body.form_first_industry,
         )
         payload.update(
             {
                 "collection_method": "form_first",
                 "form_first_query_types": body.form_first_query_types,
+                "form_first_industry": body.form_first_industry,
+                "form_first_query_order_version": "round-robin-v2",
                 "form_first_industry_keywords": [str(keyword) for keyword in body.keywords],
                 "form_first_query_map": {item["query"]: item for item in query_plan},
                 "keywords": [item["query"] for item in query_plan],

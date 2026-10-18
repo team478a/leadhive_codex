@@ -47,6 +47,7 @@ REASONS = (
     "CONTACT_PROHIBITED",
     "NON_COMPANY_SUSPECTED",
     "ALREADY_SENT_OR_UNKNOWN",
+    "RESERVATION_FORM",
     "CAPTCHA_VISIBLE",
     "CAPTCHA_INVISIBLE",
     "CAPTCHA_LEGACY",
@@ -84,6 +85,7 @@ BLOCKING_REASONS = {
     "CONTACT_PROHIBITED",
     "NON_COMPANY_SUSPECTED",
     "ALREADY_SENT_OR_UNKNOWN",
+    "RESERVATION_FORM",
     "CAPTCHA_VISIBLE",
     "CAPTCHA_INVISIBLE",
     "CAPTCHA_LEGACY",
@@ -136,6 +138,8 @@ COMPATIBILITY_REASONS = {
 
 def _compatibility_reason(db: Session, profile: FormProfile) -> str | None:
     reason_code = profile.compatibility_reason_code or ""
+    if reason_code == "RESERVATION_FORM":
+        return "RESERVATION_FORM"
     if reason_code == "MULTIPART_OR_FILE":
         file_field = db.scalar(
             select(FormProfileField.id)
@@ -258,6 +262,7 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
             "CONTACT_PROHIBITED",
             "NON_COMPANY_SUSPECTED",
             "ALREADY_SENT_OR_UNKNOWN",
+            "RESERVATION_FORM",
             "CAPTCHA_VISIBLE",
             "CAPTCHA_INVISIBLE",
             "CAPTCHA_LEGACY",

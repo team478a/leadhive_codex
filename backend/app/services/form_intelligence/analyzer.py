@@ -33,6 +33,7 @@ from app.services.form_intelligence.rules import (
     recommended_option,
     sales_contact_status,
 )
+from app.services.form_reservation import reservation_form_indices, reservation_js_container
 from app.services.scraper import CONTACT_HINTS, ScrapeError
 from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
@@ -518,9 +519,39 @@ def analyze_company_forms(
                 record_prohibition(page_prohibition, url)
                 page_kind = _page_kind(url, text)
                 contact_context = explicit or is_contact_path(url)
-                if not any(
-                    is_contact_form(form, contact_context=contact_context) for form in forms
-                ):
+                form_first_company = company.source == "form_first" or bool(
+                    company.form_first_contact_url
+                )
+                contact_forms = [
+                    (form_index, form)
+                    for form_index, form in enumerate(forms)
+                    if is_contact_form(form, contact_context=contact_context)
+                ]
+                reservation_indices = reservation_form_indices(
+                    html, contact_context=contact_context
+                )
+                analyzable_forms = [
+                    (form_index, form)
+                    for form_index, form in contact_forms
+                    if not (form_first_company and form_index in reservation_indices)
+                ]
+                if form_first_company and reservation_indices and not analyzable_forms:
+                    _log(
+                        db,
+                        company.id,
+                        "analysis_completed",
+                        details={"url": url, "finding": "RESERVATION_FORM_EXCLUDED"},
+                    )
+                    continue
+                if form_first_company and not forms and reservation_js_container(html):
+                    _log(
+                        db,
+                        company.id,
+                        "analysis_completed",
+                        details={"url": url, "finding": "RESERVATION_FORM_EXCLUDED"},
+                    )
+                    continue
+                if not analyzable_forms:
                     custom = custom_contact_containers(html)
                     if len(custom) == 1:
                         fields = parse_form_fields(custom[0])
@@ -606,9 +637,7 @@ def analyze_company_forms(
                         profiles.append(profile)
                         seen.add((url, 0))
                     continue
-                for form_index, form in enumerate(forms):
-                    if not is_contact_form(form, contact_context=contact_context):
-                        continue
+                for form_index, form in analyzable_forms:
                     found_contact.add(True)
                     form_started = time.monotonic()
                     compatibility = assess_delivery_compatibility(form, url)
