@@ -26,6 +26,7 @@ from app.schemas import OperationJobOut
 from app.security import current_user
 from app.services.approved_form import duplicate
 from app.services.browser_form_analysis import EMBED_UNVERIFIED_MARKER
+from app.services.browser_form_preparation import browser_profile_eligible
 from app.services.collection_feedback import latest_company_feedback
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_approval_preparation import preparation
@@ -71,11 +72,13 @@ REASONS = (
     "NO_FORM_DRAFT",
     "SENDER_SETTINGS",
     "READY",
+    "BROWSER_READY",
 )
 REVIEW_REASONS = {
     "NEEDS_CONSENT_REVIEW",
     "NEEDS_CHOICE_REVIEW",
     "NEEDS_MAPPING_REVIEW",
+    "BROWSER_READY",
 }
 BLOCKING_REASONS = {
     "CONTACT_PROHIBITED",
@@ -100,6 +103,18 @@ BLOCKING_REASONS = {
     "OTHER_UNSUPPORTED",
     "CONFIRMATION_PAGE",
     "CONFIRMATION_UNKNOWN",
+}
+BROWSER_REVIEW_DIAGNOSTIC_REASONS = {
+    "CF7",
+    "JS_SUBMIT",
+    "MULTIPART_OR_FILE",
+    "FILE_ATTACHMENT",
+    "MULTIPART_ONLY",
+    "JAVASCRIPT_CONFIRMATION",
+    "CONFIRMATION_PAGE",
+    "CONFIRMATION_UNKNOWN",
+    "NO_NATIVE_SUBMIT",
+    "CUSTOM_SUBMIT_HANDLER",
 }
 
 
@@ -238,6 +253,34 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
     )
     if not draft:
         reasons.append("NO_FORM_DRAFT")
+    elif browser_profile_eligible(db, company, profile) and not set(reasons).intersection(
+        {
+            "CONTACT_PROHIBITED",
+            "NON_COMPANY_SUSPECTED",
+            "ALREADY_SENT_OR_UNKNOWN",
+            "CAPTCHA_VISIBLE",
+            "CAPTCHA_INVISIBLE",
+            "CAPTCHA_LEGACY",
+        }
+    ):
+        reasons = [
+            reason
+            for reason in reasons
+            if reason
+            not in {
+                "CF7",
+                "JS_SUBMIT",
+                "NO_NATIVE_SUBMIT",
+                "CUSTOM_SUBMIT_HANDLER",
+                "MULTIPART_OR_FILE",
+                "FILE_ATTACHMENT",
+                "MULTIPART_ONLY",
+                "JAVASCRIPT_CONFIRMATION",
+                "CONFIRMATION_PAGE",
+                "CONFIRMATION_UNKNOWN",
+            }
+        ]
+        reasons.append("BROWSER_READY")
     else:
         try:
             proposal, _preview = preparation(db, company, draft)

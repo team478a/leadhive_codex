@@ -89,6 +89,8 @@ def serialize(db, item):
     result["execution_plan_hash"] = item.payload_snapshot.get("execution_plan_hash")
     result["adapter_plan"] = item.payload_snapshot.get("adapter_plan")
     result["adapter_plan_hash"] = item.payload_snapshot.get("adapter_plan_hash")
+    result["browser_form_plan"] = item.payload_snapshot.get("browser_form_plan")
+    result["browser_form_plan_hash"] = item.payload_snapshot.get("browser_form_plan_hash")
     result["cf7_reservation_plan"] = item.payload_snapshot.get("cf7_reservation_plan")
     result["cf7_real_handoff"] = item.payload_snapshot.get("cf7_real_handoff")
     if item.delivery_method == "cf7_candidate_only":
@@ -220,6 +222,45 @@ def prepare_form_adapter(
         db,
         service.create_proposal(
             db, company.project_id, proposal, "HUMAN", user.id, allow_adapter_preparation=True
+        ),
+    )
+
+
+@router.get("/outreach-drafts/{draft_id}/browser-form-approval-preview")
+def preview_browser_form_approval(
+    draft_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+):
+    from app.services.browser_form_preparation import preparation as browser_preparation
+
+    company, draft = preparation_source(db, draft_id, user)
+    _, preview = browser_preparation(db, company, draft)
+    db.commit()  # Persist a single cached AI suggestion, if the rules could not decide.
+    return preview
+
+
+@router.post("/outreach-drafts/{draft_id}/browser-form-approval-request", status_code=201)
+def prepare_browser_form_approval(
+    draft_id: UUID,
+    body: FormPreparation,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    from app.services.browser_form_preparation import preparation as browser_preparation
+
+    company, draft = preparation_source(db, draft_id, user)
+    lock_preparation_sources(db, company, user)
+    proposal, preview = browser_preparation(db, company, draft)
+    if preview["preparation_hash"] != body.expected_preparation_hash:
+        raise HTTPException(409, "準備内容が変更されています。もう一度内容を取得してください。")
+    return serialize(
+        db,
+        service.create_proposal(
+            db,
+            company.project_id,
+            proposal,
+            "HUMAN",
+            user.id,
+            allow_browser_preparation=True,
         ),
     )
 

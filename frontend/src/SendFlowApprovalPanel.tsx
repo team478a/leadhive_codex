@@ -8,11 +8,11 @@ type Channel = 'email' | 'form'
 type QueueJob = OperationJob & { form_approval_results?: { status: string }[] }
 type EmailDraft = { id: string; company_name: string; recipient: string; subject: string; body: string }
 type FormQuota = { daily_limit: number; remaining_quota: number; pending_approvals: number; paused: boolean; within_send_window: boolean }
-type SendPreview = { items: ApprovalProposal[]; email_enabled: boolean; form_enabled: boolean }
+type SendPreview = { items: ApprovalProposal[]; email_enabled: boolean; form_enabled: boolean; browser_form_enabled?: boolean }
 type ReservationPlan = { items: ApprovalProposal[]; key: string; daily: number; hourly: number }
 
 const candidate = (item: ApprovalProposal, channel: Channel) => item.channel === channel
-  && (channel === 'email' ? item.delivery_method === 'email' : item.delivery_method === 'form_direct')
+  && (channel === 'email' ? item.delivery_method === 'email' : ['form_direct', 'browser_form'].includes(item.delivery_method ?? ''))
 const selection = (items: ApprovalProposal[]) => items.map(item => ({
   request_id: item.id, expected_hash: item.payload_hash, expected_version: item.payload_version,
 }))
@@ -107,6 +107,9 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
   const waitingForFormJob = Boolean(job && ['queued', 'running'].includes(job.status))
   const dailyRemaining = channel === 'form' ? quota?.remaining_quota ?? 0 : dailyLimit
   const channelEnabled = channel === 'form' ? !!preview?.form_enabled : !!preview?.email_enabled
+  const browserDeliveryDisabled = channel === 'form'
+    && selectedItems.some(item => item.delivery_method === 'browser_form')
+    && !preview?.browser_form_enabled
   const canReserve = channel !== 'form' || Boolean(quota && !quota.paused && quota.within_send_window && selectedItems.length <= quota.remaining_quota)
 
   function choose(items: ApprovalProposal[]) {
@@ -160,7 +163,7 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
   }
 
   async function approveAndReserve() {
-    if (!selectedItems.length || !canWrite || !channelEnabled || !canReserve || busy) return
+    if (!selectedItems.length || !canWrite || !channelEnabled || browserDeliveryDisabled || !canReserve || busy) return
     const plan = { items: selectedItems, key: crypto.randomUUID(), daily: dailyLimit, hourly: hourlyLimit }
     setBusy(true); setError(''); setNotice('')
     let approved = pendingSelected.length === 0
@@ -225,6 +228,7 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
         : <p className="muted mt-2">送信時間帯：{sendingWindow} · メール予約ごとの上限：24時間{dailyLimit}件 / 1時間{hourlyLimit}件</p>}
       {channel === 'email' && <div className="grid gap-3 sm:grid-cols-2"><Field label="この予約の24時間上限"><input type="number" min="1" max="10000" value={dailyLimit} onChange={event => setDailyLimit(Number(event.target.value))} /></Field><Field label="この予約の1時間上限"><input type="number" min="1" max="1000" value={hourlyLimit} onChange={event => setHourlyLimit(Number(event.target.value))} /></Field></div>}
       <p className="muted mt-2">送信時間帯・実行ON/OFF・連絡禁止・重複防止は既存のサーバー判定を維持します。</p>
+      {channel === 'form' && selectedItems.some(item => item.delivery_method === 'browser_form') && !preview?.browser_form_enabled && <p className="muted mt-2">ブラウザーフォーム送信は既定でOFFです。運用承認後に有効化されるまで予約できません。</p>}
     </div>
     {error && <p className="error" role="alert">{error}</p>}{notice && <p role="status">{notice}</p>}
     <div className="rounded border p-3">
@@ -235,12 +239,14 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
       {pending.map(item => <details className="border-t py-3" key={item.id}><summary>{item.company_name} / {channel === 'email' ? item.recipient : item.form_url}</summary>
         <p>送信者: {item.sender.name} / {item.sender.email}</p><p>件名: {item.subject}</p><p className="whitespace-pre-wrap break-words">{item.body}</p>
         {channel === 'form' && Object.entries(item.field_values).map(([name, value]) => <p className="break-words" key={name}>{name}: {value}</p>)}
+        {item.delivery_method === 'browser_form' && item.browser_form_plan && <p className="muted text-sm">ブラウザー計画: {String(item.browser_form_plan.submission_kind)} · CAPTCHAなし · 同一サイト内 · {Array.isArray(item.browser_form_plan.fields) ? item.browser_form_plan.fields.length : 0}項目</p>}
         <p>承認期限: {new Date(item.expires_at).toLocaleString('ja-JP')}</p>
         <label><input type="checkbox" checked={Boolean(selected[item.id])} disabled={!canWrite || selectedItems.length >= selectionLimit && !selected[item.id]} onChange={() => choose(selected[item.id] ? selectedItems.filter(value => value.id !== item.id) : [...selectedItems, item])} /> 承認・予約対象にする</label>
       </details>)}
       {approvedReady.map(item => <details className="border-t py-3" key={item.id}><summary>{item.company_name} / {channel === 'email' ? item.recipient : item.form_url} / 承認済み</summary>
         <p>件名: {item.subject}</p><p className="whitespace-pre-wrap break-words">{item.body}</p>
         {channel === 'form' && Object.entries(item.field_values).map(([name, value]) => <p className="break-words" key={name}>{name}: {value}</p>)}
+        {item.delivery_method === 'browser_form' && item.browser_form_plan && <p className="muted text-sm">ブラウザー計画: {String(item.browser_form_plan.submission_kind)} · CAPTCHAなし · 同一サイト内 · {Array.isArray(item.browser_form_plan.fields) ? item.browser_form_plan.fields.length : 0}項目</p>}
         <label><input type="checkbox" checked={Boolean(selected[item.id])} disabled={!canWrite || selectedItems.length >= selectionLimit && !selected[item.id]} onChange={() => choose(selected[item.id] ? selectedItems.filter(value => value.id !== item.id) : [...selectedItems, item])} /> 予約対象にする</label>
       </details>)}
       {!pending.length && !approvedReady.length && <p className="muted mt-3">このページに選択可能な{channel === 'email' ? 'メール' : '通常フォーム'}はありません。</p>}
@@ -250,7 +256,7 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
       {sampled.map(item => <article className="border-t py-3" key={item.id}><strong>{item.company_name}</strong><p className="break-all">宛先: {channel === 'email' ? item.recipient : item.form_url}</p><p>件名: {item.subject}</p><pre className="whitespace-pre-wrap break-words">{item.body}</pre>{channel === 'form' && Object.entries(item.field_values).map(([name, value]) => <p className="break-words" key={name}>{name}: {value}</p>)}</article>)}
     </section>}
     {pendingSelected.length > 0 && <Field label="ログインパスワード（再認証）"><input type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} /></Field>}
-    <button type="button" disabled={!canWrite || busy || !selectedItems.length || !channelEnabled || !canReserve || pendingSelected.length > 0 && !password} onClick={() => void approveAndReserve()}>
+    <button type="button" disabled={!canWrite || busy || !selectedItems.length || !channelEnabled || browserDeliveryDisabled || !canReserve || pendingSelected.length > 0 && !password} onClick={() => void approveAndReserve()}>
       {pendingSelected.length ? `選択した${selectedItems.length}件を承認して送信予約` : `承認済み${approvedSelected.length}件を送信予約`}
     </button>
     {retryPlan && <button type="button" className="secondary" disabled={busy} onClick={() => void retryReservation()}>予約だけやり直す（同じ予約キー）</button>}

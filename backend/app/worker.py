@@ -932,6 +932,7 @@ def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     from app.form_dm_readiness_routes import (
         BLOCKING_REASONS,
+        BROWSER_REVIEW_DIAGNOSTIC_REASONS,
         REVIEW_REASONS,
         _ranked_form_rows,
         classify_profile,
@@ -983,7 +984,11 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                 profile.is_primary is True
                 and len(profile.fingerprint or "") == 64
                 and (bool(REVIEW_REASONS.intersection(reasons)) or ready_confirmation_required)
-                and not bool(BLOCKING_REASONS.intersection(reasons))
+                and not bool(
+                    (BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS).intersection(reasons)
+                    if outcome["primary_reason"] == "BROWSER_READY"
+                    else BLOCKING_REASONS.intersection(reasons)
+                )
             )
             results.append(
                 FormDmReadinessResult(
@@ -1014,6 +1019,7 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
     from app.form_dm_readiness_routes import _preparation_reason, classify_profile
     from app.models import ApprovalRequest, FormAnalysisLog, FormProfile, OutreachDraft, User
     from app.services import human_approval
+    from app.services.browser_form_preparation import preparation as browser_preparation
     from app.services.form_approval_preparation import preparation
 
     company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])]
@@ -1050,7 +1056,7 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
                     if profile
                     else {"primary_reason": "OTHER_UNSUPPORTED"}
                 )
-                if readiness["primary_reason"] == "READY" and profile:
+                if readiness["primary_reason"] in {"READY", "BROWSER_READY"} and profile:
                     review_confirmed = db.scalar(
                         select(FormAnalysisLog.id)
                         .where(
@@ -1065,7 +1071,7 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
                     )
                     if not review_confirmed:
                         readiness = {"primary_reason": "FORM_REVIEW_REQUIRED"}
-                if readiness["primary_reason"] != "READY":
+                if readiness["primary_reason"] not in {"READY", "BROWSER_READY"}:
                     readiness_reason = readiness["primary_reason"]
                     outcome["reason_code"] = (
                         "CAPTCHA"
@@ -1109,9 +1115,19 @@ def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None
                                     "reason_code": None,
                                 }
                         if outcome["status"] != "skipped_existing":
-                            proposal, _ = preparation(db, company, draft)
+                            browser_delivery = readiness["primary_reason"] == "BROWSER_READY"
+                            proposal, _ = (
+                                browser_preparation(db, company, draft)
+                                if browser_delivery
+                                else preparation(db, company, draft)
+                            )
                             request = human_approval.create_proposal(
-                                db, job.project_id, proposal, "HUMAN", actor.id
+                                db,
+                                job.project_id,
+                                proposal,
+                                "HUMAN",
+                                actor.id,
+                                allow_browser_preparation=browser_delivery,
                             )
                             outcome = {
                                 "company_id": str(company_id),

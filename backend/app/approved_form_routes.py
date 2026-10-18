@@ -26,6 +26,9 @@ def limits(db: Session = Depends(get_db), user: User = Depends(current_user)):
         **{c.name: getattr(row, c.name) for c in FormDispatchLimits.__table__.columns},
         "can_manage": user.is_admin,
         "execution_enabled": settings.outbound_enabled and settings.human_approved_form_enabled,
+        "browser_form_execution_enabled": settings.outbound_enabled
+        and settings.human_approved_form_enabled
+        and settings.browser_form_delivery_enabled,
     }
 
 
@@ -144,7 +147,11 @@ def output(row):
         **{c.name: getattr(row, c.name) for c in ApprovedFormDispatch.__table__.columns},
         "delivery_method": method,
         "reservation_only": method in {"form_adapter", "cf7_real_reservation"},
-        "execution_enabled": method == "form_direct"
+        "execution_enabled": (
+            method == "form_direct"
+            or method == "browser_form"
+            and settings.browser_form_delivery_enabled
+        )
         and settings.outbound_enabled
         and settings.human_approved_form_enabled,
     }

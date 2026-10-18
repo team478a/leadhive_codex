@@ -63,7 +63,7 @@ def validate(db, item, *, allow_adapter=False):
         from app.services.cf7_real_reservation import validate_reservation
 
         return validate_reservation(db, item)
-    methods = {"form_direct", "form_adapter"} if allow_adapter else {"form_direct"}
+    methods = {"form_direct", "form_adapter", "browser_form"} if allow_adapter else {"form_direct"}
     if item.channel != "form" or item.delivery_method not in methods or not item.source_draft_id:
         raise HTTPException(409, "保存済みフォームDraftから再準備・再承認してください。")
     if not item.payload_snapshot.get("sender_source_hash") or item.payload_snapshot.get(
@@ -120,7 +120,9 @@ def validate(db, item, *, allow_adapter=False):
     if not company or not draft or draft.company_id != company.id:
         raise HTTPException(409, "承認した企業・Draftを確認できません。")
     profile = primary_form_profile(db, company.id)
-    if not profile or profile.confirmation_page is not False:
+    if item.delivery_method != "browser_form" and (
+        not profile or profile.confirmation_page is not False
+    ):
         raise HTTPException(
             409, "確認画面のあるフォーム・段階が未確定のフォームは人間の確認が必要です。"
         )
@@ -130,11 +132,21 @@ def validate(db, item, *, allow_adapter=False):
         if not approval.valid_adapter_plan(item):
             raise HTTPException(409, "操作計画を確認できません。再準備してください。")
         proposal, _ = adapter_preparation(db, company, draft)
+    elif item.delivery_method == "browser_form":
+        if not approval.valid_browser_form_plan(item):
+            raise HTTPException(409, "ブラウザー操作計画を確認できません。再準備してください。")
+        from app.services.browser_form_preparation import preparation as browser_preparation
+
+        proposal, _ = browser_preparation(db, company, draft, allow_ai_suggestion=False)
     else:
         proposal, _ = preparation(db, company, draft)
     data = proposal.model_dump(mode="json", exclude={"expires_in_hours"})
     if proposal.adapter_plan:
         data["adapter_plan"] = approval.canonical_plan(proposal.adapter_plan)
+    if proposal.browser_form_plan:
+        from app.services.browser_form_plan import canonical_plan
+
+        data["browser_form_plan"] = canonical_plan(proposal.browser_form_plan)
     if any(item.payload_snapshot.get(key) != value for key, value in data.items()):
         raise HTTPException(409, "承認payloadが保存済みの準備内容と一致しません。")
     # Execution reads the snapshot exclusively, never caller-supplied field overrides.
@@ -142,6 +154,11 @@ def validate(db, item, *, allow_adapter=False):
 
 
 def reserve(db, item, body, user):
+    if item.delivery_method == "browser_form" and not settings.browser_form_delivery_enabled:
+        raise HTTPException(
+            409,
+            "ブラウザーフォーム送信は既定でOFFです。運用承認後に有効化してください。",
+        )
     lock(db)
     digest = approval.payload_hash({"approval_id": str(item.id), **body.model_dump(mode="json")})
     existing = db.scalar(

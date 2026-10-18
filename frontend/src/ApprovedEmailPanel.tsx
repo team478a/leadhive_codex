@@ -13,6 +13,8 @@ export interface ApprovalProposal {
   execution_plan_hash?: string | null
   adapter_plan?: Record<string, unknown> | null
   adapter_plan_hash?: string | null
+  browser_form_plan?: Record<string, unknown> | null
+  browser_form_plan_hash?: string | null
   cf7_candidate_snapshot?: CF7Snapshot | null
   cf7_candidate_snapshot_hash?: string | null
   cf7_observation?: CF7Observation | null

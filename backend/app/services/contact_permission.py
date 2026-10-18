@@ -197,7 +197,9 @@ def _shared_location_destination(
     )
 
 
-def _form_permission(db: Session, company: Company) -> ContactPermissionDecision:
+def _form_permission(
+    db: Session, company: Company, *, allow_browser_review_required: bool = False
+) -> ContactPermissionDecision:
     profile = _primary_form_profile(db, company.id)
     if profile and (
         profile.form_status == "BLOCKED" or profile.sales_contact_status == "PROHIBITED"
@@ -234,6 +236,12 @@ def _form_permission(db: Session, company: Company) -> ContactPermissionDecision
             "form_captcha_review",
             "CAPTCHA付きフォームは手動確認が必要です。",
         )
+    if (
+        allow_browser_review_required
+        and profile.analysis_source == "browser"
+        and profile.form_status in {"READY", "REVIEW_REQUIRED"}
+    ):
+        return _decision("ALLOWED", "allowed", "保存済みのブラウザー解析を確認できます。")
     if profile.form_status != "READY" or not profile.delivery_supported:
         status_message = {
             "UNANALYZED": "フォーム解析を実行してください。",
@@ -255,6 +263,8 @@ def evaluate_contact_permission(
     company_id: UUID,
     channel: str,
     destination: str = "",
+    *,
+    allow_browser_review_required: bool = False,
 ) -> ContactPermissionDecision:
     """Return the canonical contact decision without persisting a duplicate result."""
     company = db.get(Company, company_id)
@@ -293,7 +303,9 @@ def evaluate_contact_permission(
     if channel == "email":
         return _email_permission(db, company, destination)
     if channel == "form":
-        return _form_permission(db, company)
+        return _form_permission(
+            db, company, allow_browser_review_required=allow_browser_review_required
+        )
     if channel == "sns":
         return _decision("ALLOWED", "allowed", "送信できます。")
     return _decision(

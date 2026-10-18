@@ -75,7 +75,7 @@ def create_form_approval_batch(
                 .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
                 .where(
                     FormDmReadinessResult.job_id == snapshot.id,
-                    FormDmReadinessResult.primary_reason == "READY",
+                    FormDmReadinessResult.primary_reason.in_(("READY", "BROWSER_READY")),
                     confirmed_review_exists,
                 )
                 .order_by(FormDmReadinessResult.company_id)
@@ -143,7 +143,7 @@ def form_approval_daily_summary(
             .select_from(ApprovalRequest)
             .where(
                 ApprovalRequest.channel == "form",
-                ApprovalRequest.delivery_method == "form_direct",
+                ApprovalRequest.delivery_method.in_(("form_direct", "browser_form")),
                 ApprovalRequest.status == "APPROVED",
                 ApprovalRequest.expires_at > now,
                 ~started_approvals,
@@ -158,7 +158,7 @@ def form_approval_daily_summary(
             .where(
                 ApprovalRequest.project_id == project_id,
                 ApprovalRequest.channel == "form",
-                ApprovalRequest.delivery_method == "form_direct",
+                ApprovalRequest.delivery_method.in_(("form_direct", "browser_form")),
                 ApprovalRequest.status == "PENDING",
                 ApprovalRequest.expires_at > now,
             )
