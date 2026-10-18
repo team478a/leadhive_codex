@@ -15,9 +15,19 @@ interface ArticleExtraction {
   pattern: string; entry_count: number; linked_count: number; name_only_count: number
   rejected_count: number; warnings: string[]; entries: ArticleEntry[]
 }
+interface CollectionMetrics {
+  collection_method: string; search_request_count: number; contact_page_candidate_count: number
+  form_found_count: number; newly_registered_company_count: number
+  existing_contact_url_added_company_count: number
+  corporate_checks: Record<string, number>; exclusion_reasons: Record<string, number>
+  query_types: Record<string, { search_results: number; contact_candidates: number
+    candidate_rate_percent: number | null; search_requests: number; low_effect: boolean }>
+  sendable_company_count: number | null; sendable_companies_per_100_searches: number | null
+}
 interface Discovery {
   summary: { available: boolean; received_count: number | null; captured_count: number | null
-    omitted_count?: number; dispositions?: Record<string, number>; classifications?: Record<string, number> }
+    omitted_count?: number; dispositions?: Record<string, number>; classifications?: Record<string, number>
+    metrics?: CollectionMetrics }
   hits: Hit[]
 }
 const reasons: Record<string, string> = {
@@ -32,6 +42,13 @@ const kinds: Record<string, string> = {
   PORTAL_DIRECTORY: '掲載媒体', SOCIAL: 'SNS', JOB_PR: '求人・PR', OTHER: 'その他',
 }
 const entryStatuses: Record<string, string> = { LINKED: 'リンクあり', NAME_ONLY: 'サイト未特定', REJECTED: '除外' }
+const formFirstQueryNames: Record<string, string> = {
+  intitle_contact: 'タイトルに問い合わせ語', inurl_contact: 'URLに contact',
+  inurl_inquiry: 'URLに inquiry', form_words: '問い合わせフォーム語',
+}
+const collectionMethodNames: Record<string, string> = {
+  form_first: 'フォーム起点', company_first: '会社起点（従来）',
+}
 
 function safeLink(value: string) {
   try {
@@ -88,6 +105,7 @@ export function CollectionDiscovery({ jobId, projectId, sourceOperationId, extra
     finally { setStarting(false) }
   }
   const articleCount = data?.summary.classifications?.ARTICLE ?? 0
+  const metrics = data?.summary.metrics
   const active = extractionActive
   return <div className="mt-3 text-sm">
     <button type="button" className="secondary" disabled={loading} onClick={() => void load()}>
@@ -96,6 +114,29 @@ export function CollectionDiscovery({ jobId, projectId, sourceOperationId, extra
     {data && (!data.summary.available ? <p className="muted mt-2">この収集には候補記録がありません。導入前の履歴やSerper以外の収集は未計測です。</p> : <div>
       <p className="mt-2">検索応答 {data.summary.received_count} 件 / 記録 {data.summary.captured_count} 件 / 記録上限による省略 {data.summary.omitted_count ?? 0} 件</p>
       <p className="muted">検索結果の分類は正解判定や公式サイトの確認ではありません。</p>
+      {metrics && <section className="rounded border p-3 my-3" aria-label="収集成果・比較指標">
+        <h3>収集成果・比較</h3>
+        <p>{collectionMethodNames[metrics.collection_method] ?? metrics.collection_method} · Serper検索 {metrics.search_request_count} 回 · 問い合わせページ候補 {metrics.contact_page_candidate_count} 件 · フォームあり {metrics.form_found_count} 件</p>
+        <p>新規登録 {metrics.newly_registered_company_count} 社 · 既存企業に問い合わせURL追加 {metrics.existing_contact_url_added_company_count} 社</p>
+        <p>法人番号：一致 {metrics.corporate_checks.MATCHED ?? 0} · 複数候補 {metrics.corporate_checks.AMBIGUOUS ?? 0} · 未検出 {metrics.corporate_checks.NOT_FOUND ?? 0} · 未確認 {metrics.corporate_checks.SKIPPED ?? 0}</p>
+        <p>{metrics.sendable_company_count === null
+          ? '最新の送信可否集計がないため、送信可能数は未計測です。'
+          : `最新集計で送信可能 ${metrics.sendable_company_count} 社`}
+          {metrics.sendable_companies_per_100_searches !== null
+            ? ` · 検索100回あたり ${metrics.sendable_companies_per_100_searches} 社` : ''}</p>
+        {Object.keys(metrics.query_types).length > 0 && <div className="mt-3">
+          <strong>検索型別の問い合わせ候補率</strong>
+          <ul className="list-disc pl-5">{Object.entries(metrics.query_types).map(([key, value]) => <li key={key}>
+            {formFirstQueryNames[key] ?? key}: 候補 {value.contact_candidates} / 検索結果 {value.search_results}
+            {value.candidate_rate_percent !== null ? `（${value.candidate_rate_percent}%）` : '（結果なし）'}
+            {value.low_effect && <strong className="ml-2 text-amber-700">この型は効果が低い（自動停止はしていません）</strong>}
+          </li>)}</ul>
+        </div>}
+        {Object.keys(metrics.exclusion_reasons).length > 0 && <details className="mt-2">
+          <summary>除外・判定理由の内訳</summary>
+          <ul className="list-disc pl-5">{Object.entries(metrics.exclusion_reasons).map(([reason, count]) => <li key={reason}>{reason}: {count}</li>)}</ul>
+        </details>}
+      </section>}
       <div className="flex flex-wrap gap-2 my-2">{Object.entries(data.summary.dispositions ?? {}).map(([key, count]) => <span key={key} className="badge">{reasons[key] ?? key} {count}</span>)}</div>
       {articleCount > 0 && sourceOperationId && <section className="border rounded p-3 my-3" aria-label="記事から企業を抽出">
         <p>記事候補 {articleCount} 件。記事本文の取得・抽出を行います（検索API・AI・送信は利用しません）。</p>
