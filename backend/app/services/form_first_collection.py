@@ -130,7 +130,12 @@ def classify_search_result(db, project_id, candidate: Candidate) -> str:
 
 
 def _record_hit(
-    db, candidate: Candidate, classification: str, reason: str, query_type: str
+    db,
+    candidate: Candidate,
+    classification: str,
+    reason: str,
+    query_type: str,
+    details: dict | None = None,
 ) -> None:
     if not candidate.discovery_hit_id:
         return
@@ -139,7 +144,14 @@ def _record_hit(
         return
     hit.classification = classification[:30]
     hit.classification_reason = reason[:100]
-    hit.snapshot = {**hit.snapshot, "form_first_query_type": query_type}
+    hit.snapshot = {
+        **hit.snapshot,
+        "form_first_query_type": query_type,
+        "form_first_candidate": bool(
+            hit.snapshot.get("form_first_candidate") or reason == "CONTACT_PAGE_CANDIDATE"
+        ),
+        **(details or {}),
+    }
 
 
 def _label_value_pairs(soup: BeautifulSoup) -> dict[str, str]:
@@ -559,7 +571,8 @@ def process_search_results(
             continue
         existing = _known_company(db, collection_job.project_id, host)
         if existing:
-            if not existing.contact_url:
+            added_contact_url = not existing.contact_url
+            if added_contact_url:
                 existing.contact_url = contact_url
             if not existing.form_first_contact_url:
                 existing.form_first_contact_url = contact_url
@@ -567,7 +580,14 @@ def process_search_results(
                 existing.reference_url = contact_url
             if _needs_form_analysis(db, existing.id):
                 known_company_ids.append(existing.id)
-            _record_hit(db, result, "FORM_FIRST", "REJECT_ALREADY_KNOWN", query_type)
+            _record_hit(
+                db,
+                result,
+                "FORM_FIRST",
+                "REJECT_ALREADY_KNOWN",
+                query_type,
+                {"form_first_existing_url_added": added_contact_url},
+            )
             mark_discovery(db, collection_job, result, "DUPLICATE", existing)
             continue
         identity_duplicate = duplicate_company(
@@ -580,16 +600,32 @@ def process_search_results(
             ),
         )
         if identity_duplicate:
-            if not identity_duplicate.contact_url:
+            added_contact_url = not identity_duplicate.contact_url
+            if added_contact_url:
                 identity_duplicate.contact_url = contact_url
             if not identity_duplicate.form_first_contact_url:
                 identity_duplicate.form_first_contact_url = contact_url
             if _needs_form_analysis(db, identity_duplicate.id):
                 known_company_ids.append(identity_duplicate.id)
-            _record_hit(db, result, "FORM_FIRST", "REJECT_ALREADY_KNOWN", query_type)
+            _record_hit(
+                db,
+                result,
+                "FORM_FIRST",
+                "REJECT_ALREADY_KNOWN",
+                query_type,
+                {"form_first_existing_url_added": added_contact_url},
+            )
             mark_discovery(db, collection_job, result, "DUPLICATE", identity_duplicate)
             continue
         corporate = lookup_corporate_number(company_name, facts.get("address", {}).get("value", ""))
+        _record_hit(
+            db,
+            result,
+            "FORM_FIRST",
+            fetch_reason,
+            query_type,
+            {"form_first_corporate_check": corporate["status"]},
+        )
         if (
             payload.get("require_corporate_number")
             and corporate["status"] != "CORPORATE_NUMBER_MATCHED"
