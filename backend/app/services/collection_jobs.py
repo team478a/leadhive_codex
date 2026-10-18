@@ -203,8 +203,14 @@ def save_candidates(
             address=candidate.address,
             phone=candidate.phone,
             email=candidate.email,
-            source=job.source,
-            source_keyword=source_keyword,
+            source=candidate.collection_method or job.source,
+            source_keyword=candidate.source_keyword or source_keyword,
+            prefecture=candidate.prefecture,
+            city=candidate.city,
+            business_summary=candidate.business_summary,
+            contact_url=candidate.contact_url,
+            form_first_contact_url=candidate.form_first_contact_url,
+            corporate_number=candidate.corporate_number,
         )
         try:
             with db.begin_nested():

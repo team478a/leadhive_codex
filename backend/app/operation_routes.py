@@ -373,8 +373,36 @@ def enqueue_operation(
             raise HTTPException(404, "指定された収集処理が見つかりません。")
     payload = body.model_dump(
         mode="json",
-        exclude={"operation_type", "condition_request_id", "condition_version", "condition_hash"},
+        exclude={
+            "operation_type",
+            "condition_request_id",
+            "condition_version",
+            "condition_hash",
+            "collection_method",
+            "form_first_query_types",
+            "require_corporate_number",
+        },
     )
+    if body.collection_method == "form_first":
+        from app.services.form_first_collection import build_form_first_queries
+
+        query_plan = build_form_first_queries(
+            [str(keyword) for keyword in body.keywords], body.form_first_query_types
+        )
+        payload.update(
+            {
+                "collection_method": "form_first",
+                "form_first_query_types": body.form_first_query_types,
+                "form_first_industry_keywords": [str(keyword) for keyword in body.keywords],
+                "form_first_query_map": {item["query"]: item for item in query_plan},
+                "keywords": [item["query"] for item in query_plan],
+                "target_count": body.target_count or 10000,
+                "search_request_limit": None,
+                "segment_request_limit": 20,
+                "auto_continue": False,
+                "require_corporate_number": body.require_corporate_number,
+            }
+        )
     if body.auto_continue:
         payload["collection_chain"] = {
             "root_ids": [],

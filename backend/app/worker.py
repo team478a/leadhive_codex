@@ -888,15 +888,16 @@ def next_form_analysis_batch(db, project_id: uuid.UUID, force: bool = False) -> 
 def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     company_ids = [uuid.UUID(value) for value in job.payload.get("company_ids", [])]
     if company_ids:
-        job.total_count = len(company_ids)
+        pending_ids = list(dict.fromkeys(company_ids))
+        job.total_count = len(pending_ids)
         db.commit()
-        for offset in range(0, len(company_ids), 100):
+        processed_ids = set()
+        while pending_ids:
+            batch_ids = pending_ids[:100]
+            pending_ids = pending_ids[100:]
             companies = db.scalars(
                 select(Company)
-                .where(
-                    Company.project_id == job.project_id,
-                    Company.id.in_(company_ids[offset : offset + 100]),
-                )
+                .where(Company.project_id == job.project_id, Company.id.in_(batch_ids))
                 .order_by(Company.created_at, Company.id)
             ).all()
             for company in companies:
@@ -908,25 +909,83 @@ def run_form_intelligence(db, job: OperationJob, worker_id: uuid.UUID) -> None:
                 )
                 if not progress(db, job, worker_id, success):
                     return
+                processed_ids.add(company.id)
+            db.refresh(job, with_for_update=True)
+            payload = dict(job.payload or {})
+            new_ids = list(
+                dict.fromkeys(
+                    uuid.UUID(value)
+                    for value in payload.get("form_first_company_ids", [])
+                    if uuid.UUID(value) not in processed_ids and uuid.UUID(value) not in pending_ids
+                )
+            )
+            payload.pop("form_first_company_ids", None)
+            if new_ids:
+                job.total_count += len(new_ids)
+                pending_ids.extend(new_ids)
+            job.payload = payload
+            db.commit()
         return
     else:
         companies = next_form_analysis_batch(db, job.project_id, bool(job.payload.get("force")))
-    job.total_count = len(companies)
-    db.commit()
-    while companies:
-        for company in companies:
-            if stop_requested(db, job, worker_id):
-                return
-            profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
-            success = bool(profiles) and any(profile.form_status != "ERROR" for profile in profiles)
-            if not progress(db, job, worker_id, success):
-                return
-        if company_ids or job.payload.get("force"):
-            return
-        companies = next_form_analysis_batch(db, job.project_id)
-        if companies:
-            job.total_count += len(companies)
+        queued_ids = list(
+            dict.fromkeys(
+                uuid.UUID(value) for value in job.payload.get("form_first_company_ids", [])
+            )
+        )
+        analyzed_ids = {company.id for company in companies}
+        queued_ids = [company_id for company_id in queued_ids if company_id not in analyzed_ids]
+        job.total_count = len(companies) + len(queued_ids)
+        db.commit()
+        processed_ids = set()
+        while companies or queued_ids:
+            if not companies:
+                batch_ids = queued_ids[:100]
+                queued_ids = queued_ids[100:]
+                companies = db.scalars(
+                    select(Company)
+                    .where(Company.project_id == job.project_id, Company.id.in_(batch_ids))
+                    .order_by(Company.created_at, Company.id)
+                ).all()
+            for company in companies:
+                if company.id in processed_ids:
+                    continue
+                if stop_requested(db, job, worker_id):
+                    return
+                profiles = analyze_company_forms(db, company, bool(job.payload.get("force")))
+                success = bool(profiles) and any(
+                    profile.form_status != "ERROR" for profile in profiles
+                )
+                if not progress(db, job, worker_id, success):
+                    return
+                processed_ids.add(company.id)
+            companies = []
+            db.refresh(job, with_for_update=True)
+            payload = dict(job.payload or {})
+            new_ids = list(
+                dict.fromkeys(
+                    uuid.UUID(value)
+                    for value in payload.get("form_first_company_ids", [])
+                    if uuid.UUID(value) not in processed_ids and uuid.UUID(value) not in queued_ids
+                )
+            )
+            payload.pop("form_first_company_ids", None)
+            queued_ids.extend(new_ids)
+            job.total_count += len(new_ids)
+            job.payload = payload
             db.commit()
+            if queued_ids:
+                continue
+            if job.payload.get("force"):
+                return
+            companies = [
+                company
+                for company in next_form_analysis_batch(db, job.project_id)
+                if company.id not in processed_ids
+            ]
+            if companies:
+                job.total_count += len(companies)
+                db.commit()
 
 
 def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
