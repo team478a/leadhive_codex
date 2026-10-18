@@ -445,6 +445,7 @@ def test_existing_company_gets_contact_url_and_form_analysis_is_queued(auth, db,
     assert hit.disposition == "DUPLICATE"
     assert hit.snapshot["form_first_candidate"] is True
     assert hit.snapshot["form_first_existing_url_added"] is True
+    assert hit.snapshot["form_first_form_status"] == "FORM_FOUND"
 
 
 def test_new_form_first_company_uses_existing_candidate_ingestion(auth, db, monkeypatch):
@@ -525,6 +526,7 @@ def test_new_form_first_company_uses_existing_candidate_ingestion(auth, db, monk
     db.refresh(hit)
     assert hit.snapshot["form_first_candidate"] is True
     assert hit.snapshot["form_first_corporate_check"] == "CORPORATE_CHECK_SKIPPED"
+    assert hit.snapshot["form_first_form_status"] == "FORM_FOUND"
     assert db.scalar(
         select(OperationJob.id).where(OperationJob.operation_type == "form_intelligence")
     )

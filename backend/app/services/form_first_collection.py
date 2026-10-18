@@ -144,12 +144,14 @@ def _record_hit(
         return
     hit.classification = classification[:30]
     hit.classification_reason = reason[:100]
+    fetch_status = reason if reason in {"FORM_FOUND", "FORM_JS_SUSPECTED", "NO_FORM_ON_PAGE"} else None
     hit.snapshot = {
         **hit.snapshot,
         "form_first_query_type": query_type,
         "form_first_candidate": bool(
             hit.snapshot.get("form_first_candidate") or reason == "CONTACT_PAGE_CANDIDATE"
         ),
+        **({"form_first_form_status": fetch_status} if fetch_status else {}),
         **(details or {}),
     }
 
