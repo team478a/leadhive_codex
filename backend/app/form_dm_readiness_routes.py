@@ -406,19 +406,11 @@ def form_dm_readiness(
         result_filters = [FormDmReadinessResult.job_id == snapshot.id]
         if suspected_only:
             result_filters.append(suspected_filter)
-            total = (
-                db.scalar(
-                    select(func.count()).where(
-                        FormDmReadinessResult.job_id == snapshot.id,
-                        suspected_filter,
-                    )
-                )
-                or 0
-            )
-        else:
-            total = sum(counts.values())
-        captcha_counts = db.execute(
+        captcha_reasons = ("CAPTCHA_VISIBLE", "CAPTCHA_INVISIBLE", "CAPTCHA_LEGACY")
+        grouped_counts = db.execute(
             select(
+                FormDmReadinessResult.primary_reason,
+                func.count().label("primary_count"),
                 *[
                     func.sum(
                         case(
@@ -432,24 +424,23 @@ def form_dm_readiness(
                             else_=0,
                         )
                     ).label(reason)
-                    for reason in (
-                        "CAPTCHA_VISIBLE",
-                        "CAPTCHA_INVISIBLE",
-                        "CAPTCHA_LEGACY",
-                    )
-                ]
-            ).where(FormDmReadinessResult.job_id == snapshot.id)
-        ).one()
-        counts.update({reason: value or 0 for reason, value in captcha_counts._mapping.items()})
-        counts["NON_COMPANY_SUSPECTED"] = (
-            db.scalar(
-                select(func.count()).where(
-                    FormDmReadinessResult.job_id == snapshot.id,
-                    suspected_filter,
-                )
+                    for reason in captcha_reasons
+                ],
+                func.sum(case((suspected_filter, 1), else_=0)).label("suspected_count"),
             )
-            or 0
-        )
+            .where(FormDmReadinessResult.job_id == snapshot.id)
+            .group_by(FormDmReadinessResult.primary_reason)
+        ).all()
+        captcha_totals = dict.fromkeys(captcha_reasons, 0)
+        suspected_total = 0
+        for row in grouped_counts:
+            counts[row.primary_reason] = row.primary_count
+            for reason in captcha_reasons:
+                captcha_totals[reason] += row._mapping[reason] or 0
+            suspected_total += row.suspected_count or 0
+        counts.update(captcha_totals)
+        counts["NON_COMPANY_SUSPECTED"] = suspected_total
+        total = suspected_total if suspected_only else sum(counts[reason] for reason in REASONS)
         if format == "json":
             rows = db.execute(
                 select(FormDmReadinessResult, Company, FormProfile)
