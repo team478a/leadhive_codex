@@ -11,6 +11,7 @@ import { CompanyFormInputTrial } from './CompanyFormInputTrial'
 import { CompanyFilters } from './CompanyFilters'
 import { CompanyFollowupTasksPanel } from './CompanyFollowupTasksPanel'
 import { CompanyFormDeliveryPanel } from './CompanyFormDeliveryPanel'
+import { BrowserFormRunsPanel } from './BrowserFormRunsPanel'
 import { CompanyFormBatchesPanel } from './CompanyFormBatchesPanel'
 import { CompanyFormIntelligencePanel } from './CompanyFormIntelligencePanel'
 import { CompanyFormObservationsPanel } from './CompanyFormObservationsPanel'
@@ -981,6 +982,12 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
           onCopyAssist={() => void copyFormAssist()}
           onInspect={() => void inspectForm()}
           onSubmit={() => void submitForm()}
+        />}
+        {selectedDraft?.channel === 'form' && <BrowserFormRunsPanel
+          companyId={selected.id}
+          profileId={formProfileSummaries[selected.id]?.profile_id ?? null}
+          canWrite={!readOnly}
+          doNotContact={selected.do_not_contact}
         />}
     </CompanyOutreachDraftPanel>}
     {selected && <CompanyAiReviewPanel

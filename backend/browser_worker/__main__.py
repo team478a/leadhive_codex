@@ -74,11 +74,6 @@ def run_self_test() -> None:
 
 
 def run_forever() -> None:
-    if settings.browser_form_delivery_enabled:
-        raise RuntimeError(
-            "Browser dispatch execution is not implemented yet; keep "
-            "BROWSER_FORM_DELIVERY_ENABLED=false until a later approved phase."
-        )
     if settings.worker_paused:
         raise RuntimeError("Worker is paused for maintenance.")
 

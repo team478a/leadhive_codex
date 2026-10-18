@@ -8,6 +8,7 @@ from sqlalchemy import case, or_, select
 from app.models import (
     ApprovalRequest,
     ApprovedFormDispatch,
+    BrowserFormRun,
     Company,
     OutreachAuditEvent,
     OutreachDraft,
@@ -64,6 +65,16 @@ def reconcile_locked(db, project_id=None, limit=100):
             if expired
             else "事前確認が中断されました。再準備・再承認してください。"
         )
+        browser_run = db.scalar(
+            select(BrowserFormRun).where(BrowserFormRun.dispatch_id == row.id).with_for_update()
+        )
+        if browser_run and browser_run.status in {"queued", "checking"}:
+            browser_run.status = "blocked"
+            browser_run.reason = row.reason
+            browser_run.finished_at = approval.now()
+            browser_run.worker_id = None
+            browser_run.lease_expires_at = None
+            browser_run.payload_snapshot = {"mode": browser_run.mode}
         approval.audit(
             db,
             item,

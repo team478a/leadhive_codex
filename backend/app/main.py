@@ -13,6 +13,7 @@ from app.analysis_routes import router as analysis_router
 from app.approval_routes import router as approval_router
 from app.approved_email_routes import router as approved_email_router
 from app.approved_form_routes import router as approved_form_router
+from app.browser_form_delivery_routes import router as browser_form_delivery_router
 from app.campaign_routes import router as campaign_router
 from app.cf7_candidate_routes import router as cf7_candidate_router
 from app.collection_condition_routes import router as collection_condition_router
@@ -155,6 +156,7 @@ app.include_router(raw_pair_router)
 app.include_router(approval_router)
 app.include_router(cf7_candidate_router)
 app.include_router(approved_form_router)
+app.include_router(browser_form_delivery_router)
 app.include_router(form_operations_router)
 app.include_router(form_readiness_router)
 app.include_router(approved_email_router)
