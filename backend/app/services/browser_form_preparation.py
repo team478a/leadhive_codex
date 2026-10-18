@@ -327,8 +327,7 @@ def preparation(db, company: Company, draft: OutreachDraft, *, allow_ai_suggesti
                     recommended_value=row["recommended_value"],
                     decision_source=(
                         "OPENAI"
-                        if row["field"].mapped_key == "unknown"
-                        and row["mapped_key"] != "unknown"
+                        if row["field"].mapped_key == "unknown" and row["mapped_key"] != "unknown"
                         else row["field"].decision_source
                     ),
                 )

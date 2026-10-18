@@ -391,9 +391,7 @@ def save_form_review_decision(
         if snapshot
         else None
     )
-    browser_ready = bool(
-        readiness_result and readiness_result.primary_reason == "BROWSER_READY"
-    )
+    browser_ready = bool(readiness_result and readiness_result.primary_reason == "BROWSER_READY")
     if browser_ready:
         from app.services.browser_form_preparation import browser_profile_eligible
 
