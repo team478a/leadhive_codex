@@ -28,11 +28,31 @@ from app.services.contact_discovery import same_site
 logger = logging.getLogger("leadhive.browser_worker")
 POLL_SECONDS = 2
 LEASE_RENEW_SECONDS = 20
-_last_screenshot_cleanup = 0.0
+_last_screenshot_cleanup: float | None = None
 
 
 def _deadline() -> datetime:
     return datetime.now(timezone.utc) + timedelta(seconds=settings.worker_lease_seconds)
+
+
+def cleanup_expired_screenshots(db) -> bool:
+    global _last_screenshot_cleanup
+    now = time.monotonic()
+    if _last_screenshot_cleanup is not None and now - _last_screenshot_cleanup < 3600:
+        return False
+    try:
+        db.execute(
+            delete(BrowserFormScreenshot).where(
+                BrowserFormScreenshot.created_at < datetime.now(timezone.utc) - timedelta(days=90)
+            )
+        )
+        db.commit()
+    except Exception as exc:
+        db.rollback()
+        logger.warning("browser screenshot retention cleanup failed: %s", type(exc).__name__)
+        return False
+    _last_screenshot_cleanup = now
+    return True
 
 
 def recover_stale_browser_jobs(db) -> tuple[int, int]:
@@ -407,10 +427,12 @@ def run_browser_job_once() -> bool:
 
 
 def _run_browser_job_once_locked() -> bool:
-    global _last_screenshot_cleanup
     with SessionLocal() as db:
+        cleanup_expired_screenshots(db)
+        from app.services import approved_form_worker
+
         if settings.browser_form_delivery_enabled:
-            from app.services import approved_form, approved_form_worker
+            from app.services import approved_form
 
             dispatch = approved_form.claim(db, browser_form=True)
             if dispatch is not None and dispatch.status == "checking":
@@ -435,16 +457,6 @@ def _run_browser_job_once_locked() -> bool:
                 db.commit()
                 approved_form_worker.run_browser_dry_run(claimed_run)
                 return True
-        now = time.monotonic()
-        if now - _last_screenshot_cleanup >= 3600:
-            db.execute(
-                delete(BrowserFormScreenshot).where(
-                    BrowserFormScreenshot.created_at
-                    < datetime.now(timezone.utc) - timedelta(days=90)
-                )
-            )
-            db.commit()
-            _last_screenshot_cleanup = now
         recover_stale_browser_jobs(db)
         job = claim_browser_job(db)
     if job is None:

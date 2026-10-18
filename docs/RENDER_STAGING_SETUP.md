@@ -1,4 +1,12 @@
-# Render試験配置案（まだ未配置）
+# Render初期試験配置案（履歴）
+
+> **履歴資料:** これは2026-10-10の初期配置案です。「未配置」「Web/API/DBのみ」
+> 「workerなし」といった以下の記述は当時の状態であり、現行構成ではありません。
+> 現在の公開環境は`app.leadhive.work`で、Render上のブラウザーBackground Workerも
+> 配置対象です。現行のサービス構成・更新手順・設定ゲートは
+> [`DEPLOYMENT_OPTIONS.md`](DEPLOYMENT_OPTIONS.md) と
+> [`backend/browser_worker/README.md`](../backend/browser_worker/README.md) を参照してください。
+> この履歴資料だけを使ったBlueprint同期・リソース作成は行わないでください。
 
 基準: main@c3ab53ad241262ddd7973845d7322010f5411219。
 配置候補を`deploy/cloud/render-staging.yaml`に固定した。Render利用の決定や
