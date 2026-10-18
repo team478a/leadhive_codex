@@ -63,14 +63,14 @@ non-root user. The synthetic endpoint remains fixture-only. The gated
 rendered-analysis path is implemented but is not approved or enabled for
 real-site use. Tests use only synthetic fixtures and localhost servers.
 
-## Candidate service settings (not provisioned)
+## Render service settings
 
-The proposed Render Background Worker is fully commented out in
-`deploy/cloud/render-staging.yaml`; syncing it would create a paid resource and
-is not part of this change. After separate approval, API and worker settings
-must both explicitly enable `BROWSER_FORM_ANALYSIS_ENABLED`. The browser
-delivery flag remains false. Do not synchronize a paid service before that
-approval.
+`deploy/cloud/render-staging.yaml` defines one Singapore Background Worker on
+the `1c-2g` plan. Syncing the Blueprint provisions a paid resource. The API
+and worker both explicitly keep `BROWSER_FORM_ANALYSIS_ENABLED=false` and
+`BROWSER_FORM_DELIVERY_ENABLED=false`; the worker may heartbeat but cannot
+perform browser analysis or delivery. Do not enable either feature or run
+real-site jobs until separately approved.
 
 ## Dependencies and licenses
 

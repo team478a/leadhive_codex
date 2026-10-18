@@ -58,6 +58,8 @@ services:
         value: "false"
       - key: BROWSER_FORM_ANALYSIS_ENABLED
         value: "false"
+      - key: BROWSER_FORM_DELIVERY_ENABLED
+        value: "false"
 
   - type: web
     name: leadhive-staging-web
@@ -79,6 +81,28 @@ services:
           name: leadhive-staging-api
           property: host
 
+  - type: worker
+    name: leadhive-staging-browser-worker
+    runtime: docker
+    region: singapore
+    plan: 1c-2g
+    branch: main
+    autoDeployTrigger: "off"
+    numInstances: 1
+    dockerfilePath: backend/browser_worker/Dockerfile
+    dockerContext: .
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: leadhive-staging-db
+          property: connectionString
+      - key: WORKER_PAUSED
+        value: "false"
+      - key: BROWSER_FORM_ANALYSIS_ENABLED
+        value: "false"
+      - key: BROWSER_FORM_DELIVERY_ENABLED
+        value: "false"
+
 databases:
   - name: leadhive-staging-db
     region: singapore
@@ -88,29 +112,3 @@ databases:
     diskSizeGB: 1
     storageAutoscalingEnabled: false
     ipAllowList: []
-
-# Background Worker proposal only. Keep every line commented: uncommenting and
-# syncing this paid Render resource requires separate review and Tanaka approval.
-# When approved, enable BROWSER_FORM_ANALYSIS_ENABLED on both API and worker.
-# services:
-#   - type: worker
-#     name: leadhive-staging-browser-worker
-#     runtime: docker
-#     region: singapore
-#     plan: starter
-#     branch: main
-#     autoDeployTrigger: "off"
-#     numInstances: 1
-#     dockerfilePath: backend/browser_worker/Dockerfile
-#     dockerContext: .
-#     envVars:
-#       - key: DATABASE_URL
-#         fromDatabase:
-#           name: leadhive-staging-db
-#           property: connectionString
-#       - key: WORKER_PAUSED
-#         value: "false"
-#       - key: BROWSER_FORM_ANALYSIS_ENABLED
-#         value: "false"
-#       - key: BROWSER_FORM_DELIVERY_ENABLED
-#         value: "false"
