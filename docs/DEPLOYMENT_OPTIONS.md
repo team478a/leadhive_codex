@@ -2,7 +2,8 @@
 
 LeadHiveはクラウド運用とローカル運用の両方を提供する方針です。
 同じアプリのコード・DB定義・Human承認を使い、保存場所と起動方法を分けます。
-現在のクラウド版は配置設定まで完成した試験段階で、提供用URLは未発行です。
+現在の公開アプリは`https://app.leadhive.work`です。Render上のサービス名に`staging`が
+含まれていても、利用者向け本番として運用している公開環境です。
 
 ## どちらを選ぶか
 
@@ -41,28 +42,38 @@ Native版の制限は同梱README-FIRST.txtを優先してください。
 
 管理担当者が会社専用環境を配置し、HTTPS URLと初期Userを発行します。
 利用者はアプリをインストールせず、ブラウザで使います。
-現在のRender構成はログイン/PC読取接続の試験専用で、workerを起動しません。
-大量収集・解析・送信の本運用開始には容量評価、backup/復元、worker、安全設定の確認が必要です。
-配置手順はrepositoryの`docs/RENDER_STAGING_SETUP.md`にあります。
+現在の公開環境はRender上のWeb/API/DBに加え、ブラウザー処理専用のBackground Workerを
+使います。Render構成は`deploy/cloud/render-staging.yaml`を参照してください。
+ブラウザーWorkerの`1c-2g`プランは有料です。料金、backup/復元、容量、アラートの検証状況を
+本番利用開始前に管理者が別途確認してください。初期構築時の履歴は
+`docs/RENDER_STAGING_SETUP.md`、現行の運用確認は本節と`backend/browser_worker/README.md`を参照します。
 クラウド管理用設定や秘密値はローカル配布ZIPへ同梱しません。
 
 ## 本番のワーカーの場所と更新手順
 
-2026-10-17時点で、リポジトリにある配置定義から実際の本番ワーカーの場所は確認できません。
-`deploy/cloud/render-staging.yaml` はWeb/API/DBのみで、APIの`WORKER_PAUSED`も`true`です。
-`compose.yaml`はDBのみ、`deploy/leadhive-worker.service.example`はsystemd用の例です。
-したがって、実際の本番ワーカーがRender、PCのDocker、systemdのどれで稼働しているかは未確認です。
-本番の配置先を変更する前に、Render Dashboardと稼働PC/VMのDocker・systemd状態を管理者が確認してください。
+現行のRender構成では、ブラウザーWorkerは`leadhive-staging-browser-worker`という
+Background Workerとして定義されています。`backend/browser_worker/Dockerfile`からビルドし、
+APIとは別に手動デプロイします。Renderサービス名の`staging`は公開環境の区分を表しません。
+実際の稼働状態・Live commit・環境変数は、変更のたびにRender Dashboardで確認してください。
 
-確認できる環境では、ログイン後の画面下部にAPI版と直近5分以内のワーカー版・ホスト名が表示されます。
-フォームDMの最終集計には、そのOperationJobを実行したワーカー版・ホスト名も表示されます。
-版が異なる場合は、APIと同じGit commitへワーカーを更新し、再度heartbeatと画面表示を確認してください。
+デプロイはAPI（Migration完了を確認）→Web→ブラウザーWorkerの順で行い、3サービスが同じ
+main commitを使うことを確認します。API `/api/health` が200であることに加え、画面の稼働版表示
+または`GET /api/runtime-info`で直近5分以内のWorker heartbeatとcommit一致を確認します。
+heartbeatが古い、Workerが見えない、または版が違う場合、ブラウザー解析・送信の開始を止めます。
 
-- Renderにワーカーサービスが実在する場合：Dashboardでそのサービスを特定し、APIと同じブランチ・commitを選んで手動Deployします。現在のBlueprintにはworkerサービスがないため、サービスの存在を推測して追加・起動しないでください。
-- Dockerの場合：同一commitを使い、PowerShellで`$commit = git rev-parse --short=7 HEAD`を取得してから`docker build --build-arg "LEADHIVE_GIT_COMMIT=$commit" -f backend/Dockerfile backend`でイメージを作成し、実際の配置定義に従ってworkerコンテナを更新します。
-- systemdの場合：`/opt/leadhive`のコードと依存関係をAPIと同じcommitに更新し、`sudo systemctl restart leadhive-worker`後に`sudo journalctl -u leadhive-worker -n 100`と画面のheartbeatを確認します。
+設定は用途ごとに独立しています。ブラウザー解析はAPIとブラウザーWorkerの両方で
+`BROWSER_FORM_ANALYSIS_ENABLED=true`、dry-runは両方で`BROWSER_FORM_DRY_RUN_ENABLED=true`が必要です。
+実送信にはさらに`OUTBOUND_ENABLED`、`HUMAN_APPROVED_FORM_ENABLED`、
+`BROWSER_FORM_DELIVERY_ENABLED`と、有効なHuman承認・送信上限が必要です。設定だけでは承認や
+送信可否を迂回できません。各操作の直前にAPIとWorker双方の実効値を確認してください。
+Render Blueprintは安全のため機能フラグをOFFにしています。Dashboardで変更した値を確認せずに
+Blueprint同期を行うと設定が変わる可能性があるため、同期前に必ず差分を確認してください。
 
-再起動前に実行中ジョブ・送信停止状態・バックアップを確認してください。GitHubのmergeだけでは、Renderやローカルworkerは更新されません。
+再起動前に実行中ジョブ・送信停止状態・DB backupを確認してください。GitHubのmergeだけでは
+Renderサービスは更新されません。Renderの自動デプロイは無効で、各サービスの手動Deployが必要です。
+
+旧`form-delivery-batches`経路は`LEGACY_FORM_DELIVERY_ENABLED=false`を維持します。
+新規運用は承認付き送信経路を使い、旧履歴は移行・保持方針が決まるまで削除しません。
 
 ## Codexとの接続
 

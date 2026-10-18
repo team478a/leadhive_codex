@@ -77,12 +77,22 @@ fixtures and local Playwright request fulfillment only; no real site is sent.
 ## Render service settings
 
 `deploy/cloud/render-staging.yaml` defines one Singapore Background Worker on
-the `1c-2g` plan. Syncing the Blueprint provisions a paid resource. The API
-and worker both explicitly keep `BROWSER_FORM_ANALYSIS_ENABLED=false`,
-`BROWSER_FORM_DRY_RUN_ENABLED=false`, and `BROWSER_FORM_DELIVERY_ENABLED=false`;
-the worker may heartbeat but cannot
-perform browser analysis or delivery. Do not enable either feature or run
-real-site jobs until separately approved.
+the paid `1c-2g` plan. Syncing the Blueprint provisions a paid resource. The
+Blueprint explicitly sets analysis and delivery OFF on the API and worker;
+`BROWSER_FORM_DRY_RUN_ENABLED` is omitted there and remains OFF through the
+application default. `OUTBOUND_ENABLED` and `HUMAN_APPROVED_FORM_ENABLED` are
+also OFF by default on the worker. The tracked Blueprint is therefore a safe
+baseline, not a report of the live Render environment.
+
+Before processing live work, verify the effective flags on both services in
+Render. Analysis requires `BROWSER_FORM_ANALYSIS_ENABLED` on the API and
+browser worker. Dry-run separately requires `BROWSER_FORM_DRY_RUN_ENABLED` on
+both. Real submission additionally requires `OUTBOUND_ENABLED`,
+`HUMAN_APPROVED_FORM_ENABLED`, and `BROWSER_FORM_DELIVERY_ENABLED` to permit
+execution, plus a valid Human-approved dispatch and the configured limits.
+Do not sync the Blueprint until its OFF values have been compared with the
+intended live settings; deployment configuration changes do not grant approval
+or override the application-level send guards.
 
 ## Dependencies and licenses
 
