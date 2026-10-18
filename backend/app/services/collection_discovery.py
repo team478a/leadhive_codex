@@ -1,7 +1,6 @@
 """Persist observations before ingestion, and track derived ingestion outcomes."""
 
 import re
-from collections import Counter
 from datetime import datetime, timedelta, timezone
 from urllib.parse import urlsplit
 from uuid import UUID
@@ -9,7 +8,13 @@ from uuid import UUID
 from sqlalchemy import func, select
 
 from app.config import settings
-from app.models import CollectionDiscoveryHit, CollectionJob
+from app.models import (
+    CollectionDiscoveryHit,
+    CollectionJob,
+    FormDmReadinessResult,
+    LeadProcessingUsage,
+    OperationJob,
+)
 from app.services.collection import Candidate, canonicalize_url
 from app.services.discovery_capture import DiscoveryCapture
 from app.services.presence_platforms import DOMAINS, classify
@@ -260,23 +265,154 @@ def mark_discovery(db, job, candidate, disposition, company=None):
 def discovery_summary(db, job):
     if not job.discovery_summary:
         return {"available": False, "received_count": None, "captured_count": None}
-    counts = Counter(
-        db.scalars(
-            select(CollectionDiscoveryHit.disposition).where(
-                CollectionDiscoveryHit.collection_job_id == job.id
+    hits = CollectionDiscoveryHit
+    snapshot = hits.snapshot
+    query_type = snapshot["form_first_query_type"].astext
+    is_candidate = snapshot["form_first_candidate"].astext == "true"
+    form_status = snapshot["form_first_form_status"].astext
+    corporate_status = snapshot["form_first_corporate_check"].astext
+    url_added = snapshot["form_first_existing_url_added"].astext == "true"
+    groups = db.execute(
+        select(
+            hits.disposition,
+            hits.classification,
+            hits.classification_reason,
+            query_type,
+            is_candidate,
+            form_status,
+            corporate_status,
+            func.count(),
+        )
+        .where(hits.collection_job_id == job.id)
+        .group_by(
+            hits.disposition,
+            hits.classification,
+            hits.classification_reason,
+            query_type,
+            is_candidate,
+            form_status,
+            corporate_status,
+        )
+    ).all()
+    dispositions: dict[str, int] = {}
+    kinds: dict[str, int] = {}
+    reasons: dict[str, int] = {}
+    type_totals: dict[str, dict[str, int]] = {}
+    corporate_checks: dict[str, int] = {}
+    candidate_count = form_found_count = 0
+    for disposition, classification, reason, kind, candidate, status, corporate, count in groups:
+        dispositions[disposition] = dispositions.get(disposition, 0) + count
+        kinds[classification] = kinds.get(classification, 0) + count
+        reasons[reason] = reasons.get(reason, 0) + count
+        if kind:
+            totals = type_totals.setdefault(kind, {"search_results": 0, "contact_candidates": 0})
+            totals["search_results"] += count
+            if candidate:
+                totals["contact_candidates"] += count
+        if candidate:
+            candidate_count += count
+        if status in {"FORM_FOUND", "FORM_JS_SUSPECTED"}:
+            form_found_count += count
+        if corporate:
+            corporate_checks[corporate] = corporate_checks.get(corporate, 0) + count
+
+    search_request_count = (
+        db.scalar(
+            select(func.count(LeadProcessingUsage.id)).where(
+                LeadProcessingUsage.collection_job_id == job.id,
+                LeadProcessingUsage.kind == "search",
+                LeadProcessingUsage.provider == "serper",
             )
         )
+        or 0
     )
-    kinds = Counter(
-        db.scalars(
-            select(CollectionDiscoveryHit.classification).where(
-                CollectionDiscoveryHit.collection_job_id == job.id
+    operation = db.get(OperationJob, job.operation_job_id) if job.operation_job_id else None
+    payload = operation.payload if operation else {}
+    collection_method = (payload or {}).get("collection_method", "company_first")
+    query_map = (payload or {}).get("form_first_query_map") or {}
+    request_query_type = (query_map.get(job.keyword) or {}).get("query_type")
+    for query in query_map.values():
+        kind = query.get("query_type")
+        if kind:
+            type_totals.setdefault(kind, {"search_results": 0, "contact_candidates": 0})
+    for kind, totals in type_totals.items():
+        results = totals["search_results"]
+        candidates = totals["contact_candidates"]
+        totals["candidate_rate_percent"] = round(candidates * 100 / results, 1) if results else None
+        totals["search_requests"] = search_request_count if kind == request_query_type else 0
+        totals["low_effect"] = bool(results and candidates * 100 / results < 20)
+
+    existing_url_added_count = (
+        db.scalar(
+            select(func.count(func.distinct(hits.company_id))).where(
+                hits.collection_job_id == job.id,
+                hits.company_id.is_not(None),
+                url_added,
             )
         )
+        or 0
     )
+    newly_registered_count = (
+        db.scalar(
+            select(func.count(func.distinct(hits.company_id))).where(
+                hits.collection_job_id == job.id,
+                hits.company_id.is_not(None),
+                hits.disposition == "SAVED",
+            )
+        )
+        or 0
+    )
+    readiness_job_id = db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == job.project_id,
+            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.status == "completed",
+        )
+        .order_by(OperationJob.finished_at.desc(), OperationJob.created_at.desc())
+        .limit(1)
+    )
+    sendable_count = None
+    if readiness_job_id:
+        sendable_count = (
+            db.scalar(
+                select(func.count(func.distinct(FormDmReadinessResult.company_id)))
+                .join(hits, hits.company_id == FormDmReadinessResult.company_id)
+                .where(
+                    FormDmReadinessResult.job_id == readiness_job_id,
+                    FormDmReadinessResult.primary_reason.in_(("READY", "BROWSER_READY")),
+                    hits.collection_job_id == job.id,
+                )
+            )
+            or 0
+        )
+    metrics = {
+        "collection_method": collection_method,
+        "search_request_count": search_request_count,
+        "contact_page_candidate_count": candidate_count,
+        "form_found_count": form_found_count,
+        "newly_registered_company_count": newly_registered_count,
+        "existing_contact_url_added_company_count": existing_url_added_count,
+        "corporate_checks": {
+            "MATCHED": corporate_checks.get("CORPORATE_NUMBER_MATCHED", 0),
+            "AMBIGUOUS": corporate_checks.get("CORPORATE_NUMBER_AMBIGUOUS", 0),
+            "NOT_FOUND": corporate_checks.get("CORPORATE_NUMBER_NOT_FOUND", 0),
+            "SKIPPED": corporate_checks.get("CORPORATE_CHECK_SKIPPED", 0),
+            "ERROR": corporate_checks.get("CORPORATE_CHECK_ERROR", 0),
+        },
+        "exclusion_reasons": reasons,
+        "query_types": type_totals,
+        "sendable_company_count": sendable_count,
+        "sendable_companies_per_100_searches": (
+            round(sendable_count * 100 / search_request_count, 1)
+            if sendable_count is not None and search_request_count
+            else None
+        ),
+    }
     return {
         "available": True,
         **job.discovery_summary,
-        "dispositions": dict(counts),
-        "classifications": dict(kinds),
+        "dispositions": dispositions,
+        "classifications": kinds,
+        "metrics": metrics,
     }
