@@ -443,9 +443,10 @@ def test_existing_company_gets_contact_url_and_form_analysis_is_queued(auth, db,
     db.refresh(hit)
     assert hit.classification_reason == "REJECT_ALREADY_KNOWN"
     assert hit.disposition == "DUPLICATE"
-    assert hit.snapshot["form_first_candidate"] is True
-    assert hit.snapshot["form_first_existing_url_added"] is True
-    assert hit.snapshot["form_first_form_status"] == "FORM_FOUND"
+    assert hit.form_first_metadata["form_first_candidate"] is True
+    assert hit.form_first_metadata["form_first_existing_url_added"] is True
+    assert hit.form_first_metadata["form_first_form_status"] == "FORM_FOUND"
+    assert "form_first_candidate" not in hit.snapshot
 
 
 def test_new_form_first_company_uses_existing_candidate_ingestion(auth, db, monkeypatch):
@@ -524,9 +525,10 @@ def test_new_form_first_company_uses_existing_candidate_ingestion(auth, db, monk
         "source_url"
     ].endswith("/company")
     db.refresh(hit)
-    assert hit.snapshot["form_first_candidate"] is True
-    assert hit.snapshot["form_first_corporate_check"] == "CORPORATE_CHECK_SKIPPED"
-    assert hit.snapshot["form_first_form_status"] == "FORM_FOUND"
+    assert hit.form_first_metadata["form_first_candidate"] is True
+    assert hit.form_first_metadata["form_first_corporate_check"] == "CORPORATE_CHECK_SKIPPED"
+    assert hit.form_first_metadata["form_first_form_status"] == "FORM_FOUND"
+    assert "form_first_candidate" not in hit.snapshot
     assert db.scalar(
         select(OperationJob.id).where(OperationJob.operation_type == "form_intelligence")
     )

@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, UniqueConstraint, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -28,6 +28,9 @@ class CollectionDiscoveryHit(Base):
     )
     position: Mapped[int] = mapped_column()
     snapshot: Mapped[dict] = mapped_column(JSONB)
+    form_first_metadata: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False
+    )
     raw_hash: Mapped[str] = mapped_column(String(64))
     classification: Mapped[str] = mapped_column(String(30))
     classification_version: Mapped[str] = mapped_column(String(20), default="1")
