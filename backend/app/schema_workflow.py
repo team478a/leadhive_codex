@@ -200,6 +200,13 @@ class OperationJobOut(BaseModel):
     bulk_template_results: dict = Field(
         default_factory=dict, validation_alias=AliasPath("payload", "bulk_template_results")
     )
+    readiness_reanalysis_reason: str | None = Field(
+        default=None, validation_alias=AliasPath("payload", "readiness_reanalysis_reason")
+    )
+    readiness_reanalysis_matched_count: int | None = Field(
+        default=None,
+        validation_alias=AliasPath("payload", "readiness_reanalysis_matched_count"),
+    )
 
     @field_validator("collection_runtime_history", mode="before")
     @classmethod

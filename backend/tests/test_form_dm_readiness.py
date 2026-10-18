@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 import pytest
+from sqlalchemy import select
 
 from app.models import Company, FormProfile, FormProfileField, Project, ProjectMember
 from tests.test_approval_foundation import workspace as workspace  # noqa: F401
@@ -367,3 +368,126 @@ def test_form_dm_readiness_hides_other_projects(auth, form_source, users, db):
         json={"email": users[1].email, "password": "test-only-long-password"},
     )
     assert auth.get(f"/api/projects/{project.id}/form-dm-readiness").status_code == 404
+
+
+def test_reason_reanalysis_uses_only_snapshot_matches_and_reports_progress(auth, form_source, db):
+    from app.models import OperationJob
+
+    project, company, _draft, profile, _sender, _fields = form_source
+    company_id = company.id
+    profile.compatibility_reason_code = "MULTIPART_OR_FILE"
+    db.commit()
+
+    project_id = aggregate(auth, db, project)
+    response = auth.post(
+        f"/api/projects/{project_id}/form-dm-readiness/reanalyze?reason=MULTIPART_ONLY"
+    )
+
+    assert response.status_code == 202, response.text
+    body = response.json()
+    assert body["operation_type"] == "form_intelligence"
+    assert body["total_count"] == 1
+    assert body["readiness_reanalysis_reason"] == "MULTIPART_ONLY"
+    assert body["readiness_reanalysis_matched_count"] == 1
+    job = db.get(OperationJob, body["id"])
+    assert job.payload["company_ids"] == [str(company_id)]
+    assert job.payload["force"] is True
+    assert job.payload["readiness_reanalysis_snapshot_job_id"]
+    assert job.status == "queued"
+
+    readiness = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+    assert readiness["active_reanalysis_job"]["id"] == str(job.id)
+    job.status = "running"
+    job.processed_count = 1
+    db.commit()
+    progress = auth.get(f"/api/projects/{project_id}/form-dm-readiness/reanalysis-jobs/{job.id}")
+    assert progress.status_code == 200, progress.text
+    assert progress.json()["processed_count"] == 1
+    assert progress.json()["total_count"] == 1
+    assert not db.scalar(
+        select(OperationJob).where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type.in_(("form_delivery", "form_approval_batch")),
+        )
+    )
+
+
+def test_reason_reanalysis_includes_secondary_captcha_matches(auth, form_source, db):
+    from app.models import OperationJob
+
+    project, company, _draft, profile, _sender, _fields = form_source
+    company_id = company.id
+    company.do_not_contact = True
+    profile.captcha_type = "CAPTCHA_RECAPTCHA_V2"
+    db.commit()
+    project_id = aggregate(auth, db, project)
+
+    response = auth.post(
+        f"/api/projects/{project_id}/form-dm-readiness/reanalyze?reason=CAPTCHA_VISIBLE"
+    )
+
+    assert response.status_code == 202, response.text
+    assert response.json()["readiness_reanalysis_matched_count"] == 1
+    job = db.get(OperationJob, response.json()["id"])
+    assert job.payload["company_ids"] == [str(company_id)]
+
+
+def test_reason_reanalysis_caps_job_at_500_companies(auth, form_source, db):
+    from app.models import FormDmReadinessResult, OperationJob
+
+    project = form_source[0]
+    snapshot = OperationJob(
+        project_id=project.id,
+        operation_type="form_dm_readiness",
+        status="completed",
+        payload={},
+        finished_at=datetime.now(timezone.utc),
+    )
+    db.add(snapshot)
+    db.flush()
+    companies = [
+        Company(
+            project_id=project.id,
+            company_name=f"再解析対象{index:04d}",
+            domain=f"reanalysis-{index}.example",
+            source="url",
+        )
+        for index in range(501)
+    ]
+    db.add_all(companies)
+    db.flush()
+    profiles = [
+        FormProfile(
+            company_id=company.id,
+            form_url=f"https://{company.domain}/contact",
+            form_found=True,
+            is_primary=True,
+        )
+        for company in companies
+    ]
+    db.add_all(profiles)
+    db.flush()
+    db.add_all(
+        [
+            FormDmReadinessResult(
+                job_id=snapshot.id,
+                company_id=company.id,
+                profile_id=profile.id,
+                primary_reason="MULTIPART_ONLY",
+                secondary_reasons=[],
+                review_queue_eligible=False,
+            )
+            for company, profile in zip(companies, profiles, strict=True)
+        ]
+    )
+    db.commit()
+
+    response = auth.post(
+        f"/api/projects/{project.id}/form-dm-readiness/reanalyze?reason=MULTIPART_ONLY"
+    )
+
+    assert response.status_code == 202, response.text
+    job = db.get(OperationJob, response.json()["id"])
+    assert job.total_count == 500
+    assert len(job.payload["company_ids"]) == 500
+    assert response.json()["readiness_reanalysis_matched_count"] == 501
