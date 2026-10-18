@@ -150,6 +150,33 @@ class OperationJobInput(Input):
         return self
 
 
+class BrowserFormAnalysisInput(Input):
+    fixture: Literal[
+        "normal",
+        "cf7_style",
+        "confirmation",
+        "javascript_rendered",
+        "blocked_submit",
+        "network_probe",
+        "file_input",
+        "popup_probe",
+        "file_chooser_probe",
+        "download_probe",
+        "login_navigation",
+    ]
+    fields: dict[str, str] = Field(default_factory=dict, max_length=100)
+
+    @field_validator("fields")
+    @classmethod
+    def validate_synthetic_fields(cls, fields: dict[str, str]) -> dict[str, str]:
+        if any(
+            not selector or len(selector) > 300 or len(value) > 4000
+            for selector, value in fields.items()
+        ):
+            raise ValueError("Synthetic browser fields exceed the allowed size.")
+        return fields
+
+
 class OperationJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     collection_progress: dict | None = Field(

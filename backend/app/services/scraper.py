@@ -16,8 +16,10 @@ from app.config import settings
 from app.services import site_extraction
 from app.services.collection import canonicalize_url
 from app.services.contact_discovery import navigation_links, same_site
+from app.services.robots import robots_parser
 
 logger = logging.getLogger("leadhive")
+
 
 PREFECTURES = (
     "北海道",
@@ -327,11 +329,9 @@ class SafeFetcher:
         # Failure to fetch robots is not evidence of a robots prohibition.
         # Propagate the acquisition failure, remaining fail-closed.
         page = self._request(robots_url, 256_000, robots_request=True)
-        parser = urllib.robotparser.RobotFileParser()
-        parser.set_url(robots_url)
-        parser.parse(page.html.splitlines())
         if not hasattr(self, "_robots"):
             self._robots = {}
+        parser = robots_parser(page.html, robots_url)
         self._robots[origin] = parser
         return parser.can_fetch(settings.scraper_user_agent, url)
 
