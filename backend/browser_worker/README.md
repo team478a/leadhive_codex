@@ -1,11 +1,12 @@
-# Isolated browser worker (synthetic and gated read-only analysis)
+# Isolated browser worker (synthetic analysis and gated form delivery)
 
 Synthetic mode runs packaged fixtures and can fill explicitly selected test
 controls for offline tests. Rendered-page mode performs read-only, GET-only
-analysis of server-selected contact-page URLs. It is gated by
-`BROWSER_FORM_ANALYSIS_ENABLED`, which defaults to `false` in the API, worker
-image, and staging configuration. Do not enable it or run real-site jobs until
-Tanaka has approved the target scope. Neither mode submits forms.
+analysis of server-selected contact-page URLs. Browser form delivery runs only
+approved same-site plans. Both are gated by their respective environment
+settings and default to `false`. Do not enable browser delivery before separate
+operator approval. Synthetic delivery tests fulfill every request in Playwright
+and never access a real site.
 
 ## Safety and resource limits
 
@@ -45,6 +46,16 @@ Tanaka has approved the target scope. Neither mode submits forms.
   worker explicitly excludes this operation type. The service writes a
   `browser-`-prefixed row to the existing `worker_heartbeats` table on startup
   and every 30 seconds.
+- Delivery workers claim only `browser_form` reservations; the application
+  worker continues to claim only `form_direct`. A database advisory lock
+  serializes browser execution across worker instances. Dry-runs require a
+  current form-review confirmation but not send approval, fill/read back only
+  planned values, capture screenshots, and prohibit every non-GET request.
+- Before an approved POST, the existing `begin` commits the consumed approval
+  and an `unknown` delivery marker. The existing `finish` records `submitted`,
+  `failed`, or `unknown`; ambiguous results are never retried. Both JPEGs are
+  stored in PostgreSQL (max 200,000 bytes each), exposed only to authorized
+  project members, and pruned after 90 days. No Render persistent disk is used.
 
 ## Local synthetic tests
 
@@ -59,9 +70,9 @@ python -m pytest browser_worker/tests -q
 
 The official Playwright Python image already contains Chromium and its system
 dependencies; the Python package is installed separately. The image runs as a
-non-root user. The synthetic endpoint remains fixture-only. The gated
-rendered-analysis path is implemented but is not approved or enabled for
-real-site use. Tests use only synthetic fixtures and localhost servers.
+non-root user. The synthetic endpoint remains fixture-only. Rendered analysis
+and approved delivery remain disabled by default. Tests use packaged synthetic
+fixtures and local Playwright request fulfillment only; no real site is sent.
 
 ## Candidate service settings (not provisioned)
 
@@ -69,7 +80,7 @@ The proposed Render Background Worker is fully commented out in
 `deploy/cloud/render-staging.yaml`; syncing it would create a paid resource and
 is not part of this change. After separate approval, API and worker settings
 must both explicitly enable `BROWSER_FORM_ANALYSIS_ENABLED`. The browser
-delivery flag remains false. Do not synchronize a paid service before that
+delivery flag also remains false. Do not synchronize a paid service before that
 approval.
 
 ## Dependencies and licenses

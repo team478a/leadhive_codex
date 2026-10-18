@@ -209,7 +209,7 @@ class FormDelivery(Timestamps, Base):
             name="ck_form_delivery_status",
         ),
         CheckConstraint(
-            "delivery_method IN ('direct', 'codex_assisted', 'adapter')",
+            "delivery_method IN ('direct', 'codex_assisted', 'adapter', 'browser')",
             name="ck_form_delivery_method",
         ),
         CheckConstraint(

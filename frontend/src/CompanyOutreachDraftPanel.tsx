@@ -240,6 +240,8 @@ export function CompanyOutreachDraftPanel({
                           ? 'フォーム送信承認'
                           : approval.approval_type === 'form_adapter'
                             ? '管理下テストフォーム承認'
+                            : approval.approval_type === 'browser_form'
+                              ? 'ブラウザーフォーム送信承認'
                             : 'Codex支援フォーム承認'}
                     </strong>
                     <p className="muted text-xs">

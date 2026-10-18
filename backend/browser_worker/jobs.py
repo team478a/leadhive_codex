@@ -6,15 +6,17 @@ import logging
 import time
 import uuid
 from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from urllib.parse import urlsplit, urlunsplit
 
-from sqlalchemy import select, text
+from sqlalchemy import delete, select, text
 
 from app.config import settings
 from app.database import SessionLocal, engine
 from app.model_operations import OperationJob
-from app.models import Company, FormProfile
+from app.models import BrowserFormRun, BrowserFormScreenshot, Company, FormProfile
 from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST
 from app.services.browser_form_analysis import (
     MAX_BROWSER_ANALYSIS_TARGETS,
@@ -26,6 +28,7 @@ from app.services.contact_discovery import same_site
 logger = logging.getLogger("leadhive.browser_worker")
 POLL_SECONDS = 2
 LEASE_RENEW_SECONDS = 20
+_last_screenshot_cleanup = 0.0
 
 
 def _deadline() -> datetime:
@@ -390,7 +393,58 @@ def run_claimed_browser_job(job: OperationJob) -> None:
 def run_browser_job_once() -> bool:
     if settings.worker_paused:
         return False
+    with engine.connect() as lock_connection:
+        acquired = lock_connection.execute(
+            text("SELECT pg_try_advisory_lock(4781004)")
+        ).scalar_one()
+        if not acquired:
+            return False
+        try:
+            return _run_browser_job_once_locked()
+        finally:
+            lock_connection.execute(text("SELECT pg_advisory_unlock(4781004)"))
+            lock_connection.commit()
+
+
+def _run_browser_job_once_locked() -> bool:
+    global _last_screenshot_cleanup
     with SessionLocal() as db:
+        if settings.browser_form_delivery_enabled:
+            from app.services import approved_form, approved_form_worker
+
+            recover_stale_dry_runs(db)
+
+            dispatch = approved_form.claim(db, browser_form=True)
+            if dispatch is not None and dispatch.status == "checking":
+                claimed = {
+                    "id": dispatch.id,
+                    "worker_id": dispatch.worker_id,
+                    "approval_id": dispatch.approval_id,
+                    "payload_snapshot": deepcopy(dispatch.payload_snapshot),
+                }
+                db.commit()
+                approved_form_worker.run_browser_form(SimpleNamespace(**claimed))
+                return True
+            dry_run = claim_browser_dry_run(db)
+            if dry_run is not None:
+                claimed_run = SimpleNamespace(
+                    id=dry_run.id,
+                    worker_id=dry_run.worker_id,
+                    payload_snapshot=deepcopy(dry_run.payload_snapshot),
+                )
+                db.commit()
+                approved_form_worker.run_browser_dry_run(claimed_run)
+                return True
+        now = time.monotonic()
+        if now - _last_screenshot_cleanup >= 3600:
+            db.execute(
+                delete(BrowserFormScreenshot).where(
+                    BrowserFormScreenshot.created_at
+                    < datetime.now(timezone.utc) - timedelta(days=90)
+                )
+            )
+            db.commit()
+            _last_screenshot_cleanup = now
         recover_stale_browser_jobs(db)
         job = claim_browser_job(db)
     if job is None:
@@ -398,3 +452,44 @@ def run_browser_job_once() -> bool:
     logger.info("browser analysis started: id=%s", job.id)
     run_claimed_browser_job(job)
     return True
+
+
+def claim_browser_dry_run(db) -> BrowserFormRun | None:
+    if not settings.browser_form_delivery_enabled:
+        return None
+    run = db.scalar(
+        select(BrowserFormRun)
+        .where(BrowserFormRun.mode == "dry_run", BrowserFormRun.status == "queued")
+        .order_by(BrowserFormRun.created_at, BrowserFormRun.id)
+        .with_for_update(skip_locked=True)
+        .limit(1)
+    )
+    if run is None:
+        return None
+    run.status = "checking"
+    run.worker_id = uuid.uuid4()
+    run.lease_expires_at = _deadline()
+    run.started_at = None
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+def recover_stale_dry_runs(db) -> int:
+    now = datetime.now(timezone.utc)
+    rows = db.scalars(
+        select(BrowserFormRun)
+        .where(
+            BrowserFormRun.mode == "dry_run",
+            BrowserFormRun.status == "checking",
+            BrowserFormRun.lease_expires_at < now,
+        )
+        .with_for_update(skip_locked=True)
+        .limit(50)
+    ).all()
+    for run in rows:
+        run.status, run.worker_id, run.lease_expires_at = "queued", None, None
+        run.reason = "dry-runワーカー中断を検出したため再開します。"
+    if rows:
+        db.commit()
+    return len(rows)

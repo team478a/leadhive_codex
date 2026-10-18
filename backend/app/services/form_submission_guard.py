@@ -39,7 +39,7 @@ def reserve_form_submission(
 
     if not allowed(db):
         raise FormDeliveryError("送信可能時間外のため待機してください。", "sending_window_closed")
-    if delivery_method not in {"direct", "adapter"}:
+    if delivery_method not in {"direct", "adapter", "browser"}:
         raise FormDeliveryError("未対応の実行方式です。", "unsupported")
     # Short global lock serializes reservation only; network I/O starts after commit.
     db.execute(text("SELECT pg_advisory_xact_lock(4781003)"))

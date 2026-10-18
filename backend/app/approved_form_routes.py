@@ -8,7 +8,13 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.model_approved_form import FormDispatchLimits
-from app.models import ApprovalRequest, ApprovedFormDispatch, OutreachAuditEvent, User
+from app.models import (
+    ApprovalRequest,
+    ApprovedFormDispatch,
+    BrowserFormRun,
+    OutreachAuditEvent,
+    User,
+)
 from app.project_access import project_access
 from app.schema_approved_form import FormDispatchBulk, FormDispatchCreate, FormLimitsUpdate
 from app.security import current_admin, current_user
@@ -26,6 +32,7 @@ def limits(db: Session = Depends(get_db), user: User = Depends(current_user)):
         **{c.name: getattr(row, c.name) for c in FormDispatchLimits.__table__.columns},
         "can_manage": user.is_admin,
         "execution_enabled": settings.outbound_enabled and settings.human_approved_form_enabled,
+        "browser_form_delivery_enabled": settings.browser_form_delivery_enabled,
         "browser_form_execution_enabled": settings.outbound_enabled
         and settings.human_approved_form_enabled
         and settings.browser_form_delivery_enabled,
@@ -209,6 +216,13 @@ def cancel(dispatch_id: UUID, db: Session = Depends(get_db), user: User = Depend
     row.status, row.finished_at = "cancelled", human_approval.now()
     if row.payload_snapshot.get("delivery_method") == "form_adapter":
         row.worker_id = None
+    browser_run = db.scalar(
+        select(BrowserFormRun).where(BrowserFormRun.dispatch_id == row.id).with_for_update()
+    )
+    if browser_run and browser_run.status in {"queued", "checking"}:
+        browser_run.status, browser_run.finished_at = "cancelled", row.finished_at
+        browser_run.worker_id, browser_run.lease_expires_at = None, None
+        browser_run.payload_snapshot = {"mode": browser_run.mode}
     human_approval.audit(
         db, db.get(ApprovalRequest, row.approval_id), "form dispatch cancelled", "HUMAN", user.id
     )
