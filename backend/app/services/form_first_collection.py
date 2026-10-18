@@ -147,15 +147,18 @@ def _record_hit(
     fetch_status = (
         reason if reason in {"FORM_FOUND", "FORM_JS_SUSPECTED", "NO_FORM_ON_PAGE"} else None
     )
-    hit.snapshot = {
-        **hit.snapshot,
-        "form_first_query_type": query_type,
-        "form_first_candidate": bool(
-            hit.snapshot.get("form_first_candidate") or reason == "CONTACT_PAGE_CANDIDATE"
-        ),
-        **({"form_first_form_status": fetch_status} if fetch_status else {}),
-        **(details or {}),
-    }
+    metadata = dict(hit.form_first_metadata or {})
+    metadata.update(
+        {
+            "form_first_query_type": query_type,
+            "form_first_candidate": bool(
+                metadata.get("form_first_candidate") or reason == "CONTACT_PAGE_CANDIDATE"
+            ),
+            **({"form_first_form_status": fetch_status} if fetch_status else {}),
+            **(details or {}),
+        }
+    )
+    hit.form_first_metadata = metadata
 
 
 def _label_value_pairs(soup: BeautifulSoup) -> dict[str, str]:
@@ -498,15 +501,11 @@ def _queue_form_analysis(db, project_id, company_ids: list) -> None:
     )
     if active:
         payload = dict(active.payload or {})
-        if active.status == "queued" and payload.get("company_ids"):
-            payload["company_ids"] = list(
-                dict.fromkeys([*payload.get("company_ids", []), *map(str, company_ids)])
-            )
-        else:
-            payload["form_first_company_ids"] = list(
-                dict.fromkeys([*payload.get("form_first_company_ids", []), *map(str, company_ids)])
-            )
+        payload["form_first_company_ids"] = list(
+            dict.fromkeys([*payload.get("form_first_company_ids", []), *map(str, company_ids)])
+        )
         active.payload = payload
+        db.flush()
         return
     from app.services.operations import add_operation_job
 

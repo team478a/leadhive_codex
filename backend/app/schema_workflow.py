@@ -16,6 +16,12 @@ from app.schema_collection import CollectionJobOut
 from app.schema_core import CompanyOut, Input, Keyword
 from app.schema_external_presence import PresenceSearchPlan
 
+FormFirstQueryType = Literal["intitle_contact", "inurl_contact", "inurl_inquiry", "form_words"]
+
+
+def default_form_first_query_types() -> list[FormFirstQueryType]:
+    return ["intitle_contact", "inurl_contact", "inurl_inquiry", "form_words"]
+
 
 class OutreachQueueItemOut(BaseModel):
     company: CompanyOut
@@ -88,10 +94,8 @@ class OperationJobInput(Input):
     article_limit: int = Field(default=20, ge=1, le=50, strict=True)
     dry_run: bool = False
     collection_method: Literal["company_first", "form_first"] = "company_first"
-    form_first_query_types: list[
-        Literal["intitle_contact", "inurl_contact", "inurl_inquiry", "form_words"]
-    ] = Field(
-        default_factory=lambda: ["intitle_contact", "inurl_contact", "inurl_inquiry", "form_words"],
+    form_first_query_types: list[FormFirstQueryType] = Field(
+        default_factory=default_form_first_query_types,
         min_length=1,
         max_length=4,
     )

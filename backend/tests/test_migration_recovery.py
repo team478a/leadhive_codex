@@ -70,6 +70,9 @@ from app.database import SessionLocal, engine
 from app.models import OperationJob, Project, TargetProfile, User
 
 assert 'form_dm_readiness_results' in inspect(engine).get_table_names()
+assert 'form_first_metadata' in {
+    column['name'] for column in inspect(engine).get_columns('collection_discovery_hits')
+}
 with SessionLocal() as db:
     user = User(email='migration-recovery@example.test', password_hash='test')
     db.add(user)
