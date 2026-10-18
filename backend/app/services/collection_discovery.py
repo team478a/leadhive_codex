@@ -2,6 +2,7 @@
 
 import re
 from datetime import datetime, timedelta, timezone
+from typing import TypedDict
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -38,6 +39,16 @@ THIRD_PARTY_DOMAINS = {
     "precious.jp",
     "kit-press.com",
 }
+
+
+class QueryTypeTotals(TypedDict):
+    search_results: int
+    contact_candidates: int
+    candidate_rate_percent: float | None
+    search_requests: int
+    low_effect: bool
+
+
 JOB_SOURCE_DOMAINS = {"townwork.net", "baitoru.com", "next.rikunabi.com", "r-agent.com"}
 ARTICLE_PATH_SEGMENTS = {"blog", "blogs", "article", "articles", "column", "columns"}
 COMPARISON_TITLE_MARKERS = {
@@ -266,12 +277,12 @@ def discovery_summary(db, job):
     if not job.discovery_summary:
         return {"available": False, "received_count": None, "captured_count": None}
     hits = CollectionDiscoveryHit
-    snapshot = hits.snapshot
-    query_type = snapshot["form_first_query_type"].astext
-    is_candidate = snapshot["form_first_candidate"].astext == "true"
-    form_status = snapshot["form_first_form_status"].astext
-    corporate_status = snapshot["form_first_corporate_check"].astext
-    url_added = snapshot["form_first_existing_url_added"].astext == "true"
+    metadata = hits.form_first_metadata
+    query_type = metadata["form_first_query_type"].astext
+    is_candidate = metadata["form_first_candidate"].astext == "true"
+    form_status = metadata["form_first_form_status"].astext
+    corporate_status = metadata["form_first_corporate_check"].astext
+    url_added = metadata["form_first_existing_url_added"].astext == "true"
     groups = db.execute(
         select(
             hits.disposition,
@@ -297,7 +308,7 @@ def discovery_summary(db, job):
     dispositions: dict[str, int] = {}
     kinds: dict[str, int] = {}
     reasons: dict[str, int] = {}
-    type_totals: dict[str, dict[str, int]] = {}
+    type_totals: dict[str, QueryTypeTotals] = {}
     corporate_checks: dict[str, int] = {}
     candidate_count = form_found_count = 0
     for disposition, classification, reason, kind, candidate, status, corporate, count in groups:
@@ -305,7 +316,16 @@ def discovery_summary(db, job):
         kinds[classification] = kinds.get(classification, 0) + count
         reasons[reason] = reasons.get(reason, 0) + count
         if kind:
-            totals = type_totals.setdefault(kind, {"search_results": 0, "contact_candidates": 0})
+            totals = type_totals.setdefault(
+                kind,
+                {
+                    "search_results": 0,
+                    "contact_candidates": 0,
+                    "candidate_rate_percent": None,
+                    "search_requests": 0,
+                    "low_effect": False,
+                },
+            )
             totals["search_results"] += count
             if candidate:
                 totals["contact_candidates"] += count
@@ -334,7 +354,16 @@ def discovery_summary(db, job):
     for query in query_map.values():
         kind = query.get("query_type")
         if kind:
-            type_totals.setdefault(kind, {"search_results": 0, "contact_candidates": 0})
+            type_totals.setdefault(
+                kind,
+                {
+                    "search_results": 0,
+                    "contact_candidates": 0,
+                    "candidate_rate_percent": None,
+                    "search_requests": 0,
+                    "low_effect": False,
+                },
+            )
     for kind, totals in type_totals.items():
         results = totals["search_results"]
         candidates = totals["contact_candidates"]

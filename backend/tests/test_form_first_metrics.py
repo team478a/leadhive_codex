@@ -102,7 +102,8 @@ def test_discovery_metrics_use_bounded_sql_aggregates_for_large_projects(auth, d
             CollectionDiscoveryHit(
                 collection_job_id=collection.id,
                 position=index + 1,
-                snapshot={
+                snapshot={"link": f"https://metric-{index}.test/contact"},
+                form_first_metadata={
                     "form_first_query_type": query_type,
                     "form_first_candidate": candidate,
                     "form_first_form_status": "FORM_FOUND" if index < 30 else "NO_FORM_ON_PAGE",
@@ -123,6 +124,8 @@ def test_discovery_metrics_use_bounded_sql_aggregates_for_large_projects(auth, d
     statements = []
 
     def count_statement(_connection, _cursor, statement, _parameters, _context, _many):
+        if statement.lstrip().upper().startswith(("SAVEPOINT ", "RELEASE SAVEPOINT ")):
+            return
         statements.append(statement)
 
     event.listen(engine, "before_cursor_execute", count_statement)
