@@ -455,11 +455,13 @@ def analyze_company_forms(
         local_pages = contact_pages(
             root.url,
             root_cache,
-            company.contact_url or "",
+            company.form_first_contact_url or company.contact_url or "",
             max_pages=MAX_CONTACT_PAGES,
             resolved_urls=resolved_urls,
             found_contact=found_contact,
             guessed_path_limit=MAX_GUESSED_PATHS,
+            prioritize_saved_contact=bool(company.form_first_contact_url)
+            or company.source == "form_first",
         )
 
         def pages() -> Iterator[tuple[str, bool]]:

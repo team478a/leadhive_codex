@@ -87,9 +87,32 @@ class OperationJobInput(Input):
     source_operation_ids: list[UUID] = Field(default_factory=list, max_length=100)
     article_limit: int = Field(default=20, ge=1, le=50, strict=True)
     dry_run: bool = False
+    collection_method: Literal["company_first", "form_first"] = "company_first"
+    form_first_query_types: list[
+        Literal["intitle_contact", "inurl_contact", "inurl_inquiry", "form_words"]
+    ] = Field(
+        default_factory=lambda: ["intitle_contact", "inurl_contact", "inurl_inquiry", "form_words"],
+        min_length=1,
+        max_length=4,
+    )
+    require_corporate_number: bool = False
 
     @model_validator(mode="after")
     def validate_operation(self):
+        if self.collection_method == "form_first" and len(set(self.form_first_query_types)) != len(
+            self.form_first_query_types
+        ):
+            raise ValueError("検索型を重複して指定できません。")
+        if (
+            self.operation_type == "collect_search"
+            and self.collection_method == "form_first"
+            and self.target_count is None
+        ):
+            self.target_count = 10000
+        if self.collection_method == "form_first" and self.auto_continue:
+            raise ValueError("フォーム起点の収集では自動継続を指定できません。")
+        if self.collection_method == "company_first" and self.require_corporate_number:
+            raise ValueError("法人番号の必須確認はフォーム起点の収集のみ指定できます。")
         if self.region_mode == "prefecture_order" and not (
             self.operation_type == "collect_search"
             and self.source == "serper"
@@ -125,6 +148,10 @@ class OperationJobInput(Input):
                 raise ValueError("Search collection requires source, keywords and region")
             if self.source == "google_places" and self.max_results > 60:
                 raise ValueError("Google Places supports at most 60 results")
+            if self.collection_method == "form_first" and self.source != "serper":
+                raise ValueError("フォーム起点の収集はSerper検索のみ対応しています。")
+            if self.collection_method == "form_first" and self.presence_search:
+                raise ValueError("フォーム起点の収集では外部情報検索を指定できません。")
         elif self.operation_type == "extract_articles":
             if not self.source_operation_ids:
                 raise ValueError("記事抽出には収集operation IDが必要です。")
@@ -135,6 +162,8 @@ class OperationJobInput(Input):
                 or self.region
                 or self.target_count
                 or self.presence_search
+                or self.collection_method != "company_first"
+                or self.require_corporate_number
             ):
                 raise ValueError("記事抽出では会社・検索条件を指定できません。")
         elif (
@@ -145,6 +174,8 @@ class OperationJobInput(Input):
             or self.presence_search
             or self.condition_request_id
             or self.auto_continue
+            or self.collection_method != "company_first"
+            or self.require_corporate_number
         ):
             raise ValueError("Analysis operations do not accept search conditions")
         return self

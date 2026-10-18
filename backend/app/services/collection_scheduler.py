@@ -342,6 +342,7 @@ def run(db, job, payload, conditions, stopped):
                 db.commit()
                 continue
             before = target_collection.collection_inventory(db, job, conditions)
+            raw_candidate_count = len(candidates)
 
             def finish():
                 after = target_collection.collection_inventory(db, job, conditions)
@@ -349,20 +350,31 @@ def run(db, job, payload, conditions, stopped):
                 attempt.state, attempt.new_candidate_count = "SUCCEEDED", growth
                 attempt.finished_at = datetime.now(timezone.utc)
                 successful_page(task, growth)
-                collection.found_count = len(candidates)
+                collection.found_count = raw_candidate_count
 
-            save_candidates(
-                db,
-                collection,
-                target_collection.bounded_candidates(
+            if payload.get("collection_method") == "form_first":
+                from app.services.form_first_collection import process_search_results
+
+                candidates = process_search_results(db, collection, candidates, payload, stopped)
+            else:
+                candidates = target_collection.bounded_candidates(
                     db,
                     collection,
                     candidates,
                     payload["target_count"] - sum(v == "MATCH" for v in before.values()),
-                ),
+                )
+            save_candidates(
+                db,
+                collection,
+                candidates,
                 task.keyword,
                 before_commit=finish,
             )
+            collection.found_count = raw_candidate_count
+            if payload.get("collection_method") == "form_first":
+                from app.services.form_first_collection import queue_saved_company_analysis
+
+                queue_saved_company_analysis(db, collection, candidates)
             # Existing bounded optional presence enrichment remains separate from discovery.
             if payload.get("presence_search") and not stopped():
                 collection.presence_search_plan = payload["presence_search"]

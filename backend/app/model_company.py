@@ -57,7 +57,7 @@ class Company(Timestamps, Base):
             postgresql_where=text("address <> '' AND record_type = 'company'"),
         ),
         CheckConstraint(
-            "source IN ('serper', 'google_places', 'gbizinfo', 'url', 'csv')",
+            "source IN ('serper', 'google_places', 'gbizinfo', 'url', 'csv', 'form_first')",
             name="ck_company_source",
         ),
         CheckConstraint(
@@ -91,6 +91,8 @@ class Company(Timestamps, Base):
     reference_url: Mapped[str] = mapped_column(Text, default="", server_default="")
     website_url: Mapped[str | None] = mapped_column(Text)
     domain: Mapped[str | None] = mapped_column(String(253))
+    corporate_number: Mapped[str] = mapped_column(String(20), default="", server_default="")
+    form_first_contact_url: Mapped[str] = mapped_column(Text, default="", server_default="")
     address: Mapped[str] = mapped_column(Text, default="")
     phone: Mapped[str] = mapped_column(String(100), default="")
     email: Mapped[str] = mapped_column(String(320), default="")

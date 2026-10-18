@@ -15,6 +15,10 @@ TERMS = {
         "Google Maps attribution; storage restrictions apply",
     ),
     "serper": ("https://serper.dev/terms", "Check originating site usage rights"),
+    "form_first": (
+        "https://serper.dev/terms",
+        "Search result and official-site observations; review originating site usage rights",
+    ),
     "gbizinfo": ("https://info.gbiz.go.jp/", "Check current gBizINFO terms before expanded reuse"),
     "csv": ("", "Customer must hold data usage rights"),
     "url": ("", "Website terms and robots apply"),
@@ -46,6 +50,7 @@ def preserve_merged_evidence(db, target, source):
 
 def observe_candidate(db, job, company, candidate, *, new=False):
     values = {field: getattr(candidate, field) for field in FIELDS}
+    source = candidate.collection_method or job.source
     discovery = candidate.site_discovery if job.source == "serper" else {}
     digest = hashlib.sha256(
         json.dumps(
@@ -68,7 +73,7 @@ def observe_candidate(db, job, company, candidate, *, new=False):
     applied = []
     # Places content is not copied into a second persistent evidence store.
     # Other external source reuse remains a review candidate, not a confirmed overwrite.
-    usage = "CUSTOMER_SUPPLIED" if job.source in {"csv", "url"} else "REVIEW_REQUIRED"
+    usage = "CUSTOMER_SUPPLIED" if source in {"csv", "url"} else "REVIEW_REQUIRED"
     if state == "CONFIRMED" and usage == "CUSTOMER_SUPPLIED":
         for field in ("phone", "email", "address", "reference_url"):
             value = values[field]
@@ -91,10 +96,10 @@ def observe_candidate(db, job, company, candidate, *, new=False):
             for field, value in values.items()
             if value
         }
-        if job.source in {"csv", "url"}
+        if source in {"csv", "url"}
         else {}
     )
-    terms, attribution = TERMS[job.source]
+    terms, attribution = TERMS[source]
     if discovery:
         if discovery.get("discovery_method") == "ARTICLE_EXTRACT":
             facts.update(discovery)
@@ -104,7 +109,7 @@ def observe_candidate(db, job, company, candidate, *, new=False):
         LeadSourceObservation(
             company_id=company.id,
             collection_job_id=job.id,
-            source=job.source,
+            source=source,
             source_url=(candidate.reference_url or candidate.website_url or "") if facts else "",
             terms_reference=terms,
             allowed_usage=usage,

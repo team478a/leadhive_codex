@@ -36,6 +36,13 @@ def plan_snapshot(payload):
     if payload.get("auto_continue"):
         snapshot["auto_continue"] = True
         snapshot["total_request_budget"] = payload.get("search_request_limit") or REQUEST_BUDGET
+    if payload.get("collection_method") == "form_first":
+        snapshot["collection_method"] = "form_first-v1"
+        snapshot["form_first_query_types"] = list(payload.get("form_first_query_types") or [])
+        snapshot["form_first_industry_keywords"] = list(
+            payload.get("form_first_industry_keywords") or []
+        )
+        snapshot["require_corporate_number"] = bool(payload.get("require_corporate_number"))
     # Omit the default so hashes of existing jobs remain unchanged.
     if payload.get("region_mode") == "prefecture_order":
         snapshot["region_mode"] = "prefecture_order"
@@ -71,6 +78,7 @@ def stamp_plan(job):
         (
             settings.collection_fair_scheduler_enabled
             or job.payload.get("region_mode") == "prefecture_order"
+            or job.payload.get("collection_method") == "form_first"
         )
         and job.operation_type == "collect_search"
         and job.payload.get("target_count")

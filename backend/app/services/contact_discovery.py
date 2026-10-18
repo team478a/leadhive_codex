@@ -396,7 +396,7 @@ def same_site(left: str, right: str) -> bool:
 
 
 def navigation_links(
-    html: str, base: str, root: str, *, contact_context: bool = False
+    html: str, base: str, root: str, *, contact_context: bool = False, company_context: bool = False
 ) -> list[str]:
     soup = BeautifulSoup(html, "html.parser")
     ranked: list[tuple[int, str]] = []
@@ -424,6 +424,18 @@ def navigation_links(
         label_score = _hint_score(label)
         label_contact = label_score > 0
         label_contact_cta = _is_contact_cta(label)
+        label_company_info = company_context and any(
+            hint in label
+            for hint in (
+                "会社概要",
+                "会社案内",
+                "企業情報",
+                "about",
+                "company",
+                "特定商取引法",
+                "特商法",
+            )
+        )
         if value.startswith("#") and not (fragment_contact or label_contact):
             continue
         parsed = urlsplit(urljoin(base, value))
@@ -450,6 +462,7 @@ def navigation_links(
         # bounded crawl before its general contact destination is reached.
         score = max(
             label_score if label_contact_cta else min(label_score, 60),
+            65 if label_company_info else 0,
             90 if fragment_contact else 70 if path_hint else 0,
         )
         # Dedicated contact paths beat incidental article text, including a
@@ -475,6 +488,7 @@ def contact_pages(
     resolved_urls: dict[str, str] | None = None,
     found_contact: set[bool] | None = None,
     guessed_path_limit: int = MAX_GUESSED_PATHS,
+    prioritize_saved_contact: bool = False,
 ) -> Iterator[tuple[str, bool]]:
     """Caller fetches each yielded URL and fills cache before resuming iteration.
 
@@ -505,7 +519,11 @@ def contact_pages(
     if saved_contact:
         try:
             if same_site(root, saved_contact):
-                queue.append((saved_contact, True, 1))
+                entry = (saved_contact, True, 1)
+                if prioritize_saved_contact:
+                    queue.insert(0, entry)
+                else:
+                    queue.append(entry)
         except ValueError:
             pass
     queue.extend((url, True, 1) for url in navigation_links(root_html, root, root))
