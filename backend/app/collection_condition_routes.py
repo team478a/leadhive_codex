@@ -27,6 +27,7 @@ from app.schema_collection_conditions import (
 from app.schema_core import Input, Keyword
 from app.security import current_user
 from app.services.collection_conditions import evaluate, snapshot_hash
+from app.services.feature_usage import add_feature_usage_event
 
 router = APIRouter(prefix="/api")
 
@@ -46,9 +47,14 @@ def propose_conditions(
 
     project_access(project_id, db, user)
     try:
-        return propose(body.text)
+        proposal = propose(body.text)
     except ValueError as exc:
+        add_feature_usage_event(db, "collection_condition_proposal", "failed")
+        db.commit()
         raise HTTPException(422, str(exc)) from exc
+    add_feature_usage_event(db, "collection_condition_proposal")
+    db.commit()
+    return proposal
 
 
 class FactReviewInput(Input):

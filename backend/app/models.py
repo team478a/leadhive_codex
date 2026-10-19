@@ -48,6 +48,7 @@ from app.model_external_presence import (
     ExternalPresenceEvidence,
     ExternalPresenceSearch,
 )
+from app.model_feature_usage import FeatureUsageEvent
 from app.model_feedback_review import (
     FeedbackEvaluation,
     FeedbackEvaluationNote,
@@ -114,6 +115,7 @@ from app.model_worker_heartbeat import WorkerHeartbeat
 __all__ = [
     "FeedbackProposal",
     "FeedbackProposalDecision",
+    "FeatureUsageEvent",
     "FeedbackEvaluation",
     "FeedbackEvaluationNote",
     "SourceDomainExclusion",

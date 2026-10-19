@@ -20,6 +20,7 @@ from app.database import get_db
 from app.models import Activity, User
 from app.project_access import company_access
 from app.security import current_user
+from app.services.feature_usage import add_feature_usage_event
 
 router = APIRouter(prefix="/api")
 PREFIX = "PC入力試行接続 v1: "
@@ -161,6 +162,7 @@ def issue(
             note=seal(binding.trialId, company.id, value),
         )
     )
+    add_feature_usage_event(db, "pc_input_trial_issued")
     db.commit()
     return {"token": token, "expiresAt": expires.isoformat()}
 
@@ -251,6 +253,7 @@ def receive(
             note=REPORT_PREFIX + encode(safe),
         )
     )
+    add_feature_usage_event(db, "pc_input_report_recorded")
     value.update(state="CONSUMED", report_hash=report_hash, result_id=str(result_id))
     item.note = seal(item.id, item.company_id, value)
     db.commit()
