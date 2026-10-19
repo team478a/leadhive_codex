@@ -24,15 +24,18 @@ def cooldown_values(db):
 
 
 def target_keys(db, company):
-    site = company.domain or company.website_url or company.contact_url
+    site = (
+        getattr(company, "domain", None)
+        or getattr(company, "website_url", None)
+        or getattr(company, "contact_url", None)
+    )
     key = recipient_domain_key(site or "")
-    digits = re.sub(r"\D", "", company.corporate_number or "")
+    digits = re.sub(r"\D", "", getattr(company, "corporate_number", None) or "")
     corporate_number = digits if len(digits) == 13 else None
-    if not corporate_number and company.master_company_id:
+    master_company_id = getattr(company, "master_company_id", None)
+    if not corporate_number and master_company_id:
         value = db.scalar(
-            select(MasterCompany.corporate_number).where(
-                MasterCompany.id == company.master_company_id
-            )
+            select(MasterCompany.corporate_number).where(MasterCompany.id == master_company_id)
         )
         digits = re.sub(r"\D", "", value or "")
         corporate_number = digits if len(digits) == 13 else None
