@@ -4,7 +4,13 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import object_session
 
-from app.models import FormAnalysisLog, FormDmReadinessResult, OperationJob
+from app.models import (
+    FormAnalysisLog,
+    FormDmReadinessResult,
+    MasterFormReview,
+    OperationJob,
+    Organization,
+)
 from tests.test_approval_foundation import workspace as workspace
 from tests.test_form_approval_preparation import form_source as form_source
 
@@ -131,7 +137,13 @@ def test_required_privacy_consent_cannot_be_confirmed_unchecked(auth, form_sourc
     assert response.status_code == 422
 
 
-def test_do_not_send_accepts_unchecked_no_prohibition_confirmation(auth, form_source, db):
+def test_do_not_send_is_not_saved_as_reusable_form_review(auth, form_source, db):
+    project = form_source[0]
+    organization = Organization(name="Review organization")
+    db.add(organization)
+    db.flush()
+    project.organization_id = organization.id
+    db.commit()
     path = make_reviewable(form_source)
     item = auth.get(path).json()["items"][0]
     payload = {
@@ -146,6 +158,7 @@ def test_do_not_send_accepts_unchecked_no_prohibition_confirmation(auth, form_so
 
     assert response.status_code == 200, response.text
     assert response.json()["status"] == "DO_NOT_SEND"
+    assert db.scalar(select(MasterFormReview.id)) is None
 
 
 def test_confirm_requires_no_sales_prohibition_confirmation(auth, form_source):

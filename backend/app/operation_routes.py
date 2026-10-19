@@ -662,6 +662,53 @@ def continue_collection(
     return job
 
 
+@router.post(
+    "/projects/{project_id}/master-sites/backfill",
+    response_model=OperationJobOut,
+    status_code=202,
+)
+def enqueue_master_site_backfill(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user)
+    active = db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "master_site_backfill",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    )
+    if active:
+        raise HTTPException(409, "公式サイトの共通マスター移行はすでに実行中です。")
+    total = (
+        db.scalar(
+            select(func.count(Company.id)).where(
+                Company.project_id == project_id,
+                Company.record_type == "company",
+                Company.source.notin_(("csv", "url")),
+                Company.master_site_id.is_(None),
+                Company.website_url.is_not(None),
+            )
+        )
+        or 0
+    )
+    job = OperationJob(
+        project_id=project_id,
+        operation_type="master_site_backfill",
+        payload={"batch_size": 500},
+        total_count=total,
+    )
+    if not add_operation_job(db, job):
+        raise HTTPException(409, "公式サイトの共通マスター移行はすでに実行中です。")
+    db.commit()
+    db.refresh(job)
+    return job
+
+
 @router.get("/projects/{project_id}/operations", response_model=list[OperationJobOut])
 def list_operations(
     project_id: UUID,

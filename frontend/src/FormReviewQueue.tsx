@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 
-type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[] }
+type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[]; suggested_mapped_key?: string; same_organization_suggestion?: boolean; other_organization_suggestion?: boolean }
 type ChoiceGroup = { group_id: string; source_hash: string; label: string; supported: boolean; members: { field_id: string; label: string; required: boolean; options: { value: string; label: string }[] }[] }
 type SavedGroup = { group_id: string; source_hash: string; label: string; required_observed: boolean; reviewable: boolean; options: { option_id: string; label: string; value: string }[] }
 type Item = { company_id: string; company_name: string; profile_id: string; form_url: string; fingerprint: string; fields_hash: string; reason_codes: string[]; ready_confirmation_only: boolean; fields: Field[]; groups: ChoiceGroup[]; saved_groups: SavedGroup[] }
@@ -34,7 +34,7 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
   const canConfirm = Boolean(item && item.groups.every(g => g.supported) && item.saved_groups.every(g => g.reviewable))
   useEffect(() => {
     if (!item) return
-    setMapping(Object.fromEntries(item.fields.map(f => [f.id, f.mapped_key])))
+    setMapping(Object.fromEntries(item.fields.map(f => [f.id, f.suggested_mapped_key || f.mapped_key])))
     setValues(Object.fromEntries(item.fields.map(f => [f.id, f.recommended_value || ''])))
     setChecked({}); setRule(Object.fromEntries([...item.groups.map(g => [g.group_id, 'AT_LEAST_ONE']), ...item.saved_groups.map(g => [g.group_id, g.required_observed ? 'AT_LEAST_ONE' : 'OPTIONAL'])]))
     setNoProhibition(false); setDoNotSendReason('WRONG_PURPOSE')
@@ -77,6 +77,8 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
       {!item.ready_confirmation_only && <><p className="mt-3">解析された入力項目・値</p>
       {item.fields.map(f => <div className="border-t py-3" key={f.id}><strong>{f.label || f.name || '名称不明'}{f.required ? '（必須）' : ''}</strong>
         <label className="field mt-2">対応項目<select disabled={!canWrite || busy} value={mapping[f.id] || f.mapped_key} onChange={e => setMapping(v => ({ ...v, [f.id]: e.target.value }))}>{keys.map(k => <option value={k} key={k}>{k}</option>)}</select></label>
+        {f.same_organization_suggestion && <p className="muted text-xs">同一組織の別フォームで確認された候補：{f.suggested_mapped_key}。今回のフォームでも確認してください。</p>}
+        {f.other_organization_suggestion && <p className="muted text-xs">他の利用企業で確認された候補（提案）：{f.suggested_mapped_key}。この利用企業では未確認です。</p>}
         {mapping[f.id] === 'privacy_consent' ? <label className="mt-2 block"><input type="checkbox" checked={checked[f.id] === true} onChange={e => setChecked(v => ({ ...v, [f.id]: e.target.checked }))} /> 必須の同意内容を読み、同意チェックを明示的に選択</label>
           : mapping[f.id] === 'newsletter_consent' ? <p className="muted">メルマガ同意は常に未選択です。</p>
             : f.options?.length ? <label className="field mt-2">選択値<select value={values[f.id] || ''} onChange={e => setValues(v => ({ ...v, [f.id]: e.target.value }))}><option value="">未選択</option>{f.options.map((o, i) => <option key={`${o.value}-${i}`} value={o.value}>{o.label || o.value}</option>)}</select></label>

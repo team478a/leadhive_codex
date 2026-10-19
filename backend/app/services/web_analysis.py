@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import Company
 from app.services.collection import canonicalize_url
 from app.services.lead_identity import identity_hash, website_match
+from app.services.master_data import record_site_observations
 from app.services.scraper import PageFetchCache, ScrapeError, is_aggregator_domain, scrape_company
 from app.services.website_evidence import record as record_website_evidence
 
@@ -164,6 +165,7 @@ def analyze(
             record_website_evidence(
                 db, company, data, page.url, before_hash, confidence, reasons, applied
             )
+            record_site_observations(db, company, data, page.url)
             from app.services.external_presence import capture_website_links
 
             capture_website_links(db, company, data, page.url)

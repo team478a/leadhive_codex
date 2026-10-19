@@ -127,6 +127,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
                     "form_dm_readiness",
                     "form_approval_batch",
                     "bulk_template_drafts",
+                    "master_site_backfill",
                 )
             )
             if not settings.outbound_enabled
@@ -553,6 +554,7 @@ def claim_job(db) -> OperationJob | None:
                     "form_dm_readiness",
                     "form_approval_batch",
                     "bulk_template_drafts",
+                    "master_site_backfill",
                 )
             )
             if not settings.outbound_enabled
@@ -1567,11 +1569,13 @@ def run_once() -> bool:
         if job is None:
             return False
         worker_id = job.worker_id
+        job_id = job.id
         logger.info("operation start: id=%s type=%s", job.id, job.operation_type)
         stamp_operation_runtime(job)
         db.commit()
         try:
             from app.services.bulk_template_drafts import run_bulk_template_drafts
+            from app.services.master_data import backfill_project_sites
             from app.services.sales_preparation import run_preparation
 
             {
@@ -1590,7 +1594,11 @@ def run_once() -> bool:
                 "bulk_template_drafts": lambda db, job, worker: run_bulk_template_drafts(
                     db, job, worker, stop_requested
                 ),
+                "master_site_backfill": lambda db, job, worker: backfill_project_sites(
+                    db, job, worker, stop_requested
+                ),
             }[job.operation_type](db, job, worker_id)
+            job = db.get(OperationJob, job_id)
             db.refresh(job)
             stamp_operation_runtime(job)
             if job.status == "running" and job.worker_id == worker_id:

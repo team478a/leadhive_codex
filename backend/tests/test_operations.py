@@ -83,6 +83,31 @@ def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch)
     assert auth.post(f"/api/operations/{job['id']}/acknowledge").status_code == 409
 
 
+def test_master_site_backfill_is_explicit_and_runs_in_main_worker(auth, db, monkeypatch):
+    project = make_project(auth, db)
+    company = Company(
+        project_id=uuid.UUID(project["id"]),
+        company_name="Backfill Co.",
+        source="serper",
+        website_url="https://backfill.example.co.jp/",
+    )
+    db.add(company)
+    db.commit()
+    company_id = company.id
+
+    response = auth.post(f"/api/projects/{project['id']}/master-sites/backfill")
+    assert response.status_code == 202
+    assert response.json()["operation_type"] == "master_site_backfill"
+    assert response.json()["total_count"] == 1
+    assert auth.post(f"/api/projects/{project['id']}/master-sites/backfill").status_code == 409
+
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    assert worker.run_once()
+    persisted = db.get(Company, company_id)
+    assert persisted.master_site_id is not None
+    assert persisted.master_company_id is None
+
+
 def test_search_collection_worker_records_partial_failure(auth, db, monkeypatch):
     project = make_project(auth, db)
     created = auth.post(
