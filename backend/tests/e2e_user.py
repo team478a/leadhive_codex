@@ -72,11 +72,23 @@ with SessionLocal() as db:
             source="url",
             project_id=project.id,
             company_name="A2 E2E Company",
-            website_url="https://approval.example",
-            domain="approval.example",
-            email=f"recipient-{project.id.hex}@example.com"
-            if sys.argv[1] not in {"approval-fixture", "completion-fixture"}
-            else "",
+            website_url=(
+                f"https://approval-{project.id.hex}.example"
+                if sys.argv[1] == "approved-email-fixture"
+                else "https://approval.example"
+            ),
+            domain=(
+                f"approval-{project.id.hex}.example"
+                if sys.argv[1] == "approved-email-fixture"
+                else "approval.example"
+            ),
+            email=(
+                f"recipient-{project.id.hex}@mail-{project.id.hex}.example"
+                if sys.argv[1] == "approved-email-fixture"
+                else f"recipient-{project.id.hex}@example.com"
+                if sys.argv[1] not in {"approval-fixture", "completion-fixture"}
+                else ""
+            ),
         )
         # Completion queue assertions require a shared-destination record on
         # the last page. Random UUID ordering occasionally put the unrelated

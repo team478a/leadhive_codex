@@ -2,6 +2,7 @@ import { navigateWorkspace } from './navigation'
 import { test, expect } from '@playwright/test'
 
 test('login, profile editing, project CRUD, reload and logout', async ({ page }, testInfo) => {
+  const companyDomain = `workflow-${testInfo.project.name}.example`
   const errors: string[] = []
   page.on('pageerror', error => errors.push(error.message))
   await page.goto('/')
@@ -96,7 +97,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await projectCard.getByRole('button', { name: '企業収集', exact: true }).click()
   await expect(page.getByRole('heading', { name: '収集条件' })).toBeVisible()
   await page.getByLabel('収集元').selectOption('url')
-  await page.getByLabel('URL（1行に1件）').fill('https://example.com\nhttps://www.example.com/about\ninvalid')
+  await page.getByLabel('URL（1行に1件）').fill(`https://${companyDomain}\nhttps://www.${companyDomain}/about\ninvalid`)
   await page.getByRole('button', { name: '収集を開始' }).click()
   await expect(page.getByText('保存 1', { exact: true })).toBeVisible()
   await expect(page.getByText('重複 1', { exact: true })).toBeVisible()
@@ -106,7 +107,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await expect(page.getByLabel('解析する収集リスト')).toHaveValue(/.+/)
   await expect(page.getByLabel('解析する収集リスト').locator('option:checked')).toContainText(projectName)
   await expect(page.getByLabel('解析状況').getByText('フォーム解析済み', { exact: true })).toBeVisible()
-  await expect(page.getByRole('strong').filter({ hasText: /^example\.com$/ })).toBeVisible()
+  await expect(page.getByRole('strong').filter({ hasText: new RegExp(`^${companyDomain.replaceAll('.', '\\.')}$`) })).toBeVisible()
   await page.getByRole('button', { name: '2. 収集開始', exact: true }).click()
   await page.getByLabel('収集元').selectOption('url')
   await page.getByLabel('URL（1行に1件）').fill('https://instagram.com/example-company')
@@ -180,12 +181,12 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await renamedFilter.getByRole('button', { name: '削除' }).click()
   await expect(renamedFilter).toHaveCount(0)
   await expect(page.getByText('連絡先なし', { exact: true })).toBeVisible()
-  const companyRow = page.getByTestId('company-list-item').filter({ hasText: 'example.com' }).filter({
+  const companyRow = page.getByTestId('company-list-item').filter({ hasText: companyDomain }).filter({
     has: page.getByRole('button', { name: '詳細' }),
   })
   await companyRow.getByRole('button', { name: '詳細' }).click()
   const detail = page.getByRole('region', { name: '企業詳細' })
-  await expect(detail.getByRole('heading', { name: 'example.com' })).toBeVisible()
+  await expect(detail.getByRole('heading', { name: companyDomain })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'フォーム事前解析' })).toBeVisible()
   await expect(detail.getByRole('heading', { name: 'Web解析ページ' })).toBeVisible()
   await detail.getByRole('textbox', { name: '電話', exact: true }).fill('03-1234-5678')
@@ -209,7 +210,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await expect(page.getByText('営業状況を保存しました。')).toBeVisible()
   await detail.getByRole('button', { name: '閉じる' }).click()
   const outreachPanel = page.getByRole('heading', { name: '営業アプローチキュー' }).locator('xpath=ancestor::section[1]')
-  const outreachRow = outreachPanel.getByRole('row').filter({ hasText: 'example.com' })
+  const outreachRow = outreachPanel.getByRole('row').filter({ hasText: companyDomain })
   await outreachRow.getByRole('button', { name: '対応する' }).click()
   await outreachPanel.getByLabel('連絡経路').selectOption('call')
   await outreachPanel.getByLabel('結果').selectOption('approached')
@@ -255,7 +256,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await expect(page.locator('h1', { hasText: 'メール配信状況' })).toBeVisible()
   await expect(page.getByLabel('メール配信状況')).toBeVisible()
   await navigateWorkspace(page, '⌂ ダッシュボード')
-  const notification = page.getByRole('article').filter({ hasText: 'フォロー期限超過: example.com' })
+  const notification = page.getByRole('article').filter({ hasText: `フォロー期限超過: ${companyDomain}` })
   await expect(notification.getByText('未読', { exact: true })).toBeVisible()
   await notification.getByRole('button', { name: '既読にする' }).click()
   await expect(notification.getByText('既読', { exact: true })).toBeVisible()
