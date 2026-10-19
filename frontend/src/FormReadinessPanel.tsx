@@ -27,6 +27,7 @@ const labels: Record<string, string> = {
   NO_NATIVE_SUBMIT: '標準の送信ボタンなし', CUSTOM_SUBMIT_HANDLER: '送信ボタンの独自処理',
   NO_INPUT_FIELDS: '入力項目なし', JAVASCRIPT_CONFIRMATION: '確認ボタンがJavaScript',
   FILE_ATTACHMENT: 'ファイル添付欄あり', MULTIPART_ONLY: 'multipart形式のみ（添付欄なし）',
+  RESERVATION_FORM: '予約専用フォーム（送信対象外）',
 }
 
 const nextActions: Record<string, string> = {
@@ -41,6 +42,7 @@ const nextActions: Record<string, string> = {
   error: '企業詳細の解析ログで取得失敗の理由を確認します。取得失敗はフォームがない証拠ではありません。',
   missing_form: '企業詳細で問い合わせ導線と埋め込みの診断を確認します。静的HTMLでの未検出をフォームなしと判断しないでください。',
   legacy: '古い解析結果です。企業詳細で解析日時と対象URLを確認し、必要な範囲を再解析します。',
+  RESERVATION_FORM: '予約専用フォームのため営業送信対象外です。通常の問い合わせ窓口が別にあるか確認してください。',
 }
 
 function nextAction(row: Row) {

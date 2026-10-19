@@ -45,6 +45,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [formFirstQueryTypes, setFormFirstQueryTypes] = useState([
     'intitle_contact', 'inurl_contact', 'inurl_inquiry', 'form_words',
   ])
+  const [formFirstIndustry, setFormFirstIndustry] = useState<'general' | 'restaurant'>('general')
   const [requireCorporateNumber, setRequireCorporateNumber] = useState(false)
   const [presencePlan, setPresencePlan] = useState(defaultPresencePlan)
   const [confirmedConditions, setConfirmedConditions] = useState<ConditionRevision | null>(null)
@@ -225,7 +226,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             target_count: targetCount,
             collection_method: collectionMethod,
             ...(formFirst
-              ? { form_first_query_types: formFirstQueryTypes, require_corporate_number: requireCorporateNumber, auto_continue: false }
+              ? { form_first_query_types: formFirstQueryTypes, form_first_industry: formFirstIndustry, require_corporate_number: requireCorporateNumber, auto_continue: false }
               : { search_request_limit: searchRequestLimit, auto_continue: autoContinue }),
           } : {}),
           ...(useConditions && confirmedConditions && !formFirst ? { condition_request_id: confirmedConditions.id, condition_version: confirmedConditions.version, condition_hash: confirmedConditions.payload_hash } : {}),
@@ -412,6 +413,15 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
         {source === 'serper' && <>
           {collectionMethod === 'form_first' && <section className="rounded border p-3" aria-label="フォーム起点の検索条件">
             <h3>問い合わせページの検索型</h3>
+            <Field label="業種別の除外語"><select value={formFirstIndustry} onChange={event => setFormFirstIndustry(event.target.value as 'general' | 'restaurant')}>
+              <option value="general">共通の除外語のみ</option>
+              <option value="restaurant">飲食店（グルメサイト・予約語を除外）</option>
+            </select></Field>
+            <button type="button" className="secondary mt-2" onClick={() => {
+              setRegion('名古屋市')
+              setKeywords(['居酒屋', 'レストラン', 'カフェ', '焼肉', 'ラーメン', '寿司', '和食', 'イタリアン'].join('\n'))
+              setFormFirstIndustry('restaurant')
+            }}>名古屋市・飲食店の初回試験条件を入力</button>
             <div className="grid gap-2 sm:grid-cols-2">
               {[
                 ['intitle_contact', 'ページタイトルに「お問い合わせ」'],
@@ -428,7 +438,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {formFirstQueryTypes.length === 0 && <p role="alert" className="error">検索型を1つ以上選択してください。</p>}
             <label className="checkbox-row mt-3"><input type="checkbox" checked={requireCorporateNumber}
               onChange={event => setRequireCorporateNumber(event.target.checked)} />法人番号を確認できた会社だけ登録</label>
-            <p className="muted mb-0 text-sm">最初の検索上限は20回です。ページの確認は同一サイト内のGETのみで、フォーム入力・送信はしません。</p>
+            <p className="muted mb-0 text-sm">初回試験は検索20回までです。飲食店は8語から分けて検索し、グルメサイトや予約語を除外します。ページ確認は同一サイト内のGETのみで、フォーム入力・送信はしません。</p>
           </section>}
           <section aria-label="検索の組み合わせ" className="muted text-sm">
           <p>{region === '全国' ? '全国は各キーワードに都道府県名を足して検索します。北海道から沖縄県へ、県内の検索語を巡回して次の県へ進みます。' : `${region}と各キーワードを組み合わせて検索します。`}</p>

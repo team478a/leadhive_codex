@@ -46,6 +46,7 @@ const labels: Record<string, string> = {
   NON_COMPANY_ARTICLE_STYLE_NAME: '記事・お知らせ風の名称',
   NON_COMPANY_REVIEW_NG: '人が会社ではないと確認',
   ALREADY_SENT_OR_UNKNOWN: '送信済み・予約済み・結果不明',
+  RESERVATION_FORM: '予約専用フォーム（送信対象外）',
   CAPTCHA_VISIBLE: 'CAPTCHA（表示型）',
   CAPTCHA_INVISIBLE: 'CAPTCHA（非表示型）',
   CAPTCHA_LEGACY: 'CAPTCHA（旧解析結果・再解析が必要）',

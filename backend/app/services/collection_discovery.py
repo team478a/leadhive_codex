@@ -310,7 +310,7 @@ def discovery_summary(db, job):
     reasons: dict[str, int] = {}
     type_totals: dict[str, QueryTypeTotals] = {}
     corporate_checks: dict[str, int] = {}
-    candidate_count = form_found_count = 0
+    candidate_count = form_found_count = reservation_form_count = 0
     for disposition, classification, reason, kind, candidate, status, corporate, count in groups:
         dispositions[disposition] = dispositions.get(disposition, 0) + count
         kinds[classification] = kinds.get(classification, 0) + count
@@ -331,8 +331,10 @@ def discovery_summary(db, job):
                 totals["contact_candidates"] += count
         if candidate:
             candidate_count += count
-        if status in {"FORM_FOUND", "FORM_JS_SUSPECTED"}:
+        if status in {"FORM_FOUND", "FORM_JS_SUSPECTED", "RESERVATION_FORM"}:
             form_found_count += count
+        if status == "RESERVATION_FORM":
+            reservation_form_count += count
         if corporate:
             corporate_checks[corporate] = corporate_checks.get(corporate, 0) + count
 
@@ -420,6 +422,7 @@ def discovery_summary(db, job):
         "search_request_count": search_request_count,
         "contact_page_candidate_count": candidate_count,
         "form_found_count": form_found_count,
+        "reservation_form_count": reservation_form_count,
         "newly_registered_company_count": newly_registered_count,
         "existing_contact_url_added_company_count": existing_url_added_count,
         "corporate_checks": {

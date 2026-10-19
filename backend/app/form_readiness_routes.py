@@ -19,7 +19,7 @@ CATEGORIES = (
     "all|candidate|unanalyzed|prohibited|review|captcha|confirmation|"
     "stale|error|missing_form|legacy|do_not_contact|OTHER_UNSUPPORTED|NON_POST_METHOD|"
     "DUPLICATE_INPUTS|MISSING_NAME_ATTRIBUTE|NO_NATIVE_SUBMIT|CUSTOM_SUBMIT_HANDLER|"
-    "NO_INPUT_FIELDS|JAVASCRIPT_CONFIRMATION|FILE_ATTACHMENT|MULTIPART_ONLY"
+    "NO_INPUT_FIELDS|JAVASCRIPT_CONFIRMATION|FILE_ATTACHMENT|MULTIPART_ONLY|RESERVATION_FORM"
 )
 
 
@@ -71,6 +71,7 @@ def overview_query(project_id):
         .exists()
     )
     compatibility_category = case(
+        (FormProfile.compatibility_reason_code == "RESERVATION_FORM", "RESERVATION_FORM"),
         (
             and_(FormProfile.compatibility_reason_code == "MULTIPART_OR_FILE", file_input),
             "FILE_ATTACHMENT",
@@ -98,6 +99,7 @@ def overview_query(project_id):
                 FormProfile.compatibility_reason_code.not_in(
                     (
                         "MULTIPART_OR_FILE",
+                        "RESERVATION_FORM",
                         "NON_POST_METHOD",
                         "DUPLICATE_INPUTS",
                         "MISSING_NAME_ATTRIBUTE",
@@ -118,6 +120,7 @@ def overview_query(project_id):
             "prohibited",
         ),
         (Company.do_not_contact.is_(True), "do_not_contact"),
+        (FormProfile.compatibility_reason_code == "RESERVATION_FORM", "RESERVATION_FORM"),
         (
             or_(
                 FormProfile.form_status == "BLOCKED",

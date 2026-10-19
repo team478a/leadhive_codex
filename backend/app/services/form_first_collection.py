@@ -24,6 +24,7 @@ from app.services.contact_discovery import (
     navigation_links,
     same_site,
 )
+from app.services.form_reservation import reservation_form_indices, reservation_js_container
 from app.services.non_company_suspected import evidence as non_company_evidence
 from app.services.processing_usage import measured_request
 from app.services.scraper import SafeFetcher, ScrapeError, _extract_location, site_extraction
@@ -40,6 +41,19 @@ QUERY_TEMPLATES = {
     "form_words": '"お問い合わせフォーム" {keyword}',
 }
 EXCLUDED_TERMS = ("-求人", "-採用", "-ポータル", "-ランキング", "-まとめ")
+FORM_FIRST_INDUSTRY_EXCLUDED_TERMS = {
+    "restaurant": ("-食べログ", "-ぐるなび", "-ホットペッパー", "-Retty", "-一休", "-予約"),
+}
+RESTAURANT_KEYWORDS = (
+    "居酒屋",
+    "レストラン",
+    "カフェ",
+    "焼肉",
+    "ラーメン",
+    "寿司",
+    "和食",
+    "イタリアン",
+)
 CONTACT_TITLE_MARKERS = ("お問い合わせ", "問合せ", "contact", "inquiry", "資料請求")
 PUBLIC_SUFFIXES = (".lg.jp", ".go.jp", ".ed.jp", ".ac.jp")
 PUBLIC_PREFIXES = ("city.", "pref.", "town.", "vill.")
@@ -65,14 +79,19 @@ _HOST_LAST_GET: dict[str, float] = {}
 _HOST_GET_LOCK = threading.Lock()
 
 
-def build_form_first_queries(keywords: list[str], query_types: list[str]) -> list[dict[str, str]]:
+def build_form_first_queries(
+    keywords: list[str], query_types: list[str], industry: str = "general"
+) -> list[dict[str, str]]:
     if not keywords or not query_types or any(kind not in QUERY_TEMPLATES for kind in query_types):
         raise ValueError("フォーム起点の検索条件が正しくありません。")
+    if industry not in {"general", *FORM_FIRST_INDUSTRY_EXCLUDED_TERMS}:
+        raise ValueError("フォーム起点の業種指定が正しくありません。")
+    excluded_terms = (*EXCLUDED_TERMS, *FORM_FIRST_INDUSTRY_EXCLUDED_TERMS.get(industry, ()))
     queries = []
     seen = set()
-    for keyword in keywords:
-        for kind in query_types:
-            query = f"{QUERY_TEMPLATES[kind].format(keyword=keyword)} {' '.join(EXCLUDED_TERMS)}"
+    for kind in query_types:
+        for keyword in keywords:
+            query = f"{QUERY_TEMPLATES[kind].format(keyword=keyword)} {' '.join(excluded_terms)}"
             if query not in seen:
                 queries.append({"query": query, "query_type": kind, "industry_keyword": keyword})
                 seen.add(query)
@@ -145,7 +164,9 @@ def _record_hit(
     hit.classification = classification[:30]
     hit.classification_reason = reason[:100]
     fetch_status = (
-        reason if reason in {"FORM_FOUND", "FORM_JS_SUSPECTED", "NO_FORM_ON_PAGE"} else None
+        reason
+        if reason in {"FORM_FOUND", "FORM_JS_SUSPECTED", "NO_FORM_ON_PAGE", "RESERVATION_FORM"}
+        else None
     )
     metadata = dict(hit.form_first_metadata or {})
     metadata.update(
@@ -327,6 +348,24 @@ def _has_contact_form(html: str) -> tuple[bool, bool, bool]:
     return js_suspected, js_suspected, False
 
 
+def _contact_page_status(html: str) -> str:
+    soup = BeautifulSoup(html, "html.parser")
+    if embedded_form_providers(html):
+        return "REJECT_EXTERNAL_FORM_SERVICE"
+    forms = list(soup.select("form"))
+    reservations = reservation_form_indices(html, contact_context=True)
+    contact_form_indices = {
+        index for index, form in enumerate(forms) if is_contact_form(form, contact_context=True)
+    }
+    if reservations and not (contact_form_indices - reservations):
+        return "RESERVATION_FORM"
+    if contact_form_indices:
+        return "FORM_FOUND"
+    if custom_contact_containers(html):
+        return "RESERVATION_FORM" if reservation_js_container(html) else "FORM_JS_SUSPECTED"
+    return "NO_FORM_ON_PAGE"
+
+
 def _is_listing_page(html: str) -> bool:
     soup = BeautifulSoup(html, "html.parser")
     title = soup.title.get_text(" ", strip=True) if soup.title else ""
@@ -444,42 +483,95 @@ def _minimum_host_interval(host: str) -> None:
 def _fetch_candidate(contact_url: str) -> tuple[str, list[tuple[str, str, str]]]:
     fetcher = SafeFetcher()
     pages: list[tuple[str, str, str]] = []
+    fetch_count = 0
     try:
         _minimum_host_interval(urlsplit(contact_url).hostname or "")
         fetcher.site_root = contact_url
+        fetch_count += 1
         contact = fetcher.fetch_html(contact_url)
         if not same_site(contact_url, contact.url):
             raise ScrapeError("問い合わせページが別サイトへ転送されました。")
-        pages.append(("contact", contact.url, contact.html))
-        has_form, js_suspected, external = _has_contact_form(contact.html)
-        if external:
-            return "REJECT_EXTERNAL_FORM_SERVICE", pages
-        if not has_form:
-            return "NO_FORM_ON_PAGE", pages
+        status = _contact_page_status(contact.html)
+        pages.append(
+            (
+                "reservation" if status == "RESERVATION_FORM" else "contact",
+                contact.url,
+                contact.html,
+            )
+        )
+        if status in {"REJECT_EXTERNAL_FORM_SERVICE", "NO_FORM_ON_PAGE"}:
+            return status, pages
         root_parts = urlsplit(contact.url)
         root_url = urlunsplit((root_parts.scheme, root_parts.netloc, "/", "", ""))
+        fetched_urls = {contact.url}
         if contact.url.rstrip("/") == root_url.rstrip("/"):
             root = contact
         else:
+            fetch_count += 1
             _minimum_host_interval(root_parts.hostname or "")
             root = fetcher.fetch_html(root_url)
+            fetched_urls.add(root.url)
         if not same_site(contact.url, root.url):
             raise ScrapeError("会社トップページが別サイトへ転送されました。")
+        root_status = _contact_page_status(root.html)
         if root.url != contact.url:
-            pages.append(("root", root.url, root.html))
+            pages.append(
+                (
+                    "root_contact"
+                    if status == "RESERVATION_FORM"
+                    and root_status in {"FORM_FOUND", "FORM_JS_SUSPECTED"}
+                    else "root",
+                    root.url,
+                    root.html,
+                )
+            )
+        selected_status = status
+        if status == "RESERVATION_FORM" and root_status in {"FORM_FOUND", "FORM_JS_SUSPECTED"}:
+            selected_status = root_status
+        if status == "RESERVATION_FORM" and selected_status == "RESERVATION_FORM":
+            page_links = [
+                *navigation_links(root.html, root.url, root.url, contact_context=True),
+                *navigation_links(contact.html, contact.url, root.url, contact_context=True),
+            ]
+            for page_url in dict.fromkeys(page_links):
+                if page_url in fetched_urls or fetch_count >= 4:
+                    continue
+                fetch_count += 1
+                _minimum_host_interval(urlsplit(page_url).hostname or "")
+                try:
+                    page = fetcher.fetch_html(page_url)
+                except ScrapeError:
+                    continue
+                fetched_urls.add(page.url)
+                if not same_site(root.url, page.url):
+                    continue
+                page_status = _contact_page_status(page.html)
+                page_kind = (
+                    "contact"
+                    if page_status in {"FORM_FOUND", "FORM_JS_SUSPECTED"}
+                    else "reservation"
+                    if page_status == "RESERVATION_FORM"
+                    else "other_contact"
+                )
+                pages.append((page_kind, page.url, page.html))
+                if page_kind == "contact":
+                    selected_status = page_status
+                    break
         if _is_listing_page(root.html):
             return "REJECT_NON_COMPANY", pages
         for url, kind in _company_info_links(root.html, root.url):
-            if len(pages) >= 4:
+            if fetch_count >= 4:
                 break
-            if any(existing_url == url for _, existing_url, _ in pages):
+            if url in fetched_urls:
                 continue
+            fetch_count += 1
             _minimum_host_interval(urlsplit(url).hostname or "")
             page = fetcher.fetch_html(url)
+            fetched_urls.add(page.url)
             if not same_site(root.url, page.url):
                 continue
             pages.append((kind, page.url, page.html))
-        return "FORM_JS_SUSPECTED" if js_suspected else "FORM_FOUND", pages
+        return selected_status, pages
     except ScrapeError as exc:
         return "REJECT_ROBOTS" if "robots.txt" in str(exc) else "REJECT_FETCH_ERROR", pages
     finally:
@@ -556,13 +648,23 @@ def process_search_results(
             continue
         fetch_reason, pages = _fetch_candidate(contact_url)
         _record_hit(db, result, "FORM_FIRST", fetch_reason, query_type)
-        if fetch_reason not in {"FORM_FOUND", "FORM_JS_SUSPECTED"}:
+        if fetch_reason not in {"FORM_FOUND", "FORM_JS_SUSPECTED", "RESERVATION_FORM"}:
             continue
+        is_reservation = fetch_reason == "RESERVATION_FORM"
+        selected_contact_url = next(
+            (url for kind, url, _ in pages if kind == "contact"),
+            next((url for kind, url, _ in pages if kind == "root_contact"), ""),
+        )
+        reservation_url = next(
+            (url for kind, url, _ in pages if kind == "reservation"), contact_url
+        )
         facts = extract_company_facts(pages)
         name_fact = facts.get("company_name")
         company_name = name_fact["value"] if name_fact else host
         reasons = [] if name_fact else ["COMPANY_NAME_UNRESOLVED"]
-        root_html = next((html for kind, _, html in pages if kind == "root"), pages[0][2])
+        root_html = next(
+            (html for kind, _, html in pages if kind in {"root", "root_contact"}), pages[0][2]
+        )
         reasons.extend(_non_company_reasons(company_name, host, root_html))
         business_fact = facts.get("business_summary")
         weak_name = not name_fact or name_fact.get("method") == "TITLE"
@@ -574,14 +676,14 @@ def process_search_results(
             continue
         existing = _known_company(db, collection_job.project_id, host)
         if existing:
-            added_contact_url = not existing.contact_url
+            added_contact_url = bool(not is_reservation and not existing.contact_url)
             if added_contact_url:
-                existing.contact_url = contact_url
-            if not existing.form_first_contact_url:
-                existing.form_first_contact_url = contact_url
+                existing.contact_url = selected_contact_url
+            if not is_reservation and not existing.form_first_contact_url:
+                existing.form_first_contact_url = selected_contact_url
             if existing.reference_url == "":
-                existing.reference_url = contact_url
-            if _needs_form_analysis(db, existing.id):
+                existing.reference_url = reservation_url if is_reservation else selected_contact_url
+            if not is_reservation and _needs_form_analysis(db, existing.id):
                 known_company_ids.append(existing.id)
             _record_hit(
                 db,
@@ -603,12 +705,12 @@ def process_search_results(
             ),
         )
         if identity_duplicate:
-            added_contact_url = not identity_duplicate.contact_url
+            added_contact_url = bool(not is_reservation and not identity_duplicate.contact_url)
             if added_contact_url:
-                identity_duplicate.contact_url = contact_url
-            if not identity_duplicate.form_first_contact_url:
-                identity_duplicate.form_first_contact_url = contact_url
-            if _needs_form_analysis(db, identity_duplicate.id):
+                identity_duplicate.contact_url = selected_contact_url
+            if not is_reservation and not identity_duplicate.form_first_contact_url:
+                identity_duplicate.form_first_contact_url = selected_contact_url
+            if not is_reservation and _needs_form_analysis(db, identity_duplicate.id):
                 known_company_ids.append(identity_duplicate.id)
             _record_hit(
                 db,
@@ -642,14 +744,16 @@ def process_search_results(
             "form_first_reasons": reasons,
             "form_first_fields": facts,
             "corporate_check": corporate["status"],
+            "form_first_form_status": fetch_reason,
         }
+        destination_url = reservation_url if is_reservation else selected_contact_url or contact_url
         accepted.append(
             Candidate(
                 company_name=company_name[:500],
                 website_url=urlunsplit((*urlsplit(contact_url)[:2], "/", "", "")),
-                reference_url=contact_url,
-                contact_url=contact_url,
-                form_first_contact_url=contact_url,
+                reference_url=destination_url,
+                contact_url="" if is_reservation else destination_url,
+                form_first_contact_url="" if is_reservation else destination_url,
                 address=address[:5000],
                 phone=facts.get("phone", {}).get("value", "")[:100],
                 prefecture=prefecture,
@@ -662,12 +766,16 @@ def process_search_results(
                 site_discovery=site_discovery,
             )
         )
-        created_hosts.append(host)
+        if not is_reservation:
+            created_hosts.append(host)
         _record_hit(db, result, "FORM_FIRST", fetch_reason, query_type)
     db.flush()
     if accepted:
         for candidate in accepted:
-            if candidate.website_url:
+            if (
+                candidate.website_url
+                and candidate.site_discovery.get("form_first_form_status") != "RESERVATION_FORM"
+            ):
                 host = canonicalize_url(candidate.website_url)[1]
                 existing = _known_company(db, collection_job.project_id, host)
                 if existing and not existing.contact_url:
@@ -686,12 +794,27 @@ def process_search_results(
 
 
 def queue_saved_company_analysis(db, collection_job, candidates: list[Candidate]) -> None:
+    reservation_candidates = [
+        candidate
+        for candidate in candidates
+        if candidate.site_discovery.get("form_first_form_status") == "RESERVATION_FORM"
+    ]
     hosts = {
         canonicalize_url(candidate.website_url)[1].lower().removeprefix("www.")
         for candidate in candidates
         if candidate.website_url
+        and candidate.site_discovery.get("form_first_form_status") != "RESERVATION_FORM"
     }
+    for candidate in reservation_candidates:
+        if not candidate.website_url or not candidate.reference_url:
+            continue
+        host = canonicalize_url(candidate.website_url)[1].lower().removeprefix("www.")
+        company = _known_company(db, collection_job.project_id, host)
+        if company and company.source == "form_first":
+            _save_reservation_profile(db, company, candidate.reference_url)
     if not hosts:
+        if reservation_candidates:
+            db.commit()
         return
     companies = db.scalars(
         select(Company).where(
@@ -704,5 +827,40 @@ def queue_saved_company_analysis(db, collection_job, candidates: list[Candidate]
         company.id for company in companies if _needs_form_analysis(db, company.id)
     ]
     _queue_form_analysis(db, collection_job.project_id, missing_profile_ids)
-    if missing_profile_ids:
+    if missing_profile_ids or reservation_candidates:
         db.commit()
+
+
+def _save_reservation_profile(db, company: Company, reservation_url: str) -> None:
+    profile = db.scalar(
+        select(FormProfile)
+        .where(
+            FormProfile.company_id == company.id,
+            FormProfile.form_url == reservation_url,
+            FormProfile.form_index == 0,
+        )
+        .limit(1)
+    )
+    if profile and profile.compatibility_reason_code != "RESERVATION_FORM":
+        return
+    if profile is None:
+        profile = FormProfile(
+            company_id=company.id,
+            form_url=reservation_url,
+            form_index=0,
+        )
+        db.add(profile)
+    profile.form_status = "BLOCKED"
+    profile.sales_contact_status = "UNCERTAIN"
+    profile.captcha_type = "CAPTCHA_NONE"
+    profile.confirmation_page = None
+    profile.is_primary = True
+    profile.form_found = True
+    profile.page_kind = "contact"
+    profile.fingerprint = ""
+    profile.analysis_version = "form-first-reservation-v1"
+    profile.analysis_provider = "rule"
+    profile.analysis_source = "static"
+    profile.delivery_supported = False
+    profile.compatibility_reason_code = "RESERVATION_FORM"
+    profile.review_reason = "予約専用フォームのため営業送信対象外です。"
