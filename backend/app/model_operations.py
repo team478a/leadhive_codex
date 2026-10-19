@@ -13,7 +13,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
 from app.model_core import Timestamps
@@ -21,14 +21,59 @@ from app.model_core import Timestamps
 
 class SuppressionEntry(Timestamps, Base):
     __tablename__ = "suppression_entries"
+    __table_args__ = (
+        Index("ix_suppression_entries_org_active", "organization_id", "released_at"),
+        Index("ix_suppression_entries_scope_active", "scope", "released_at"),
+        CheckConstraint(
+            "(scope = 'project' AND project_id IS NOT NULL AND organization_id IS NULL) OR "
+            "(scope = 'organization' AND project_id IS NULL AND organization_id IS NOT NULL) OR "
+            "(scope = 'global' AND project_id IS NULL AND organization_id IS NULL)",
+            name="ck_suppression_entry_scope",
+        ),
+        CheckConstraint(
+            "source IN ('manual', 'legacy', 'legacy_project', 'legacy_do_not_contact', "
+            "'email_unsubscribe', 'reply_unsubscribe', 'complaint', 'bounce', 'global_opt_out', "
+            "'operator')",
+            name="ck_suppression_entry_source",
+        ),
+    )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
+    )
+    organization_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "organizations.id",
+            name="fk_suppression_entries_organization_id_organizations",
+            ondelete="RESTRICT",
+        ),
+    )
+    organization = relationship("Organization")
+    scope: Mapped[str] = mapped_column(
+        String(20), default="organization", server_default="organization"
+    )
+    source: Mapped[str] = mapped_column(String(40), default="manual", server_default="manual")
+    created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "users.id",
+            name="fk_suppression_entries_created_by_user_id_users",
+            ondelete="SET NULL",
+        ),
+        index=True,
     )
     domain: Mapped[str] = mapped_column(String(253), default="", index=True)
     email: Mapped[str] = mapped_column(String(320), default="", index=True)
     phone: Mapped[str] = mapped_column(String(100), default="", index=True)
     reason: Mapped[str] = mapped_column(String(500))
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    released_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "users.id",
+            name="fk_suppression_entries_released_by_user_id_users",
+            ondelete="SET NULL",
+        )
+    )
+    release_reason: Mapped[str] = mapped_column(String(500), default="", server_default="")
 
 
 class CollectionJob(Base):

@@ -7,8 +7,9 @@ from sqlalchemy import func, select
 
 from app.model_approved_email import ApprovedEmailBatch, ApprovedEmailReservation, EmailSendAttempt
 from app.model_email_feedback import EmailFeedbackEvent, EmailHealthState
-from app.models import Company, EmailDelivery, OutreachAuditEvent, Project, SuppressionEntry
+from app.models import Company, EmailDelivery, OutreachAuditEvent, Project
 from app.services import human_approval as approval
+from app.services.suppression import add_suppression
 
 
 def state(db, project_id):
@@ -172,21 +173,23 @@ def record(db, body, source, actor=None, expected_project=None):
     db.add(event)
     db.flush()
     if body.kind in {"hard_bounce", "complaint", "unsubscribe"}:
-        if not db.scalar(
-            select(SuppressionEntry.id).where(
-                SuppressionEntry.project_id == company.project_id,
-                func.lower(SuppressionEntry.email) == recipient,
-            )
-        ):
-            db.add(
-                SuppressionEntry(
-                    project_id=company.project_id,
-                    domain="",
-                    email=recipient,
-                    phone="",
-                    reason=f"メール結果: {body.kind}",
-                )
-            )
+        project = db.get(Project, company.project_id)
+        if project is None:
+            raise HTTPException(404, "プロジェクトが見つかりません。")
+        source = {
+            "hard_bounce": "bounce",
+            "complaint": "complaint",
+            "unsubscribe": "email_unsubscribe",
+        }[body.kind]
+        scope = "global" if body.kind == "complaint" else "organization"
+        add_suppression(
+            db,
+            scope=scope,
+            organization_id=project.organization_id if scope == "organization" else None,
+            email=recipient,
+            reason=f"メール結果: {body.kind}",
+            source=source,
+        )
         # Do not suppress an entire domain or unrelated phone because one address bounced.
         db.flush()
     db.add(

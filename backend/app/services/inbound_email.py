@@ -8,7 +8,7 @@ from datetime import datetime, timedelta, timezone
 from email.header import decode_header
 from email.utils import parseaddr, parsedate_to_datetime
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import func, select
 
 from app.models import (
     Activity,
@@ -16,11 +16,12 @@ from app.models import (
     ContactPerson,
     InboundEmail,
     InboundMailSettings,
-    SuppressionEntry,
+    Project,
 )
 from app.services.email_delivery import EmailDeliveryError, decrypt_secret
 from app.services.inbound_reply_notification import notify_inbound_reply
 from app.services.outreach_attribution import attribute_inbound_reply
+from app.services.suppression import add_suppression
 
 logger = logging.getLogger("leadhive")
 EMAIL_PATTERN = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
@@ -258,28 +259,20 @@ def record_company_reply(
 
 
 def suppress_company(db, company: Company, reason: str) -> None:
-    match = or_(
-        (SuppressionEntry.domain != "") & (SuppressionEntry.domain == company.domain),
-        (SuppressionEntry.email != "")
-        & (func.lower(SuppressionEntry.email) == company.email.lower()),
-        (SuppressionEntry.phone != "") & (SuppressionEntry.phone == company.phone),
+    project = db.get(Project, company.project_id)
+    if project is None:
+        return
+    source = "bounce" if "不達" in reason else "reply_unsubscribe"
+    add_suppression(
+        db,
+        scope="organization",
+        organization_id=project.organization_id,
+        domain=company.domain or "",
+        email=company.email,
+        phone=company.phone,
+        reason=reason,
+        source=source,
     )
-    entries = db.scalars(
-        select(SuppressionEntry).where(SuppressionEntry.project_id == company.project_id, match)
-    ).all()
-    if entries:
-        for entry in entries:
-            entry.reason = reason
-    else:
-        db.add(
-            SuppressionEntry(
-                project_id=company.project_id,
-                domain=company.domain or "",
-                email=company.email.lower(),
-                phone=company.phone,
-                reason=reason,
-            )
-        )
     company.do_not_contact = True
     company.exclusion_reason = reason
     company.status = "excluded"

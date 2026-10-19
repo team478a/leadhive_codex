@@ -18,7 +18,6 @@ from app.models import (
     ContactPerson,
     OperationJob,
     Project,
-    SuppressionEntry,
     User,
 )
 from app.project_access import accessible_project_condition
@@ -35,6 +34,7 @@ from app.schemas import (
     DashboardOut,
 )
 from app.security import current_user
+from app.services.suppression import add_suppression
 
 router = APIRouter(prefix="/api")
 JST = ZoneInfo("Asia/Tokyo")
@@ -173,33 +173,30 @@ def update_contact_control(
     user: User = Depends(current_user),
 ):
     company = owned_company(company_id, db, user)
-    match = or_(
-        (SuppressionEntry.domain != "") & (SuppressionEntry.domain == company.domain),
-        (SuppressionEntry.email != "")
-        & (func.lower(SuppressionEntry.email) == company.email.lower()),
-        (SuppressionEntry.phone != "") & (SuppressionEntry.phone == company.phone),
-    )
-    entries = db.scalars(
-        select(SuppressionEntry).where(SuppressionEntry.project_id == company.project_id, match)
-    ).all()
+    project = db.get(Project, company.project_id)
     if body.do_not_contact:
-        if entries:
-            for entry in entries:
-                entry.reason = body.exclusion_reason
-        else:
-            db.add(
-                SuppressionEntry(
-                    project_id=company.project_id,
-                    domain=company.domain or "",
-                    email=company.email.lower(),
-                    phone=company.phone,
-                    reason=body.exclusion_reason,
-                )
-            )
+        if project is None:
+            raise HTTPException(404, "プロジェクトが見つかりません。")
+        add_suppression(
+            db,
+            scope="organization",
+            organization_id=project.organization_id,
+            domain=company.domain or "",
+            email=company.email,
+            phone=company.phone,
+            reason=body.exclusion_reason,
+            source="manual",
+            actor_user_id=user.id,
+        )
         company.status = "excluded"
-    else:
-        for entry in entries:
-            db.delete(entry)
+    elif project is not None and project.organization_id:
+        db.add(
+            Activity(
+                company_id=company.id,
+                activity_type="note",
+                note="企業の連絡禁止フラグを解除しました。利用企業の送信停止は残っています。解除は利用企業の管理者が行います。",
+            )
+        )
     company.do_not_contact = body.do_not_contact
     company.exclusion_reason = body.exclusion_reason
     company.contact_quality_status = body.contact_quality_status
@@ -211,7 +208,10 @@ def update_contact_control(
             note=(
                 f"連絡禁止に設定: {body.exclusion_reason}"
                 if body.do_not_contact
-                else f"連絡禁止を解除・連絡先品質を{body.contact_quality_status}に更新"
+                else (
+                    "企業の連絡禁止フラグを解除（利用企業の送信停止は保持）・"
+                    f"連絡先品質を{body.contact_quality_status}に更新"
+                )
             ),
         )
     )

@@ -15,6 +15,8 @@ import { InstallationGuide } from './InstallationGuide'
 import { FeedbackProposalsPage } from './FeedbackProposalsPage'
 import { CollectionResults, CollectionTargets, SalesWorkspace } from './Workspaces'
 import { SmtpSettingsPage } from './SmtpSettingsPage'
+import { OrganizationSettingsPanel } from './OrganizationSettingsPanel'
+import { PublicOptOutPage } from './PublicOptOutPage'
 import { RuntimeVersionStatus } from './RuntimeVersionStatus'
 import type { Dashboard, Notification, Profile, Project, ProjectMember, User } from './types'
 
@@ -55,7 +57,7 @@ type Editor = { type: 'project'; value?: Project; profileId?: string } | { type:
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'targets' | 'sales' | 'results' | 'analysis'>(window.location.hash === '#raw' ? 'raw' : 'targets')
+  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'organization' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'targets' | 'sales' | 'results' | 'analysis'>(window.location.hash === '#raw' ? 'raw' : 'targets')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -186,6 +188,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           setTab('approvals'); setEditor(null); setNotice('')
         }}>✓ 承認キュー</button>
         <p className="nav-label">管理・ガイド</p>
+        <button className={tab === 'organization' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('organization'); setEditor(null); setNotice('') }}>利用企業設定</button>
         <button className={tab === 'raw' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('raw'); setMenuOpen(false); setEditor(null); setNotice('') }}>◎ 収集結果の確認（検証用）</button>
         <button className={tab === 'dashboard' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('dashboard'); setEditor(null); setNotice('')
@@ -273,7 +276,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           }} onOpenFollowup={(projectId, companyId) => {
             setCompletionCompanyId(null); setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
-          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'raw' ? <RawCollectionBenchmarkPage /> : loaded && tab === 'deliveries' ?
+          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'organization' ? <OrganizationSettingsPanel isAdmin={user.is_admin} /> : loaded && tab === 'raw' ? <RawCollectionBenchmarkPage /> : loaded && tab === 'deliveries' ?
           <EmailDeliveriesPage key={collectionProjectId} initialProjectId={collectionProjectId} projects={projects} projectRoles={projectRoles} /> : loaded && tab === 'approvals' ?
           <ApprovalQueuePage key={collectionProjectId} initialProjectId={collectionProjectId} projects={projects} projectRoles={projectRoles} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>
@@ -305,7 +308,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
   </div>
 }
 
-export function App() {
+function AuthenticatedApp() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const [notice, setNotice] = useState('')
@@ -322,4 +325,8 @@ export function App() {
   if (loading) return <main className="p-12" role="status">読み込み中…</main>
   return user ? <Workspace user={user} onLogout={() => { setUser(null); setNotice('') }} /> :
     <Login notice={notice} onLogin={value => { setUser(value); setNotice('') }} />
+}
+
+export function App() {
+  return window.location.pathname === '/opt-out' ? <PublicOptOutPage /> : <AuthenticatedApp />
 }

@@ -18,7 +18,6 @@ from app.models import (
     OutreachDraftApproval,
     Project,
     ProjectMember,
-    SuppressionEntry,
     User,
 )
 from app.project_access import project_access
@@ -49,23 +48,6 @@ def safety_reason(db, item):
     )
     if not permission.allowed:
         return permission.message
-    recipient = item.recipient.strip().lower()
-    # SMTP is installation-wide today: block opt-outs across projects sharing it.
-    if db.scalar(
-        select(SuppressionEntry.id)
-        .where(
-            or_(
-                func.lower(SuppressionEntry.email) == recipient,
-                func.lower(SuppressionEntry.domain) == recipient.rsplit("@", 1)[-1],
-            )
-        )
-        .limit(1)
-    ) or db.scalar(
-        select(Company.id)
-        .where(func.lower(Company.email) == recipient, Company.do_not_contact.is_(True))
-        .limit(1)
-    ):
-        return "同じ送信環境の連絡禁止・配信停止に該当します。"
     config = smtp_configuration(db)
     if config.from_email.strip().lower() != item.sender.get(
         "email", ""

@@ -157,3 +157,18 @@ engine.dispose()
     )
     run_alembic(environment, "upgrade", "head")
     assert_schema_and_job(environment)
+
+
+def test_organization_migration_backfills_owner_project_and_both_stop_sources(migration_schema):
+    environment = migration_schema
+    run_alembic(environment, "upgrade", "e214b1a7c903")
+    run_python(
+        environment,
+        "import runpy; runpy.run_path('tests/organization_migration_fixture.py')['seed']()",
+    )
+    run_alembic(environment, "upgrade", "head")
+    run_python(
+        environment,
+        "import runpy; runpy.run_path('tests/organization_migration_fixture.py')"
+        "['assert_migrated']()",
+    )

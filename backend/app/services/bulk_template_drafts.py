@@ -14,6 +14,7 @@ from app.models import (
     OperationJob,
     OutreachDraft,
     OutreachTemplate,
+    Project,
     SmtpSettings,
     SuppressionEntry,
 )
@@ -21,6 +22,7 @@ from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_profile_delivery import primary_form_profile, sender_values
 from app.services.non_company_suspected import current_suspected_evidence
 from app.services.outreach_template_validation import has_stop_method
+from app.services.suppression import active_suppression_scope_condition
 
 CHUNK_SIZE = 100
 PLACEHOLDER_PATTERN = re.compile(r"\{\{(会社名|送信者名|送信者会社名|送信者メール|送信者電話)\}\}")
@@ -54,10 +56,11 @@ def readiness_targets(db: Session, project_id: UUID) -> list[dict[str, str | Non
 def email_draft_targets(db: Session, project_id: UUID) -> list[dict[str, str | None]]:
     peer_company = aliased(Company)
     email_domain = func.split_part(func.lower(func.trim(Company.email)), "@", 2)
+    organization_id = db.scalar(select(Project.organization_id).where(Project.id == project_id))
     suppressed = (
         select(SuppressionEntry.id)
         .where(
-            SuppressionEntry.project_id == Company.project_id,
+            active_suppression_scope_condition(project_id, organization_id),
             or_(
                 and_(
                     SuppressionEntry.email != "",
@@ -122,7 +125,7 @@ def email_draft_targets(db: Session, project_id: UUID) -> list[dict[str, str | N
         )
         .order_by(Company.company_name, Company.id)
     )
-    targets = []
+    targets: list[dict[str, str | None]] = []
     offset = 0
     while len(targets) < 500:
         companies = db.scalars(statement.offset(offset).limit(500)).all()
