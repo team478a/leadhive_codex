@@ -72,6 +72,12 @@ from app.model_operations import (
     SearchSchedule,
     SuppressionEntry,
 )
+from app.model_organizations import (
+    GlobalOptOutVerification,
+    Organization,
+    OrganizationAuditEvent,
+    OrganizationMember,
+)
 from app.model_outreach import (
     EmailCampaign,
     EmailDelivery,
@@ -193,6 +199,10 @@ __all__ = [
     "InboundEmail",
     "Notification",
     "SuppressionEntry",
+    "Organization",
+    "OrganizationMember",
+    "OrganizationAuditEvent",
+    "GlobalOptOutVerification",
     "CollectionJob",
     "OperationJob",
     "SearchSchedule",

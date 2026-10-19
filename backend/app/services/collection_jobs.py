@@ -16,6 +16,7 @@ from app.services.external_presence import capture_candidate
 from app.services.lead_enrichment import observe_candidate
 from app.services.location_identity import location_key
 from app.services.scraper import is_aggregator_domain
+from app.services.suppression import active_suppression_scope_condition
 
 logger = logging.getLogger("leadhive")
 
@@ -88,6 +89,9 @@ def is_duplicate(db: Session, project_id: UUID, candidate: Candidate) -> bool:
 
 
 def is_suppressed(db: Session, project_id: UUID, candidate: Candidate) -> bool:
+    project = db.get(Project, project_id)
+    if project is None:
+        return False
     conditions = []
     for url in (candidate.website_url, candidate.reference_url):
         if not url:
@@ -107,7 +111,10 @@ def is_suppressed(db: Session, project_id: UUID, candidate: Candidate) -> bool:
         bool(conditions)
         and db.scalar(
             select(SuppressionEntry.id)
-            .where(SuppressionEntry.project_id == project_id, or_(*conditions))
+            .where(
+                active_suppression_scope_condition(project_id, project.organization_id),
+                or_(*conditions),
+            )
             .limit(1)
         )
         is not None

@@ -766,7 +766,11 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
         do_not_contact: doNotContact, exclusion_reason: exclusionReason,
         contact_quality_status: contactQuality,
       })
-      setSelected(updated); await reload(); setNotice('連絡制御と連絡先品質を保存しました。')
+      setSelected(updated); await reload(); setNotice(
+        doNotContact
+          ? '連絡制御と連絡先品質を保存しました。'
+          : '連絡制御を解除しました。利用企業の送信停止は残っています。解除は利用企業の管理者が行います。',
+      )
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function reanalyzeQuality() {

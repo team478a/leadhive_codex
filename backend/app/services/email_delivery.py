@@ -103,9 +103,11 @@ def send_with_configuration(
     *,
     stable_message_id: str | None = None,
     unsubscribe_url: str | None = None,
+    transactional: bool = False,
 ) -> None:
-    require_outbound_enabled()
-    require_sending_time()
+    if not transactional:
+        require_outbound_enabled()
+        require_sending_time()
     if not config.host or not config.from_email:
         raise EmailDeliveryError("メール送信設定が未完了です。")
     message = EmailMessage()
@@ -128,8 +130,9 @@ def send_with_configuration(
                 client.starttls()
             if config.username:
                 client.login(config.username, config.password)
-            require_outbound_enabled()
-            require_sending_time()
+            if not transactional:
+                require_outbound_enabled()
+                require_sending_time()
             transmitting = True
             client.send_message(message)
             accepted = True

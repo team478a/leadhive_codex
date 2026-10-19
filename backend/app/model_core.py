@@ -9,10 +9,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
     func,
+    select,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from app.database import Base
 
@@ -62,6 +64,16 @@ class Project(Timestamps, Base):
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id"), index=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey(
+            "organizations.id",
+            name="fk_projects_organization_id_organizations",
+            ondelete="RESTRICT",
+        ),
+        nullable=False,
+        index=True,
+    )
+    organization = relationship("Organization")
     project_name: Mapped[str] = mapped_column(String(200))
     target_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("target_profiles.id"), index=True
@@ -94,3 +106,69 @@ class AuthSession(Base):
         ForeignKey("users.id", ondelete="CASCADE"), index=True
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+
+
+@event.listens_for(Session, "before_flush")
+def assign_project_organization(session: Session, _flush_context, _instances) -> None:
+    from app.model_operations import SuppressionEntry
+    from app.model_organizations import Organization, OrganizationMember
+
+    pending_by_owner: dict[uuid.UUID, Organization] = {}
+    pending_projects: dict[uuid.UUID, Project] = {}
+    pending_organizations: dict[uuid.UUID, Organization] = {}
+    for project in session.new:
+        if not isinstance(project, Project):
+            continue
+        pending_projects[project.id] = project
+        if project.organization_id is not None:
+            continue
+        organization = pending_by_owner.get(project.user_id)
+        if organization is None:
+            membership = session.scalar(
+                select(OrganizationMember)
+                .join(Organization, Organization.id == OrganizationMember.organization_id)
+                .where(
+                    OrganizationMember.user_id == project.user_id,
+                    OrganizationMember.role.in_(("owner", "admin")),
+                    Organization.status == "active",
+                )
+                .order_by(Organization.created_at, Organization.id)
+                .limit(1)
+            )
+            if membership is not None:
+                project.organization_id = membership.organization_id
+                continue
+            owner = session.get(User, project.user_id)
+            organization = Organization(
+                id=uuid.uuid4(),
+                name=f"利用企業 - {(owner.email if owner else str(project.user_id))[:180]}",
+                status="active",
+            )
+            session.add(organization)
+            session.add(
+                OrganizationMember(
+                    organization_id=organization.id,
+                    user_id=project.user_id,
+                    role="owner",
+                )
+            )
+            pending_by_owner[project.user_id] = organization
+            pending_organizations[organization.id] = organization
+            project.organization = organization
+        project.organization_id = organization.id
+    for entry in session.new:
+        if not isinstance(entry, SuppressionEntry) or entry.project_id is None:
+            continue
+        if entry.scope not in {None, "organization"} or entry.organization_id is not None:
+            continue
+        project = pending_projects.get(entry.project_id) or session.get(Project, entry.project_id)
+        if project is None or project.organization_id is None:
+            continue
+        entry.scope = "organization"
+        entry.project_id = None
+        entry.organization_id = project.organization_id
+        organization = pending_organizations.get(project.organization_id)
+        if organization is None:
+            organization = getattr(project, "organization", None)
+        if organization is not None:
+            entry.organization = organization

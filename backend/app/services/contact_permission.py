@@ -6,9 +6,10 @@ from uuid import UUID
 from sqlalchemy import and_, func, or_, select, true
 from sqlalchemy.orm import Session
 
-from app.models import Company, ContactPerson, FormProfile, SuppressionEntry
+from app.models import Company, ContactPerson, FormProfile, Project, SuppressionEntry
 from app.services.form_observation_safety import observation_hold
 from app.services.form_submission_guard import UNKNOWN_MESSAGE, unresolved_form_submission
+from app.services.suppression import active_suppression_scope_condition
 
 ContactPermissionStatus = Literal["ALLOWED", "PROHIBITED", "UNCERTAIN"]
 
@@ -35,7 +36,8 @@ def _decision(
 
 
 def _normalized(value: str | None) -> str:
-    return (value or "").strip().casefold()
+    normalized = (value or "").strip().casefold().rstrip(".")
+    return normalized[4:] if normalized.startswith("www.") else normalized
 
 
 def _destination_domain(channel: str, destination: str) -> str:
@@ -43,7 +45,7 @@ def _destination_domain(channel: str, destination: str) -> str:
     if channel == "email" and "@" in value:
         return value.rsplit("@", 1)[1].casefold()
     if channel == "form":
-        return (urlsplit(value).hostname or "").casefold()
+        return _normalized(urlsplit(value).hostname)
     return ""
 
 
@@ -98,10 +100,13 @@ def _matching_suppression(
         conditions.append(and_(SuppressionEntry.phone != "", SuppressionEntry.phone.in_(phones)))
     if not conditions:
         return None, ""
+    project = db.get(Project, company.project_id)
+    if project is None:
+        return None, ""
     entry = db.scalar(
         select(SuppressionEntry)
         .where(
-            SuppressionEntry.project_id == company.project_id,
+            active_suppression_scope_condition(company.project_id, project.organization_id),
             or_(*conditions),
         )
         .order_by(SuppressionEntry.created_at.desc(), SuppressionEntry.id)

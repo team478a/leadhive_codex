@@ -15,7 +15,7 @@ from app.models import (
     OutreachDraft,
     OutreachDraftApproval,
     OutreachTemplate,
-    SuppressionEntry,
+    Project,
     User,
 )
 from app.project_access import project_access
@@ -23,6 +23,7 @@ from app.schemas import EmailCampaignCreateInput, EmailCampaignOut
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.outbound_guard import require_outbound_enabled
+from app.services.suppression import add_suppression
 
 router = APIRouter(prefix="/api")
 
@@ -221,16 +222,20 @@ def unsubscribe(token: str, db: Session = Depends(get_db)):
     company = db.get(Company, delivery.company_id)
     if company is None:
         raise HTTPException(404, "企業情報が見つかりません。")
+    project = db.get(Project, company.project_id)
+    if project is None:
+        raise HTTPException(404, "プロジェクトが見つかりません。")
     company.do_not_contact = True
     company.exclusion_reason = "メールの配信停止リンク"
-    db.add(
-        SuppressionEntry(
-            project_id=company.project_id,
-            email=delivery.recipient_email,
-            domain=company.domain or "",
-            phone=company.phone,
-            reason="メールの配信停止リンク",
-        )
+    add_suppression(
+        db,
+        scope="organization",
+        organization_id=project.organization_id,
+        domain=company.domain or "",
+        email=delivery.recipient_email,
+        phone=company.phone,
+        reason="メールの配信停止リンク",
+        source="email_unsubscribe",
     )
     db.commit()
     return {"message": "配信を停止しました。"}

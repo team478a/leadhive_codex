@@ -49,6 +49,7 @@ from app.lead_completion_routes import router as lead_completion_router
 from app.live_input_routes import router as live_input_router
 from app.notification_routes import router as notification_router
 from app.operation_routes import router as operation_router
+from app.organization_routes import router as organization_router
 from app.outreach_draft_routes import router as outreach_draft_router
 from app.pc_input_routes import router as pc_input_router
 from app.preparation_routes import router as preparation_router
@@ -190,7 +191,14 @@ async def protect_browser_requests(request: Request, call_next):
         public_origin = f"{public_url.scheme}://{public_url.netloc}"
         public_optout = (
             request.method == "POST"
-            and request.url.path.startswith("/api/public/unsubscribe/")
+            and (
+                request.url.path.startswith("/api/public/unsubscribe/")
+                or request.url.path
+                in {
+                    "/api/public/opt-out/request",
+                    "/api/public/opt-out/confirm",
+                }
+            )
             and public_url.scheme == "https"
             and origin == public_origin
         )
@@ -263,6 +271,7 @@ app.include_router(company_reporting_router)
 app.include_router(company_quality_router)
 app.include_router(operation_router)
 app.include_router(notification_router)
+app.include_router(organization_router)
 app.include_router(improvement_router)
 app.include_router(form_batch_router)
 app.include_router(form_approval_bulk_router)
