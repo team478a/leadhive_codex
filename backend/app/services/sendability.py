@@ -40,6 +40,10 @@ REASONS = {
     "SUPPRESSED": ("送信禁止リストに登録済み", "連絡しない"),
     "SALES_PROHIBITED": ("営業禁止の記録あり", "連絡しない"),
     "DELIVERY_UNKNOWN": ("過去の送信結果が不明", "人が結果を確認する。自動再送しない"),
+    "RECIPIENT_COOLDOWN": (
+        "この送信先は一定期間、送信を控えています",
+        "一定期間後に再確認する",
+    ),
     "DUPLICATE_DESTINATION": ("送信済み・処理中の窓口", "既存の送信履歴を確認する"),
     "OFFICIAL_SITE_NOT_FOUND": ("公式サイト未登録", "公式サイト候補を探す"),
     "IDENTITY_UNCERTAIN": (
@@ -97,6 +101,7 @@ HARD = {
     "SUPPRESSED",
     "SALES_PROHIBITED",
     "DELIVERY_UNKNOWN",
+    "RECIPIENT_COOLDOWN",
     "DUPLICATE_DESTINATION",
     "CONTACT_INVALID",
     "DESTINATION_INVALID",
@@ -188,6 +193,11 @@ def evaluate(db, company):
         global_codes.add("SALES_PROHIBITED")
     if any(status == "unknown" for _, status in (*email_history, *form_history)):
         global_codes.add("DELIVERY_UNKNOWN")
+    cooldown_reached = False
+    if any(channel == "form" for channel, _value in available):
+        from app.services.recipient_cooldown import at_limit
+
+        cooldown_reached = at_limit(db, company, now)
     lead_codes = set(global_codes)
     if not company.website_url:
         lead_codes.add("OFFICIAL_SITE_NOT_FOUND")
@@ -196,6 +206,8 @@ def evaluate(db, company):
     rows: list[dict] = []
     for (channel, value), source in sorted(available.items()):
         codes = set(lead_codes)
+        if channel == "form" and cooldown_reached:
+            codes.add("RECIPIENT_COOLDOWN")
         saved = inventory.get((channel, value), {})
         purpose = saved.get("purpose", "unknown")
         destination = db.get(ContactDestination, saved["id"]) if saved.get("id") else None

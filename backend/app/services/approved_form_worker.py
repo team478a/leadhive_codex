@@ -191,6 +191,30 @@ def begin(
             "payload_version": item.payload_version,
             "adapter_plan_hash": item.payload_snapshot["adapter_plan_hash"],
         }
+    from app.services.recipient_cooldown import (
+        PUBLIC_MESSAGE,
+        cooldown_values,
+        count_usage,
+        lock_recipient_keys,
+        matching_company_ids,
+        target_keys,
+    )
+
+    keys, corporate_number = target_keys(db, company)
+    lock_recipient_keys(db, keys, corporate_number)
+    current_key = keys[0] if keys else None
+    if (row.recipient_key and current_key != row.recipient_key) or (
+        row.corporate_number and corporate_number != row.corporate_number
+    ):
+        raise HTTPException(
+            409, "送信先の識別情報が予約時から変更されています。再予約してください。"
+        )
+    row.recipient_key = row.recipient_key or current_key
+    row.corporate_number = row.corporate_number or corporate_number
+    company_ids = matching_company_ids(db, keys, corporate_number)
+    _cooldown_days, cooldown_limit = cooldown_values(db)
+    if count_usage(db, keys, corporate_number, company_ids) > cooldown_limit:
+        raise HTTPException(409, PUBLIC_MESSAGE)
     delivery = reserve_form_submission(
         db,
         company,
@@ -202,6 +226,7 @@ def begin(
             "adapter" if adapter_plan is not None else "browser" if browser_form else "direct"
         ),
         execution_authorization=authorization,
+        cooldown_reserved=True,
     )
     row.delivery_id, row.started_at, row.status = delivery.id, approval.now(), "unknown"
     row.reason = UNKNOWN_MESSAGE

@@ -155,6 +155,8 @@ def validate(db, item, *, allow_adapter=False):
 
 
 def reserve(db, item, body, user):
+    from app.services.recipient_cooldown import PUBLIC_MESSAGE, reserve_slot
+
     if item.delivery_method == "browser_form" and not settings.browser_form_delivery_enabled:
         raise HTTPException(
             409,
@@ -194,7 +196,7 @@ def reserve(db, item, body, user):
         lock_preparation_sources(db, db.get(Company, item.company_id), user)
     approval.expected(item, body)
     try:
-        validate(db, item, allow_adapter=True)
+        company, _draft = validate(db, item, allow_adapter=True)
     except HTTPException:
         db.commit()  # Preserve expiry/revocation and its ledger entry.
         raise
@@ -202,6 +204,11 @@ def reserve(db, item, body, user):
         select(ApprovedFormDispatch.id).where(ApprovedFormDispatch.approval_id == item.id)
     ) or duplicate(db, item.company_id, item.form_url):
         raise HTTPException(409, "承認または宛先に既存の予約・送信があります。")
+    allowed, keys, corporate_number, _used = reserve_slot(db, company)
+    if not keys and not corporate_number:
+        raise HTTPException(409, "送信先の識別情報を確認できません。")
+    if not allowed:
+        raise HTTPException(409, PUBLIC_MESSAGE)
     row = ApprovedFormDispatch(
         approval_id=item.id,
         project_id=item.project_id,
@@ -213,6 +220,8 @@ def reserve(db, item, body, user):
         payload_snapshot=deepcopy(item.payload_snapshot),
         payload_hash=item.payload_hash,
         form_url=item.form_url,
+        recipient_key=keys[0] if keys else None,
+        corporate_number=corporate_number,
         status="queued",
     )
     db.add(row)
