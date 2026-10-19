@@ -111,9 +111,7 @@ def analyze(
     try:
         remembered = domains(db, company.project_id)
         page, data = (
-            scrape_company(
-                company.website_url, excluded_domains=remembered, page_cache=page_cache
-            )
+            scrape_company(company.website_url, excluded_domains=remembered, page_cache=page_cache)
             if remembered
             else scrape_company(company.website_url, page_cache=page_cache)
         )
