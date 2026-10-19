@@ -91,6 +91,12 @@ class Company(Timestamps, Base):
     reference_url: Mapped[str] = mapped_column(Text, default="", server_default="")
     website_url: Mapped[str | None] = mapped_column(Text)
     domain: Mapped[str | None] = mapped_column(String(253))
+    master_company_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("master_companies.id", ondelete="SET NULL"), index=True
+    )
+    master_site_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("master_sites.id", ondelete="SET NULL"), index=True
+    )
     corporate_number: Mapped[str] = mapped_column(String(20), default="", server_default="")
     form_first_contact_url: Mapped[str] = mapped_column(Text, default="", server_default="")
     address: Mapped[str] = mapped_column(Text, default="")

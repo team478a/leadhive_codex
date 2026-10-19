@@ -10,7 +10,14 @@ from bs4.element import Tag
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
-from app.models import Company, FormAnalysisLog, FormProfile, FormProfileField, Project
+from app.models import (
+    Company,
+    FormAnalysisLog,
+    FormProfile,
+    FormProfileField,
+    MasterContactPage,
+    Project,
+)
 from app.services.contact_discovery import (
     contact_pages,
     custom_contact_containers,
@@ -34,6 +41,13 @@ from app.services.form_intelligence.rules import (
     sales_contact_status,
 )
 from app.services.form_reservation import reservation_form_indices, reservation_js_container
+from app.services.master_data import (
+    attach_site_to_project_company,
+    get_or_create_site,
+    reusable_form_structure,
+    store_form_structure,
+    upsert_contact_page,
+)
 from app.services.scraper import CONTACT_HINTS, PageFetchCache, ScrapeError
 from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
@@ -364,6 +378,53 @@ def _upsert_profile(
     return profile
 
 
+def _save_master_form_structures(
+    db: Session, company: Company, profiles: list[FormProfile]
+) -> None:
+    if company.source in {"csv", "url"} or not company.website_url:
+        return
+    site = get_or_create_site(db, company.website_url)
+    attach_site_to_project_company(db, company, site)
+    for profile in profiles:
+        if (
+            not profile.form_found
+            or not profile.fingerprint
+            or not same_site(company.website_url, profile.form_url)
+            or not profile.form_url.startswith(("http://", "https://"))
+        ):
+            continue
+        page = upsert_contact_page(db, site, profile.form_url)
+        page.sales_prohibited = profile.sales_contact_status == "PROHIBITED"
+        page.last_checked_at = profile.last_analyzed_at
+        fields = db.scalars(
+            select(FormProfileField)
+            .where(FormProfileField.form_profile_id == profile.id)
+            .order_by(FormProfileField.position)
+        ).all()
+        store_form_structure(
+            db,
+            page,
+            form_index=profile.form_index,
+            fingerprint=profile.fingerprint,
+            fields=[
+                {
+                    "name": field.name,
+                    "selector": field.selector,
+                    "label": field.label,
+                    "field_type": field.field_type,
+                    "required": field.required,
+                    "options": field.options,
+                }
+                for field in fields
+            ],
+            captcha_type=profile.captcha_type,
+            submission_kind=profile.compatibility_reason_code,
+            confirmation_page=profile.confirmation_page,
+            analysis_version=profile.analysis_version,
+            analyzed_at=profile.last_analyzed_at,
+        )
+
+
 def analyze_company_forms(
     db: Session,
     company: Company,
@@ -401,6 +462,62 @@ def analyze_company_forms(
         )
         db.commit()
         return [profile]
+
+    cached_url = company.form_first_contact_url or company.contact_url or ""
+    if cached_url and company.source not in {"csv", "url"}:
+        cached = reusable_form_structure(
+            db,
+            contact_page_url=cached_url,
+            form_index=0,
+            analysis_version=ANALYSIS_VERSION,
+        )
+        if cached is not None:
+            cached_page = db.get(MasterContactPage, cached.master_contact_page_id)
+            fields = [
+                {
+                    **field,
+                    "position": position,
+                    "mapped_key": "unknown",
+                    "confidence": 0,
+                    "decision_source": "DOM",
+                    "recommended_value": "",
+                    "placeholder": "",
+                    "aria_label": "",
+                    "surrounding_text": "",
+                }
+                for position, field in enumerate(cached.fields)
+            ]
+            profile = _upsert_profile(
+                db,
+                company,
+                cached_url,
+                0,
+                form_found=True,
+                page_kind="general",
+                fields=fields,
+                sales_status=(
+                    "PROHIBITED" if cached_page and cached_page.sales_prohibited else "UNCERTAIN"
+                ),
+                captcha=cached.captcha_type,
+                confirmation=cached.confirmation_page,
+                duration_ms=0,
+                provider_name="master_cache",
+                compatibility_reason_code="MASTER_CACHE_REVIEW_REQUIRED",
+                review_reason_override=(
+                    "共通マスターの構造キャッシュを利用しました。送信前にフォームを再確認してください。"
+                ),
+                fingerprint_override=cached.fingerprint,
+            )
+            profile.is_primary = True
+            _log(
+                db,
+                company.id,
+                "analysis_completed",
+                profile_id=profile.id,
+                details={"finding": "MASTER_CACHE_REUSED", "master_form_id": str(cached.id)},
+            )
+            db.commit()
+            return [profile]
 
     project = db.get(Project, company.project_id)
     fetcher = SafeFetcher()
@@ -890,6 +1007,7 @@ def analyze_company_forms(
             )
             for current_profile in profiles:
                 current_profile.is_primary = current_profile.id == primary.id
+        _save_master_form_structures(db, company, profiles)
         db.commit()
         return list(
             db.scalars(

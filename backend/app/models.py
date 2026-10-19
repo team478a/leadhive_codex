@@ -65,6 +65,15 @@ from app.model_lead_completion import (
     LeadSiteEvidence,
     LeadSourceObservation,
 )
+from app.model_master_data import (
+    MasterCompany,
+    MasterCompanySite,
+    MasterContactPage,
+    MasterFormReview,
+    MasterFormStructure,
+    MasterObservation,
+    MasterSite,
+)
 from app.model_operations import (
     AnalysisRefreshSchedule,
     CollectionJob,
@@ -146,6 +155,13 @@ __all__ = [
     "LeadDestinationLink",
     "LeadSiteEvidence",
     "LeadSourceObservation",
+    "MasterCompany",
+    "MasterSite",
+    "MasterCompanySite",
+    "MasterContactPage",
+    "MasterFormStructure",
+    "MasterFormReview",
+    "MasterObservation",
     "FormObservationJobEvent",
     "FormObservationEvent",
     "FormObservationEvidence",

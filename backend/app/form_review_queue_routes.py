@@ -24,6 +24,7 @@ from app.models import (
     FormProfileField,
     FormSenderSettings,
     OutreachDraft,
+    Project,
     User,
 )
 from app.project_access import company_access, project_access
@@ -49,6 +50,10 @@ from app.services.form_saved_choice_reviews import (
 )
 from app.services.form_saved_choice_reviews import (
     reviewable as saved_choice_reviewable,
+)
+from app.services.master_data import (
+    form_review_suggestion_sets,
+    save_organization_form_review,
 )
 
 router = APIRouter(prefix="/api", tags=["Form review queue"])
@@ -158,9 +163,24 @@ def _queue_item(
         )
     )
     choices = {} if confirmation_only else sender_values(db.get(FormSenderSettings, 1))
+    project = db.get(Project, company.project_id)
+    same_org_suggestions, other_org_suggestions = (
+        form_review_suggestion_sets(db, organization_id=project.organization_id, profile=profile)
+        if project is not None and project.organization_id is not None and not confirmation_only
+        else ({}, {})
+    )
     output_fields = []
     for field in [] if confirmation_only else fields:
         row = _field_material(field)
+        field_identity = (field.name, field.selector, field.field_type)
+        suggested_key = same_org_suggestions.get(field_identity)
+        same_org_suggestion = suggested_key is not None
+        if suggested_key is None:
+            suggested_key = other_org_suggestions.get(field_identity)
+        if suggested_key:
+            row["suggested_mapped_key"] = suggested_key
+            row["same_organization_suggestion"] = same_org_suggestion
+            row["other_organization_suggestion"] = not same_org_suggestion
         row["display_value"] = (
             ""
             if field.mapped_key in CONSENT_KEYS
@@ -445,6 +465,16 @@ def save_form_review_decision(
             .where(FormDmReadinessResult.profile_id == profile.id)
             .values(review_queue_eligible=False)
         )
+        project = db.get(Project, company.project_id)
+        if project is not None and project.organization_id is not None:
+            save_organization_form_review(
+                db,
+                organization_id=project.organization_id,
+                profile=profile,
+                fields=fields,
+                fields_hash=_fields_hash(profile, fields),
+                confirmed_by_user_id=user.id,
+            )
         db.commit()
         return {"status": "CONFIRMED", "company_id": str(company.id), "profile_id": str(profile.id)}
 
@@ -609,6 +639,16 @@ def save_form_review_decision(
             },
         )
     )
+    project = db.get(Project, company.project_id)
+    if project is not None and project.organization_id is not None:
+        save_organization_form_review(
+            db,
+            organization_id=project.organization_id,
+            profile=profile,
+            fields=after_fields,
+            fields_hash=_fields_hash(profile, after_fields),
+            confirmed_by_user_id=user.id,
+        )
     db.execute(
         update(FormDmReadinessResult)
         .where(FormDmReadinessResult.profile_id == profile.id)
