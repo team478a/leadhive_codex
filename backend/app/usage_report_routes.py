@@ -45,9 +45,7 @@ def _grouped_counts(db: Session, model, dimensions: tuple, time_column, since: d
 
 
 def _count_since(db: Session, model, time_column, since: datetime) -> int:
-    return db.scalar(
-        select(func.count()).select_from(model).where(time_column >= since)
-    ) or 0
+    return db.scalar(select(func.count()).select_from(model).where(time_column >= since)) or 0
 
 
 @router.get("/usage-report")

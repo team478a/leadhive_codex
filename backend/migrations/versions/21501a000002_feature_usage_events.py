@@ -15,9 +15,7 @@ def upgrade():
         "feature_usage_events",
         sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("event_type", sa.String(length=60), nullable=False),
-        sa.Column(
-            "outcome", sa.String(length=20), server_default="completed", nullable=False
-        ),
+        sa.Column("outcome", sa.String(length=20), server_default="completed", nullable=False),
         sa.Column(
             "created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False
         ),
@@ -26,9 +24,7 @@ def upgrade():
             "'pc_input_report_recorded', 'live_input_trial_issued', 'live_input_report_recorded')",
             name="ck_feature_usage_event_type",
         ),
-        sa.CheckConstraint(
-            "outcome IN ('completed', 'failed')", name="ck_feature_usage_outcome"
-        ),
+        sa.CheckConstraint("outcome IN ('completed', 'failed')", name="ck_feature_usage_outcome"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(

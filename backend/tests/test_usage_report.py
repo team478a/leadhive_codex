@@ -60,4 +60,3 @@ def test_usage_report_counts_3000_companies_with_bounded_queries(client, users, 
     )
     assert report["coverage"]["processing_usage_partial"] is True
     assert len(statements) <= 30
-

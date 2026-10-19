@@ -86,9 +86,7 @@ def test_proposal_api_is_read_only_and_human_scoped(auth, db, sample, users):
     db.commit()
     assert auth.post(url, json=body).status_code == 200
     assert (
-        db.query(FeatureUsageEvent)
-        .filter_by(event_type="collection_condition_proposal")
-        .count()
+        db.query(FeatureUsageEvent).filter_by(event_type="collection_condition_proposal").count()
         == 2
     )
 
