@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from app.models import ApplicationSettings, Company, OperationJob
+from app.models import ApplicationSettings, Company, OperationJob, Project
 from app.services import web_analysis
 from app.services.collection import Candidate
 from app.services.collection_jobs import save_candidates, start_job
@@ -16,12 +16,15 @@ from tests.test_collection import make_project
 def test_collection_automatically_queues_site_analysis_and_setting_can_disable(auth, db):
     project = make_project(auth)
     project_id = UUID(project["id"])
+    project_record = db.get(Project, project_id)
     collection = start_job(db, project_id, "url", "", "")
     save_candidates(
         db,
         collection,
         [Candidate("自動解析対象", "https://auto-analysis.example")],
     )
+    assert project_record is not None
+    assert project_record.id == project_id
     job = db.query(OperationJob).filter_by(operation_type="site_analysis").one()
     assert job.payload["company_ids"]
 

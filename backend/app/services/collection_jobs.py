@@ -279,6 +279,9 @@ def save_candidates(
         from app.services.site_analysis import enqueue_site_analysis
 
         preserved: list[object] = [job]
+        project = db.get(Project, job.project_id)
+        if project is not None:
+            preserved.append(project)
         if job.operation_job_id:
             operation = db.get(OperationJob, job.operation_job_id)
             if operation is not None:
