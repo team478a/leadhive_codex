@@ -683,7 +683,12 @@ def test_bulk_form_intelligence_job(auth, db, monkeypatch):
     assert job.payload["company_ids"] == [str(company.id)]
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: 0)
-    monkeypatch.setattr(web_analysis, "analyze", lambda _db, item, *_args, **_kwargs: item)
+
+    def complete_analysis(_db, item, *_args, **_kwargs):
+        item.analysis_status = "completed"
+        return item
+
+    monkeypatch.setattr(web_analysis, "analyze", complete_analysis)
     monkeypatch.setattr(
         form_intelligence_service,
         "analyze_company_forms",
@@ -707,6 +712,8 @@ def test_project_site_analysis_job_continues_for_missing_forms(auth, db, monkeyp
     )
     db.add(second)
     db.commit()
+    first_id = first.id
+    second_id = second.id
     analyzed_ids = []
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
@@ -734,7 +741,7 @@ def test_project_site_analysis_job_continues_for_missing_forms(auth, db, monkeyp
     db.refresh(job)
     assert job.status == "completed"
     assert job.total_count == 2 and job.processed_count == 2
-    assert analyzed_ids.count(first.id) == 2 and analyzed_ids.count(second.id) == 2
+    assert analyzed_ids.count(first_id) == 2 and analyzed_ids.count(second_id) == 2
 
 
 def test_review_reason_is_saved_for_browser_only_form(auth, db, monkeypatch):
