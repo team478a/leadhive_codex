@@ -9,6 +9,7 @@ from app.config import settings
 from app.models import Activity, ApprovalRequest, EmailDelivery, FormDelivery, FormProfile
 from app.services import web_analysis
 from app.services.field_feedback import PREFIX, bound_web, capture_web
+from app.services.form_intelligence import analyzer
 from app.services.scraper import FetchedPage, PageData
 from offline_replay.feedback import normalize
 from tests.test_collection_feedback import body
@@ -89,7 +90,7 @@ def test_form_snapshot_is_system_and_keeps_old_diagnostic(auth, db, monkeypatch)
             ),
         },
     )
-    assert auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").status_code == 200
+    analyzer.analyze_company_forms(db, company)
     response = auth.get(f"/api/projects/{company.project_id}/feedback-export")
     export = response.json()
     rows = normalize(export, str(company.project_id))

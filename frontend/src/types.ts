@@ -1,6 +1,6 @@
 export interface User { id: string; email: string; is_admin: boolean; created_at: string }
 export interface ApplicationSettings {
-  public_app_url: string; openai_model: string; gbizinfo_api_base_url: string
+  public_app_url: string; openai_model: string; gbizinfo_api_base_url: string; auto_site_analysis: boolean
   openai_api_key_source: 'database' | 'environment' | 'unset'
   serper_api_key_source: 'database' | 'environment' | 'unset'
   google_places_api_key_source: 'database' | 'environment' | 'unset'
@@ -190,7 +190,7 @@ export interface OperationJob {
   condition_request_id?: string | null
   condition_version?: number | null
   id: string; project_id: string
-  operation_type: 'collect_search' | 'web_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'extract_articles' | 'form_dm_readiness' | 'form_approval_batch' | 'bulk_template_drafts'
+  operation_type: 'collect_search' | 'web_analysis' | 'site_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'extract_articles' | 'form_dm_readiness' | 'form_approval_batch' | 'bulk_template_drafts'
   bulk_template_results?: { created: string[]; skipped_existing: string[]; excluded: { company_id: string; reason_code: string; reason?: string }[] }
   readiness_reanalysis_reason?: string | null
   readiness_reanalysis_matched_count?: number | null

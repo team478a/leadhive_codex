@@ -43,7 +43,6 @@ from app.services.form_adapter_prerequisites import assess as assess_adapter_pre
 from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
 from app.services.form_execution_plan import PlanError
 from app.services.form_input_preparation import prepare as prepare_form_inputs
-from app.services.form_intelligence import analyze_company_forms
 from app.services.form_intelligence.fields import mapping_review_reason
 from app.services.form_live_check import check as check_live_form
 from app.services.form_live_check import latest as latest_live_check
@@ -63,7 +62,7 @@ from app.services.form_saved_choice_reviews import record as record_saved_choice
 from app.services.form_saved_choice_reviews import reviews as saved_choice_reviews
 from app.services.form_saved_choice_structure import inventory as saved_choice_structure
 from app.services.form_target_refresh import refresh as refresh_target_form
-from app.services.operations import add_operation_job
+from app.services.site_analysis import enqueue_site_analysis
 
 router = APIRouter(prefix="/api")
 
@@ -489,13 +488,26 @@ def review_choice_group(
 
 @router.post(
     "/companies/{company_id}/form-intelligence/analyze",
-    response_model=list[FormProfileOut],
+    response_model=OperationJobOut,
+    status_code=202,
 )
 def analyze_form_profile(
     company_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     company = company_access(company_id, db, user)
-    return [_profile_out(db, item) for item in analyze_company_forms(db, company, force=True)]
+    active_form_job = db.scalar(
+        select(OperationJob.id).where(
+            OperationJob.project_id == company.project_id,
+            OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
+            OperationJob.status.in_(("queued", "running")),
+        )
+    )
+    if active_form_job:
+        raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
+    job = enqueue_site_analysis(db, company.project_id, [company.id], force=True, expunge=False)
+    if job is None:
+        raise HTTPException(409, "サイト解析を登録できませんでした。")
+    return OperationJobOut.model_validate(job)
 
 
 @router.post(
@@ -521,22 +533,16 @@ def enqueue_form_intelligence(
     active = db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == "form_intelligence",
+            OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
             OperationJob.status.in_(("queued", "running")),
         )
     )
     if active:
         raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
-    job = OperationJob(
-        project_id=project_id,
-        operation_type="form_intelligence",
-        payload={"company_ids": [str(item) for item in company_ids], "force": body.force},
-    )
-    if not add_operation_job(db, job):
-        raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
-    db.commit()
-    db.refresh(job)
-    return job
+    job = enqueue_site_analysis(db, project_id, company_ids, force=body.force, expunge=False)
+    if job is None:
+        raise HTTPException(409, "サイト解析を登録できませんでした。")
+    return OperationJobOut.model_validate(job)
 
 
 @router.post(
@@ -555,17 +561,10 @@ def enqueue_missing_form_redetection(
     )
     if not company_ids:
         raise HTTPException(409, "一括再検出できるフォーム未発見企業がありません。")
-    job = OperationJob(
-        project_id=project_id,
-        operation_type="form_intelligence",
-        payload={"company_ids": [str(company_id) for company_id in company_ids], "force": True},
-        total_count=len(company_ids),
-    )
-    if not add_operation_job(db, job):
-        raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
-    db.commit()
-    db.refresh(job)
-    return job
+    job = enqueue_site_analysis(db, project_id, company_ids, force=True, expunge=False)
+    if job is None:
+        raise HTTPException(409, "サイト解析を登録できませんでした。")
+    return OperationJobOut.model_validate(job)
 
 
 def _safe_csv_cell(value: object) -> str:

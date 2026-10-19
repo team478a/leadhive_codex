@@ -122,6 +122,29 @@ class FetchedPage:
     html: str
 
 
+class PageFetchCache:
+    def __init__(self):
+        self._pages: dict[str, FetchedPage] = {}
+
+    @staticmethod
+    def _key(url: str) -> str:
+        parsed = urlsplit(url.strip())
+        return urlunsplit(
+            (parsed.scheme.lower(), parsed.netloc.lower(), parsed.path or "/", parsed.query, "")
+        )
+
+    def fetch(self, fetcher, url: str) -> FetchedPage:
+        key = self._key(url)
+        if key in self._pages:
+            return self._pages[key]
+        page = fetcher.fetch_html(url)
+        return self.remember(page)
+
+    def remember(self, page: FetchedPage) -> FetchedPage:
+        self._pages[self._key(page.url)] = page
+        return page
+
+
 @dataclass
 class PageData:
     company_name: str = ""
@@ -594,11 +617,15 @@ def extract_page(html: str, base_url: str) -> PageData:
 
 
 def scrape_company(
-    url: str, *, excluded_domains: set[str] | None = None
+    url: str, *, excluded_domains: set[str] | None = None, page_cache: PageFetchCache | None = None
 ) -> tuple[FetchedPage, PageData]:
     fetcher = SafeFetcher()
+
+    def fetch(target: str) -> FetchedPage:
+        return page_cache.fetch(fetcher, target) if page_cache else fetcher.fetch_html(target)
+
     try:
-        page = fetcher.fetch_html(url)
+        page = fetch(url)
         root_attempts = 0
         from app.services.source_page_policy import page_reason
 
@@ -618,7 +645,7 @@ def scrape_company(
             ) != root_url.rstrip("/"):
                 try:
                     root_attempts = 1
-                    root = fetcher.fetch_html(root_url)
+                    root = fetch(root_url)
                     if same_site(page.url, root.url) and not source_reason(root):
                         page = root
                         reason = ""
@@ -640,7 +667,7 @@ def scrape_company(
             visited.add(secondary_url.rstrip("/"))
             count += 1
             try:
-                secondary_page = fetcher.fetch_html(secondary_url)
+                secondary_page = fetch(secondary_url)
             except ScrapeError as exc:
                 data.crawl_errors.append(
                     {"requested_url": secondary_url, "reason": exc.public_message}

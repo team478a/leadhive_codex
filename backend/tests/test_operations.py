@@ -6,11 +6,24 @@ from threading import Barrier
 from sqlalchemy import select
 
 from app import worker
-from app.models import AnalysisRefreshSchedule, CollectionJob, Company, OperationJob, SearchSchedule
+from app.models import (
+    AnalysisRefreshSchedule,
+    ApplicationSettings,
+    CollectionJob,
+    Company,
+    OperationJob,
+    SearchSchedule,
+)
 from app.services.collection import Candidate, ExternalServiceError
 
 
-def make_project(auth):
+def make_project(auth, db):
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     profile_id = auth.get("/api/target-profiles").json()[0]["id"]
     return auth.post(
         "/api/projects",
@@ -34,7 +47,9 @@ def add_company(auth, db, project_id):
 
 
 def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch):
-    project = make_project(auth)
+    from app.services import site_analysis
+
+    project = make_project(auth, db)
     company = add_company(auth, db, project["id"])
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
@@ -42,23 +57,25 @@ def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch)
     )
     assert response.status_code == 202
     assert response.json()["status"] == "queued"
-    assert (
-        auth.post(
-            f"/api/projects/{project['id']}/operations",
-            json={"operation_type": "web_analysis"},
-        ).status_code
-        == 409
+    duplicate = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json={"operation_type": "web_analysis"},
     )
+    assert duplicate.status_code == 202
+    assert duplicate.json()["id"] == response.json()["id"]
 
-    def completed(_db, item, force=False):
+    def completed(_db, item, *, force=False, page_cache=None):
         item.analysis_status = "completed"
-        _db.commit()
-        return item
+        return True
 
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
-    monkeypatch.setattr(worker, "analyze", completed)
+    monkeypatch.setattr(site_analysis, "analyze_site_company", completed)
     assert worker.run_once()
-    job = auth.get(f"/api/projects/{project['id']}/operations").json()[0]
+    job = next(
+        row
+        for row in auth.get(f"/api/projects/{project['id']}/operations").json()
+        if row["id"] == response.json()["id"]
+    )
     assert job["status"] == "completed"
     assert job["total_count"] == 1
     assert job["processed_count"] == 1 and job["success_count"] == 1
@@ -67,7 +84,7 @@ def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch)
 
 
 def test_search_collection_worker_records_partial_failure(auth, db, monkeypatch):
-    project = make_project(auth)
+    project = make_project(auth, db)
     created = auth.post(
         f"/api/projects/{project['id']}/operations",
         json={
@@ -99,7 +116,7 @@ def test_search_collection_worker_records_partial_failure(auth, db, monkeypatch)
 
 
 def test_search_collection_runs_keywords_concurrently(auth, db, monkeypatch):
-    project = make_project(auth)
+    project = make_project(auth, db)
     created = auth.post(
         f"/api/projects/{project['id']}/operations",
         json={
@@ -125,7 +142,7 @@ def test_search_collection_runs_keywords_concurrently(auth, db, monkeypatch):
 
 
 def test_stale_job_recovery_and_attempt_limit(auth, db, monkeypatch):
-    project = make_project(auth)
+    project = make_project(auth, db)
     expired = datetime.now(timezone.utc) - timedelta(minutes=1)
     retryable = OperationJob(
         project_id=project["id"],
@@ -169,7 +186,7 @@ def test_stale_job_recovery_and_attempt_limit(auth, db, monkeypatch):
 
 
 def test_worker_stops_after_losing_lease(auth, db):
-    project = make_project(auth)
+    project = make_project(auth, db)
     original_worker = uuid.uuid4()
     job = OperationJob(
         project_id=project["id"],
@@ -185,7 +202,7 @@ def test_worker_stops_after_losing_lease(auth, db):
 
 
 def test_search_schedule_crud_due_enqueue_and_company_limit(auth, db, monkeypatch):
-    project = make_project(auth)
+    project = make_project(auth, db)
     body = {
         "name": "大阪の週次検索",
         "source": "serper",
@@ -244,7 +261,7 @@ def test_search_schedule_crud_due_enqueue_and_company_limit(auth, db, monkeypatc
 
 
 def test_analysis_refresh_schedule_crud_and_due_enqueue(auth, db):
-    project = make_project(auth)
+    project = make_project(auth, db)
     company = add_company(auth, db, project["id"])
     company.analysis_status = "completed"
     company.scraped_at = datetime.now(timezone.utc) - timedelta(days=120)
@@ -295,8 +312,8 @@ def test_analysis_refresh_schedule_crud_and_due_enqueue(auth, db):
     )
 
 
-def test_cancel_retry_validation_and_access_isolation(auth, users):
-    project = make_project(auth)
+def test_cancel_retry_validation_and_access_isolation(auth, users, db):
+    project = make_project(auth, db)
     created = auth.post(
         f"/api/projects/{project['id']}/operations",
         json={
@@ -332,7 +349,7 @@ def test_cancel_retry_validation_and_access_isolation(auth, users):
 
 
 def test_collection_performance_groups_quality_and_speed(auth, db):
-    project = make_project(auth)
+    project = make_project(auth, db)
     db.add_all(
         [
             CollectionJob(

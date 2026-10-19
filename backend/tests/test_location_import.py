@@ -130,7 +130,7 @@ def test_location_web_analysis_preserves_store_names_and_does_not_collapse(auth,
     monkeypatch.setattr(
         web_analysis,
         "scrape_company",
-        lambda url: (FetchedPage(url="https://chain.example", html=""), data),
+        lambda url, **_kwargs: (FetchedPage(url="https://chain.example", html=""), data),
     )
     companies = list(db.scalars(select(Company).where(Company.project_id == project["id"])))
     for company in companies:
@@ -149,7 +149,7 @@ def test_location_redirect_to_portal_remains_reference_only(auth, db, monkeypatc
     monkeypatch.setattr(
         web_analysis,
         "scrape_company",
-        lambda url: (
+        lambda url, **_kwargs: (
             FetchedPage(url="https://beauty.hotpepper.jp/sln1/", html=""),
             PageData(),
         ),

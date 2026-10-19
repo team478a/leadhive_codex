@@ -27,7 +27,6 @@ from app.schemas import (
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.lead_enrichment import preserve_merged_evidence
-from app.services.operations import add_operation_job
 
 router = APIRouter(prefix="/api")
 
@@ -259,7 +258,7 @@ def reanalyze_data_quality(
     active = db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == "web_analysis",
+            OperationJob.operation_type.in_(("web_analysis", "site_analysis", "form_intelligence")),
             OperationJob.status.in_(("queued", "running")),
         )
     )
@@ -285,13 +284,9 @@ def reanalyze_data_quality(
     )
     if not company_ids:
         raise HTTPException(409, "再解析対象の企業はありません。")
-    job = OperationJob(
-        project_id=project_id,
-        operation_type="web_analysis",
-        payload={"company_ids": [str(item) for item in company_ids], "force": True},
-    )
-    if not add_operation_job(db, job):
+    from app.services.site_analysis import enqueue_site_analysis
+
+    job = enqueue_site_analysis(db, project_id, company_ids, force=True, expunge=False)
+    if job is None:
         raise HTTPException(409, "Web解析がすでに実行待ちです。")
-    db.commit()
-    db.refresh(job)
     return job

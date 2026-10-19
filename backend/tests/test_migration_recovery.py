@@ -151,6 +151,10 @@ def test_reapplies_idempotently_to_old_order_completed_schema(migration_schema):
 from sqlalchemy import text
 from app.database import engine
 with engine.begin() as connection:
+    connection.execute(text(\"DROP TABLE IF EXISTS feature_usage_events CASCADE\"))
+    connection.execute(
+        text(\"ALTER TABLE application_settings DROP COLUMN IF EXISTS auto_site_analysis\")
+    )
     connection.execute(text(\"UPDATE alembic_version SET version_num = '3a8b2c1d4e5f'\"))
 engine.dispose()
 """,

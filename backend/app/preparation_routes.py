@@ -16,7 +16,13 @@ from app.security import current_user
 from app.services.sales_preparation import context_hash
 
 router = APIRouter(prefix="/api")
-PREPARATION_TYPES = ("prepare_outreach", "web_analysis", "ai_analysis", "form_intelligence")
+PREPARATION_TYPES = (
+    "prepare_outreach",
+    "web_analysis",
+    "site_analysis",
+    "ai_analysis",
+    "form_intelligence",
+)
 
 
 def lock_project(db, project_id):

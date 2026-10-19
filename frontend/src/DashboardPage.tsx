@@ -10,7 +10,7 @@ const labels: Record<string, string> = {
 }
 
 const operationLabels: Record<string, string> = {
-  collect_search: '検索収集', web_analysis: 'Web解析', ai_analysis: 'AI判定', form_delivery: '一括フォームDM', form_intelligence: 'フォーム解析',
+  collect_search: '検索収集', web_analysis: 'Web解析', site_analysis: 'サイト解析', ai_analysis: 'AI判定', form_delivery: '一括フォームDM', form_intelligence: 'フォーム解析',
 }
 const operationStatuses: Record<string, string> = {
   queued: '待機中', running: '実行中', completed: '完了', failed: '失敗', cancelled: 'キャンセル',

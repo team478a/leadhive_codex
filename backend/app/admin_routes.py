@@ -71,6 +71,7 @@ def application_settings_out(value: ApplicationSettings | None) -> ApplicationSe
         gbizinfo_api_base_url=effective_value(
             value.gbizinfo_api_base_url if value else "", _environment.gbizinfo_api_base_url
         ),
+        auto_site_analysis=value.auto_site_analysis if value else True,
         openai_api_key_source=secret_source(
             value.openai_api_key_ciphertext if value else "", _environment.openai_api_key
         ),
@@ -120,6 +121,8 @@ def update_application_settings(
     saved.public_app_url = body.public_app_url.strip()
     saved.openai_model = body.openai_model.strip()
     saved.gbizinfo_api_base_url = body.gbizinfo_api_base_url.strip()
+    if body.auto_site_analysis is not None:
+        saved.auto_site_analysis = body.auto_site_analysis
     saved.updated_by_user_id = user.id
     for field, value in encrypted.items():
         setattr(saved, field, value)

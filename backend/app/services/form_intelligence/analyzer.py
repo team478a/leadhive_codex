@@ -34,7 +34,7 @@ from app.services.form_intelligence.rules import (
     sales_contact_status,
 )
 from app.services.form_reservation import reservation_form_indices, reservation_js_container
-from app.services.scraper import CONTACT_HINTS, ScrapeError
+from app.services.scraper import CONTACT_HINTS, PageFetchCache, ScrapeError
 from app.services.scraper import FormDiscoveryFetcher as SafeFetcher
 
 logger = logging.getLogger("leadhive")
@@ -365,7 +365,12 @@ def _upsert_profile(
 
 
 def analyze_company_forms(
-    db: Session, company: Company, force: bool = False, *, allow_ai: bool = True
+    db: Session,
+    company: Company,
+    force: bool = False,
+    *,
+    allow_ai: bool = True,
+    page_cache: PageFetchCache | None = None,
 ) -> list[FormProfile]:
     # A requested analysis always refreshes the snapshot; force is kept for the job contract.
     del force
@@ -399,11 +404,15 @@ def analyze_company_forms(
 
     project = db.get(Project, company.project_id)
     fetcher = SafeFetcher()
+
+    def fetch(url: str):
+        return page_cache.fetch(fetcher, url) if page_cache else fetcher.fetch_html(url)
+
     seen: set[tuple[str, int]] = set()
     profiles: list[FormProfile] = []
     prohibitions: list[tuple[str, str]] = []
     try:
-        root = fetcher.fetch_html(company.website_url)
+        root = fetch(company.website_url)
         fetcher.site_root = root.url
         root_cache = {root.url: root.html}
         external_seen: set[str] = set()
@@ -483,7 +492,7 @@ def analyze_company_forms(
                     # to this candidate's host before even fetching robots.txt.
                     fetcher.site_root = url if external else root.url
                     try:
-                        page = fetcher.fetch_html(url)
+                        page = fetch(url)
                     finally:
                         fetcher.site_root = root.url
                     if not same_site(url if external else root.url, page.url):

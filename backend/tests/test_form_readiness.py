@@ -170,9 +170,10 @@ def test_bulk_redetection_queues_only_visible_missing_form_companies(auth, form_
     assert response.json()["total_count"] == 1
     job = db.get(OperationJob, response.json()["id"])
     assert job.payload == {"company_ids": [str(company.id)], "force": True}
-    assert (
-        auth.post(f"/api/projects/{project.id}/form-intelligence/retry-missing").status_code == 409
-    )
+    duplicate = auth.post(f"/api/projects/{project.id}/form-intelligence/retry-missing")
+    assert duplicate.status_code == 202
+    assert duplicate.json()["id"] == response.json()["id"]
+    assert db.get(OperationJob, duplicate.json()["id"]).payload["company_ids"] == [str(company.id)]
 
 
 def test_missing_diagnostics_classify_recent_logs_and_export_csv(auth, form_source, db):

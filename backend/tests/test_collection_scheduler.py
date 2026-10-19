@@ -10,11 +10,28 @@ from sqlalchemy.exc import IntegrityError
 
 from app import worker
 from app.config import settings
-from app.models import CollectionQueryTask, CollectionSearchAttempt, Company, OperationJob
+from app.models import (
+    ApplicationSettings,
+    CollectionQueryTask,
+    CollectionSearchAttempt,
+    Company,
+    OperationJob,
+)
 from app.services import collection_scheduler as scheduler
 from app.services import target_collection
 from app.services.collection import ExternalServiceError
 from tests.test_target_collection import candidate, make_project, result, setup_job
+
+
+def make_project_without_auto_analysis(auth, db):
+    project = make_project(auth)
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
+    return project
 
 
 def setup(auth, db, monkeypatch, **kwargs):
@@ -127,7 +144,7 @@ def test_global_budget_fairness_and_page_cap(auth, db, monkeypatch):
 
 def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)
-    project = make_project(auth)
+    project = make_project_without_auto_analysis(auth, db)
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
@@ -184,7 +201,7 @@ def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
 
 def test_auto_continue_stops_at_explicit_total_budget(auth, db, monkeypatch):
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)
-    project = make_project(auth)
+    project = make_project_without_auto_analysis(auth, db)
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
         json=dict(
@@ -220,7 +237,7 @@ def test_auto_continue_stops_at_explicit_total_budget(auth, db, monkeypatch):
 
 def test_auto_continue_repeats_until_goal_across_prefecture_cursor(auth, db, monkeypatch):
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)
-    project = make_project(auth)
+    project = make_project_without_auto_analysis(auth, db)
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
