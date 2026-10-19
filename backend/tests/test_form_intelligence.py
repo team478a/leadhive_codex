@@ -8,6 +8,7 @@ from sqlalchemy import select
 from app import worker
 from app.form_intelligence_routes import _profile_out
 from app.models import ApplicationSettings, Company, FormAnalysisLog, FormProfileField, OperationJob
+from app.services import form_intelligence as form_intelligence_service
 from app.services import web_analysis
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence import analyzer
@@ -684,7 +685,7 @@ def test_bulk_form_intelligence_job(auth, db, monkeypatch):
     monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: 0)
     monkeypatch.setattr(web_analysis, "analyze", lambda _db, item, *_args, **_kwargs: item)
     monkeypatch.setattr(
-        analyzer,
+        form_intelligence_service,
         "analyze_company_forms",
         lambda *_args, **_kwargs: [SimpleNamespace(form_status="READY")],
     )
@@ -721,7 +722,7 @@ def test_project_site_analysis_job_continues_for_missing_forms(auth, db, monkeyp
 
     monkeypatch.setattr(web_analysis, "analyze", analyze_company)
     monkeypatch.setattr(
-        analyzer,
+        form_intelligence_service,
         "analyze_company_forms",
         lambda _db, company, *_args, **_kwargs: (
             analyzed_ids.append(company.id) or [SimpleNamespace(form_status="READY")]

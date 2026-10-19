@@ -71,7 +71,11 @@ def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch)
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     monkeypatch.setattr(site_analysis, "analyze_site_company", completed)
     assert worker.run_once()
-    job = auth.get(f"/api/operations/{response.json()['id']}").json()
+    job = next(
+        row
+        for row in auth.get(f"/api/projects/{project['id']}/operations").json()
+        if row["id"] == response.json()["id"]
+    )
     assert job["status"] == "completed"
     assert job["total_count"] == 1
     assert job["processed_count"] == 1 and job["success_count"] == 1
