@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from app.models import Activity, Company, ContactPerson, OperationJob
+from app.models import Activity, ApplicationSettings, Company, ContactPerson, OperationJob
 
 
 def make_project(auth, name="営業リストテスト"):
@@ -22,6 +22,12 @@ def make_project(auth, name="営業リストテスト"):
 
 
 def add_companies(auth, db, project_id):
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     content = (
         "company_name,website_url,phone,email,address\n"
         "=危険な数式,https://alpha.example,06-1111-1111,a@example.jp,大阪府大阪市\n"

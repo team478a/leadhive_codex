@@ -275,24 +275,14 @@ def save_candidates(
     db.commit()
     db.refresh(job)
     if saved_company_ids:
-        from app.models import OperationJob
         from app.services.site_analysis import enqueue_site_analysis
-
-        preserved: list[object] = [job]
-        project = db.get(Project, job.project_id)
-        if project is not None:
-            preserved.append(project)
-        if job.operation_job_id:
-            operation = db.get(OperationJob, job.operation_job_id)
-            if operation is not None:
-                preserved.append(operation)
 
         enqueue_site_analysis(
             db,
             job.project_id,
             saved_company_ids,
             automatic=True,
-            preserve_instances=tuple(preserved),
+            expunge=False,
         )
         refreshed_job = db.get(CollectionJob, collection_job_id)
         if refreshed_job is None:

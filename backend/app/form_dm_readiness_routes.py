@@ -783,6 +783,7 @@ def reanalyze_readiness_reason(
         project_id,
         company_ids,
         force=True,
+        expunge=False,
         extra_payload={
             "force": True,
             "requested_by_user_id": str(user.id),

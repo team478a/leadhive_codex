@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app import worker
 from app.form_intelligence_routes import _profile_out
-from app.models import Company, FormAnalysisLog, FormProfileField, OperationJob
+from app.models import ApplicationSettings, Company, FormAnalysisLog, FormProfileField, OperationJob
 from app.services import web_analysis
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence import analyzer
@@ -26,6 +26,12 @@ from app.services.scraper import FetchedPage, ScrapeError
 
 
 def make_company(auth, db):
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     profile_id = auth.get("/api/target-profiles").json()[0]["id"]
     project = auth.post(
         "/api/projects",

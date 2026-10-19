@@ -22,7 +22,9 @@ def analyze_company(
     user: User = Depends(current_user),
 ):
     company = company_access(company_id, db, user)
-    job = enqueue_site_analysis(db, company.project_id, [company.id], force=body.force)
+    job = enqueue_site_analysis(
+        db, company.project_id, [company.id], force=body.force, expunge=False
+    )
     if job is None:
         raise HTTPException(409, "サイト解析を登録できませんでした。")
     return OperationJobOut.model_validate(job)
@@ -53,6 +55,7 @@ def analyze_project(
         project_id,
         [company.id for company in companies],
         force=body.force,
+        expunge=False,
     )
     if job is None:
         raise HTTPException(409, "サイト解析の対象がありません。")

@@ -504,7 +504,7 @@ def analyze_form_profile(
     )
     if active_form_job:
         raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
-    job = enqueue_site_analysis(db, company.project_id, [company.id], force=True)
+    job = enqueue_site_analysis(db, company.project_id, [company.id], force=True, expunge=False)
     if job is None:
         raise HTTPException(409, "サイト解析を登録できませんでした。")
     return OperationJobOut.model_validate(job)
@@ -539,7 +539,7 @@ def enqueue_form_intelligence(
     )
     if active:
         raise HTTPException(409, "フォーム解析がすでに実行待ちです。")
-    job = enqueue_site_analysis(db, project_id, company_ids, force=body.force)
+    job = enqueue_site_analysis(db, project_id, company_ids, force=body.force, expunge=False)
     if job is None:
         raise HTTPException(409, "サイト解析を登録できませんでした。")
     return OperationJobOut.model_validate(job)
@@ -561,7 +561,7 @@ def enqueue_missing_form_redetection(
     )
     if not company_ids:
         raise HTTPException(409, "一括再検出できるフォーム未発見企業がありません。")
-    job = enqueue_site_analysis(db, project_id, company_ids, force=True)
+    job = enqueue_site_analysis(db, project_id, company_ids, force=True, expunge=False)
     if job is None:
         raise HTTPException(409, "サイト解析を登録できませんでした。")
     return OperationJobOut.model_validate(job)

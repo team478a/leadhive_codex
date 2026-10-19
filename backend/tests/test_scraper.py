@@ -412,7 +412,7 @@ def test_extraction_evidence_does_not_bootstrap_official_confirmation(auth, db, 
     monkeypatch.setattr(
         web_analysis,
         "scrape_company",
-        lambda url: (
+        lambda url, **_kwargs: (
             FetchedPage("https://example.jp", HTML),
             extract_page(HTML, "https://example.jp"),
         ),

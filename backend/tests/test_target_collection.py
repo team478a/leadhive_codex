@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app import worker
-from app.models import CollectionJob, Company
+from app.models import ApplicationSettings, CollectionJob, Company
 from app.services import target_collection
 from app.services.collection import Candidate, ExternalServiceError
 from app.services.collection_jobs import save_candidates, start_job
@@ -32,6 +32,12 @@ def test_serper_pagination_keeps_batch_size(monkeypatch):
 
 def setup_job(auth, db, monkeypatch, *, keywords=None, target=3, request_limit=None):
     project = make_project(auth)
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
         json=dict(

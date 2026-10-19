@@ -136,7 +136,7 @@ def run_analysis_refresh_schedule(
         project_id,
         company_ids,
         force=True,
-        preserve_instances=(schedule,),
+        expunge=False,
     )
     if job is None:
         raise HTTPException(409, "Web解析がすでに実行待ちです。")
@@ -387,7 +387,7 @@ def enqueue_operation(
             )
             if len(valid_ids) != len(set(body.company_ids)):
                 raise HTTPException(404, "指定された企業が見つかりません。")
-            job = enqueue_site_analysis(db, project_id, valid_ids, force=body.force)
+            job = enqueue_site_analysis(db, project_id, valid_ids, force=body.force, expunge=False)
         else:
             job = enqueue_site_analysis_scan(db, project_id, force=body.force)
         if job is None:

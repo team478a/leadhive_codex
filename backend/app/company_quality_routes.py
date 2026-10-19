@@ -286,7 +286,7 @@ def reanalyze_data_quality(
         raise HTTPException(409, "再解析対象の企業はありません。")
     from app.services.site_analysis import enqueue_site_analysis
 
-    job = enqueue_site_analysis(db, project_id, company_ids, force=True)
+    job = enqueue_site_analysis(db, project_id, company_ids, force=True, expunge=False)
     if job is None:
         raise HTTPException(409, "Web解析がすでに実行待ちです。")
     return job

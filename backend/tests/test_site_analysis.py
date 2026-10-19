@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from app.models import ApplicationSettings, Company, OperationJob, Project
+from app.models import ApplicationSettings, Company, OperationJob
 from app.services import web_analysis
 from app.services.collection import Candidate
 from app.services.collection_jobs import save_candidates, start_job
@@ -13,18 +13,17 @@ from app.services.site_analysis import (
 from tests.test_collection import make_project
 
 
-def test_collection_automatically_queues_site_analysis_and_setting_can_disable(auth, db):
+def test_collection_automatically_queues_site_analysis_and_setting_can_disable(auth, db, users):
     project = make_project(auth)
     project_id = UUID(project["id"])
-    project_record = db.get(Project, project_id)
+    user_email = users[0].email
     collection = start_job(db, project_id, "url", "", "")
     save_candidates(
         db,
         collection,
         [Candidate("自動解析対象", "https://auto-analysis.example")],
     )
-    assert project_record is not None
-    assert project_record.id == project_id
+    assert users[0].email == user_email
     job = db.query(OperationJob).filter_by(operation_type="site_analysis").one()
     assert job.payload["company_ids"]
 
@@ -39,6 +38,25 @@ def test_collection_automatically_queues_site_analysis_and_setting_can_disable(a
         [Candidate("自動解析停止", "https://auto-analysis-disabled.example")],
     )
     assert db.query(OperationJob).filter_by(operation_type="site_analysis").count() == 1
+
+
+def test_site_analysis_api_keeps_request_session_entities_attached(auth, db, users):
+    project = make_project(auth)
+    company = Company(
+        project_id=UUID(project["id"]),
+        company_name="API解析対象",
+        domain="api-analysis.example",
+        website_url="https://api-analysis.example",
+        source="url",
+    )
+    db.add(company)
+    db.commit()
+
+    response = auth.post(f"/api/companies/{company.id}/analyze", json={"force": False})
+
+    assert response.status_code == 202
+    assert users[0].email == "user0@example.com"
+    assert company.company_name == "API解析対象"
 
 
 def test_obvious_public_domains_and_article_titles_are_filtered_before_save(auth, db):
@@ -115,11 +133,12 @@ def test_manual_site_analysis_still_queues_when_automatic_setting_is_off(auth, d
     )
     db.add_all([company, ApplicationSettings(id=1, auto_site_analysis=False)])
     db.commit()
+    company_id = company.id
 
-    job = enqueue_site_analysis(db, project_id, [company.id])
+    job = enqueue_site_analysis(db, project_id, [company_id])
 
     assert job is not None
-    assert job.payload["company_ids"] == [str(company.id)]
+    assert job.payload["company_ids"] == [str(company_id)]
 
 
 def test_site_analysis_shares_one_page_cache_between_web_and_form_analysis(auth, db, monkeypatch):
