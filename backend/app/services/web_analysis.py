@@ -110,11 +110,12 @@ def analyze(
     phase = "fetch"
     try:
         remembered = domains(db, company.project_id)
-        fetch_options = {"page_cache": page_cache} if page_cache is not None else {}
         page, data = (
-            scrape_company(company.website_url, excluded_domains=remembered, **fetch_options)
+            scrape_company(
+                company.website_url, excluded_domains=remembered, page_cache=page_cache
+            )
             if remembered
-            else scrape_company(company.website_url, **fetch_options)
+            else scrape_company(company.website_url, page_cache=page_cache)
         )
         phase = "normalize"
         if data.source_exclusion_reason:
