@@ -16,6 +16,14 @@ class FormDispatchLimits(Base):
         CheckConstraint("id = 1", name="ck_form_limits_singleton"),
         CheckConstraint("site_interval_seconds BETWEEN 60 AND 86400", name="ck_form_site_interval"),
         CheckConstraint(
+            "recipient_cooldown_days BETWEEN 1 AND 365",
+            name="ck_form_recipient_cooldown_days",
+        ),
+        CheckConstraint(
+            "recipient_cooldown_limit BETWEEN 1 AND 100",
+            name="ck_form_recipient_cooldown_limit",
+        ),
+        CheckConstraint(
             "daily_limit BETWEEN 1 AND 1000 AND hourly_limit BETWEEN 1 AND 100 "
             "AND minimum_interval_seconds BETWEEN 60 AND 86400",
             name="ck_form_limits_range",
@@ -26,6 +34,8 @@ class FormDispatchLimits(Base):
     hourly_limit: Mapped[int] = mapped_column(Integer, default=5)
     minimum_interval_seconds: Mapped[int] = mapped_column(Integer, default=60)
     site_interval_seconds: Mapped[int] = mapped_column(Integer, default=300)
+    recipient_cooldown_days: Mapped[int] = mapped_column(Integer, default=30, server_default="30")
+    recipient_cooldown_limit: Mapped[int] = mapped_column(Integer, default=2, server_default="2")
     paused: Mapped[bool] = mapped_column(Boolean, default=False)
     version: Mapped[int] = mapped_column(Integer, default=1)
     updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("users.id"))
@@ -69,6 +79,8 @@ class ApprovedFormDispatch(Base):
     payload_snapshot: Mapped[dict] = mapped_column(JSONB)
     payload_hash: Mapped[str] = mapped_column(String(64))
     form_url: Mapped[str] = mapped_column(Text, index=True)
+    recipient_key: Mapped[str | None] = mapped_column(String(253), index=True)
+    corporate_number: Mapped[str | None] = mapped_column(String(20), index=True)
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
     worker_id: Mapped[uuid.UUID | None] = mapped_column()
     lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

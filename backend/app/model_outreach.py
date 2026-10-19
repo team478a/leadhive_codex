@@ -233,6 +233,8 @@ class FormDelivery(Timestamps, Base):
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     form_url: Mapped[str] = mapped_column(Text)
+    recipient_key: Mapped[str | None] = mapped_column(String(253), index=True)
+    corporate_number: Mapped[str | None] = mapped_column(String(20), index=True)
     action_url: Mapped[str] = mapped_column(Text, default="")
     delivery_method: Mapped[str] = mapped_column(String(30), default="direct", index=True)
     status: Mapped[str] = mapped_column(String(20), default="submitted", index=True)

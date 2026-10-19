@@ -108,7 +108,7 @@ def source(db, users):
         project_id=project.id,
         company_name="Synthetic HTTP fixture",
         website_url=ORIGIN,
-        domain="form-lab.test",
+        domain=f"{uuid4().hex}.form-lab.test",
         contact_url=ORIGIN + path,
     )
     db.add(company)

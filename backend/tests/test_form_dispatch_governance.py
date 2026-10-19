@@ -117,9 +117,16 @@ def test_admin_reauth_limits_version_and_audit(auth, users, db):
     users[0].is_admin = True
     db.commit()
     assert update(auth, password="wrong").status_code == 403
-    saved = update(auth, paused=True)
+    saved = update(
+        auth,
+        paused=True,
+        recipient_cooldown_days=45,
+        recipient_cooldown_limit=3,
+    )
     assert saved.status_code == 200, saved.text
     assert saved.json()["version"] == 2 and saved.json()["daily_limit"] == 500
+    assert saved.json()["recipient_cooldown_days"] == 45
+    assert saved.json()["recipient_cooldown_limit"] == 3
     assert update(auth).status_code == 409
     assert not service.capacity(db)
     event = db.scalar(

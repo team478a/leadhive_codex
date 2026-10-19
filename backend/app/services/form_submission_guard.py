@@ -34,7 +34,14 @@ def reserve_form_submission(
     commit=True,
     delivery_method="direct",
     execution_authorization=None,
+    cooldown_reserved=False,
 ):
+    from app.services.recipient_cooldown import (
+        PUBLIC_MESSAGE,
+        lock_recipient_keys,
+        reserve_slot,
+        target_keys,
+    )
     from app.services.sending_window import allowed
 
     if not allowed(db):
@@ -43,6 +50,15 @@ def reserve_form_submission(
         raise FormDeliveryError("未対応の実行方式です。", "unsupported")
     # Short global lock serializes reservation only; network I/O starts after commit.
     db.execute(text("SELECT pg_advisory_xact_lock(4781003)"))
+    if cooldown_reserved:
+        keys, corporate_number = target_keys(db, company)
+        lock_recipient_keys(db, keys, corporate_number)
+    else:
+        allowed, keys, corporate_number, _used = reserve_slot(db, company)
+    if not keys and not corporate_number:
+        raise FormDeliveryError("送信先の識別情報を確認できません。", "recipient_identity_missing")
+    if not cooldown_reserved and not allowed:
+        raise FormDeliveryError(PUBLIC_MESSAGE, "recipient_cooldown")
     existing = db.scalar(select(FormDelivery).where(FormDelivery.draft_id == draft.id))
     blocked = db.scalar(
         select(FormDelivery.id)
@@ -63,6 +79,8 @@ def reserve_form_submission(
             company_id=company.id,
             created_by_user_id=user_id,
             form_url=context.preview.form_url,
+            recipient_key=keys[0] if keys else None,
+            corporate_number=corporate_number,
             action_url=context.preview.action_url,
             form_profile_id=context.profile.id,
             delivery_method=delivery_method,
@@ -73,6 +91,8 @@ def reserve_form_submission(
     existing.status = "unknown"
     existing.error_message = UNKNOWN_MESSAGE
     existing.form_url = context.preview.form_url
+    existing.recipient_key = existing.recipient_key or (keys[0] if keys else None)
+    existing.corporate_number = existing.corporate_number or corporate_number
     existing.action_url = context.preview.action_url
     existing.form_profile_id = context.profile.id
     existing.profile_fingerprint = context.profile.fingerprint

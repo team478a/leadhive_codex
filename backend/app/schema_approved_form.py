@@ -20,6 +20,8 @@ class FormLimitsUpdate(StrictInput):
     hourly_limit: int = Field(ge=1, le=100)
     minimum_interval_seconds: int = Field(ge=60, le=86400)
     site_interval_seconds: int | None = Field(default=None, ge=60, le=86400)
+    recipient_cooldown_days: int = Field(default=30, ge=1, le=365)
+    recipient_cooldown_limit: int = Field(default=2, ge=1, le=100)
     paused: bool
     expected_version: int = Field(ge=1)
     password: str = Field(min_length=1, max_length=200)
