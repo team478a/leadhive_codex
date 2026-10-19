@@ -86,15 +86,15 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [notice, setNotice] = useState('')
   const progressPanel = useRef<HTMLDivElement>(null)
   const hadActiveOperations = useRef(false)
-  const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'Web解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
-  const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'ai_analysis', 'form_intelligence'].includes(job.operation_type) : ['collect_search', 'extract_articles'].includes(job.operation_type))
+  const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'サイト解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
+  const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'site_analysis', 'ai_analysis', 'form_intelligence'].includes(job.operation_type) : ['collect_search', 'extract_articles'].includes(job.operation_type))
   const collectionRunning = operations.some(job => job.operation_type === 'collect_search' && ['queued', 'running'].includes(job.status))
   const resumableJob = !collectionRunning ? visibleOperations.find(job => job.operation_type === 'collect_search'
     && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED'
     && !!job.collection_progress.pending_queries) : undefined
-  const webJob = operations.find(job => job.project_id === projectId && job.operation_type === 'web_analysis' && ['queued', 'running'].includes(job.status))
+  const webJob = operations.find(job => job.project_id === projectId && ['web_analysis', 'site_analysis'].includes(job.operation_type) && ['queued', 'running'].includes(job.status))
   const aiJob = operations.find(job => job.project_id === projectId && job.operation_type === 'ai_analysis' && ['queued', 'running'].includes(job.status))
-  const formJob = operations.find(job => job.project_id === projectId && job.operation_type === 'form_intelligence' && ['queued', 'running'].includes(job.status))
+  const formJob = operations.find(job => job.project_id === projectId && ['site_analysis', 'form_intelligence'].includes(job.operation_type) && ['queued', 'running'].includes(job.status))
   const webBusy = analyzing || !!webJob
   const aiBusy = aiAnalyzing || !!aiJob
   const formBusy = formAnalyzing || !!formJob
@@ -259,17 +259,15 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     try {
       if (!companyIds.length) {
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
-          operation_type: 'web_analysis', company_ids: [], force: false,
+          operation_type: 'site_analysis', company_ids: [], force: false,
         })
         await reload(); setNotice('Web解析をバックグラウンド処理へ登録しました。'); return
       }
-      const results = await api<Company[]>(`/projects/${projectId}/web-analysis`, 'POST', {
+      const job = await api<OperationJob>(`/projects/${projectId}/web-analysis`, 'POST', {
         company_ids: companyIds, limit: companyIds.length, force: false,
       })
       await reload()
-      setNotice(results.length
-        ? `${results.length}社のWeb解析を完了しました。`
-        : '解析対象の企業はありません。')
+      setNotice(`${companyIds.length}社のサイト解析を登録しました（ジョブ ${job.id.slice(0, 8)}）。`)
     } catch (e) { setError(errorMessage(e)) }
     finally { setAnalyzing(false) }
   }
@@ -299,10 +297,10 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     setFormAnalyzing(true); setError(''); setNotice('')
     try {
       await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
-        operation_type: 'form_intelligence', company_ids: [], force: false,
+        operation_type: 'site_analysis', company_ids: [], force: false,
       })
       await reload()
-      setNotice('Web解析済みでフォーム未解析の企業を、100社ずつバックグラウンド解析に登録しました。')
+      setNotice('未解析の企業を、サイト解析ジョブに登録しました。')
     } catch (e) { setError(errorMessage(e)) }
     finally { setFormAnalyzing(false) }
   }
@@ -329,7 +327,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const progress = <div className="panel scroll-mt-24" ref={progressPanel} tabIndex={-1}><div className="flex items-center justify-between gap-4"><h2>バックグラウンド処理</h2>
         <button type="button" className="secondary" disabled={refreshing} aria-busy={refreshing} onClick={() => void refresh()}>{refreshing ? '更新中…' : '更新'}</button></div>
         {visibleOperations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : visibleOperations.map(job =>
-            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : job.operation_type === 'web_analysis' ? 'Web解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : job.operation_type === 'form_intelligence' ? 'フォーム解析' : job.operation_type === 'extract_articles' ? '記事から企業を抽出' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
+            <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : ['web_analysis', 'site_analysis'].includes(job.operation_type) ? 'サイト解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : job.operation_type === 'form_intelligence' ? 'フォーム解析' : job.operation_type === 'extract_articles' ? '記事から企業を抽出' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
             {job.operation_type === 'extract_articles' ? <p className="muted my-2 text-sm">記事 {job.processed_count} / {job.total_count} 件（新規保存 {job.article_saved_count ?? 0} 社・失敗 {job.failed_count} 件）</p> : job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
@@ -357,12 +355,12 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       </div>}
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={dataLoading || webBusy || analysisCounts.webPending + analysisCounts.webFailed === 0}
-            onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'Web解析 待機中…' : 'Web解析中…') : 'Web解析を開始'}</button>
+            onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'サイト解析 待機中…' : 'サイト解析中…') : 'サイト解析を開始'}</button>
           <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={dataLoading || aiBusy || analysisCounts.aiPending === 0}
             onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : 'AI判定を開始'}</button>
           <button type="button" className={formBusy ? 'analysis-active' : undefined} aria-busy={formBusy}
             disabled={dataLoading || formBusy || analysisCounts.webCompleted === 0 || (formAnalysisSummary?.counts.unanalyzed ?? 0) === 0}
-            onClick={() => void analyzeForms()}>{formBusy ? (formJob?.status === 'queued' ? 'フォーム解析 待機中…' : 'フォーム解析中…') : 'フォーム解析を開始'}</button>
+            onClick={() => void analyzeForms()}>{formBusy ? (formJob?.status === 'queued' ? 'サイト解析 待機中…' : 'サイト解析中…') : 'フォームを含むサイト解析'}</button>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-label="各解析の目的">
         <article className="rounded border p-3"><strong>1. Web解析</strong><p className="muted mb-0 mt-2 text-sm">公式サイトから事業内容・連絡先を取得します。AI判定とフォーム解析の基礎情報になります。</p></article>
@@ -524,7 +522,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           <div className="flex shrink-0 flex-col items-end gap-2"><span className="badge">{sourceNames[company.source]}</span>
             {company.website_url && !['duplicate', 'excluded'].includes(company.analysis_status) &&
               <button type="button" className={webBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={webBusy} disabled={webBusy}
-                onClick={() => void analyze([company.id])}>{webBusy ? 'Web解析 処理中…' : 'Web解析'}</button>}
+                onClick={() => void analyze([company.id])}>{webBusy ? 'サイト解析 処理中…' : 'サイト解析'}</button>}
             {company.analysis_status === 'completed' && <button type="button" className={aiBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={aiBusy}
               disabled={aiBusy} onClick={() => void analyzeAi([company.id])}>{aiBusy ? 'AI判定 処理中…' : 'AI判定'}</button>}</div>
         </article>)}

@@ -4,7 +4,8 @@ import httpx
 import pytest
 from sqlalchemy.exc import DataError
 
-from app.models import Company
+from app.models import Company, OperationJob
+from app.schema_core import CompanyOut
 from app.services import scraper, web_analysis
 from app.services.scraper import FetchedPage, PageData, ScrapeError, extract_page
 
@@ -121,6 +122,11 @@ def add_url(auth, project_id, url):
     return next(item for item in companies if item["website_url"] == url.rstrip("/"))
 
 
+def analyze_company_record(db, company_id, *, force=False):
+    result = web_analysis.analyze(db, db.get(Company, UUID(company_id)), force)
+    return CompanyOut.model_validate(result).model_dump(mode="json")
+
+
 def test_extract_company_contact_location_and_socials():
     data = extract_page(HTML, "https://example.jp/")
     assert data.company_name == "株式会社サンプル"
@@ -215,20 +221,18 @@ def test_multipage_analysis_discovers_and_merges_important_pages(monkeypatch):
     assert "outside.example" not in data.scraped_urls
 
 
-def test_company_analysis_success(auth, monkeypatch):
+def test_company_analysis_success(auth, db, monkeypatch):
     project = make_project(auth)
     company = add_url(auth, project["id"], "https://original.example")
     monkeypatch.setattr(
         web_analysis,
         "scrape_company",
-        lambda url: (
+        lambda url, **_kwargs: (
             FetchedPage("https://final.example/", HTML),
             extract_page(HTML, "https://final.example/"),
         ),
     )
-    response = auth.post(f"/api/companies/{company['id']}/analyze", json={})
-    assert response.status_code == 200
-    result = response.json()
+    result = analyze_company_record(db, company["id"])
     assert result["analysis_status"] == "completed"
     assert result["company_name"] == "株式会社サンプル"
     assert result["domain"] == "final.example"
@@ -243,7 +247,7 @@ def test_company_analysis_success(auth, monkeypatch):
     assert result["contact_checked_at"]
 
 
-def test_company_analysis_preserves_and_releases_protected_fields(auth, monkeypatch):
+def test_company_analysis_preserves_and_releases_protected_fields(auth, db, monkeypatch):
     project = make_project(auth)
     company = add_url(auth, project["id"], "https://protected.example")
     editable = {
@@ -271,7 +275,7 @@ def test_company_analysis_preserves_and_releases_protected_fields(auth, monkeypa
     monkeypatch.setattr(
         web_analysis,
         "scrape_company",
-        lambda url: (
+        lambda url, **_kwargs: (
             FetchedPage(url, HTML),
             PageData(
                 company_name="解析された会社名",
@@ -280,16 +284,16 @@ def test_company_analysis_preserves_and_releases_protected_fields(auth, monkeypa
             ),
         ),
     )
-    protected = auth.post(f"/api/companies/{company['id']}/analyze", json={"force": True})
-    assert protected.json()["company_name"] == "手動の会社名"
-    assert protected.json()["contact_url"] == "https://manual.example/contact"
-    assert protected.json()["phone"] == "03-9999-9999"
+    protected = analyze_company_record(db, company["id"], force=True)
+    assert protected["company_name"] == "手動の会社名"
+    assert protected["contact_url"] == "https://manual.example/contact"
+    assert protected["phone"] == "03-9999-9999"
 
     editable["protected_fields"] = []
     auth.put(f"/api/companies/{company['id']}", json=editable)
-    released = auth.post(f"/api/companies/{company['id']}/analyze", json={"force": True})
-    assert released.json()["company_name"] == "解析された会社名"
-    assert released.json()["contact_url"] == "https://protected.example/contact"
+    released = analyze_company_record(db, company["id"], force=True)
+    assert released["company_name"] == "解析された会社名"
+    assert released["contact_url"] == "https://protected.example/contact"
 
 
 def test_analysis_failure_missing_url_and_aggregator(auth, db, monkeypatch):
@@ -301,7 +305,7 @@ def test_analysis_failure_missing_url_and_aggregator(auth, db, monkeypatch):
     )
     companies = auth.get(f"/api/projects/{project['id']}/companies").json()
     missing = next(item for item in companies if item["company_name"] == "No URL")
-    result = auth.post(f"/api/companies/{missing['id']}/analyze", json={}).json()
+    result = analyze_company_record(db, missing["id"])
     assert result["analysis_status"] == "skipped"
 
     aggregator = Company(
@@ -313,30 +317,30 @@ def test_analysis_failure_missing_url_and_aggregator(auth, db, monkeypatch):
     )
     db.add(aggregator)
     db.commit()
-    result = auth.post(f"/api/companies/{aggregator.id}/analyze", json={}).json()
+    result = analyze_company_record(db, str(aggregator.id))
     assert result["analysis_status"] == "excluded" and result["is_aggregator"]
 
     failing = add_url(auth, project["id"], "https://failure.example")
 
-    def fail(url):
+    def fail(url, **_kwargs):
         raise ScrapeError("接続できません。")
 
     monkeypatch.setattr(web_analysis, "scrape_company", fail)
-    result = auth.post(f"/api/companies/{failing['id']}/analyze", json={}).json()
+    result = analyze_company_record(db, failing["id"])
     assert result["analysis_status"] == "failed"
     assert result["analysis_error"] == "接続できません。"
 
 
-def test_analysis_data_error_has_safe_diagnostics(auth, monkeypatch, caplog):
+def test_analysis_data_error_has_safe_diagnostics(auth, db, monkeypatch, caplog):
     project = make_project(auth)
     company = add_url(auth, project["id"], "https://data-error.example")
 
-    def fail(url):
+    def fail(url, **_kwargs):
         raise DataError("insert", {"private": "do-not-log"}, Exception("invalid value"))
 
     monkeypatch.setattr(web_analysis, "scrape_company", fail)
     with caplog.at_level("ERROR", logger="leadhive"):
-        result = auth.post(f"/api/companies/{company['id']}/analyze", json={}).json()
+        result = analyze_company_record(db, company["id"])
 
     assert result["analysis_status"] == "failed"
     assert "データ形式エラー" in result["analysis_error"]
@@ -344,38 +348,35 @@ def test_analysis_data_error_has_safe_diagnostics(auth, monkeypatch, caplog):
     assert "do-not-log" not in caplog.text
 
 
-def test_analysis_marks_redirected_domain_duplicate(auth, monkeypatch):
+def test_analysis_marks_redirected_domain_duplicate(auth, db, monkeypatch):
     project = make_project(auth)
     original = add_url(auth, project["id"], "https://canonical.example")
     duplicate = add_url(auth, project["id"], "https://redirect.example")
     monkeypatch.setattr(
         web_analysis,
         "scrape_company",
-        lambda url: (
+        lambda url, **_kwargs: (
             FetchedPage("https://canonical.example/", HTML),
             PageData(company_name="別名"),
         ),
     )
-    result = auth.post(f"/api/companies/{duplicate['id']}/analyze", json={}).json()
+    result = analyze_company_record(db, duplicate["id"])
     assert result["analysis_status"] == "duplicate"
     assert result["duplicate_of_id"] == original["id"]
 
 
-def test_batch_analysis_and_access_isolation(auth, users, monkeypatch):
+def test_batch_analysis_and_access_isolation(auth, db, users, monkeypatch):
     project = make_project(auth)
     first = add_url(auth, project["id"], "https://first.example")
     second = add_url(auth, project["id"], "https://second.example")
-    monkeypatch.setattr(
-        web_analysis,
-        "scrape_company",
-        lambda url: (FetchedPage(url, HTML), PageData(company_name=urlsplit_name(url))),
-    )
     response = auth.post(
         f"/api/projects/{project['id']}/web-analysis",
         json={"company_ids": [first["id"], second["id"]], "limit": 20},
     )
-    assert response.status_code == 200
-    assert {item["analysis_status"] for item in response.json()} == {"completed"}
+    assert response.status_code == 202
+    assert response.json()["operation_type"] == "site_analysis"
+    job = db.get(OperationJob, UUID(response.json()["id"]))
+    assert set(job.payload["company_ids"]) == {first["id"], second["id"]}
     assert (
         auth.post(
             f"/api/projects/{project['id']}/web-analysis",
@@ -383,6 +384,9 @@ def test_batch_analysis_and_access_isolation(auth, users, monkeypatch):
         ).status_code
         == 404
     )
+    single = auth.post(f"/api/companies/{first['id']}/analyze", json={})
+    assert single.status_code == 202
+    assert single.json()["operation_type"] == "site_analysis"
 
     auth.post(
         "/api/auth/login",

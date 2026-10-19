@@ -369,7 +369,7 @@ def test_data_quality_summary_and_reanalysis_queue(auth, db):
     )
     assert queued.status_code == 202
     job = db.scalar(select(OperationJob).where(OperationJob.id == queued.json()["id"]))
-    assert job.operation_type == "web_analysis" and job.payload["force"] is True
+    assert job.operation_type == "site_analysis" and job.payload["force"] is True
     assert set(job.payload["company_ids"]) == {str(alpha.id), str(beta.id)}
     assert (
         auth.post(

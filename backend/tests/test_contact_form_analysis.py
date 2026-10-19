@@ -1,4 +1,4 @@
-from app.models import Company
+from app.models import Company, FormProfileField
 from app.services.form_intelligence import analyzer
 from app.services.scraper import FetchedPage, ScrapeError
 
@@ -46,13 +46,14 @@ def test_name_email_form_on_contact_anchor_is_detected(auth, db, monkeypatch):
     monkeypatch.setattr(analyzer, "SafeFetcher", lambda: fetcher)
     monkeypatch.setattr(analyzer, "get_form_decision_provider", lambda: None)
 
-    profiles = auth.post(f"/api/companies/{company_id}/form-intelligence/analyze").json()
+    profiles = analyzer.analyze_company_forms(db, company, allow_ai=False)
 
     assert len(profiles) == 1
-    assert profiles[0]["form_found"] is True
-    assert profiles[0]["form_url"] == "https://contact-analysis.example/contact"
-    assert profiles[0]["form_status"] == "REVIEW_REQUIRED"
-    assert {field["name"] for field in profiles[0]["fields"] if field["name"]} == {
+    assert profiles[0].form_found is True
+    assert profiles[0].form_url == "https://contact-analysis.example/contact"
+    assert profiles[0].form_status == "REVIEW_REQUIRED"
+    fields = db.query(FormProfileField).filter_by(form_profile_id=profiles[0].id).all()
+    assert {field.name for field in fields if field.name} == {
         "your-name",
         "your-email",
     }

@@ -359,7 +359,7 @@ def _active_form_reanalysis(db: Session, project_id: UUID) -> OperationJob | Non
         select(OperationJob)
         .where(
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == "form_intelligence",
+            OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
             OperationJob.status.in_(("queued", "running")),
         )
         .order_by(OperationJob.created_at.desc())
@@ -448,7 +448,12 @@ def form_dm_readiness(
         .where(
             OperationJob.project_id == project_id,
             OperationJob.operation_type.in_(
-                ("form_dm_readiness", "form_intelligence", "browser_form_analysis")
+                (
+                    "form_dm_readiness",
+                    "form_intelligence",
+                    "site_analysis",
+                    "browser_form_analysis",
+                )
             ),
             OperationJob.status.in_(("queued", "running")),
         )
@@ -461,7 +466,7 @@ def form_dm_readiness(
         (
             job
             for job in active_jobs
-            if job.operation_type == "form_intelligence"
+            if job.operation_type in {"form_intelligence", "site_analysis"}
             and (job.payload or {}).get("readiness_reanalysis_reason")
         ),
         None,
@@ -744,7 +749,7 @@ def reanalyze_readiness_reason(
         select(OperationJob)
         .where(
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == "form_intelligence",
+            OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
             OperationJob.status.in_(("queued", "running")),
         )
         .order_by(OperationJob.created_at.desc())
@@ -771,12 +776,14 @@ def reanalyze_readiness_reason(
             .limit(MAX_REANALYSIS_COMPANIES)
         ).all()
     )
-    job = OperationJob(
-        project_id=project_id,
-        operation_type="form_intelligence",
-        total_count=len(company_ids),
-        payload={
-            "company_ids": [str(company_id) for company_id in company_ids],
+    from app.services.site_analysis import enqueue_site_analysis
+
+    job = enqueue_site_analysis(
+        db,
+        project_id,
+        company_ids,
+        force=True,
+        extra_payload={
             "force": True,
             "requested_by_user_id": str(user.id),
             "readiness_reanalysis_reason": reason,
@@ -784,12 +791,12 @@ def reanalyze_readiness_reason(
             "readiness_reanalysis_snapshot_job_id": str(snapshot.id),
         },
     )
-    if not add_operation_job(db, job):
+    if job is None:
         active_job = db.scalar(
             select(OperationJob)
             .where(
                 OperationJob.project_id == project_id,
-                OperationJob.operation_type == "form_intelligence",
+                OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
                 OperationJob.status.in_(("queued", "running")),
             )
             .order_by(OperationJob.created_at.desc())
@@ -822,7 +829,7 @@ def get_readiness_reanalysis_job(
         select(OperationJob).where(
             OperationJob.id == job_id,
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == "form_intelligence",
+            OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
         )
     )
     if job is None or not (job.payload or {}).get("readiness_reanalysis_reason"):

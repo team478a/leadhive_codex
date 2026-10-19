@@ -385,7 +385,7 @@ def test_reason_reanalysis_uses_only_snapshot_matches_and_reports_progress(auth,
 
     assert response.status_code == 202, response.text
     body = response.json()
-    assert body["operation_type"] == "form_intelligence"
+    assert body["operation_type"] == "site_analysis"
     assert body["total_count"] == 1
     assert body["readiness_reanalysis_reason"] == "MULTIPART_ONLY"
     assert body["readiness_reanalysis_matched_count"] == 1

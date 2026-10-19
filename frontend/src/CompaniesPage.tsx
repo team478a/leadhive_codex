@@ -330,12 +330,8 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     if (!selected) return
     setBusy(true); setError(''); setNotice('')
     try {
-      const profiles = await api<FormProfile[]>(`/companies/${selected.id}/form-intelligence/analyze`, 'POST')
-      setFormProfiles(profiles)
-      const primary = profiles.find(item => item.is_primary) ?? profiles[0]
-      setFormAnalysisLogs(primary ? await api<FormAnalysisLog[]>(`/form-profiles/${primary.id}/logs`) : [])
-      if (primary) setFormProfileSummaries(current => ({ ...current, [selected.id]: { company_id: selected.id, profile_id: primary.id, form_status: primary.form_status, form_found: primary.form_found, sales_contact_status: primary.sales_contact_status, captcha_type: primary.captcha_type, compatibility_reason_code: primary.compatibility_reason_code, last_analyzed_at: primary.last_analyzed_at } }))
-      setNotice(`${profiles.length}件のフォーム候補を解析しました。`)
+      const job = await api<OperationJob>(`/companies/${selected.id}/form-intelligence/analyze`, 'POST')
+      setNotice(`サイト解析を登録しました（ジョブ ${job.id.slice(0, 8)}）。完了後に企業詳細を更新してください。`)
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function enqueueSelectedFormAnalysis() {

@@ -10,6 +10,7 @@ from app.database import get_db
 from app.models import (
     AnalysisRefreshSchedule,
     CollectionJob,
+    Company,
     OperationJob,
     SearchSchedule,
     User,
@@ -120,7 +121,7 @@ def run_analysis_refresh_schedule(
     if db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == "web_analysis",
+            OperationJob.operation_type.in_(("web_analysis", "site_analysis", "form_intelligence")),
             OperationJob.status.in_(("queued", "running")),
         )
     ):
@@ -128,12 +129,16 @@ def run_analysis_refresh_schedule(
     company_ids = refresh_company_ids(db, schedule)
     if not company_ids:
         raise HTTPException(409, "再解析対象の企業はありません。")
-    job = OperationJob(
-        project_id=project_id,
-        operation_type="web_analysis",
-        payload={"company_ids": [str(item) for item in company_ids], "force": True},
+    from app.services.site_analysis import enqueue_site_analysis
+
+    job = enqueue_site_analysis(
+        db,
+        project_id,
+        company_ids,
+        force=True,
+        preserve_instances=(schedule,),
     )
-    if not add_operation_job(db, job):
+    if job is None:
         raise HTTPException(409, "Web解析がすでに実行待ちです。")
     now = datetime.now(timezone.utc)
     schedule.last_enqueued_at = now
@@ -339,6 +344,11 @@ def enqueue_operation(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    operation_type = (
+        "site_analysis"
+        if body.operation_type in {"web_analysis", "form_intelligence"}
+        else body.operation_type
+    )
     from app.preparation_routes import lock_project
 
     lock_project(db, project_id)
@@ -352,10 +362,41 @@ def enqueue_operation(
         .limit(1)
     ):
         raise HTTPException(409, "営業準備が実行中です。完了または停止後に開始してください。")
+    if operation_type == "site_analysis" and db.scalar(
+        select(OperationJob.id).where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type.in_(("web_analysis", "form_intelligence")),
+            OperationJob.status.in_(("queued", "running")),
+        )
+    ):
+        raise HTTPException(409, "旧形式のサイト解析が実行中です。完了後に再試行してください。")
+    if operation_type == "site_analysis":
+        from app.services.site_analysis import (
+            enqueue_site_analysis,
+            enqueue_site_analysis_scan,
+        )
+
+        if body.company_ids:
+            valid_ids = list(
+                db.scalars(
+                    select(Company.id).where(
+                        Company.project_id == project_id,
+                        Company.id.in_(body.company_ids),
+                    )
+                ).all()
+            )
+            if len(valid_ids) != len(set(body.company_ids)):
+                raise HTTPException(404, "指定された企業が見つかりません。")
+            job = enqueue_site_analysis(db, project_id, valid_ids, force=body.force)
+        else:
+            job = enqueue_site_analysis_scan(db, project_id, force=body.force)
+        if job is None:
+            raise HTTPException(409, "サイト解析ジョブを登録できませんでした。")
+        return OperationJobOut.model_validate(job)
     active = db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == project_id,
-            OperationJob.operation_type == body.operation_type,
+            OperationJob.operation_type == operation_type,
             OperationJob.status.in_(("queued", "running")),
         )
     )
@@ -437,7 +478,7 @@ def enqueue_operation(
         payload["presence_search"] = merged_plan(
             conditions, payload.get("presence_search")
         ).model_dump()
-    job = OperationJob(project_id=project_id, operation_type=body.operation_type, payload=payload)
+    job = OperationJob(project_id=project_id, operation_type=operation_type, payload=payload)
     if not add_operation_job(db, job):
         raise HTTPException(409, "同じ種類の処理がすでに実行待ちです。")
     from app.services.collection_query_plan import stamp_plan

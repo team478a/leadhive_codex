@@ -21,12 +21,14 @@ class ApplicationSettingsInput(Input):
     google_places_api_key: str | None = Field(default=None, max_length=1024)
     gbizinfo_api_token: str | None = Field(default=None, max_length=1024)
     gbizinfo_api_base_url: str = Field(default="", max_length=2000)
+    auto_site_analysis: bool | None = None
 
 
 class ApplicationSettingsOut(BaseModel):
     public_app_url: str
     openai_model: str
     gbizinfo_api_base_url: str
+    auto_site_analysis: bool
     openai_api_key_source: Literal["database", "environment", "unset"]
     serper_api_key_source: Literal["database", "environment", "unset"]
     google_places_api_key_source: Literal["database", "environment", "unset"]

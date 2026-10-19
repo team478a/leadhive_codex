@@ -98,15 +98,15 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
     })
     await page.goto('/')
     await page.getByRole('button', { name: 'このターゲットで収集へ' }).click()
-    await expect(page.getByRole('button', { name: 'Web解析を開始', exact: true })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: 'サイト解析を開始', exact: true })).toHaveCount(0)
     await page.getByRole('button', { name: '3. リスト解析', exact: true }).click()
     await expect(page.getByRole('heading', { name: '収集済みリストを後から解析' })).toBeVisible()
     await expect(page.getByLabel('解析する収集リスト')).toHaveValue(project.id)
     await expect(page.getByRole('button', { name: '収集を開始', exact: true })).toHaveCount(0)
     expect(posts).toBe(0)
-    const idle = kind === 'web_analysis' ? 'Web解析を開始' : 'AI判定を開始'
-    const queued = kind === 'web_analysis' ? 'Web解析 待機中…' : 'AI判定 待機中…'
-    const running = kind === 'web_analysis' ? 'Web解析中…' : 'AI判定中…'
+    const idle = kind === 'web_analysis' ? 'サイト解析を開始' : 'AI判定を開始'
+    const queued = kind === 'web_analysis' ? 'サイト解析 待機中…' : 'AI判定 待機中…'
+    const running = kind === 'web_analysis' ? 'サイト解析中…' : 'AI判定中…'
     const startPanel = page.getByRole('region', { name: '解析開始', exact: true })
     await expect(startPanel.getByRole('button', { name: idle, exact: true })).toBeVisible()
     expect(await page.getByRole('button', { name: idle, exact: true }).evaluate(button => {
