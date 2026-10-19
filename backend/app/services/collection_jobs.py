@@ -278,7 +278,7 @@ def save_candidates(
         from app.models import OperationJob
         from app.services.site_analysis import enqueue_site_analysis
 
-        preserved = [job]
+        preserved: list[object] = [job]
         if job.operation_job_id:
             operation = db.get(OperationJob, job.operation_job_id)
             if operation is not None:
@@ -291,9 +291,10 @@ def save_candidates(
             automatic=True,
             preserve_instances=tuple(preserved),
         )
-        job = db.get(CollectionJob, collection_job_id)
-        if job is None:
+        refreshed_job = db.get(CollectionJob, collection_job_id)
+        if refreshed_job is None:
             raise RuntimeError("collection job disappeared after enqueueing site analysis")
+        job = refreshed_job
     logger.info(
         "collection job end: id=%s status=completed found=%s saved=%s duplicates=%s errors=%s",
         job.id,
