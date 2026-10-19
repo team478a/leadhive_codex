@@ -535,11 +535,11 @@ def test_form_first_contact_page_is_the_first_analysis_candidate():
 
 
 @pytest.mark.parametrize("status", ["queued", "running"])
-def test_form_first_companies_join_active_generic_form_analysis_job(auth, db, status):
+def test_form_first_companies_join_active_site_analysis_job(auth, db, status):
     project = make_project(auth)
     active = OperationJob(
         project_id=UUID(project["id"]),
-        operation_type="form_intelligence",
+        operation_type="site_analysis",
         status=status,
         payload={"company_ids": [], "force": False},
     )
@@ -550,10 +550,10 @@ def test_form_first_companies_join_active_generic_form_analysis_job(auth, db, st
     form_first._queue_form_analysis(db, active.project_id, [company_id])
 
     db.refresh(active)
-    assert active.payload["form_first_company_ids"] == [str(company_id)]
+    assert active.payload["company_ids"] == [str(company_id)]
 
 
-def test_existing_company_gets_contact_url_and_form_analysis_is_queued(auth, db, monkeypatch):
+def test_existing_company_reuses_form_first_pages_for_site_analysis(auth, db, monkeypatch):
     project = make_project(auth)
     project_id = UUID(project["id"])
     company = Company(
@@ -622,8 +622,20 @@ def test_existing_company_gets_contact_url_and_form_analysis_is_queued(auth, db,
     assert accepted == []
     db.refresh(company)
     assert company.contact_url == "https://fixture.test/contact"
-    job = db.scalar(select(OperationJob).where(OperationJob.operation_type == "form_intelligence"))
-    assert job is not None
+
+    def analyze(_db, selected_company, *, page_cache, **_kwargs):
+        class NoFetch:
+            def fetch_html(self, _url):
+                raise AssertionError("form-first page should be reused")
+
+        page = page_cache.fetch(NoFetch(), "https://fixture.test/contact")
+        assert "<form>" in page.html
+        selected_company.analysis_status = "completed"
+        return True
+
+    monkeypatch.setattr("app.services.site_analysis.analyze_site_company", analyze)
+    form_first.queue_saved_company_analysis(db, collection, accepted)
+    assert not db.scalar(select(OperationJob).where(OperationJob.operation_type == "site_analysis"))
     db.refresh(hit)
     assert hit.classification_reason == "REJECT_ALREADY_KNOWN"
     assert hit.disposition == "DUPLICATE"
@@ -689,6 +701,20 @@ def test_new_form_first_company_uses_existing_candidate_ingestion(auth, db, monk
     )
     assert len(accepted) == 1
     save_candidates(db, collection, accepted, "intitle:お問い合わせ")
+
+    reused = []
+
+    def analyze(_db, selected_company, *, page_cache, **_kwargs):
+        class NoFetch:
+            def fetch_html(self, _url):
+                raise AssertionError("form-first page should be reused")
+
+        page = page_cache.fetch(NoFetch(), "https://newfixture.test/contact")
+        reused.append(page.html)
+        selected_company.analysis_status = "completed"
+        return True
+
+    monkeypatch.setattr("app.services.site_analysis.analyze_site_company", analyze)
     form_first.queue_saved_company_analysis(db, collection, accepted)
     company = db.scalar(
         select(Company).where(
@@ -713,8 +739,9 @@ def test_new_form_first_company_uses_existing_candidate_ingestion(auth, db, monk
     assert hit.form_first_metadata["form_first_corporate_check"] == "CORPORATE_CHECK_SKIPPED"
     assert hit.form_first_metadata["form_first_form_status"] == "FORM_FOUND"
     assert "form_first_candidate" not in hit.snapshot
-    assert db.scalar(
-        select(OperationJob.id).where(OperationJob.operation_type == "form_intelligence")
+    assert reused and "<form>" in reused[0]
+    assert not db.scalar(
+        select(OperationJob.id).where(OperationJob.operation_type == "site_analysis")
     )
 
 

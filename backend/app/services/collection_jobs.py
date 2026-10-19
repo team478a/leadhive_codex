@@ -1,6 +1,7 @@
 """Persistence and deduplication for collection jobs."""
 
 import logging
+import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import UUID
@@ -19,6 +20,12 @@ from app.services.scraper import is_aggregator_domain
 from app.services.suppression import active_suppression_scope_condition
 
 logger = logging.getLogger("leadhive")
+PUBLIC_HOST_SUFFIXES = (".lg.jp", ".go.jp", ".ed.jp", ".ac.jp")
+PUBLIC_HOST_PREFIXES = ("city.", "pref.", "town.", "vill.")
+DEFINITE_ARTICLE_TITLE = re.compile(
+    r"(?:[0-9０-９]+年版|年度|調べてみた|がスタート|開催|募集|とは)|"
+    r"^(?:»|・|【)|[｜|]\s*[^｜|]*(?:都|道|府|県|市|区|町|村)$"
+)
 
 
 def start_job(
@@ -121,6 +128,20 @@ def is_suppressed(db: Session, project_id: UUID, candidate: Candidate) -> bool:
     )
 
 
+def definite_non_company_reason(job: CollectionJob, candidate: Candidate) -> str:
+    if candidate.record_type != "company" or not candidate.website_url:
+        return ""
+    try:
+        _, host = canonicalize_url(candidate.website_url)
+    except (ValueError, UnicodeError):
+        return ""
+    if host.endswith(PUBLIC_HOST_SUFFIXES) or host.startswith(PUBLIC_HOST_PREFIXES):
+        return "PUBLIC_SECTOR_DOMAIN"
+    if job.source == "serper" and DEFINITE_ARTICLE_TITLE.search(candidate.company_name.strip()):
+        return "ARTICLE_STYLE_TITLE"
+    return ""
+
+
 def save_candidates(
     db: Session,
     job: CollectionJob,
@@ -130,6 +151,8 @@ def save_candidates(
     *,
     before_commit: Callable[[], None] | None = None,
 ) -> CollectionJob:
+    collection_job_id = job.id
+    saved_company_ids: list[UUID] = []
     error_details = input_errors if isinstance(input_errors, list) else []
     error_count = len(input_errors) if isinstance(input_errors, list) else input_errors
     job.found_count = len(candidates) + error_count
@@ -145,6 +168,11 @@ def save_candidates(
     remembered_sources = domains(db, job.project_id)
     for candidate in candidates:
         capture_candidate(db, job, candidate)
+        exclusion_reason = definite_non_company_reason(job, candidate)
+        if exclusion_reason:
+            job.excluded_count += 1
+            mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
+            continue
         if candidate.site_discovery.get("kind") == "REFERENCE_DOCUMENT":
             job.excluded_count += 1
             mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
@@ -234,6 +262,8 @@ def save_candidates(
             )
         else:
             job.saved_count += 1
+            if company.website_url and company.source != "form_first":
+                saved_company_ids.append(company.id)
             observe_candidate(db, job, company, candidate, new=True)
             capture_candidate(db, job, candidate, company)
             mark_discovery(db, job, candidate, "SAVED", company)
@@ -244,6 +274,20 @@ def save_candidates(
         before_commit()
     db.commit()
     db.refresh(job)
+    if saved_company_ids:
+        from app.services.site_analysis import enqueue_site_analysis
+
+        enqueue_site_analysis(
+            db,
+            job.project_id,
+            saved_company_ids,
+            automatic=True,
+            expunge=False,
+        )
+        refreshed_job = db.get(CollectionJob, collection_job_id)
+        if refreshed_job is None:
+            raise RuntimeError("collection job disappeared after enqueueing site analysis")
+        job = refreshed_job
     logger.info(
         "collection job end: id=%s status=completed found=%s saved=%s duplicates=%s errors=%s",
         job.id,

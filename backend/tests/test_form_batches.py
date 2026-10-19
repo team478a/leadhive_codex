@@ -1,12 +1,18 @@
 from contextlib import nullcontext
 
 from app import worker
-from app.models import Company, FormProfile, FormProfileField, SuppressionEntry
+from app.models import ApplicationSettings, Company, FormProfile, FormProfileField, SuppressionEntry
 from app.services import bulk_form_delivery, form_profile_delivery
 from app.services.form_delivery import FormField, FormPreview, FormSubmissionResult
 
 
 def make_project_and_companies(auth, db):
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     profile_id = auth.get("/api/target-profiles").json()[0]["id"]
     project = auth.post(
         "/api/projects",

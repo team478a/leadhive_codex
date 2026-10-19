@@ -62,6 +62,7 @@ from app.sending_window_routes import router as sending_window_router
 from app.services.approval_principals import reject_mixed_credentials
 from app.site_identity_review_routes import router as site_identity_review_router
 from app.source_exclusion_routes import router as source_exclusion_router
+from app.usage_report_routes import router as usage_report_router
 
 logger = logging.getLogger("leadhive")
 
@@ -260,6 +261,7 @@ app.include_router(external_presence_router)
 app.include_router(router)
 app.include_router(profile_proposal_router)
 app.include_router(admin_router)
+app.include_router(usage_report_router)
 app.include_router(collection_router)
 app.include_router(campaign_router)
 app.include_router(analysis_router)

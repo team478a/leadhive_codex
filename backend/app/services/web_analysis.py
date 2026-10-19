@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.models import Company
 from app.services.collection import canonicalize_url
 from app.services.lead_identity import identity_hash, website_match
-from app.services.scraper import ScrapeError, is_aggregator_domain, scrape_company
+from app.services.scraper import PageFetchCache, ScrapeError, is_aggregator_domain, scrape_company
 from app.services.website_evidence import record as record_website_evidence
 
 logger = logging.getLogger("leadhive")
@@ -70,7 +70,13 @@ def find_duplicate(
     )
 
 
-def analyze(db: Session, company: Company, force: bool = False) -> Company:
+def analyze(
+    db: Session,
+    company: Company,
+    force: bool = False,
+    *,
+    page_cache: PageFetchCache | None = None,
+) -> Company:
     from app.services.source_exclusions import domains, excluded
 
     if company.website_url and excluded(db, company.project_id, company.website_url):
@@ -105,9 +111,9 @@ def analyze(db: Session, company: Company, force: bool = False) -> Company:
     try:
         remembered = domains(db, company.project_id)
         page, data = (
-            scrape_company(company.website_url, excluded_domains=remembered)
+            scrape_company(company.website_url, excluded_domains=remembered, page_cache=page_cache)
             if remembered
-            else scrape_company(company.website_url)
+            else scrape_company(company.website_url, page_cache=page_cache)
         )
         phase = "normalize"
         if data.source_exclusion_reason:

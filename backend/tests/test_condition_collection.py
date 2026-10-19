@@ -5,7 +5,14 @@ from sqlalchemy import func, select
 
 from app import worker
 from app.config import settings
-from app.models import Company, ExternalPresenceSearch, OperationJob, Project, ProjectMember
+from app.models import (
+    ApplicationSettings,
+    Company,
+    ExternalPresenceSearch,
+    OperationJob,
+    Project,
+    ProjectMember,
+)
 from app.services import collection
 from app.services.collection import Candidate
 from app.services.collection_jobs import save_candidates, start_job
@@ -17,6 +24,12 @@ from tests.test_collection_conditions import condition, payload
 def prepared(auth, db, monkeypatch):
     monkeypatch.setattr(settings, "outbound_enabled", False)
     project = make_project(auth)
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     revision = auth.post(
         f"/api/projects/{project['id']}/collection-conditions", json=payload()
     ).json()

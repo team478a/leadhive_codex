@@ -49,6 +49,9 @@ class ApplicationSettings(Timestamps, Base):
     google_places_api_key_ciphertext: Mapped[str] = mapped_column(Text, default="")
     gbizinfo_api_token_ciphertext: Mapped[str] = mapped_column(Text, default="")
     gbizinfo_api_base_url: Mapped[str] = mapped_column(String(2000), default="")
+    auto_site_analysis: Mapped[bool] = mapped_column(
+        Boolean, default=True, server_default="true", nullable=False
+    )
     updated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

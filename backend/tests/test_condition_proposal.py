@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import func, select
 
-from app.models import CollectionConditionRequest, OperationJob, ProjectMember
+from app.models import CollectionConditionRequest, FeatureUsageEvent, OperationJob, ProjectMember
 from app.services.condition_proposal import propose
 from tests import test_collection_conditions as condition_tests
 
@@ -85,6 +85,22 @@ def test_proposal_api_is_read_only_and_human_scoped(auth, db, sample, users):
     member.role = "editor"
     db.commit()
     assert auth.post(url, json=body).status_code == 200
+    assert (
+        db.query(FeatureUsageEvent).filter_by(event_type="collection_condition_proposal").count()
+        == 2
+    )
+
+
+def test_invalid_condition_proposal_is_counted_without_storing_text(auth, db, sample):
+    project, _, _ = sample
+    response = auth.post(
+        f"/api/projects/{project.id}/collection-conditions/propose", json={"text": " "}
+    )
+    assert response.status_code == 422
+    event = db.query(FeatureUsageEvent).one()
+    assert event.event_type == "collection_condition_proposal"
+    assert event.outcome == "failed"
+    assert not hasattr(event, "text")
 
 
 def test_purpose_sentence_is_only_a_proposal():

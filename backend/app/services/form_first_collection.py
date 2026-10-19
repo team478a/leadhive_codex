@@ -12,7 +12,7 @@ from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from app.config import settings
-from app.models import CollectionDiscoveryHit, Company, FormProfile, OperationJob
+from app.models import CollectionDiscoveryHit, Company, FormProfile
 from app.services.collection import Candidate, canonicalize_url
 from app.services.collection_discovery import classify_hit, mark_discovery
 from app.services.collection_jobs import duplicate_company
@@ -27,7 +27,14 @@ from app.services.contact_discovery import (
 from app.services.form_reservation import reservation_form_indices, reservation_js_container
 from app.services.non_company_suspected import evidence as non_company_evidence
 from app.services.processing_usage import measured_request
-from app.services.scraper import SafeFetcher, ScrapeError, _extract_location, site_extraction
+from app.services.scraper import (
+    FetchedPage,
+    PageFetchCache,
+    SafeFetcher,
+    ScrapeError,
+    _extract_location,
+    site_extraction,
+)
 from app.services.site_discovery import is_reference_host
 from app.services.source_exclusions import excluded
 
@@ -581,33 +588,14 @@ def _fetch_candidate(contact_url: str) -> tuple[str, list[tuple[str, str, str]]]
 def _queue_form_analysis(db, project_id, company_ids: list) -> None:
     if not company_ids:
         return
-    active = db.scalar(
-        select(OperationJob)
-        .where(
-            OperationJob.project_id == project_id,
-            OperationJob.operation_type == "form_intelligence",
-            OperationJob.status.in_(("queued", "running")),
-        )
-        .with_for_update()
-        .limit(1)
-    )
-    if active:
-        payload = dict(active.payload or {})
-        payload["form_first_company_ids"] = list(
-            dict.fromkeys([*payload.get("form_first_company_ids", []), *map(str, company_ids)])
-        )
-        active.payload = payload
-        db.flush()
-        return
-    from app.services.operations import add_operation_job
+    from app.services.site_analysis import enqueue_site_analysis
 
-    add_operation_job(
+    enqueue_site_analysis(
         db,
-        OperationJob(
-            project_id=project_id,
-            operation_type="form_intelligence",
-            payload={"company_ids": list(dict.fromkeys(map(str, company_ids))), "force": False},
-        ),
+        project_id,
+        list(dict.fromkeys(company_ids)),
+        automatic=True,
+        expunge=False,
     )
 
 
@@ -629,6 +617,8 @@ def _needs_form_analysis(db, company_id) -> bool:
 def process_search_results(
     db, collection_job, candidates: list[Candidate], payload: dict, stopped
 ) -> list[Candidate]:
+    prefetched_by_company = {}
+    prefetched_by_host = {}
     query_type, industry_keyword = query_result_type(
         collection_job.keyword, payload.get("form_first_query_map") or {}
     )
@@ -685,6 +675,7 @@ def process_search_results(
                 existing.reference_url = reservation_url if is_reservation else selected_contact_url
             if not is_reservation and _needs_form_analysis(db, existing.id):
                 known_company_ids.append(existing.id)
+                prefetched_by_company[existing.id] = pages
             _record_hit(
                 db,
                 result,
@@ -712,6 +703,7 @@ def process_search_results(
                 identity_duplicate.form_first_contact_url = selected_contact_url
             if not is_reservation and _needs_form_analysis(db, identity_duplicate.id):
                 known_company_ids.append(identity_duplicate.id)
+                prefetched_by_company[identity_duplicate.id] = pages
             _record_hit(
                 db,
                 result,
@@ -767,6 +759,8 @@ def process_search_results(
             )
         )
         if not is_reservation:
+            prefetched_by_host[host] = pages
+        if not is_reservation:
             created_hosts.append(host)
         _record_hit(db, result, "FORM_FIRST", fetch_reason, query_type)
     db.flush()
@@ -789,7 +783,10 @@ def process_search_results(
         if existing:
             if _needs_form_analysis(db, existing.id):
                 known_company_ids.append(existing.id)
-    _queue_form_analysis(db, collection_job.project_id, list(dict.fromkeys(known_company_ids)))
+                if host in prefetched_by_host:
+                    prefetched_by_company[existing.id] = prefetched_by_host[host]
+    collection_job._form_first_prefetched_by_company = prefetched_by_company
+    collection_job._form_first_prefetched_by_host = prefetched_by_host
     return accepted
 
 
@@ -812,21 +809,65 @@ def queue_saved_company_analysis(db, collection_job, candidates: list[Candidate]
         company = _known_company(db, collection_job.project_id, host)
         if company and company.source == "form_first":
             _save_reservation_profile(db, company, candidate.reference_url)
-    if not hosts:
+    prefetched_by_company = getattr(collection_job, "_form_first_prefetched_by_company", {})
+    prefetched_by_host = getattr(collection_job, "_form_first_prefetched_by_host", {})
+    if not hosts and not prefetched_by_company:
         if reservation_candidates:
             db.commit()
         return
-    companies = db.scalars(
-        select(Company).where(
-            Company.project_id == collection_job.project_id,
-            Company.domain.in_(hosts | {f"www.{host}" for host in hosts}),
-            Company.source == "form_first",
-        )
-    ).all()
+    companies = (
+        db.scalars(
+            select(Company).where(
+                Company.project_id == collection_job.project_id,
+                Company.domain.in_(hosts | {f"www.{host}" for host in hosts}),
+                Company.source == "form_first",
+            )
+        ).all()
+        if hosts
+        else []
+    )
     missing_profile_ids = [
         company.id for company in companies if _needs_form_analysis(db, company.id)
     ]
-    _queue_form_analysis(db, collection_job.project_id, missing_profile_ids)
+    by_id = {company.id: company for company in companies}
+    for company_id in prefetched_by_company:
+        if company_id not in by_id:
+            company = db.get(Company, company_id)
+            if company is not None and company.project_id == collection_job.project_id:
+                by_id[company_id] = company
+    pending_ids = []
+    analyzed_inline = False
+    from app.services.site_analysis import analyze_site_company, auto_site_analysis_enabled
+
+    if auto_site_analysis_enabled(db):
+        analysis_ids = list(dict.fromkeys([*missing_profile_ids, *prefetched_by_company]))
+        for company_id in analysis_ids:
+            company = by_id.get(company_id)
+            page_rows = prefetched_by_company.get(company_id)
+            if page_rows is None and company is not None:
+                page_rows = prefetched_by_host.get(
+                    (company.domain or "").lower().removeprefix("www.")
+                )
+            if company is None or not page_rows:
+                pending_ids.append(company_id)
+                continue
+            page_cache = PageFetchCache()
+            for _, url, html in page_rows:
+                page_cache.remember(FetchedPage(url=url, html=html))
+            analyze_site_company(db, company, page_cache=page_cache)
+            analyzed_inline = True
+        if pending_ids:
+            _queue_form_analysis(db, collection_job.project_id, pending_ids)
+        elif analyzed_inline and collection_job.operation_job_id:
+            from app.models import OperationJob
+
+            operation = db.get(OperationJob, collection_job.operation_job_id)
+            if operation is not None:
+                operation.payload = {
+                    **(operation.payload or {}),
+                    "site_analysis_completed_during_collection": True,
+                }
+                db.commit()
     if missing_profile_ids or reservation_candidates:
         db.commit()
 

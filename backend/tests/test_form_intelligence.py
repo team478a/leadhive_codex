@@ -6,7 +6,10 @@ from bs4 import BeautifulSoup
 from sqlalchemy import select
 
 from app import worker
-from app.models import Company, FormAnalysisLog, FormProfileField, OperationJob
+from app.form_intelligence_routes import _profile_out
+from app.models import ApplicationSettings, Company, FormAnalysisLog, FormProfileField, OperationJob
+from app.services import form_intelligence as form_intelligence_service
+from app.services import web_analysis
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence import analyzer
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
@@ -24,6 +27,12 @@ from app.services.scraper import FetchedPage, ScrapeError
 
 
 def make_company(auth, db):
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     profile_id = auth.get("/api/target-profiles").json()[0]["id"]
     project = auth.post(
         "/api/projects",
@@ -61,6 +70,11 @@ def install_pages(monkeypatch, pages):
     FakeFetcher.pages = pages
     monkeypatch.setattr(analyzer, "SafeFetcher", FakeFetcher)
     monkeypatch.setattr(analyzer, "get_form_decision_provider", lambda: None)
+
+
+def analyze_form_profiles(db, company):
+    profiles = analyzer.analyze_company_forms(db, company, force=True)
+    return [_profile_out(db, profile).model_dump(mode="json") for profile in profiles]
 
 
 def test_official_external_contact_analyzed_without_send_permission(auth, db, monkeypatch):
@@ -353,9 +367,7 @@ def test_analyze_form_profile_and_manual_correction(auth, db, monkeypatch):
         },
     )
 
-    response = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze")
-    assert response.status_code == 200
-    profiles = response.json()
+    profiles = analyze_form_profiles(db, company)
     assert len(profiles) == 1
     profile = profiles[0]
     assert profile["form_status"] == "READY"
@@ -391,7 +403,7 @@ def test_analyze_form_profile_and_manual_correction(auth, db, monkeypatch):
     FakeFetcher.pages["https://form-intelligence.example/contact"] = FakeFetcher.pages[
         "https://form-intelligence.example/contact"
     ].replace('name="body"', 'name="inquiry_body"')
-    changed = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    changed = analyze_form_profiles(db, company)[0]
     assert changed["form_status"] == "STALE"
     changed_fields = {item["name"]: item for item in changed["fields"]}
     assert changed_fields["corporation"]["mapped_key"] == "contact_name"
@@ -411,7 +423,7 @@ def test_manual_unknown_body_stays_review_after_reanalysis(auth, db, monkeypatch
             ),
         },
     )
-    profile = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    profile = analyze_form_profiles(db, company)[0]
     field = next(f for f in profile["fields"] if f["name"] == "message")
     response = auth.patch(
         f"/api/form-profile-fields/{field['id']}",
@@ -421,7 +433,7 @@ def test_manual_unknown_body_stays_review_after_reanalysis(auth, db, monkeypatch
         },
     )
     assert response.status_code == 200
-    refreshed = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    refreshed = analyze_form_profiles(db, company)[0]
     assert refreshed["form_status"] == "REVIEW_REQUIRED"
     assert next(f for f in refreshed["fields"] if f["name"] == "message")["mapped_key"] == "unknown"
 
@@ -461,7 +473,7 @@ def test_ai_receives_only_ambiguous_fields_and_cannot_override_rule_results(auth
 
     provider = CaptureProvider()
     monkeypatch.setattr(analyzer, "get_form_decision_provider", lambda: provider)
-    profile = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    profile = analyze_form_profiles(db, company)[0]
 
     assert len(provider.contexts) == 1
     assert [(item.position, item.name) for item in provider.contexts[0].fields] == [
@@ -512,7 +524,7 @@ def test_multiple_forms_are_saved_and_primary_can_be_selected(auth, db, monkeypa
             """,
         },
     )
-    profiles = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()
+    profiles = analyze_form_profiles(db, company)
     assert len(profiles) == 2
     assert {item["form_index"] for item in profiles} == {0, 1}
     assert sum(item["is_primary"] for item in profiles) == 1
@@ -545,7 +557,7 @@ def test_prohibition_captcha_and_fingerprint_change(auth, db, monkeypatch, prohi
             "https://form-intelligence.example/contact": first_form,
         },
     )
-    first = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    first = analyze_form_profiles(db, company)[0]
     assert first["form_status"] == "BLOCKED"
     assert first["sales_contact_status"] == "PROHIBITED"
     assert first["captcha_type"] == "CAPTCHA_RECAPTCHA_V2"
@@ -555,7 +567,7 @@ def test_prohibition_captcha_and_fingerprint_change(auth, db, monkeypatch, prohi
     FakeFetcher.pages["https://form-intelligence.example/contact"] = first_form.replace(
         'name="message"', 'name="inquiry_message"'
     )
-    second = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    second = analyze_form_profiles(db, company)[0]
     assert second["form_status"] == "BLOCKED"
     assert second["fingerprint"] != original_fingerprint
 
@@ -589,7 +601,7 @@ def test_form_intelligence_project_access_roles(auth, db, users, monkeypatch):
             """,
         },
     )
-    profile = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    profile = analyze_form_profiles(db, company)[0]
     field_id = profile["fields"][0]["id"]
     correction = {
         "mapped_key": "email",
@@ -640,10 +652,15 @@ def test_form_intelligence_project_access_roles(auth, db, users, monkeypatch):
         ).status_code
         == 201
     )
+    db.query(OperationJob).filter_by(
+        project_id=company.project_id, operation_type="site_analysis"
+    ).update({"status": "completed"})
+    db.commit()
     login_as(auth, users[1])
     analyzed = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze")
-    assert analyzed.status_code == 200
-    latest_field_id = analyzed.json()[0]["fields"][0]["id"]
+    assert analyzed.status_code == 202
+    assert analyzed.json()["operation_type"] == "site_analysis"
+    latest_field_id = profile["fields"][0]["id"]
     assert (
         auth.patch(f"/api/form-profile-fields/{latest_field_id}", json=correction).status_code
         == 200
@@ -652,18 +669,28 @@ def test_form_intelligence_project_access_roles(auth, db, users, monkeypatch):
 
 def test_bulk_form_intelligence_job(auth, db, monkeypatch):
     project, company = make_company(auth, db)
+    db.query(OperationJob).filter_by(
+        project_id=company.project_id, operation_type="site_analysis"
+    ).update({"status": "completed"})
+    db.commit()
     response = auth.post(
         f"/api/projects/{project['id']}/form-intelligence/jobs",
         json={"company_ids": [str(company.id)], "force": False},
     )
     assert response.status_code == 202
     job = db.get(OperationJob, response.json()["id"])
-    assert job.operation_type == "form_intelligence"
+    assert job.operation_type == "site_analysis"
     assert job.payload["company_ids"] == [str(company.id)]
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: 0)
+
+    def complete_analysis(_db, item, *_args, **_kwargs):
+        item.analysis_status = "completed"
+        return item
+
+    monkeypatch.setattr(web_analysis, "analyze", complete_analysis)
     monkeypatch.setattr(
-        worker,
+        form_intelligence_service,
         "analyze_company_forms",
         lambda *_args, **_kwargs: [SimpleNamespace(form_status="READY")],
     )
@@ -672,7 +699,7 @@ def test_bulk_form_intelligence_job(auth, db, monkeypatch):
     assert job.status == "completed" and job.success_count == 1
 
 
-def test_project_form_analysis_job_continues_in_bounded_batches(auth, db, monkeypatch):
+def test_project_site_analysis_job_continues_for_missing_forms(auth, db, monkeypatch):
     project, first = make_company(auth, db)
     first.analysis_status = "completed"
     first.website_url = "https://form-intelligence.example"
@@ -685,31 +712,36 @@ def test_project_form_analysis_job_continues_in_bounded_batches(auth, db, monkey
     )
     db.add(second)
     db.commit()
-    batches = [[first], [second], []]
+    first_id = first.id
+    second_id = second.id
     analyzed_ids = []
     response = auth.post(
         f"/api/projects/{project['id']}/operations",
-        json={"operation_type": "form_intelligence", "company_ids": [], "force": False},
+        json={"operation_type": "site_analysis", "company_ids": [], "force": False},
     )
     assert response.status_code == 202
     job = db.get(OperationJob, response.json()["id"])
 
-    def next_batch(_db, _project_id, _force=False):
-        return batches.pop(0)
-
-    def analyze_company(_db, company, _force):
+    def analyze_company(_db, company, _force=False, **_kwargs):
+        company.analysis_status = "completed"
         analyzed_ids.append(company.id)
-        return [SimpleNamespace(form_status="READY")]
+        return company
 
-    monkeypatch.setattr(worker, "next_form_analysis_batch", next_batch)
+    monkeypatch.setattr(web_analysis, "analyze", analyze_company)
+    monkeypatch.setattr(
+        form_intelligence_service,
+        "analyze_company_forms",
+        lambda _db, company, *_args, **_kwargs: (
+            analyzed_ids.append(company.id) or [SimpleNamespace(form_status="READY")]
+        ),
+    )
     monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
     monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: 0)
-    monkeypatch.setattr(worker, "analyze_company_forms", analyze_company)
     assert worker.run_once()
     db.refresh(job)
     assert job.status == "completed"
     assert job.total_count == 2 and job.processed_count == 2
-    assert analyzed_ids == [first.id, second.id]
+    assert analyzed_ids.count(first_id) == 2 and analyzed_ids.count(second_id) == 2
 
 
 def test_review_reason_is_saved_for_browser_only_form(auth, db, monkeypatch):
@@ -727,7 +759,7 @@ def test_review_reason_is_saved_for_browser_only_form(auth, db, monkeypatch):
             """,
         },
     )
-    profile = auth.post(f"/api/companies/{company.id}/form-intelligence/analyze").json()[0]
+    profile = analyze_form_profiles(db, company)[0]
     assert profile["form_status"] == "REVIEW_REQUIRED"
     assert "POST形式" in profile["review_reason"]
 

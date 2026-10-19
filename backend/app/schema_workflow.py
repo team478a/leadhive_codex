@@ -83,7 +83,12 @@ class OperationJobInput(Input):
     condition_hash: str | None = Field(default=None, pattern="^[0-9a-f]{64}$")
     presence_search: PresenceSearchPlan | None = None
     operation_type: Literal[
-        "collect_search", "web_analysis", "ai_analysis", "form_intelligence", "extract_articles"
+        "collect_search",
+        "web_analysis",
+        "site_analysis",
+        "ai_analysis",
+        "form_intelligence",
+        "extract_articles",
     ]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
     source: Literal["serper", "google_places", "gbizinfo"] | None = None

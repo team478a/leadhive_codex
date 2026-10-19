@@ -119,6 +119,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
                 (
                     "collect_search",
                     "web_analysis",
+                    "site_analysis",
                     "ai_analysis",
                     "form_intelligence",
                     "prepare_outreach",
@@ -495,7 +496,14 @@ def enqueue_due_refresh_schedules(db) -> int:
         active = db.scalar(
             select(OperationJob.id).where(
                 OperationJob.project_id == schedule.project_id,
-                OperationJob.operation_type.in_(("web_analysis", "prepare_outreach")),
+                OperationJob.operation_type.in_(
+                    (
+                        "web_analysis",
+                        "site_analysis",
+                        "form_intelligence",
+                        "prepare_outreach",
+                    )
+                ),
                 OperationJob.status.in_(("queued", "running")),
             )
         )
@@ -508,7 +516,7 @@ def enqueue_due_refresh_schedules(db) -> int:
             continue
         job = OperationJob(
             project_id=schedule.project_id,
-            operation_type="web_analysis",
+            operation_type="site_analysis",
             payload={"company_ids": [str(item) for item in company_ids], "force": True},
         )
         if not add_operation_job(db, job):
@@ -537,6 +545,7 @@ def claim_job(db) -> OperationJob | None:
                 (
                     "collect_search",
                     "web_analysis",
+                    "site_analysis",
                     "ai_analysis",
                     "form_intelligence",
                     "prepare_outreach",
@@ -809,6 +818,112 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         if companies:
             job.total_count += len(companies)
             db.commit()
+
+
+def run_site_analysis(db, job: OperationJob, worker_id: uuid.UUID) -> None:
+    from app.services.scraper import PageFetchCache
+    from app.services.site_analysis import analyze_site_company
+
+    job_id = job.id
+    project_id = job.project_id
+    processed_ids: set[uuid.UUID] = set()
+    explicit_ids = bool((job.payload or {}).get("company_ids"))
+
+    while True:
+        current = db.get(OperationJob, job_id)
+        if current is None or stop_requested(db, current, worker_id):
+            return
+        payload = dict(current.payload or {})
+        scan_unanalyzed = bool(payload.get("scan_unanalyzed") or not explicit_ids)
+        company_ids = [
+            uuid.UUID(value)
+            for value in payload.get("company_ids", [])
+            if uuid.UUID(value) not in processed_ids
+        ][:100]
+        if scan_unanalyzed:
+            has_terminal_form_log = (
+                select(FormAnalysisLog.id)
+                .where(
+                    FormAnalysisLog.company_id == Company.id,
+                    FormAnalysisLog.event_type.in_(("analysis_completed", "analysis_failed")),
+                )
+                .exists()
+            )
+            query = select(Company.id).where(
+                Company.project_id == project_id,
+                Company.website_url.is_not(None),
+                Company.analysis_status.notin_(("excluded", "duplicate")),
+                or_(
+                    Company.analysis_status.in_(("pending", "failed")),
+                    ~has_terminal_form_log,
+                ),
+            )
+            if processed_ids:
+                query = query.where(Company.id.notin_(processed_ids))
+            if payload.get("force"):
+                query = select(Company.id).where(
+                    Company.project_id == project_id,
+                    Company.website_url.is_not(None),
+                    Company.analysis_status.notin_(("excluded", "duplicate")),
+                )
+                if processed_ids:
+                    query = query.where(Company.id.notin_(processed_ids))
+            scan_capacity = max(0, 100 - len(company_ids))
+            if scan_capacity:
+                company_ids.extend(
+                    company_id
+                    for company_id in db.scalars(
+                        query.order_by(Company.created_at, Company.id).limit(scan_capacity)
+                    ).all()
+                    if company_id not in company_ids
+                )
+
+        if not company_ids:
+            locked = db.scalar(
+                select(OperationJob).where(OperationJob.id == job_id).with_for_update()
+            )
+            if locked is None:
+                return
+            latest_ids = {
+                uuid.UUID(value) for value in (locked.payload or {}).get("company_ids", [])
+            }
+            if latest_ids - processed_ids:
+                continue
+            return
+
+        current.total_count = max(current.total_count, len(processed_ids) + len(company_ids))
+        db.commit()
+        for company_id in company_ids:
+            if stop_requested(db, current, worker_id):
+                return
+            success = False
+            company = db.get(Company, company_id)
+            if company is not None:
+                cache = PageFetchCache()
+                try:
+                    success = analyze_site_company(
+                        db,
+                        company,
+                        force=bool(payload.get("force")),
+                        page_cache=cache,
+                    )
+                except Exception as exc:
+                    db.rollback()
+                    logger.warning(
+                        "site analysis failed: company_id=%s type=%s",
+                        company_id,
+                        type(exc).__name__,
+                    )
+                    current = db.get(OperationJob, job_id)
+                    if current is None:
+                        return
+            if not progress(db, current, worker_id, success):
+                return
+            processed_ids.add(company_id)
+            db.expunge_all()
+            db.add(job)
+            db.refresh(job)
+            current = job
 
 
 def run_form_delivery(db, job: OperationJob, worker_id: uuid.UUID) -> None:
@@ -1462,6 +1577,7 @@ def run_once() -> bool:
             {
                 "collect_search": run_collection,
                 "web_analysis": run_web,
+                "site_analysis": run_site_analysis,
                 "ai_analysis": run_ai,
                 "form_delivery": run_form_delivery,
                 "form_intelligence": run_form_intelligence,
@@ -1495,6 +1611,16 @@ def run_once() -> bool:
                 job.worker_id = None
                 job.lease_expires_at = None
                 job.finished_at = datetime.now(timezone.utc)
+                if job.operation_type == "site_analysis" and job.processed_count:
+                    from app.services.site_analysis import enqueue_readiness_after_site_analysis
+
+                    enqueue_readiness_after_site_analysis(db, job.project_id)
+                elif job.operation_type == "collect_search" and (job.payload or {}).get(
+                    "site_analysis_completed_during_collection"
+                ):
+                    from app.services.site_analysis import enqueue_readiness_after_site_analysis
+
+                    enqueue_readiness_after_site_analysis(db, job.project_id)
                 progress_state = (job.payload or {}).get("collection_progress") or {}
                 chain = (job.payload or {}).get("collection_chain") or {}
                 if (

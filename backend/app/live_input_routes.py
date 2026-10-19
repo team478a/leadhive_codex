@@ -21,6 +21,7 @@ from app.pc_input_routes import encode, seal
 from app.project_access import company_access
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
+from app.services.feature_usage import add_feature_usage_event
 from app.services.pinned_read_transport import TransportBlocked, target
 
 router = APIRouter(prefix="/api")
@@ -141,6 +142,7 @@ def issue(
     }
     item.note = stored(item, value)
     db.add(item)
+    add_feature_usage_event(db, "live_input_trial_issued")
     db.commit()
     return {
         **task,
@@ -282,6 +284,7 @@ def receive_result(
         ),
     )
     db.add(result)
+    add_feature_usage_event(db, "live_input_report_recorded")
     value.update(state="REPORTED", report_hash=digest, result_id=str(result.id))
     item.note = stored(item, value)
     db.commit()

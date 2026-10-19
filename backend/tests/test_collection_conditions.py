@@ -5,6 +5,7 @@ from pydantic import ValidationError
 from sqlalchemy import func, select
 
 from app.models import (
+    ApplicationSettings,
     ApprovalRequest,
     CollectionConditionRequest,
     Company,
@@ -44,6 +45,12 @@ def condition(priority="MUST", value="INSTAGRAM", kind="MEDIA_EXISTS", key="c1")
 @pytest.fixture
 def sample(db, auth):
     project = db.get(Project, make_project(auth)["id"])
+    saved_settings = db.get(ApplicationSettings, 1)
+    if saved_settings is None:
+        saved_settings = ApplicationSettings(id=1)
+    saved_settings.auto_site_analysis = False
+    db.add(saved_settings)
+    db.commit()
     job = start_job(db, project.id, "serper", "test", "test")
     save_candidates(db, job, [Candidate("テスト店舗", "https://example.test", phone="0791234567")])
     company = db.scalar(select(Company).where(Company.project_id == project.id))

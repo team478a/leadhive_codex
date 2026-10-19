@@ -18,6 +18,7 @@ import { SmtpSettingsPage } from './SmtpSettingsPage'
 import { OrganizationSettingsPanel } from './OrganizationSettingsPanel'
 import { PublicOptOutPage } from './PublicOptOutPage'
 import { RuntimeVersionStatus } from './RuntimeVersionStatus'
+import { UsageReportPage } from './UsageReportPage'
 import type { Dashboard, Notification, Profile, Project, ProjectMember, User } from './types'
 
 function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: string }) {
@@ -57,7 +58,7 @@ type Editor = { type: 'project'; value?: Project; profileId?: string } | { type:
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'organization' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'targets' | 'sales' | 'results' | 'analysis'>(window.location.hash === '#raw' ? 'raw' : 'targets')
+  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'organization' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'usage' | 'targets' | 'sales' | 'results' | 'analysis'>(window.location.hash === '#raw' ? 'raw' : 'targets')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -204,6 +205,9 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         {user.is_admin && <button className={tab === 'settings' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('settings'); setEditor(null); setNotice('')
         }}>⚙ 運用設定</button>}
+        {user.is_admin && <button className={tab === 'usage' ? 'nav-item selected' : 'nav-item'} onClick={() => {
+          setTab('usage'); setEditor(null); setNotice('')
+        }}>利用状況</button>}
         <button className={tab === 'installation' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('installation'); setEditor(null); setNotice('') }}>↓ 導入・ダウンロード</button>
         <button className="nav-item" onClick={() => setGuideOpen(true)}>？ 使い方ガイド</button>
       </nav>
@@ -214,8 +218,8 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
       </div>
     </aside>
     <main className="workspace"><OutboundStatus /><header><p className="eyebrow">YOUR WORKSPACE</p>
-      <div className="page-heading"><div><h1>{tab === 'targets' ? '収集ターゲット設定' : tab === 'analysis' ? 'リスト解析' : tab === 'results' ? '収集リストの確認' : tab === 'sales' ? '送信の準備・実行' : tab === 'improvements' ? '改善候補' : tab === 'installation' ? '導入・ダウンロード' : tab === 'operation' ? '担当者の作業ガイド' : tab === 'raw' ? '収集結果の確認' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : 'ターゲットプロファイル'}</h1>
-        <p className="muted">{tab === 'targets' ? 'ターゲット設定 → 収集 → 解析 → 結果確認。解析は後からでもできます。' : tab === 'analysis' ? '保存済みリストを選び、Web解析・AI判定・フォーム解析を順に実行。' : tab === 'results' ? '収集した候補を確認してOK・NG・URL修正を記録。' : tab === 'sales' ? '文面準備 → 人の確認・承認 → 一括送信 → 結果確認を1か所から進めます。' : tab === 'improvements' ? '改善候補を確認し、理由付きで判断を記録。採用しても本番ルールは変わりません。' : tab === 'installation' ? 'クラウド版・ローカル版の使い始め方と配布リンク。' : tab === 'operation' ? '収集・入力・結果記録を、実際に使いながら進める。' : tab === 'raw' ? '候補を順番に確認して、営業対象かどうかを記録。' : tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
+      <div className="page-heading"><div><h1>{tab === 'targets' ? '収集ターゲット設定' : tab === 'analysis' ? 'リスト解析' : tab === 'results' ? '収集リストの確認' : tab === 'sales' ? '送信の準備・実行' : tab === 'improvements' ? '改善候補' : tab === 'installation' ? '導入・ダウンロード' : tab === 'operation' ? '担当者の作業ガイド' : tab === 'raw' ? '収集結果の確認' : tab === 'approvals' ? '承認キュー' : tab === 'dashboard' ? 'ダッシュボード' : tab === 'projects' ? 'プロジェクト' : tab === 'collection' ? '企業収集' : tab === 'companies' ? '企業一覧' : tab === 'deliveries' ? 'メール配信状況' : tab === 'settings' ? '運用設定' : tab === 'usage' ? '機能の利用状況' : 'ターゲットプロファイル'}</h1>
+        <p className="muted">{tab === 'targets' ? 'ターゲット設定 → 収集 → 解析 → 結果確認。解析は後からでもできます。' : tab === 'analysis' ? '保存済みリストを選び、Web解析・AI判定・フォーム解析を順に実行。' : tab === 'results' ? '収集した候補を確認してOK・NG・URL修正を記録。' : tab === 'sales' ? '文面準備 → 人の確認・承認 → 一括送信 → 結果確認を1か所から進めます。' : tab === 'improvements' ? '改善候補を確認し、理由付きで判断を記録。採用しても本番ルールは変わりません。' : tab === 'installation' ? 'クラウド版・ローカル版の使い始め方と配布リンク。' : tab === 'operation' ? '収集・入力・結果記録を、実際に使いながら進める。' : tab === 'raw' ? '候補を順番に確認して、営業対象かどうかを記録。' : tab === 'approvals' ? '提案内容を確認し、Human承認を記録。' : tab === 'dashboard' ? '営業リスト全体の進捗を確認。' : tab === 'projects' ? '営業目的ごとに、ターゲットと地域を整理。' : tab === 'collection' ? '検索・URL・CSVから営業候補を登録。' : tab === 'companies' ? '優先順位と営業状況を確認・更新。' : tab === 'deliveries' ? '送信予約と配信結果をプロジェクトごとに確認。' : tab === 'settings' ? '収集・AI・メール送受信に使う運用設定を管理。' : tab === 'usage' ? '機能別の利用件数と計測範囲を確認します。' : '検索条件と評価基準を、業種に合わせて管理。'}</p></div>
         {!editor && (tab === 'projects' || tab === 'profiles') && <button disabled={!loaded || loading || busy} onClick={() => {
           setEditor({ type: tab === 'projects' ? 'project' : 'profile' }); setNotice('')
         }}>＋ {tab === 'projects' ? 'プロジェクトを作成' : 'プロファイルを作成'}</button>}
@@ -276,7 +280,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           }} onOpenFollowup={(projectId, companyId) => {
             setCompletionCompanyId(null); setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
-          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'organization' ? <OrganizationSettingsPanel isAdmin={user.is_admin} /> : loaded && tab === 'raw' ? <RawCollectionBenchmarkPage /> : loaded && tab === 'deliveries' ?
+          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'usage' && user.is_admin ? <UsageReportPage /> : loaded && tab === 'organization' ? <OrganizationSettingsPanel isAdmin={user.is_admin} /> : loaded && tab === 'raw' ? <RawCollectionBenchmarkPage /> : loaded && tab === 'deliveries' ?
           <EmailDeliveriesPage key={collectionProjectId} initialProjectId={collectionProjectId} projects={projects} projectRoles={projectRoles} /> : loaded && tab === 'approvals' ?
           <ApprovalQueuePage key={collectionProjectId} initialProjectId={collectionProjectId} projects={projects} projectRoles={projectRoles} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>
