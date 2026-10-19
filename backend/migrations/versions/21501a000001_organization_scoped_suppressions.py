@@ -279,7 +279,6 @@ def upgrade():
         sa.Column(
             "actor_user_id",
             postgresql.UUID(as_uuid=True),
-            sa.ForeignKey("users.id", ondelete="SET NULL"),
         ),
         sa.Column("event_type", sa.String(40), nullable=False),
         sa.Column("reason", sa.Text(), nullable=False, server_default=""),

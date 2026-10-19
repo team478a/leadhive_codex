@@ -54,9 +54,7 @@ class OrganizationAuditEvent(Base):
     suppression_entry_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("suppression_entries.id", ondelete="SET NULL"), index=True
     )
-    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        ForeignKey("users.id", ondelete="SET NULL"), index=True
-    )
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(index=True)
     event_type: Mapped[str] = mapped_column(String(40))
     reason: Mapped[str] = mapped_column(Text, default="", server_default="")
     details: Mapped[dict] = mapped_column(JSONB, default=dict, server_default="{}")

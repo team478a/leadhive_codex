@@ -44,6 +44,27 @@ def create_company(db, project_id, *, name, email, domain):
     return company
 
 
+def test_audit_actor_id_survives_user_deletion(db, users):
+    event = OrganizationAuditEvent(
+        actor_user_id=users[0].id,
+        event_type="suppression_created",
+        reason="履歴保持",
+        details={"scope": "global"},
+    )
+    db.add(event)
+    db.commit()
+    actor_id = users[0].id
+    event_id = event.id
+
+    db.delete(users[0])
+    db.commit()
+    db.expire_all()
+
+    preserved = db.get(OrganizationAuditEvent, event_id)
+    assert preserved is not None
+    assert preserved.actor_user_id == actor_id
+
+
 def test_suppression_scope_and_do_not_contact_off_does_not_release(auth, db, users):
     first_project = create_project(auth, "停止元")
     second_project = create_project(auth, "同じ利用企業")
