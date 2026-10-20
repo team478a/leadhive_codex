@@ -1,25 +1,29 @@
 import type { CompletionReturnContext } from './completionWorkQueueTypes'
-import { useCallback, useEffect, useState, useRef, type FormEvent } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useState, useRef, type FormEvent } from 'react'
 import { allPages, api, ApiError, errorMessage } from './api'
 import { Field, ProfileForm, ProjectForm } from './forms'
 import { OutboundStatus } from './OutboundStatus'
-import { CollectionPage } from './CollectionPage'
-import { ApprovalQueuePage } from './ApprovalQueuePage'
-import { CompaniesPage } from './CompaniesPage'
-import { DashboardPage } from './DashboardPage'
-import { RawCollectionBenchmarkPage } from './RawCollectionBenchmarkPage'
-import { EmailDeliveriesPage } from './EmailDeliveriesPage'
 import { OnboardingGuide } from './OnboardingGuide'
-import { OperatorGuide, type OperatorDestination } from './OperatorGuide'
-import { InstallationGuide } from './InstallationGuide'
-import { FeedbackProposalsPage } from './FeedbackProposalsPage'
-import { CollectionResults, CollectionTargets, SalesWorkspace } from './Workspaces'
-import { SmtpSettingsPage } from './SmtpSettingsPage'
+import type { OperatorDestination } from './OperatorGuide'
 import { OrganizationSettingsPanel } from './OrganizationSettingsPanel'
 import { PublicOptOutPage } from './PublicOptOutPage'
 import { RuntimeVersionStatus } from './RuntimeVersionStatus'
-import { UsageReportPage } from './UsageReportPage'
 import type { Dashboard, Notification, Profile, Project, ProjectMember, User } from './types'
+
+const CollectionPage = lazy(() => import('./CollectionPage').then(module => ({ default: module.CollectionPage })))
+const ApprovalQueuePage = lazy(() => import('./ApprovalQueuePage').then(module => ({ default: module.ApprovalQueuePage })))
+const CompaniesPage = lazy(() => import('./CompaniesPage').then(module => ({ default: module.CompaniesPage })))
+const DashboardPage = lazy(() => import('./DashboardPage').then(module => ({ default: module.DashboardPage })))
+const RawCollectionBenchmarkPage = lazy(() => import('./RawCollectionBenchmarkPage').then(module => ({ default: module.RawCollectionBenchmarkPage })))
+const EmailDeliveriesPage = lazy(() => import('./EmailDeliveriesPage').then(module => ({ default: module.EmailDeliveriesPage })))
+const OperatorGuide = lazy(() => import('./OperatorGuide').then(module => ({ default: module.OperatorGuide })))
+const InstallationGuide = lazy(() => import('./InstallationGuide').then(module => ({ default: module.InstallationGuide })))
+const FeedbackProposalsPage = lazy(() => import('./FeedbackProposalsPage').then(module => ({ default: module.FeedbackProposalsPage })))
+const CollectionResults = lazy(() => import('./Workspaces').then(module => ({ default: module.CollectionResults })))
+const CollectionTargets = lazy(() => import('./Workspaces').then(module => ({ default: module.CollectionTargets })))
+const SalesWorkspace = lazy(() => import('./Workspaces').then(module => ({ default: module.SalesWorkspace })))
+const SmtpSettingsPage = lazy(() => import('./SmtpSettingsPage').then(module => ({ default: module.SmtpSettingsPage })))
+const UsageReportPage = lazy(() => import('./UsageReportPage').then(module => ({ default: module.UsageReportPage })))
 
 function Login({ onLogin, notice }: { onLogin: (user: User) => void; notice: string }) {
   const [email, setEmail] = useState('')
@@ -233,6 +237,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         <button className={tab === 'analysis' ? '' : 'secondary'} aria-current={tab === 'analysis' ? 'step' : undefined} disabled={!canCollect} onClick={() => setTab('analysis')}>3. リスト解析</button>
         <button className={tab === 'results' ? '' : 'secondary'} aria-current={tab === 'results' ? 'step' : undefined} onClick={() => setTab('results')}>4. 結果確認</button>
       </nav>}
+      <Suspense fallback={<p role="status">画面を読み込み中…</p>}>
       {loading ? <p role="status">読み込み中…</p> : editor?.type === 'project' ?
         <ProjectForm key={editor.value?.id ?? 'new'} profiles={profiles} initial={editor.value} profileId={editor.profileId}
           collectionSetup={collectionSetup} onSaved={collectionSetup ? savedTarget : saved} onCancel={() => { setEditor(null); setCollectionSetup(false) }} /> : editor?.type === 'profile' ?
@@ -305,6 +310,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
               </div></div>
           </article>)}</div>
         </>}
+      </Suspense>
       <RuntimeVersionStatus />
     </main>
     <OnboardingGuide open={loaded && guideOpen} projectCount={currentProjects.length} totalCompanies={totalCompanies}
