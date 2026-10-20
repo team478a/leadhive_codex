@@ -512,9 +512,9 @@ def test_known_sources_are_excluded_but_article_titles_are_saved(auth, db, monke
     assert [hit.disposition for hit in hits] == [
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
         "SAVED",
         "SAVED",
-        "DUPLICATE",
         "TARGET_LIMIT",
         "TARGET_LIMIT",
     ]
@@ -526,14 +526,20 @@ def test_known_sources_are_excluded_but_article_titles_are_saved(auth, db, monke
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_aggregation_title_is_saved_as_a_reviewable_candidate(auth, db, monkeypatch, fair):
+def test_aggregation_title_is_excluded_before_save(auth, db, monkeypatch, fair):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
     project, operation_id = setup_job(auth, db, monkeypatch, keywords=["店舗"], target=1)
     rows = [
-        {"title": "大阪のおすすめ店7選", "link": "https://store.example/blog/selection"},
-        {"title": "近郊の店舗一覧", "link": "https://directory.example/area"},
+        {
+            "title": "【神戸市】おすすめ工務店10選",
+            "link": "https://publisher-one.example/blog/selection",
+        },
+        {
+            "title": "名古屋市の居酒屋ランキング20選",
+            "link": "https://publisher-two.example/ranking",
+        },
         {"title": "店舗公式サイト｜おすすめプラン", "link": "https://store.example/"},
         {"title": "超過候補", "link": "https://next.example/"},
     ]
@@ -544,9 +550,9 @@ def test_aggregation_title_is_saved_as_a_reviewable_candidate(auth, db, monkeypa
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
     assert [h.disposition for h in hits] == [
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
         "SAVED",
-        "SAVED",
-        "DUPLICATE",
         "TARGET_LIMIT",
     ]
     assert len(hits) == len(rows)
@@ -554,6 +560,7 @@ def test_aggregation_title_is_saved_as_a_reviewable_candidate(auth, db, monkeypa
     assert hits[0].snapshot["link"] == rows[0]["link"]
     company = db.scalar(select(Company))
     assert company.domain == "store.example"
+    assert company.website_url == "https://store.example"
 
 
 @pytest.mark.parametrize(
@@ -641,19 +648,15 @@ def test_additional_media_keep_raw_and_do_not_consume_goal(auth, db, monkeypatch
     provider(monkeypatch, rows)
     monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
     assert worker.run_once()
-    assert set(db.scalars(select(Company.domain))) == {"unknown.test", "restaurant.test"}
+    assert list(db.scalars(select(Company.domain))) == ["restaurant.test"]
     hits = db.scalars(
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
-    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 5 + [
-        "SAVED",
-        "SAVED",
-        "TARGET_LIMIT",
-    ]
+    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 6 + ["SAVED", "TARGET_LIMIT"]
     assert [h.snapshot["link"] for h in hits] == [row["link"] for row in rows]
-    assert all(h.company_id is None for h in hits[:5])
+    assert all(h.company_id is None for h in hits[:6])
     job = db.scalar(
         select(CollectionJob).where(CollectionJob.operation_job_id == UUID(operation_id))
     )
-    assert job.saved_count == 2
-    assert job.excluded_count == 5
+    assert job.saved_count == 1
+    assert job.excluded_count == 6
