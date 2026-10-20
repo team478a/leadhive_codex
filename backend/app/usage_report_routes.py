@@ -9,6 +9,7 @@ from app.models import (
     Activity,
     CF7Observation,
     CollectionConditionRequest,
+    CollectionDiscoveryHit,
     CollectionFactReview,
     CollectionJob,
     Company,
@@ -136,6 +137,19 @@ def usage_report(
         ).where(CF7Observation.observed_at >= since)
     ).one()
 
+    non_company_source_rows = db.execute(
+        select(
+            CollectionDiscoveryHit.classification_reason,
+            func.count().label("count"),
+        )
+        .where(CollectionDiscoveryHit.disposition == "NON_COMPANY_SOURCE")
+        .group_by(CollectionDiscoveryHit.classification_reason)
+        .order_by(CollectionDiscoveryHit.classification_reason)
+    )
+    non_company_source_by_reason = [
+        {"reason": row.classification_reason, "count": row.count} for row in non_company_source_rows
+    ]
+
     batch_current = db.execute(
         select(
             func.count(case((FormDeliveryBatch.status.in_(("ready", "running")), 1))).label(
@@ -178,6 +192,11 @@ def usage_report(
             CollectionJob.created_at,
             since,
         ),
+        "non_company_source_exclusions": {
+            "count": sum(row["count"] for row in non_company_source_by_reason),
+            "by_reason": non_company_source_by_reason,
+            "scope": "all discovery records still in the database",
+        },
         "active_collection_jobs": [
             {"source": row.source, "count": row.count} for row in collection_active
         ],

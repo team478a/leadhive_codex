@@ -1,7 +1,6 @@
 """Persistence and deduplication for collection jobs."""
 
 import logging
-import re
 from collections.abc import Callable
 from datetime import datetime, timezone
 from uuid import UUID
@@ -22,10 +21,6 @@ from app.services.suppression import active_suppression_scope_condition
 logger = logging.getLogger("leadhive")
 PUBLIC_HOST_SUFFIXES = (".lg.jp", ".go.jp", ".ed.jp", ".ac.jp")
 PUBLIC_HOST_PREFIXES = ("city.", "pref.", "town.", "vill.")
-DEFINITE_ARTICLE_TITLE = re.compile(
-    r"(?:[0-9０-９]+年版|年度|調べてみた|がスタート|開催|募集|とは)|"
-    r"^(?:»|・|【)|[｜|]\s*[^｜|]*(?:都|道|府|県|市|区|町|村)$"
-)
 
 
 def start_job(
@@ -135,10 +130,10 @@ def definite_non_company_reason(job: CollectionJob, candidate: Candidate) -> str
         _, host = canonicalize_url(candidate.website_url)
     except (ValueError, UnicodeError):
         return ""
-    if host.endswith(PUBLIC_HOST_SUFFIXES) or host.startswith(PUBLIC_HOST_PREFIXES):
+    if host.endswith(PUBLIC_HOST_SUFFIXES) or (
+        host.startswith(PUBLIC_HOST_PREFIXES) and host.endswith(".jp")
+    ):
         return "PUBLIC_SECTOR_DOMAIN"
-    if job.source == "serper" and DEFINITE_ARTICLE_TITLE.search(candidate.company_name.strip()):
-        return "ARTICLE_STYLE_TITLE"
     return ""
 
 
@@ -183,10 +178,8 @@ def save_candidates(
             continue
         if job.source == "serper" and candidate.website_url:
             kind, reason = classify_candidate(candidate)
-            if (
-                kind in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
-                or (kind == "JOB_PR" and reason == "EXTERNAL_PLATFORM")
-                or (kind == "ARTICLE" and reason == "AGGREGATION_TITLE")
+            if kind in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"} or (
+                kind == "JOB_PR" and reason == "EXTERNAL_PLATFORM"
             ):
                 job.excluded_count += 1
                 mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")
