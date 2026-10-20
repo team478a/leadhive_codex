@@ -147,8 +147,7 @@ def usage_report(
         .order_by(CollectionDiscoveryHit.classification_reason)
     )
     non_company_source_by_reason = [
-        {"reason": row.classification_reason, "count": row.count}
-        for row in non_company_source_rows
+        {"reason": row.classification_reason, "count": row.count} for row in non_company_source_rows
     ]
 
     batch_current = db.execute(

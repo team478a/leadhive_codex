@@ -278,8 +278,7 @@ def test_company_like_titles_are_saved_and_public_domain_filter_is_narrow(auth, 
         ]
     )
     rows = [
-        {"title": candidate.company_name, "link": candidate.website_url}
-        for candidate in candidates
+        {"title": candidate.company_name, "link": candidate.website_url} for candidate in candidates
     ]
     provider(monkeypatch, rows)
     job = start_job(db, UUID(project["id"]), "serper", "synthetic", "")
@@ -293,8 +292,14 @@ def test_company_like_titles_are_saved_and_public_domain_filter_is_narrow(auth, 
     saved_names = set(db.scalars(select(Company.company_name)))
     assert set(titles) <= saved_names
     assert [hit.disposition for hit in hits[len(titles) :]] == [
-        "SAVED", "SAVED", "SAVED", "NON_COMPANY_SOURCE",
-        "NON_COMPANY_SOURCE", "NON_COMPANY_SOURCE", "NON_COMPANY_SOURCE", "NON_COMPANY_SOURCE",
+        "SAVED",
+        "SAVED",
+        "SAVED",
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
     ]
 
 
@@ -483,9 +488,7 @@ def test_search_page_hints_are_shared_with_ingestion(url, title, kind):
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_known_sources_are_excluded_but_article_titles_are_saved(
-    auth, db, monkeypatch, fair
-):
+def test_known_sources_are_excluded_but_article_titles_are_saved(auth, db, monkeypatch, fair):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
@@ -523,9 +526,7 @@ def test_known_sources_are_excluded_but_article_titles_are_saved(
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_aggregation_title_is_saved_as_a_reviewable_candidate(
-    auth, db, monkeypatch, fair
-):
+def test_aggregation_title_is_saved_as_a_reviewable_candidate(auth, db, monkeypatch, fair):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)

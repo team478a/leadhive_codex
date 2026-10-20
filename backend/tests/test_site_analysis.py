@@ -59,7 +59,7 @@ def test_site_analysis_api_keeps_request_session_entities_attached(auth, db, use
     assert company.company_name == "API解析対象"
 
 
-def test_obvious_public_domains_and_article_titles_are_filtered_before_save(auth, db):
+def test_obvious_public_domains_are_filtered_but_article_titles_are_saved(auth, db):
     project = make_project(auth)
     collection = start_job(db, UUID(project["id"]), "serper", "問い合わせ", "全国")
     save_candidates(
@@ -73,8 +73,11 @@ def test_obvious_public_domains_and_article_titles_are_filtered_before_save(auth
     )
 
     saved = db.query(Company).filter_by(project_id=UUID(project["id"])).all()
-    assert [company.company_name for company in saved] == ["株式会社サンプル"]
-    assert collection.excluded_count == 2
+    assert {company.company_name for company in saved} == {
+        "2025年版 工務店を調べてみた",
+        "株式会社サンプル",
+    }
+    assert collection.excluded_count == 1
 
 
 def test_site_analysis_queue_commits_and_expunge_all_per_200_company_chunk(auth, db, monkeypatch):
