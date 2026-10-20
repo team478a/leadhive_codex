@@ -248,7 +248,7 @@ test('login, profile editing, project CRUD, reload and logout', async ({ page },
   await page.screenshot({ path: testInfo.outputPath('companies.png'), fullPage: true })
   await navigateWorkspace(page, '⌂ ダッシュボード')
   await expect(page.getByRole('heading', { name: 'ダッシュボード' })).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'アプローチ済', exact: true }).first()).toBeVisible()
+  await expect(page.locator('article.metric').filter({ hasText: 'アプローチ済' }).first()).toBeVisible()
   await expect(page.getByRole('heading', { name: '営業活動成果' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '送信方法・文面別の成果' })).toBeVisible()
   await expect(page.getByRole('heading', { name: '通知' })).toBeVisible()
