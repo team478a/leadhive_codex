@@ -1,8 +1,9 @@
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import event
 
-from app.models import Company, FeatureUsageEvent
+from app.models import CollectionDiscoveryHit, CollectionJob, Company, FeatureUsageEvent
 from tests.test_collection import make_project
 
 
@@ -35,6 +36,24 @@ def test_usage_report_counts_3000_companies_with_bounded_queries(client, users, 
         for index in range(3000)
     )
     db.add(FeatureUsageEvent(event_type="collection_condition_proposal"))
+    job = CollectionJob(
+        project_id=project_id, source="serper", keyword="test", region="", status="completed"
+    )
+    db.add(job)
+    db.flush()
+    db.add_all(
+        CollectionDiscoveryHit(
+            collection_job_id=job.id,
+            position=index,
+            snapshot={"link": f"https://excluded-{index}.example.test"},
+            raw_hash=f"{index:064x}",
+            classification="ARTICLE",
+            classification_reason=reason,
+            disposition="NON_COMPANY_SOURCE",
+            retain_until=datetime.now(timezone.utc) + timedelta(days=30),
+        )
+        for index, reason in enumerate(("PUBLIC_SECTOR_DOMAIN", "AGGREGATION_TITLE"), 1)
+    )
     db.commit()
 
     statements = []
@@ -53,6 +72,14 @@ def test_usage_report_counts_3000_companies_with_bounded_queries(client, users, 
     report = response.json()
     assert report["window_days"] == 90
     assert report["companies_by_source"] == [{"source": "serper", "count": 3000}]
+    assert report["non_company_source_exclusions"] == {
+        "count": 2,
+        "by_reason": [
+            {"reason": "AGGREGATION_TITLE", "count": 1},
+            {"reason": "PUBLIC_SECTOR_DOMAIN", "count": 1},
+        ],
+        "scope": "all discovery records still in the database",
+    }
     assert report["historical_proposal_calls"] is None
     assert any(
         row["event_type"] == "collection_condition_proposal" and row["count"] == 1

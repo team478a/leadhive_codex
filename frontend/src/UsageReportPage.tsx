@@ -26,6 +26,11 @@ type UsageReport = {
     note: string
   }
   collection_jobs: CountRow[]
+  non_company_source_exclusions: {
+    count: number
+    by_reason: Array<{ reason: string; count: number }>
+    scope: string
+  }
   active_collection_jobs: Array<{ source: string; count: number }>
   companies_by_source: CountRow[]
   operation_jobs: CountRow[]
@@ -107,6 +112,14 @@ export function UsageReportPage() {
     <CountTable title="収集job（source・status別）" rows={report.collection_jobs} columns={[
       { key: 'source', label: '収集元' }, { key: 'status', label: '状態' }, { key: 'count', label: '90日件数' },
     ]} />
+    <section className="panel">
+      <h3>保存前に除外された収集候補（NON_COMPANY_SOURCE）</h3>
+      <p className="mt-2">記録件数：<strong>{report.non_company_source_exclusions.count}件</strong></p>
+      <p className="muted mt-1 text-sm">{report.non_company_source_exclusions.scope}。同じ候補が複数回出た場合は出現ごとに数えます。</p>
+      {report.non_company_source_exclusions.by_reason.length > 0 && <ul className="mt-2">
+        {report.non_company_source_exclusions.by_reason.map(row => <li key={row.reason}>{row.reason}：{row.count}件</li>)}
+      </ul>}
+    </section>
     <CountTable title="収集後に保存された企業（source別）" rows={report.companies_by_source} columns={[
       { key: 'source', label: '保存source' }, { key: 'count', label: '90日件数' },
     ]} />

@@ -251,6 +251,53 @@ def test_manual_url_import_is_not_changed_by_serper_directory_policy(auth, db):
     assert db.scalar(select(func.count()).select_from(Company)) == 1
 
 
+def test_company_like_titles_are_saved_and_public_domain_filter_is_narrow(auth, db, monkeypatch):
+    project = make_project(auth)
+    titles = [
+        "【公式】株式会社山田工務店",
+        "株式会社ABC | 名古屋市",
+        "居酒屋たなか | 名古屋市中区",
+        "注文住宅なら山田工務店 | 兵庫県姫路市",
+        "スタッフ募集中｜ABC株式会社",
+        "ABC株式会社 2026年度採用",
+    ]
+    candidates = [
+        collection.Candidate(title, f"https://title-{index}.example.test/")
+        for index, title in enumerate(titles)
+    ]
+    candidates.extend(
+        [
+            collection.Candidate("City example", "https://city.example.com/"),
+            collection.Candidate("Town example", "https://town.example.org/"),
+            collection.Candidate("Village example", "https://vill.example.net/"),
+            collection.Candidate("Prefecture host", "https://pref.example.jp/"),
+            collection.Candidate("Local government", "https://city.example.lg.jp/"),
+            collection.Candidate("Government", "https://official.example.go.jp/"),
+            collection.Candidate("School", "https://school.example.ed.jp/"),
+            collection.Candidate("University", "https://university.example.ac.jp/"),
+        ]
+    )
+    rows = [
+        {"title": candidate.company_name, "link": candidate.website_url}
+        for candidate in candidates
+    ]
+    provider(monkeypatch, rows)
+    job = start_job(db, UUID(project["id"]), "serper", "synthetic", "")
+    candidates = measured_search(db, job, collection.search_serper, "synthetic", "", 20)
+    save_candidates(db, job, candidates)
+
+    hits = db.scalars(
+        select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
+    ).all()
+    assert [hit.disposition for hit in hits[: len(titles)]] == ["SAVED"] * len(titles)
+    saved_names = set(db.scalars(select(Company.company_name)))
+    assert set(titles) <= saved_names
+    assert [hit.disposition for hit in hits[len(titles) :]] == [
+        "SAVED", "SAVED", "SAVED", "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE", "NON_COMPANY_SOURCE", "NON_COMPANY_SOURCE", "NON_COMPANY_SOURCE",
+    ]
+
+
 @pytest.mark.parametrize(
     "url",
     [
@@ -436,7 +483,7 @@ def test_search_page_hints_are_shared_with_ingestion(url, title, kind):
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_known_sources_and_strong_lists_skip_goal_slots_but_unknown_articles_remain(
+def test_known_sources_are_excluded_but_article_titles_are_saved(
     auth, db, monkeypatch, fair
 ):
     from app import worker
@@ -462,9 +509,9 @@ def test_known_sources_and_strong_lists_skip_goal_slots_but_unknown_articles_rem
     assert [hit.disposition for hit in hits] == [
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
-        "NON_COMPANY_SOURCE",
         "SAVED",
         "SAVED",
+        "DUPLICATE",
         "TARGET_LIMIT",
         "TARGET_LIMIT",
     ]
@@ -476,7 +523,7 @@ def test_known_sources_and_strong_lists_skip_goal_slots_but_unknown_articles_rem
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_unknown_summary_pages_do_not_consume_goal_or_ban_provider_domain(
+def test_aggregation_title_is_saved_as_a_reviewable_candidate(
     auth, db, monkeypatch, fair
 ):
     from app import worker
@@ -496,9 +543,9 @@ def test_unknown_summary_pages_do_not_consume_goal_or_ban_provider_domain(
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
     assert [h.disposition for h in hits] == [
-        "NON_COMPANY_SOURCE",
-        "NON_COMPANY_SOURCE",
         "SAVED",
+        "SAVED",
+        "DUPLICATE",
         "TARGET_LIMIT",
     ]
     assert len(hits) == len(rows)
@@ -506,7 +553,6 @@ def test_unknown_summary_pages_do_not_consume_goal_or_ban_provider_domain(
     assert hits[0].snapshot["link"] == rows[0]["link"]
     company = db.scalar(select(Company))
     assert company.domain == "store.example"
-    assert company.website_url == "https://store.example"
 
 
 @pytest.mark.parametrize(
@@ -594,15 +640,19 @@ def test_additional_media_keep_raw_and_do_not_consume_goal(auth, db, monkeypatch
     provider(monkeypatch, rows)
     monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
     assert worker.run_once()
-    assert list(db.scalars(select(Company.domain))) == ["restaurant.test"]
+    assert set(db.scalars(select(Company.domain))) == {"unknown.test", "restaurant.test"}
     hits = db.scalars(
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
-    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 6 + ["SAVED", "TARGET_LIMIT"]
+    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 5 + [
+        "SAVED",
+        "SAVED",
+        "TARGET_LIMIT",
+    ]
     assert [h.snapshot["link"] for h in hits] == [row["link"] for row in rows]
-    assert all(h.company_id is None for h in hits[:6])
+    assert all(h.company_id is None for h in hits[:5])
     job = db.scalar(
         select(CollectionJob).where(CollectionJob.operation_job_id == UUID(operation_id))
     )
-    assert job.saved_count == 1
-    assert job.excluded_count == 6
+    assert job.saved_count == 2
+    assert job.excluded_count == 5
