@@ -38,13 +38,15 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   })
 
   await page.goto('/')
-  await page.evaluate(projectId => localStorage.setItem(`leadhive:send-channel:${projectId}`, 'form'), fixture.project_id)
   await page.getByLabel('メールアドレス').fill(process.env.E2E_EMAIL!)
   await page.getByLabel('パスワード').fill(process.env.E2E_PASSWORD!)
   await page.getByRole('button', { name: 'ログインする', exact: true }).click()
   await page.getByRole('dialog', { name: '3ステップで始めましょう' }).getByRole('button', { name: 'あとで見る' }).click()
   await navigateWorkspace(page, '▶ 送信の準備・実行')
   await page.getByLabel('対象プロジェクト').selectOption(fixture.project_id)
+  const formSummary = page.waitForResponse(response => response.url().includes(`/api/projects/${fixture.project_id}/send-flow-summary`))
+  await page.getByRole('button', { name: 'フォーム', exact: true }).click()
+  await formSummary
   const queueStage = page.getByRole('region', { name: '2. フォームを確認', exact: true })
   const queueStageHeader = queueStage.getByRole('button').first()
   await expect(queueStageHeader).toHaveAttribute('aria-expanded', 'true')
