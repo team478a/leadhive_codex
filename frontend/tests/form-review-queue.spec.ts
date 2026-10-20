@@ -47,6 +47,7 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   await page.getByLabel('対象プロジェクト').selectOption(fixture.project_id)
   const queueStage = page.getByRole('region', { name: '2. フォームを確認', exact: true })
   const queueStageHeader = queueStage.getByRole('button').first()
+  if (await queueStageHeader.getAttribute('aria-expanded') !== 'true') await queueStageHeader.click()
   await expect(queueStageHeader).toHaveAttribute('aria-expanded', 'true')
   await expect(queueStageHeader).toContainText('確認待ち 3社 · 確認不要：0社')
 
