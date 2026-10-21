@@ -763,19 +763,26 @@ def selected_companies(db, job: OperationJob, ai: bool) -> list[Company]:
     return list(db.scalars(query.order_by(Company.created_at).limit(100)).all())
 
 
-def next_analysis_batch(db, job: OperationJob, ai: bool) -> list[Company]:
-    """Select only untouched records for automatic follow-up batches."""
+def next_analysis_batch(
+    db,
+    job: OperationJob,
+    ai: bool,
+    processed_company_ids: set[uuid.UUID] | None = None,
+) -> list[Company]:
+    """Select eligible records not already processed by this job."""
     query = select(Company).where(Company.project_id == job.project_id)
     if ai:
         query = query.where(
             Company.analysis_status == "completed",
-            Company.ai_status == "pending",
+            Company.ai_status.in_(("pending", "failed", "skipped")),
         )
     else:
         query = query.where(
             Company.website_url.is_not(None),
             Company.analysis_status == "pending",
         )
+    if processed_company_ids:
+        query = query.where(Company.id.notin_(processed_company_ids))
     return list(db.scalars(query.order_by(Company.created_at, Company.id).limit(100)).all())
 
 
@@ -805,6 +812,7 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     companies = selected_companies(db, job, True)
     job.total_count = len(companies)
     db.commit()
+    processed_company_ids: set[uuid.UUID] = set()
     while companies:
         for company in companies:
             if stop_requested(db, job, worker_id):
@@ -814,9 +822,10 @@ def run_ai(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             )
             if not progress(db, job, worker_id, result.ai_status == "completed"):
                 return
+            processed_company_ids.add(company.id)
         if job.payload.get("company_ids") or job.payload.get("force"):
             return
-        companies = next_analysis_batch(db, job, True)
+        companies = next_analysis_batch(db, job, True, processed_company_ids)
         if companies:
             job.total_count += len(companies)
             db.commit()
