@@ -51,6 +51,40 @@ def test_analysis_worker_continues_with_remaining_pending_batch(monkeypatch, ope
     assert job.total_count == 102
 
 
+def test_ai_worker_continues_after_failed_batch_without_reprocessing(monkeypatch):
+    job = OperationJob(project_id=uuid4(), operation_type="ai_analysis", payload={"force": False})
+    first = SimpleNamespace(id=uuid4())
+    second = SimpleNamespace(id=uuid4())
+    next_calls = []
+
+    class Database:
+        def commit(self):
+            pass
+
+        def get(self, _model, _identifier):
+            return SimpleNamespace(target_profile_id=uuid4())
+
+    monkeypatch.setattr(worker, "selected_companies", lambda *_args: [first])
+
+    def next_batch(_db, _job, ai, processed_ids):
+        next_calls.append((ai, set(processed_ids)))
+        return [second] if second.id not in processed_ids else []
+
+    monkeypatch.setattr(worker, "next_analysis_batch", next_batch)
+    monkeypatch.setattr(worker, "stop_requested", lambda *_args: False)
+    monkeypatch.setattr(worker, "progress", lambda *_args: True)
+    monkeypatch.setattr(
+        worker,
+        "analyze_company_ai",
+        lambda _db, company, *_args: SimpleNamespace(ai_status="failed"),
+    )
+
+    worker.run_ai(Database(), job, uuid4())
+
+    assert next_calls == [(True, {first.id}), (True, {first.id, second.id})]
+    assert job.total_count == 2
+
+
 @pytest.mark.parametrize("operation", ["web_analysis", "ai_analysis"])
 def test_explicit_analysis_selection_does_not_auto_continue(monkeypatch, operation):
     job = OperationJob(
