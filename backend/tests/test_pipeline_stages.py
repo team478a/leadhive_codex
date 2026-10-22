@@ -262,10 +262,7 @@ def test_form_not_found_uses_existing_missing_diagnosis(workspace, db):
 
     assert data["rows"][0]["stage"].stage == "FORM_NOT_FOUND"
     assert data["rows"][0]["missing_form"]["primary_reason"] == "PAGE_FOUND_NO_FORM"
-    assert (
-        data["rows"][0]["missing_form"]["last_reached_url"]
-        == "https://approval.example/contact"
-    )
+    assert data["rows"][0]["missing_form"]["last_reached_url"] == "https://approval.example/contact"
 
 
 def test_pipeline_stage_access_allows_viewer_only(auth, workspace, db, users):
