@@ -2,6 +2,7 @@
 
 import csv
 import io
+from types import SimpleNamespace
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -47,6 +48,15 @@ CAPTCHA_COUNT_REASONS = (
     "CAPTCHA_LEGACY",
 )
 SECONDARY_COUNT_REASONS = {"NON_COMPANY_SUSPECTED", *CAPTCHA_COUNT_REASONS}
+READINESS_CSV_FIELDS = (
+    "company_id",
+    "company_name",
+    "domain",
+    "website_url",
+    "form_url",
+    "primary_reason",
+    "secondary_reasons",
+)
 REASONS = (
     "CONTACT_PROHIBITED",
     "NON_COMPANY_SUSPECTED",
@@ -79,6 +89,55 @@ REASONS = (
     "READY",
     "BROWSER_READY",
 )
+
+
+def readiness_csv_rows(db: Session, snapshot, result_filters):
+    output = io.StringIO(newline="")
+    writer = csv.writer(output)
+    writer.writerow(
+        ["company_id", "company_name", "form_url", "primary_reason", "secondary_reasons"]
+    )
+    yield "\ufeff" + output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+    if not snapshot:
+        return
+    statement = (
+        select(
+            FormDmReadinessResult.company_id.label("company_id"),
+            Company.company_name.label("company_name"),
+            Company.domain.label("domain"),
+            Company.website_url.label("website_url"),
+            FormProfile.form_url.label("form_url"),
+            FormDmReadinessResult.primary_reason.label("primary_reason"),
+            FormDmReadinessResult.secondary_reasons.label("secondary_reasons"),
+        )
+        .join(Company, Company.id == FormDmReadinessResult.company_id)
+        .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
+        .where(*result_filters)
+        .order_by(Company.company_name, Company.id)
+        .execution_options(stream_results=True, yield_per=200)
+    )
+    for row in db.execute(statement):
+        company = SimpleNamespace(
+            company_name=row.company_name,
+            domain=row.domain,
+            website_url=row.website_url,
+        )
+        writer.writerow(
+            [
+                row.company_id,
+                display_name(company),
+                row.form_url,
+                row.primary_reason,
+                ",".join(row.secondary_reasons),
+            ]
+        )
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+
 REVIEW_REASONS = {
     "NEEDS_CONSENT_REVIEW",
     "NEEDS_CHOICE_REVIEW",
@@ -572,41 +631,8 @@ def form_dm_readiness(
                 for result, company, profile in rows
             ]
     if format == "csv":
-
-        def csv_rows():
-            output = io.StringIO(newline="")
-            writer = csv.writer(output)
-            writer.writerow(
-                ["company_id", "company_name", "form_url", "primary_reason", "secondary_reasons"]
-            )
-            yield output.getvalue()
-            output.seek(0)
-            output.truncate(0)
-            if snapshot:
-                result_rows = db.execute(
-                    select(FormDmReadinessResult, Company, FormProfile)
-                    .join(Company, Company.id == FormDmReadinessResult.company_id)
-                    .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
-                    .where(*result_filters)
-                    .order_by(Company.company_name, Company.id)
-                    .execution_options(stream_results=True, yield_per=200)
-                )
-                for result, company, profile in result_rows:
-                    writer.writerow(
-                        [
-                            result.company_id,
-                            display_name(company),
-                            profile.form_url,
-                            result.primary_reason,
-                            ",".join(result.secondary_reasons),
-                        ]
-                    )
-                    yield output.getvalue()
-                    output.seek(0)
-                    output.truncate(0)
-
         return StreamingResponse(
-            csv_rows(),
+            readiness_csv_rows(db, snapshot, result_filters if snapshot else []),
             media_type="text/csv; charset=utf-8",
             headers={"Content-Disposition": "attachment; filename=form-dm-readiness.csv"},
         )

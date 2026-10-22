@@ -1,9 +1,12 @@
 import csv
 import io
 from datetime import datetime, timedelta, timezone
+from unittest.mock import Mock
+from uuid import uuid4
 
 from sqlalchemy import select
 
+from app.company_routes import COMPANY_CSV_FIELDS, company_csv_rows, company_query
 from app.models import Activity, ApplicationSettings, Company, ContactPerson, OperationJob
 
 
@@ -302,6 +305,29 @@ def test_csv_export_is_filtered_utf8_and_formula_safe(auth, db):
     rows = list(csv.DictReader(io.StringIO(response.content.decode("utf-8-sig"))))
     assert len(rows) == 1 and rows[0]["rank"] == "A"
     assert rows[0]["company_name"] == "'=危険な数式"
+
+
+def test_csv_export_selects_only_output_columns_and_streams_in_batches():
+    fake_db = Mock()
+    fake_db.execute.return_value = []
+    query = company_query(
+        project_id=uuid4(),
+        rank=None,
+        min_score=None,
+        region=None,
+        status=None,
+        source=None,
+        keyword=None,
+        assignee=None,
+        followup=None,
+        sort="score_desc",
+    )
+    generator = company_csv_rows(fake_db, query)
+    assert next(generator).startswith("\ufeffrank,score,company_name")
+    assert list(generator) == []
+    statement = fake_db.execute.call_args.args[0]
+    assert [column.key for column in statement.selected_columns] == list(COMPANY_CSV_FIELDS)
+    assert statement.get_execution_options()["yield_per"] == 200
 
 
 def test_dashboard_counts_and_recent_jobs(auth, db):
