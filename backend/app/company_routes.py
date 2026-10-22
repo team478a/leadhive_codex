@@ -6,7 +6,7 @@ from uuid import UUID
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import StreamingResponse
 from sqlalchemy import String, asc, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -38,6 +38,34 @@ from app.services.suppression import add_suppression
 
 router = APIRouter(prefix="/api")
 JST = ZoneInfo("Asia/Tokyo")
+COMPANY_CSV_FIELDS = (
+    "rank",
+    "score",
+    "company_name",
+    "business_type",
+    "prefecture",
+    "city",
+    "address",
+    "website_url",
+    "record_type",
+    "reference_url",
+    "phone",
+    "email",
+    "contact_url",
+    "instagram_url",
+    "x_url",
+    "ai_summary",
+    "ai_reason",
+    "ai_strengths",
+    "ai_concerns",
+    "ai_recommended_approach",
+    "status",
+    "assignee",
+    "next_followup_at",
+    "notes",
+    "source",
+    "source_keyword",
+)
 
 
 def owned_contact_person(contact_id: UUID, db: Session, user: User) -> ContactPerson:
@@ -343,6 +371,29 @@ def csv_safe(value) -> str:
     return "'" + text if text.startswith(("=", "+", "-", "@")) else text
 
 
+def company_csv_rows(db: Session, query):
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(COMPANY_CSV_FIELDS)
+    yield "\ufeff" + output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+    statement = query.with_only_columns(
+        *(getattr(Company, field) for field in COMPANY_CSV_FIELDS),
+        maintain_column_froms=True,
+    ).execution_options(stream_results=True, yield_per=200)
+    for values in db.execute(statement):
+        row = []
+        for value in values:
+            if isinstance(value, list):
+                value = " / ".join(value)
+            row.append(csv_safe(value))
+        writer.writerow(row)
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+
 @router.get("/projects/{project_id}/companies.csv")
 def export_companies(
     project_id: UUID,
@@ -359,52 +410,11 @@ def export_companies(
     user: User = Depends(current_user),
 ):
     owned_project(project_id, db, user, write=False)
-    companies = db.scalars(
-        company_query(
-            project_id, rank, min_score, region, status, source, keyword, assignee, followup, sort
-        )
-    ).all()
-    output = io.StringIO()
-    writer = csv.writer(output, lineterminator="\n")
-    fields = [
-        "rank",
-        "score",
-        "company_name",
-        "business_type",
-        "prefecture",
-        "city",
-        "address",
-        "website_url",
-        "record_type",
-        "reference_url",
-        "phone",
-        "email",
-        "contact_url",
-        "instagram_url",
-        "x_url",
-        "ai_summary",
-        "ai_reason",
-        "ai_strengths",
-        "ai_concerns",
-        "ai_recommended_approach",
-        "status",
-        "assignee",
-        "next_followup_at",
-        "notes",
-        "source",
-        "source_keyword",
-    ]
-    writer.writerow(fields)
-    for company in companies:
-        row = []
-        for field in fields:
-            value = getattr(company, field)
-            if isinstance(value, list):
-                value = " / ".join(value)
-            row.append(csv_safe(value))
-        writer.writerow(row)
-    return Response(
-        content="\ufeff" + output.getvalue(),
+    query = company_query(
+        project_id, rank, min_score, region, status, source, keyword, assignee, followup, sort
+    )
+    return StreamingResponse(
+        company_csv_rows(db, query),
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": 'attachment; filename="leadhive-companies.csv"'},
     )

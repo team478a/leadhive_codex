@@ -52,6 +52,7 @@ def test_form_dm_readiness_is_read_only_and_exports_csv(auth, form_source, db):
     exported = auth.get(f"/api/projects/{project_id}/form-dm-readiness?format=csv")
     assert exported.status_code == 200
     assert "text/csv" in exported.headers["content-type"]
+    assert exported.content.startswith(b"\xef\xbb\xbf")
     assert "company_name" in exported.text
     assert company_name in exported.text
 

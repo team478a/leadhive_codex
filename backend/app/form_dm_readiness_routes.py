@@ -579,7 +579,7 @@ def form_dm_readiness(
             writer.writerow(
                 ["company_id", "company_name", "form_url", "primary_reason", "secondary_reasons"]
             )
-            yield output.getvalue()
+            yield "\ufeff" + output.getvalue()
             output.seek(0)
             output.truncate(0)
             if snapshot:
