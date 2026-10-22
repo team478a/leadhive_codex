@@ -27,11 +27,13 @@
 
 ### 対象と解析
 
-- 対象URLはAPIが保存済みの `FormProfile` から選ぶ。対象は既知の問い合わせページで「フォームなし」「埋め込み未確認」、Contact Form 7、multipart、確認画面、JavaScript送信の候補に限る。ブラウザー解析済み、取得失敗、営業NG・連絡禁止、同一サイトでないURLは対象にしない。
+- 対象URLはAPIが保存済みの `FormProfile` から選ぶ。対象は既知の問い合わせページで「フォームなし」「埋め込み未確認」、Contact Form 7、multipart、確認画面、JavaScript送信、標準送信ボタンなし、独自送信処理の候補に限る。ブラウザー解析済み、取得失敗、CAPTCHAあり、営業NG・連絡禁止、同一サイトでないURLは対象にしない。
+- 最新の送信可否集計がある場合、主理由または副理由に連絡禁止、非企業の疑い、送信済み・結果不明、予約専用フォーム、CAPTCHAが含まれる企業を除外する。集計結果がない企業は従来の保存情報だけで判定する。
+- 最新集計の主理由が Contact Form 7、multipart、確認画面、JavaScript送信、確認ボタンがJavaScript、標準送信ボタンなし、独自送信処理、確認画面未判定の企業を優先し、その中では会社名順とする。
 - ブラウザーで問い合わせページを表示し、描画後DOMから既存の項目解析、同意・選択肢、CAPTCHA、営業NG、§5.1の日本語判定を再利用する。フォーム値はスナップショット前に除去し、項目・選択肢・送信経路などの構造だけからfingerprintを作る。外部CAPTCHAスクリプトが遮断されDOMで確認できない場合、既存解析で確認済みのCAPTCHA判定を消さず、安全側に保持する。
 - 解析結果は既存の `FormProfile` を更新し、`analysis_source='browser'` とする。描画後にフォームがなければ未発見として保存する。外部iframe・外部フォームのDOMは取得せず、「埋め込み未確認」のまま記録する。
 - 同一サイト（`www` の有無を同一扱い）のページはデータベースのadvisory lockで直列化し、1件の解析後に1秒以上空ける。1つのOperationJobは最大100社。対象URLはサーバー側で決定し、任意URLやドメインのAPI入力は受け付けない。
-- 送信可否パネルに「ブラウザ解析済み」と、問い合わせページ到達・フォームなし、埋め込み未確認、Contact Form 7、multipart、確認画面、JavaScript送信の会社数を表示する。
+- 送信可否パネルに「ブラウザ解析済み」と、問い合わせページ到達・フォームなし、埋め込み未確認、Contact Form 7、multipart、確認画面、JavaScript送信の会社数、未解析の残り件数を表示する。
 
 ### 有効化の手順
 
@@ -44,6 +46,7 @@
 - 合成フォームは既存の `POST /api/projects/{project_id}/browser-form-analysis` でのみ受け付け、パッケージ済みfixture名・制限付き入力値に限定する。
 - 実サイトの読み取り解析は `POST /api/projects/{project_id}/browser-form-analysis/recalculate` から要求する。APIが保存済み候補を最大100社選び、OperationJobのlease、cancel、stale recovery、重複防止で処理する。フラグOFFなら409で拒否する。
 - 通常のapplication workerは `browser_form_analysis` をclaimしない。Browser Workerが実行直前にもフラグ・payload・会社・URLを再検証する。
+- 描画後DOMの解析ジョブが完了した場合は、同じトランザクションで送信可否の再集計を1件登録する。再集計が待機中または実行中なら既存のOperationJob重複防止により追加しない。失敗・取消では登録しない。
 
 ## テストと確認
 

@@ -25,7 +25,10 @@ from app.project_access import project_access
 from app.schemas import OperationJobOut
 from app.security import current_user
 from app.services.approved_form import duplicate
-from app.services.browser_form_analysis import EMBED_UNVERIFIED_MARKER
+from app.services.browser_form_analysis import (
+    EMBED_UNVERIFIED_MARKER,
+    count_browser_analysis_targets,
+)
 from app.services.browser_form_preparation import browser_profile_eligible
 from app.services.collection_feedback import latest_company_feedback
 from app.services.contact_permission import evaluate_contact_permission
@@ -428,6 +431,7 @@ def browser_analysis_summary(db: Session, project_id: UUID) -> dict:
     ).one()
     return {key: value or 0 for key, value in row._mapping.items() if key != "last_analyzed_at"} | {
         "last_analyzed_at": row.last_analyzed_at,
+        "remaining_targets": count_browser_analysis_targets(db, project_id),
     }
 
 
@@ -643,6 +647,8 @@ def form_dm_readiness(
         if active_reanalysis_job
         else None,
         "browser_analysis_enabled": settings.browser_form_analysis_enabled,
+        "browser_dry_run_enabled": settings.browser_form_dry_run_enabled,
+        "browser_delivery_enabled": settings.browser_form_delivery_enabled,
         "browser_analysis_job": (
             OperationJobOut.model_validate(active_browser_job) if active_browser_job else None
         ),

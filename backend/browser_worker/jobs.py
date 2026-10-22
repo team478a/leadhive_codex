@@ -20,10 +20,12 @@ from app.models import BrowserFormRun, BrowserFormScreenshot, Company, FormProfi
 from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST
 from app.services.browser_form_analysis import (
     MAX_BROWSER_ANALYSIS_TARGETS,
+    SUPPORTED_FORM_REASONS,
     eligible_no_form_profile,
     save_rendered_analysis,
 )
 from app.services.contact_discovery import same_site
+from app.services.operations import add_operation_job
 
 logger = logging.getLogger("leadhive.browser_worker")
 POLL_SECONDS = 2
@@ -218,15 +220,13 @@ def _target_is_current(job: OperationJob, target: dict) -> bool:
             return False
         is_eligible_no_form = eligible_no_form_profile(company, profile)
         is_eligible_form = profile.form_found and (
-            profile.compatibility_reason_code
-            in {
-                "CONTACT_FORM_7",
-                "MULTIPART_OR_FILE",
-                "JAVASCRIPT_CONFIRMATION",
-                "ASYNC_SUBMISSION",
-            }
+            profile.compatibility_reason_code in SUPPORTED_FORM_REASONS
             or profile.confirmation_page is True
         )
+        if profile.captcha_type not in {None, "CAPTCHA_NONE"}:
+            return False
+        if profile.form_found and profile.captcha_type != "CAPTCHA_NONE":
+            return False
         if not (is_eligible_no_form or is_eligible_form):
             return False
         if not same_site(company.website_url or "", target["url"]):
@@ -276,6 +276,17 @@ def _finish_analysis_batch(job_id: uuid.UUID, worker_id: uuid.UUID) -> None:
             job.status = "completed"
             if job.failed_count:
                 job.error_message = f"{job.failed_count}社のブラウザ解析に失敗しました。"
+            add_operation_job(
+                db,
+                OperationJob(
+                    project_id=job.project_id,
+                    operation_type="form_dm_readiness",
+                    payload={
+                        "trigger": "browser_form_analysis",
+                        "source_job_id": str(job.id),
+                    },
+                ),
+            )
         job.worker_id = None
         job.lease_expires_at = None
         job.finished_at = datetime.now(timezone.utc)

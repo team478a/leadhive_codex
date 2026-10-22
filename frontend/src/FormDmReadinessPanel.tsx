@@ -22,6 +22,8 @@ type Readiness = {
   active_job: OperationJob | null
   active_reanalysis_job: OperationJob | null
   browser_analysis_enabled: boolean
+  browser_dry_run_enabled: boolean
+  browser_delivery_enabled: boolean
   browser_analysis_job: OperationJob | null
   browser_analysis_counts: {
     total: number
@@ -31,6 +33,7 @@ type Readiness = {
     multipart: number
     confirmation: number
     javascript_submission: number
+    remaining_targets: number
     last_analyzed_at: string | null
   }
   read_only: boolean
@@ -211,12 +214,15 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
         <span className="badge">JavaScript送信：{data.browser_analysis_counts.javascript_submission}社</span>
       </div>
       <p className="muted mt-2 text-xs">表示後DOMの解析は読み取り専用です。フォームへの入力・送信、外部埋め込み先への接続は行いません。</p>
+      <p className="muted mt-2 text-sm">ブラウザー解析の残り：{data.browser_analysis_counts.remaining_targets}社（1回に最大100社）</p>
       <div className="actions mt-2">
         <button type="button" className="secondary" disabled={!canWrite || !data.browser_analysis_enabled || starting || reanalysisBusy || Boolean(data.active_job) || browserBusy} onClick={() => void startBrowserAnalysis()}>
           {browserJob && ['queued', 'running'].includes(browserJob.status) ? `ブラウザ解析中 ${browserJob.processed_count}/${browserJob.total_count}社` : 'ブラウザで最大100社を解析'}
         </button>
       </div>
-      {!data.browser_analysis_enabled && <p className="muted text-xs">実サイト解析は既定でOFFです。田中さんの承認後に管理者がAPI・Worker双方の設定を有効化します。</p>}
+      {!data.browser_analysis_enabled && <p className="muted text-xs">ブラウザー解析は管理者の設定でOFFです。実際の動作にはWorker側の設定も必要です。</p>}
+      {data.browser_analysis_enabled && !data.browser_delivery_enabled && <p className="muted text-xs">ブラウザー送信は管理者の設定でOFFです。対象の確認とdry-runまでは行えます。{!data.browser_dry_run_enabled && 'dry-runも管理者の設定でOFFです。'}実際の動作にはWorker側の設定も必要です。</p>}
+      {data.browser_analysis_enabled && data.browser_delivery_enabled && !data.browser_dry_run_enabled && <p className="muted text-xs">dry-runは管理者の設定でOFFです。実際の動作にはWorker側の設定も必要です。</p>}
       {browserJob && ['failed', 'cancelled'].includes(browserJob.status) && <p className="error text-sm" role="alert">{browserJob.error_message || 'ブラウザ解析が完了しませんでした。'}</p>}
       {data.browser_analysis_counts.last_analyzed_at && <p className="muted text-xs">最終ブラウザ解析：{new Date(data.browser_analysis_counts.last_analyzed_at).toLocaleString('ja-JP')}</p>}
     </div>}

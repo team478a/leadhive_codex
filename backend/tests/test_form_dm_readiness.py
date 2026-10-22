@@ -56,6 +56,23 @@ def test_form_dm_readiness_is_read_only_and_exports_csv(auth, form_source, db):
     assert company_name in exported.text
 
 
+def test_form_dm_readiness_reports_browser_feature_flags(auth, form_source, db, monkeypatch):
+    from app.config import settings
+
+    project = form_source[0]
+    project_id = aggregate(auth, db, project)
+    monkeypatch.setattr(settings, "browser_form_analysis_enabled", True)
+    monkeypatch.setattr(settings, "browser_form_dry_run_enabled", False)
+    monkeypatch.setattr(settings, "browser_form_delivery_enabled", False)
+
+    body = auth.get(f"/api/projects/{project_id}/form-dm-readiness").json()
+
+    assert body["browser_analysis_enabled"] is True
+    assert body["browser_dry_run_enabled"] is False
+    assert body["browser_delivery_enabled"] is False
+    assert body["browser_analysis_counts"]["remaining_targets"] >= 0
+
+
 def test_form_dm_readiness_recalculate_joins_active_job_after_enqueue_race(
     auth, form_source, db, monkeypatch
 ):
