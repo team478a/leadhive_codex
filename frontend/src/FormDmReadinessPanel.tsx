@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, download, errorMessage } from './api'
+import { PipelineStagesSummary } from './PipelineStagesSummary'
 import type { OperationJob } from './types'
 
 type ReadinessItem = {
@@ -194,6 +195,7 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
     </div>
     {error && <p className="error mt-3" role="alert">{error}</p>}
     {reviewNotice && <p className="muted mt-3" role="status">{reviewNotice}</p>}
+    <PipelineStagesSummary projectId={projectId} />
     {data?.last_aggregated_at && <p className="muted mt-3 text-sm">最終集計：{new Date(data.last_aggregated_at).toLocaleString('ja-JP')} · Worker版 {data.last_aggregated_by_commit || 'unknown'}（{data.last_aggregated_by_host || 'host不明'}）</p>}
     {data?.active_job && <p className="muted mt-3 text-sm">再集計中：{data.active_job.processed_count}/{data.active_job.total_count}社</p>}
     {reanalysisJob && <p className="muted mt-3 text-sm" role="status">

@@ -16,6 +16,7 @@ import { CompanyFormBatchesPanel } from './CompanyFormBatchesPanel'
 import { CompanyFormIntelligencePanel } from './CompanyFormIntelligencePanel'
 import { CompanyFormObservationsPanel } from './CompanyFormObservationsPanel'
 import { FormReadinessPanel } from './FormReadinessPanel'
+import { PipelineStagesSummary } from './PipelineStagesSummary'
 import { CompanyEmailDeliveryPanel } from './CompanyEmailDeliveryPanel'
 import { CompanyEmailCampaignsPanel } from './CompanyEmailCampaignsPanel'
 import { CompanyList } from './CompanyList'
@@ -852,6 +853,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onApply={() => { setFilters(draft); setPage(0) }}
       onDownload={() => void download(`/projects/${projectId}/companies.csv?${query}`, 'leadhive-companies.csv').catch(e => setError(errorMessage(e)))}
     />
+    {projectId && <PipelineStagesSummary projectId={projectId} compact />}
     {projectId && <FormReadinessPanel key={projectId} projectId={projectId} onOpen={async id => { await open(await api<Company>(`/companies/${id}`)) }} />}
     <CompanyList
       companies={companies}
