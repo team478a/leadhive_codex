@@ -16,6 +16,7 @@ from app.models import (
     Project,
 )
 from app.schema_approval import Proposal
+from app.services.browser_form_analysis import SUPPORTED_FORM_REASONS
 from app.services.browser_form_plan import BrowserFormFieldPlan, BrowserFormPlan, plan_hash
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_choice_groups import inventory as choice_group_inventory
@@ -38,15 +39,7 @@ from app.services.human_approval import (
     payload_hash,
 )
 
-ALLOWED_COMPATIBILITY = {
-    "",
-    "CONTACT_FORM_7",
-    "MULTIPART_OR_FILE",
-    "JAVASCRIPT_CONFIRMATION",
-    "ASYNC_SUBMISSION",
-    "NO_NATIVE_SUBMIT",
-    "CUSTOM_SUBMIT_HANDLER",
-}
+ALLOWED_COMPATIBILITY = {"", *SUPPORTED_FORM_REASONS}
 
 
 def browser_profile_eligible(db, company: Company, profile: FormProfile) -> bool:

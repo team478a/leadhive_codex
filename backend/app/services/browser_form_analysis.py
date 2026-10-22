@@ -10,10 +10,10 @@ from uuid import UUID
 
 from bs4 import BeautifulSoup
 from bs4.element import Tag
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, case, func, or_, select
 from sqlalchemy.orm import Session
 
-from app.models import Company, FormProfile
+from app.models import Company, FormDmReadinessResult, FormProfile, OperationJob
 from app.services.contact_discovery import (
     custom_contact_containers,
     embedded_form_providers,
@@ -39,12 +39,38 @@ from app.services.pinned_read_transport import TransportBlocked
 from app.services.pinned_read_transport import target as validate_target
 
 MAX_BROWSER_ANALYSIS_TARGETS = 100
-SUPPORTED_FORM_REASONS = {
-    "CONTACT_FORM_7",
-    "MULTIPART_OR_FILE",
+BROWSER_DELIVERY_COMPATIBILITY = frozenset(
+    {
+        "CONTACT_FORM_7",
+        "MULTIPART_OR_FILE",
+        "JAVASCRIPT_CONFIRMATION",
+        "ASYNC_SUBMISSION",
+        "NO_NATIVE_SUBMIT",
+        "CUSTOM_SUBMIT_HANDLER",
+    }
+)
+SUPPORTED_FORM_REASONS = BROWSER_DELIVERY_COMPATIBILITY
+BLOCKED_READINESS_REASONS = frozenset(
+    {
+        "CONTACT_PROHIBITED",
+        "NON_COMPANY_SUSPECTED",
+        "ALREADY_SENT_OR_UNKNOWN",
+        "RESERVATION_FORM",
+        "CAPTCHA_VISIBLE",
+        "CAPTCHA_INVISIBLE",
+        "CAPTCHA_LEGACY",
+    }
+)
+PRIORITY_READINESS_REASONS = (
+    "CF7",
+    "MULTIPART_ONLY",
+    "CONFIRMATION_PAGE",
+    "JS_SUBMIT",
     "JAVASCRIPT_CONFIRMATION",
-    "ASYNC_SUBMISSION",
-}
+    "NO_NATIVE_SUBMIT",
+    "CUSTOM_SUBMIT_HANDLER",
+    "CONFIRMATION_UNKNOWN",
+)
 EMBED_UNVERIFIED_MARKER = "外部埋め込みを検出しました"
 NO_FORM_MARKER = "送信可能なフォームが見つかりません"
 CONTACT_PATH_PATTERN = (
@@ -103,12 +129,17 @@ def _eligible_profile_filter():
         FormProfile.form_found.is_(False),
         FormProfile.error_message == "",
         or_(
+            FormProfile.captcha_type == "CAPTCHA_NONE",
+            FormProfile.captcha_type.is_(None),
+        ),
+        or_(
             FormProfile.review_reason.ilike(f"%{EMBED_UNVERIFIED_MARKER}%"),
             and_(FormProfile.review_reason.ilike(f"%{NO_FORM_MARKER}%"), known_contact_page),
         ),
     )
     supported_form = and_(
         FormProfile.form_found.is_(True),
+        FormProfile.captcha_type == "CAPTCHA_NONE",
         or_(
             FormProfile.compatibility_reason_code.in_(SUPPORTED_FORM_REASONS),
             FormProfile.confirmation_page.is_(True),
@@ -121,22 +152,31 @@ def _eligible_profile_filter():
     )
 
 
-def eligible_no_form_profile(company: Company, profile: FormProfile) -> bool:
-    reason = profile.review_reason or ""
-    if profile.form_found or profile.error_message:
-        return False
-    if EMBED_UNVERIFIED_MARKER in reason:
-        return True
-    return NO_FORM_MARKER in reason and (
-        company.contact_url == profile.form_url or is_contact_path(profile.form_url or "")
+def _latest_readiness_job_id(db: Session, project_id: UUID) -> UUID | None:
+    return db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.status == "completed",
+        )
+        .order_by(OperationJob.finished_at.desc().nullslast(), OperationJob.id.desc())
+        .limit(1)
     )
 
 
-def select_browser_analysis_targets(
-    db: Session, project_id: UUID, *, limit: int = MAX_BROWSER_ANALYSIS_TARGETS
-) -> list[BrowserAnalysisTarget]:
-    if limit < 1 or limit > MAX_BROWSER_ANALYSIS_TARGETS:
-        raise ValueError("Browser analysis target limit must be between 1 and 100.")
+def _readiness_blocked_filter():
+    return or_(
+        FormDmReadinessResult.primary_reason.in_(BLOCKED_READINESS_REASONS),
+        *[
+            FormDmReadinessResult.secondary_reasons.contains([reason])
+            for reason in BLOCKED_READINESS_REASONS
+        ],
+    )
+
+
+def _candidate_rows(db: Session, project_id: UUID):
+    latest_job_id = _latest_readiness_job_id(db, project_id)
     ranked = (
         select(
             FormProfile.id.label("profile_id"),
@@ -162,7 +202,7 @@ def select_browser_analysis_targets(
         )
         .subquery()
     )
-    rows = db.execute(
+    query = (
         select(Company, FormProfile)
         .join(ranked, (ranked.c.company_id == Company.id) & (ranked.c.position == 1))
         .join(FormProfile, FormProfile.id == ranked.c.profile_id)
@@ -173,9 +213,50 @@ def select_browser_analysis_targets(
             Company.website_url.ilike("https://%"),
             _eligible_profile_filter(),
         )
-        .order_by(Company.company_name, Company.id)
-        .limit(limit * 10)
-    ).all()
+    )
+    if latest_job_id is None:
+        return query.order_by(Company.company_name, Company.id)
+    query = query.outerjoin(
+        FormDmReadinessResult,
+        and_(
+            FormDmReadinessResult.job_id == latest_job_id,
+            FormDmReadinessResult.company_id == Company.id,
+        ),
+    ).where(
+        or_(
+            FormDmReadinessResult.id.is_(None),
+            ~_readiness_blocked_filter(),
+        )
+    )
+    priority = case(
+        (FormDmReadinessResult.primary_reason.in_(PRIORITY_READINESS_REASONS), 0),
+        else_=1,
+    )
+    return query.order_by(priority, Company.company_name, Company.id)
+
+
+def count_browser_analysis_targets(db: Session, project_id: UUID) -> int:
+    query = _candidate_rows(db, project_id).order_by(None).subquery()
+    return db.scalar(select(func.count()).select_from(query)) or 0
+
+
+def eligible_no_form_profile(company: Company, profile: FormProfile) -> bool:
+    reason = profile.review_reason or ""
+    if profile.form_found or profile.error_message:
+        return False
+    if EMBED_UNVERIFIED_MARKER in reason:
+        return True
+    return NO_FORM_MARKER in reason and (
+        company.contact_url == profile.form_url or is_contact_path(profile.form_url or "")
+    )
+
+
+def select_browser_analysis_targets(
+    db: Session, project_id: UUID, *, limit: int = MAX_BROWSER_ANALYSIS_TARGETS
+) -> list[BrowserAnalysisTarget]:
+    if limit < 1 or limit > MAX_BROWSER_ANALYSIS_TARGETS:
+        raise ValueError("Browser analysis target limit must be between 1 and 100.")
+    rows = db.execute(_candidate_rows(db, project_id).limit(limit * 10)).all()
     targets: list[BrowserAnalysisTarget] = []
     for company, profile in rows:
         target = _target_url(company, profile)
