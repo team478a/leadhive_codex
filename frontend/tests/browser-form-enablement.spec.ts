@@ -25,6 +25,17 @@ async function openReadiness(page: Page, flags: BrowserFlags) {
   } }))
   await page.route(`**/api/projects/${fixture.project_id}/outreach-templates`, route => route.fulfill({ json: [] }))
   await page.route(`**/api/projects/${fixture.project_id}/company-list?**`, route => route.fulfill({ json: { items: [], total: 0, offset: 0, limit: 20 } }))
+  await page.route(`**/api/projects/${fixture.project_id}/pipeline-stages/summary`, route => route.fulfill({ json: {
+    total_companies: 7,
+    generated_at: new Date().toISOString(),
+    readiness_aggregated_at: new Date().toISOString(),
+    stages: [
+      { order: 10, stage: 'FORM_NOT_FOUND', label: 'フォーム未発見', count: 2 },
+      { order: 12, stage: 'BLOCKED_AT_READINESS', label: '送信可否で停止', count: 5 },
+    ],
+    missing_form_reasons: [{ reason: 'NO_CONTACT_PAGE', label: '問い合わせページ未到達', count: 2 }],
+    readiness_reasons: [{ reason: 'CF7', label: 'Contact Form 7', count: 5 }],
+  } }))
   await page.route(`**/api/projects/${fixture.project_id}/form-dm-readiness**`, route => route.fulfill({ json: {
     counts: { BROWSER_READY: 3 }, total: 3, offset: 0, limit: 20, items: [],
     last_aggregated_at: new Date().toISOString(), last_aggregated_by_commit: 'abc1234',
@@ -55,6 +66,10 @@ async function openReadiness(page: Page, flags: BrowserFlags) {
 
 test('shows browser analysis disabled state and remaining targets', async ({ page }) => {
   const panel = await openReadiness(page, { analysis: false, dryRun: false, delivery: false })
+  const pipeline = panel.locator('[aria-label="全体の流れ"]')
+  await expect(pipeline.getByText('全体の流れ（全7社）')).toBeVisible()
+  await expect(pipeline.getByText('フォーム未発見：2社')).toBeVisible()
+  await expect(pipeline.getByRole('button', { name: '段階CSVをダウンロード' })).toBeVisible()
   await expect(panel.getByText('ブラウザー解析の残り：42社（1回に最大100社）')).toBeVisible()
   await expect(panel.getByText('ブラウザー解析は管理者の設定でOFFです。実際の動作にはWorker側の設定も必要です。')).toBeVisible()
 })
