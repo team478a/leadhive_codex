@@ -33,6 +33,7 @@ from app.services.browser_form_preparation import browser_profile_eligible
 from app.services.collection_feedback import latest_company_feedback
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_approval_preparation import preparation
+from app.services.form_profile_ranking import ranked_form_profiles
 from app.services.non_company_suspected import display_name
 from app.services.non_company_suspected import evidence as non_company_evidence
 from app.services.operations import add_operation_job
@@ -307,25 +308,7 @@ def classify_profile(db: Session, company: Company, profile: FormProfile) -> dic
 
 
 def _ranked_form_rows(project_id: UUID):
-    ranked = (
-        select(
-            FormProfile.id.label("profile_id"),
-            FormProfile.company_id.label("company_id"),
-            func.row_number()
-            .over(
-                partition_by=FormProfile.company_id,
-                order_by=(
-                    FormProfile.is_primary.desc(),
-                    FormProfile.updated_at.desc(),
-                    FormProfile.id,
-                ),
-            )
-            .label("position"),
-        )
-        .join(Company, Company.id == FormProfile.company_id)
-        .where(Company.project_id == project_id)
-        .subquery()
-    )
+    ranked = ranked_form_profiles(project_id)
     return (
         select(Company, FormProfile)
         .join(ranked, (ranked.c.company_id == Company.id) & (ranked.c.position == 1))
