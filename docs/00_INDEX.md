@@ -59,6 +59,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 ## 実装・運用記録
 
+- `218_PIPELINE_STAGE_CSV.md`：全企業を1社1行で分類する段階CSVと段階別件数。
+
 - `BROWSER_SEND_ENABLEMENT_IMPLEMENTATION.md`：ブラウザー解析対象の安全な絞り込み、残件表示、解析後の送信可否自動再集計。
 - `purpose-based-list-engine-report.md`: 用途・目的別条件収集のStage 0監査と段階的変更案。
 - `external-presence-search-control-report.md`: 発見済み外部掲載・SNS情報の保存と、媒体・カテゴリ別追加検索の制御。一般Condition Modelとの統合は次工程。
