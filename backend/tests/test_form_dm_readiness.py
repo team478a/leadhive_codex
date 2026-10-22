@@ -1,9 +1,11 @@
 from datetime import datetime, timezone
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
 
+from app.form_dm_readiness_routes import READINESS_CSV_FIELDS, readiness_csv_rows
 from app.models import Company, FormProfile, FormProfileField, Project, ProjectMember
 from tests.test_approval_foundation import workspace as workspace  # noqa: F401
 from tests.test_form_approval_preparation import form_source as form_source
@@ -55,6 +57,21 @@ def test_form_dm_readiness_is_read_only_and_exports_csv(auth, form_source, db):
     assert exported.content.startswith(b"\xef\xbb\xbf")
     assert "company_name" in exported.text
     assert company_name in exported.text
+
+
+def test_form_dm_readiness_csv_selects_only_output_columns_and_streams_in_batches():
+    fake_db = Mock()
+    fake_db.execute.return_value = []
+    generator = readiness_csv_rows(
+        fake_db,
+        snapshot=object(),
+        result_filters=[FormProfile.id == uuid4()],
+    )
+    assert next(generator).startswith("\ufeffcompany_id,company_name,form_url")
+    assert list(generator) == []
+    statement = fake_db.execute.call_args.args[0]
+    assert [column.key for column in statement.selected_columns] == list(READINESS_CSV_FIELDS)
+    assert statement.get_execution_options()["yield_per"] == 200
 
 
 def test_form_dm_readiness_reports_browser_feature_flags(auth, form_source, db, monkeypatch):
