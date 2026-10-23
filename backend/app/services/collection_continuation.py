@@ -12,6 +12,8 @@ def enqueue_continuation(
     db: Session, source: OperationJob, *, automatic: bool
 ) -> OperationJob | None:
     """Resume a completed, budget-limited collection without resetting its cursors."""
+    if (source.payload or {}).get("source") == "google_places":
+        return None
     progress = dict((source.payload or {}).get("collection_progress") or {})
     plan = (source.payload or {}).get("query_plan") or {}
     if (

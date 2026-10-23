@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, download, errorMessage } from './api'
 import { CompanyActivitiesPanel } from './CompanyActivitiesPanel'
-import { CompanyCodexFormQueue } from './CompanyCodexFormQueue'
 import { CompanyContactsPanel } from './CompanyContactsPanel'
 import { CompanyDealsPanel } from './CompanyDealsPanel'
 import { CompanyDetailsPanel } from './CompanyDetailsPanel'
@@ -29,7 +28,7 @@ import { CompanySavedFiltersPanel } from './CompanySavedFiltersPanel'
 import { CompanyAiReviewPanel, CompanyExperimentPanel } from './CompanyOptimizationPanels'
 import { companyQueryString, defaultCompanyFilters, emptyContact } from './companyPageShared'
 import { approvedCodexFormTask } from './formCodexTask'
-import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormCodexTask, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAnalysisLog, FormAssist, FormDelivery, FormMappedKey, FormPreview, FormProfile, FormProfileField, FormProfileSummary, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ProjectMember, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
+import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormDeliveryBatch, OutreachExperiment, OutreachExperimentResult, AnalysisRefreshSchedule, AssigneeAnalytics, Company, CompanyFilterValues, CompanyPage, ContactPerson, DataQuality, DuplicateCandidate, EmailDelivery, FollowupTask, FormAnalysisLog, FormAssist, FormDelivery, FormMappedKey, FormPreview, FormProfile, FormProfileField, FormProfileSummary, OperationJob, OutreachChannel, OutreachDraft, OutreachDraftApproval, OutreachQueueItem, OutreachTemplate, Project, ProjectMember, ReplyQueueItem, SalesStatus, SavedCompanyFilter } from './types'
 
 type Filters = CompanyFilterValues
 
@@ -117,9 +116,6 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   const [emailCampaignFollowupDays, setEmailCampaignFollowupDays] = useState(0)
   const [emailCampaignConfirmed, setEmailCampaignConfirmed] = useState(false)
   const [formBatches, setFormBatches] = useState<FormDeliveryBatch[]>([])
-  const [formCodexTasks, setFormCodexTasks] = useState<FormCodexTask[]>([])
-  const [formBatchTemplateId, setFormBatchTemplateId] = useState('')
-  const [formBatchConfirmed, setFormBatchConfirmed] = useState(false)
   const [formProfileSummaries, setFormProfileSummaries] = useState<Record<string, FormProfileSummary>>({})
   const [formProfiles, setFormProfiles] = useState<FormProfile[]>([])
   const [formAnalysisLogs, setFormAnalysisLogs] = useState<FormAnalysisLog[]>([])
@@ -153,11 +149,11 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
   const query = useMemo(() => companyQueryString(filters, page), [filters, page])
   const reload = useCallback(async () => {
     const requestId = ++reloadRequestId.current
-    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setFormCodexTasks([]); setEmailCampaigns([]); setFormProfileSummaries({}); setDealPipeline(null); return }
+    if (!projectId) { setCompanies([]); setSavedFilters([]); setAssigneeAnalytics([]); setOutreachQueue([]); setFollowupTasks([]); setReplyQueue([]); setFormBatches([]); setEmailCampaigns([]); setFormProfileSummaries({}); setDealPipeline(null); return }
     const result = await api<CompanyPage>(`/projects/${projectId}/company-list?${query}`)
     if (requestId !== reloadRequestId.current) return
     setCompanies(result.items); setTotal(result.total); setChecked([])
-    const [nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextFormCodexTasks, nextDealPipeline, nextFormProfileSummaries] = await Promise.all([
+    const [nextQuality, nextDuplicates, nextSavedFilters, nextAssigneeAnalytics, nextOutreachQueue, nextFollowupTasks, nextReplyQueue, nextRefreshSchedule, nextFormBatches, nextOutreachTemplates, nextEmailCampaigns, nextDealPipeline, nextFormProfileSummaries] = await Promise.all([
       api<DataQuality>(`/projects/${projectId}/data-quality?stale_days=${staleDays}`),
       api<DuplicateCandidate[]>(`/projects/${projectId}/duplicate-candidates`),
       api<SavedCompanyFilter[]>(`/projects/${projectId}/saved-company-filters`),
@@ -169,7 +165,6 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       api<FormDeliveryBatch[]>(`/projects/${projectId}/form-delivery-batches`),
       api<OutreachTemplate[]>(`/projects/${projectId}/outreach-templates`),
       api<EmailCampaign[]>(`/projects/${projectId}/email-campaigns`),
-      api<FormCodexTask[]>(`/projects/${projectId}/form-codex-queue`),
       api<DealPipeline>(`/projects/${projectId}/deal-pipeline`),
       api<FormProfileSummary[]>(`/projects/${projectId}/form-profiles/summary`),
     ])
@@ -177,7 +172,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     setQuality(nextQuality)
     setDuplicates(nextDuplicates); setSavedFilters(nextSavedFilters)
     setAssigneeAnalytics(nextAssigneeAnalytics); setOutreachQueue(nextOutreachQueue); setFollowupTasks(nextFollowupTasks); setReplyQueue(nextReplyQueue); setChecked([])
-    setFormBatches(nextFormBatches); setFormCodexTasks(nextFormCodexTasks); setOutreachTemplates(nextOutreachTemplates); setEmailCampaigns(nextEmailCampaigns); setDealPipeline(nextDealPipeline); setRefreshSchedule(nextRefreshSchedule)
+    setFormBatches(nextFormBatches); setOutreachTemplates(nextOutreachTemplates); setEmailCampaigns(nextEmailCampaigns); setDealPipeline(nextDealPipeline); setRefreshSchedule(nextRefreshSchedule)
     setFormProfileSummaries(Object.fromEntries(nextFormProfileSummaries.map(item => [item.company_id, item])))
     if (nextRefreshSchedule) {
       setRefreshInterval(nextRefreshSchedule.interval_hours)
@@ -638,58 +633,6 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     try { const updated = await api<EmailCampaign>(`/email-campaigns/${campaign.id}/${action}`, 'POST'); setEmailCampaigns(emailCampaigns.map(item => item.id === updated.id ? updated : item)); setNotice(action === 'pause' ? 'メールキャンペーンを停止しました。' : 'メールキャンペーンを再開しました。') }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
-  async function createFormBatch() {
-    if (!projectId || !formBatchTemplateId || checked.length === 0) return
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const batch = await api<FormDeliveryBatch>(`/projects/${projectId}/form-delivery-batches`, 'POST', { template_id: formBatchTemplateId, company_ids: checked })
-      setFormBatches([batch, ...formBatches]); setFormBatchConfirmed(false); setNotice(`一括フォームDMを${batch.items.length}社分作成しました。送信前に対象を確認してください。`)
-    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
-  }
-  async function executeFormBatch(batch: FormDeliveryBatch) {
-    if (!formBatchConfirmed) return
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const updated = await api<FormDeliveryBatch>(`/form-delivery-batches/${batch.id}/execute`, 'POST', { confirmed: true, limit: 20 })
-      setFormBatches(formBatches.map(item => item.id === updated.id ? updated : item)); setFormBatchConfirmed(false)
-      const counts = updated.items.reduce<Record<string, number>>((result, item) => ({ ...result, [item.status]: (result[item.status] ?? 0) + 1 }), {})
-      setNotice(`一括フォームDMを処理しました。送信済み ${counts.submitted ?? 0} / 手動対応 ${counts.manual_required ?? 0} / 残り ${counts.queued ?? 0}`)
-    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
-  }
-  async function retryFormBatchItem(itemId: string) {
-    if (!window.confirm('この失敗したフォーム送信を、次回の一括実行対象に戻しますか？')) return
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const updated = await api<FormDeliveryBatch>(`/form-delivery-batch-items/${itemId}/retry`, 'POST', { confirmed: true })
-      setFormBatches(formBatches.map(item => item.id === updated.id ? updated : item))
-      setNotice('フォーム送信を再試行待ちに戻しました。実行前に改めて承認してください。')
-    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
-  }
-  async function copyBatchCodexTask(task: FormCodexTask) {
-    if (!window.confirm(`「${task.company_name}」のフォームへCodexが入力し、最終送信を一度だけ実行することを承認しますか？`)) return
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const updated = task.codex_status === 'open'
-        ? await api<FormCodexTask>(`/form-codex-queue/${task.item_id}`, 'POST', { status: 'running' })
-        : task
-      setFormCodexTasks(formCodexTasks.map(item => item.item_id === updated.item_id ? updated : item))
-      await navigator.clipboard.writeText(approvedCodexFormTask(updated))
-      setNotice(`${task.company_name}の送信承認済みCodex Skillタスクをコピーし、作業中にしました。`)
-    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
-  }
-
-  async function updateFormCodexTask(task: FormCodexTask, status: 'running' | 'submitted' | 'failed') {
-    const completed = status === 'submitted' || status === 'failed'
-    if (completed && !window.confirm(status === 'submitted' ? 'Codex上で送信完了を確認しましたか？' : 'Codex上で送信失敗を確認しましたか？')) return
-    setBusy(true); setError(''); setNotice('')
-    try {
-      const updated = await api<FormCodexTask>(`/form-codex-queue/${task.item_id}`, 'POST', { status, confirmed: completed })
-      setFormCodexTasks(formCodexTasks.map(item => item.item_id === updated.item_id ? updated : item).filter(item => item.codex_status === 'open' || item.codex_status === 'running'))
-      await reload()
-      setNotice(status === 'running' ? 'Codex支援フォームを作業中にしました。' : status === 'submitted' ? 'Codex支援フォームの送信完了を記録しました。' : 'Codex支援フォームの失敗を記録しました。')
-    } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
-  }
-
   async function cancelFormBatch(batch: FormDeliveryBatch) {
     setBusy(true); setError('')
     try { const updated = await api<FormDeliveryBatch>(`/form-delivery-batches/${batch.id}/cancel`, 'POST'); setFormBatches(formBatches.map(item => item.id === updated.id ? updated : item)); setNotice('一括フォームDMを中止しました。') }
@@ -1064,8 +1007,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onCreate={() => void createEmailCampaign()}
       onChangeCampaign={(campaign, action) => void changeEmailCampaign(campaign, action)}
     />
-    <CompanyCodexFormQueue items={formCodexTasks} busy={busy} onCopy={task => void copyBatchCodexTask(task)} onUpdate={(task, status) => void updateFormCodexTask(task, status)} />
-    <CompanyFormBatchesPanel selectedCount={checked.length} templates={outreachTemplates} templateId={formBatchTemplateId} batches={formBatches} confirmed={formBatchConfirmed} busy={busy} onTemplateChange={setFormBatchTemplateId} onConfirmedChange={setFormBatchConfirmed} onCreate={() => void createFormBatch()} onExecute={batch => void executeFormBatch(batch)} onCancel={batch => void cancelFormBatch(batch)} onRetry={itemId => void retryFormBatchItem(itemId)} />
+    <CompanyFormBatchesPanel batches={formBatches} busy={busy} onCancel={batch => void cancelFormBatch(batch)} />
     <CompanyReplyQueuePanel
       items={replyQueue}
       target={replyTarget}

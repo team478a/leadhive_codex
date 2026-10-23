@@ -1,6 +1,4 @@
-from app import collection_routes
 from app.models import Company, OutreachDraft
-from app.services.collection import Candidate
 
 
 def make_company(auth, db):
@@ -96,16 +94,17 @@ def test_ai_review_deals_and_ab_experiment(auth, db):
     assert results.status_code == 200 and [item["variant"] for item in results.json()] == ["A", "B"]
 
 
-def test_gbizinfo_collection_source(auth, db, monkeypatch):
+def test_gbizinfo_background_collection_source_remains_available(auth, db):
     project, _ = make_company(auth, db)
-    monkeypatch.setattr(
-        collection_routes,
-        "search_gbizinfo",
-        lambda *_args: [Candidate("gBiz株式会社", address="東京都")],
-    )
     response = auth.post(
-        f"/api/projects/{project['id']}/collection-jobs/search",
-        json={"source": "gbizinfo", "keywords": ["gBiz"], "region": "東京都", "max_results": 10},
+        f"/api/projects/{project['id']}/operations",
+        json={
+            "operation_type": "collect_search",
+            "source": "gbizinfo",
+            "keywords": ["gBiz"],
+            "region": "東京都",
+            "max_results": 10,
+        },
     )
-    assert response.status_code == 201
-    assert response.json()[0]["source"] == "gbizinfo" and response.json()[0]["saved_count"] == 1
+    assert response.status_code == 202
+    assert response.json()["status"] == "queued"

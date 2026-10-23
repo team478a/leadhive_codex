@@ -44,6 +44,7 @@ from app.services.collection import (
 from app.services.collection_jobs import fail_job, save_candidates, start_job
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.email_delivery import EmailDeliveryError, email_delivery_limits, send_email
+from app.services.feature_retirement import GOOGLE_PLACES_RETIREMENT_MESSAGE
 from app.services.form_intelligence import analyze_company_forms
 from app.services.inbound_email import sync_inbound_mail
 from app.services.operations import add_operation_job, refresh_company_ids
@@ -437,6 +438,10 @@ def enqueue_due_schedules(db) -> int:
     enqueued = 0
     for schedule in schedules:
         schedule.next_run_at = now + timedelta(hours=schedule.interval_hours)
+        if schedule.source == "google_places":
+            schedule.active = False
+            schedule.last_error = GOOGLE_PLACES_RETIREMENT_MESSAGE
+            continue
         active = db.scalar(
             select(OperationJob.id).where(
                 OperationJob.project_id == schedule.project_id,

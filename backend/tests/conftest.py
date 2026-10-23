@@ -77,7 +77,9 @@ def auth(client, users):
 @pytest.fixture(autouse=True)
 def legacy_delivery_test_mode(monkeypatch):
     # Existing executor tests explicitly opt in; production/default remains OFF.
+    from app import form_batch_routes
     from app.config import settings
 
     monkeypatch.setattr(settings, "outbound_enabled", True)
     monkeypatch.setattr(settings, "legacy_form_delivery_enabled", True)
+    monkeypatch.setattr(form_batch_routes, "reject_legacy_form_entry", lambda: None)

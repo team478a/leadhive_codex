@@ -1,8 +1,8 @@
 from contextlib import nullcontext
 
-from app import worker
+from app import form_batch_routes, worker
 from app.models import ApplicationSettings, Company, FormProfile, FormProfileField, SuppressionEntry
-from app.services import bulk_form_delivery, form_profile_delivery
+from app.services import bulk_form_delivery, feature_retirement, form_profile_delivery
 from app.services.form_delivery import FormField, FormPreview, FormSubmissionResult
 
 
@@ -256,3 +256,44 @@ def test_codex_queue_tracks_work_and_result(auth, db, monkeypatch):
     assert submitted.status_code == 200 and submitted.json()["codex_status"] == "submitted"
     item = auth.get(f"/api/projects/{project['id']}/form-delivery-batches").json()[0]["items"][0]
     assert item["status"] == "submitted" and item["form_delivery_id"]
+
+
+def test_legacy_form_entrypoints_are_retired_but_history_can_be_read_and_cancelled(
+    auth, db, monkeypatch
+):
+    project, companies, template = make_project_and_companies(auth, db)
+    batch = auth.post(
+        f"/api/projects/{project['id']}/form-delivery-batches",
+        json={"template_id": template["id"], "company_ids": [str(companies[0].id)]},
+    ).json()
+    item_id = batch["items"][0]["id"]
+    monkeypatch.setattr(
+        form_batch_routes,
+        "reject_legacy_form_entry",
+        feature_retirement.reject_legacy_form_entry,
+    )
+    assert auth.get(f"/api/projects/{project['id']}/form-delivery-batches").status_code == 200
+    assert auth.get(f"/api/projects/{project['id']}/form-codex-queue").status_code == 410
+    assert (
+        auth.post(
+            f"/api/projects/{project['id']}/form-delivery-batches",
+            json={"template_id": template["id"], "company_ids": [str(companies[0].id)]},
+        ).status_code
+        == 410
+    )
+    assert (
+        auth.post(
+            f"/api/form-delivery-batches/{batch['id']}/execute", json={"confirmed": True}
+        ).status_code
+        == 410
+    )
+    assert (
+        auth.post(
+            f"/api/form-delivery-batch-items/{item_id}/retry", json={"confirmed": True}
+        ).status_code
+        == 410
+    )
+    assert (
+        auth.post(f"/api/form-codex-queue/{item_id}", json={"status": "running"}).status_code == 410
+    )
+    assert auth.post(f"/api/form-delivery-batches/{batch['id']}/cancel").status_code == 200
