@@ -92,8 +92,8 @@ def test_bound_collection_forces_off_and_limits_results_to_job(auth, db, monkeyp
     report = auth.get(f"/api/operations/{job_id}/collection-conditions").json()
     assert report["condition_version"] == 1 and report["total_candidates"] == 2
     assert report["page_counts"] == {"MATCH": 1, "NO_MATCH": 0, "REVIEW_REQUIRED": 1}
-    assert len(extra) == 1
-    assert db.scalar(select(func.count()).select_from(ExternalPresenceSearch)) == 1
+    assert len(extra) == 2
+    assert db.scalar(select(func.count()).select_from(ExternalPresenceSearch)) == 2
     assert not settings.outbound_enabled
     assert (
         auth.get(f"/api/operations/{job_id}/collection-conditions?offset=2").json()[
@@ -142,14 +142,16 @@ def test_hard_failure_skips_optional_investigation(auth, db, monkeypatch, prepar
     assert db.scalar(select(func.count()).select_from(Company)) == 1  # Preserve the candidate.
 
 
-def test_zero_budget_stays_review_no_external_verification(auth, monkeypatch, prepared):
+def test_zero_optional_budget_still_verifies_required_platform(auth, monkeypatch, prepared):
     project, revision = prepared
     response = enqueue(auth, project, revision, {"presence_search": {"max_extra_searches": 0}})
     monkeypatch.setattr(worker, "search_serper", primary)
-    monkeypatch.setattr(collection, "search_serper", lambda *_: pytest.fail("No extra budget"))
+    calls = []
+    monkeypatch.setattr(collection, "search_serper", lambda *args: calls.append(args) or [])
     assert worker.run_once()
     result = auth.get(f"/api/operations/{response.json()['id']}/collection-conditions").json()
-    assert result["page_counts"]["REVIEW_REQUIRED"] == 1
+    assert len(calls) == 1
+    assert result["page_counts"]["NO_MATCH"] == 1
 
 
 def test_cancel_stops_extra_search_preserves_partial_scope(auth, db, monkeypatch, prepared):

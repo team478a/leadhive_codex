@@ -11,7 +11,7 @@ export type PresencePlan = {
   timeout_seconds: number
 }
 export const defaultPresencePlan: PresencePlan = {
-  modes: {}, required_platforms: [], max_extra_searches: 5, timeout_seconds: 60,
+  modes: {}, required_platforms: [], max_extra_searches: 0, timeout_seconds: 60,
 }
 export const presenceGroups: Record<string, string[]> = {
   SNS: ['INSTAGRAM', 'X', 'FACEBOOK', 'YOUTUBE', 'TIKTOK'],

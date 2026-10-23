@@ -1,5 +1,6 @@
 from app.schema_collection import (
     AiAnalysisInput,
+    AiAnalysisTargetsOut,
     CollectionJobOut,
     CompanyAiAnalysisInput,
     CompanyAnalysisInput,
@@ -154,6 +155,7 @@ __all__ = [
     "WebAnalysisInput",
     "CompanyAnalysisInput",
     "AiAnalysisInput",
+    "AiAnalysisTargetsOut",
     "CompanyAiAnalysisInput",
     "CompanySalesInput",
     "CompanyEditInput",

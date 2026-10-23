@@ -91,6 +91,7 @@ class OperationJobInput(Input):
         "extract_articles",
     ]
     company_ids: list[UUID] = Field(default_factory=list, max_length=100)
+    ai_target_scope: Literal["eligible", "all"] = "eligible"
     source: Literal["serper", "google_places", "gbizinfo"] | None = None
     keywords: list[Keyword] = Field(default_factory=list, max_length=20)
     region: str = Field(default="", max_length=500)

@@ -314,7 +314,9 @@ def extra_searches(
                 or job.created_at
             )
             elapsed = (datetime.now(timezone.utc) - started).total_seconds()
-            if count >= plan.max_extra_searches or elapsed >= plan.timeout_seconds:
+            if (
+                mode != "REQUIRED" and count >= plan.max_extra_searches
+            ) or elapsed >= plan.timeout_seconds:
                 set_status(db, company, platform, "ERROR", reason="SEARCH_BUDGET_EXHAUSTED")
                 db.commit()
                 continue
