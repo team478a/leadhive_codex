@@ -69,6 +69,7 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
     const project = { id: 'project-1', project_name: '収集済みリスト', target_profile_id: profile.id, region: '大阪府', status: 'active' }
     let status = ''
     let posts = 0
+    let operationPayload: Record<string, unknown> = {}
     let failRefresh = false
     const operation = () => ({ id: 'analysis-1', project_id: project.id, operation_type: kind, status, processed_count: 0, total_count: 2, success_count: 0, failed_count: 0, attempt_count: 0 })
     await page.addInitScript(email => localStorage.setItem(`leadhive:onboarding:${email}`, 'dismissed'), email)
@@ -85,11 +86,12 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
         saved: 1, webCompleted: 0, webPending: kind === 'web_analysis' ? 1 : 0,
         webFailed: 0, aiCompleted: 0, aiPending: 1,
       }
+      else if (path.endsWith('/ai-analysis/targets')) data = { eligible_count: 1, all_count: 2 }
       else if (path.endsWith('/form-readiness')) data = { counts: { unanalyzed: 0 }, company_total: 1 }
       else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', company_name: 'カフェ', source: 'serper', website_url: 'https://example.test', analysis_status: kind === 'ai_analysis' ? 'completed' : 'pending', ai_status: 'pending' }], total: 1 }
       else if (path.endsWith('/companies')) data = [{ id: 'company-1', company_name: 'カフェ', source: 'serper', website_url: 'https://example.test', analysis_status: kind === 'ai_analysis' ? 'completed' : 'pending', ai_status: 'pending' }]
       else if (path.endsWith('/operations') && route.request().method() === 'POST') {
-        posts++; status = 'queued'; data = operation()
+        posts++; operationPayload = route.request().postDataJSON(); status = 'queued'; data = operation()
       } else if (path.endsWith('/operations')) {
         if (failRefresh) { await route.fulfill({ status: 503, json: { detail: '更新に失敗しました。' } }); return }
         data = status ? [operation()] : []
@@ -109,11 +111,19 @@ for (const kind of ['web_analysis', 'ai_analysis'] as const) {
     const running = kind === 'web_analysis' ? 'サイト解析中…' : 'AI判定中…'
     const startPanel = page.getByRole('region', { name: '解析開始', exact: true })
     await expect(startPanel.getByRole('button', { name: idle, exact: true })).toBeVisible()
+    if (kind === 'ai_analysis') {
+      const targets = page.getByLabel('AI判定対象')
+      await expect(targets).toContainText('AI判定対象：1社')
+      await targets.getByText('詳細設定', { exact: true }).click()
+      await targets.getByRole('checkbox').check()
+      await expect(targets).toContainText('AI判定対象：2社')
+    }
     expect(await page.getByRole('button', { name: idle, exact: true }).evaluate(button => {
       const progress = [...document.querySelectorAll('h2')].find(h => h.textContent === 'バックグラウンド処理')
       return !!progress && !!(button.compareDocumentPosition(progress) & Node.DOCUMENT_POSITION_FOLLOWING)
     })).toBeTruthy()
     await page.getByRole('button', { name: idle, exact: true }).click()
+    if (kind === 'ai_analysis') expect(operationPayload.ai_target_scope).toBe('all')
     const active = page.getByRole('button', { name: queued, exact: true })
     await expect(active).toBeDisabled()
     await expect(active).toHaveClass(/analysis-active/)

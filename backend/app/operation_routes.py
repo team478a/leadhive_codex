@@ -476,8 +476,11 @@ def enqueue_operation(
             "form_first_query_types",
             "form_first_industry",
             "require_corporate_number",
+            "ai_target_scope",
         },
     )
+    if body.operation_type == "ai_analysis":
+        payload["ai_target_scope"] = body.ai_target_scope
     if body.collection_method == "form_first":
         from app.services.form_first_collection import build_form_first_queries
 

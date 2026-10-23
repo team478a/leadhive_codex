@@ -32,7 +32,9 @@ const aiNames = {
 }
 type CompanyAnalysisSummary = { saved: number; webCompleted: number; webPending: number; webFailed: number; aiCompleted: number; aiPending: number }
 type FormAnalysisSummary = { counts: Record<string, number>; company_total: number; analyzed_count: number }
+type AiTargetSummary = { eligible_count: number; all_count: number }
 const emptyAnalysisSummary: CompanyAnalysisSummary = { saved: 0, webCompleted: 0, webPending: 0, webFailed: 0, aiCompleted: 0, aiPending: 0 }
+const emptyAiTargetSummary: AiTargetSummary = { eligible_count: 0, all_count: 0 }
 
 export function CollectionPage({ projects, profiles, initialProjectId, onConfigureTarget, onProjectSelected, mode = 'collection' }: {
   mode?: 'collection' | 'analysis'; projects: Project[]; profiles: Profile[]; initialProjectId: string; onConfigureTarget?: () => void; onProjectSelected?: (id: string) => void
@@ -65,6 +67,8 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [companies, setCompanies] = useState<Company[]>([])
   const [analysisSummary, setAnalysisSummary] = useState(emptyAnalysisSummary)
   const [formAnalysisSummary, setFormAnalysisSummary] = useState<FormAnalysisSummary | null>(null)
+  const [aiTargetSummary, setAiTargetSummary] = useState(emptyAiTargetSummary)
+  const [aiTargetScope, setAiTargetScope] = useState<'eligible' | 'all'>('eligible')
   const [analysisTotal, setAnalysisTotal] = useState(0)
   const [dataLoading, setDataLoading] = useState(true)
   const [analysisPage, setAnalysisPage] = useState(0)
@@ -103,11 +107,12 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const profile = profiles.find(item => item.id === project?.target_profile_id)
   const projectRegion = project?.region
   const analysisCounts = analysisSummary
+  const selectedAiTargetCount = aiTargetScope === 'all' ? aiTargetSummary.all_count : aiTargetSummary.eligible_count
   const suggestedKeywords = useMemo(() => profile?.search_keywords ?? [], [profile])
   const suggestedKeywordText = suggestedKeywords.join('\n')
 
   const reload = useCallback(async (progressOnly = false) => {
-    if (!projectId) { setJobs([]); setCompanies([]); setAnalysisSummary(emptyAnalysisSummary); setAnalysisTotal(0); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); setReviewAnalytics([]); setDataLoading(false); return }
+    if (!projectId) { setJobs([]); setCompanies([]); setAnalysisSummary(emptyAnalysisSummary); setAiTargetSummary(emptyAiTargetSummary); setAnalysisTotal(0); setOperations([]); setSchedules([]); setAnalytics([]); setPerformance([]); setReviewAnalytics([]); setDataLoading(false); return }
     if (!progressOnly && mode === 'analysis') setDataLoading(true)
     const coreLoads: Promise<unknown>[] = [
       api<OperationJob[]>(`/projects/${projectId}/operations?limit=20`).then(next => {
@@ -122,6 +127,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
         setCompanies(nextPage.items); setAnalysisTotal(nextPage.total)
       }))
       coreLoads.push(api<FormAnalysisSummary>(`/projects/${projectId}/form-readiness?category=all&limit=1&offset=0`).then(setFormAnalysisSummary))
+      coreLoads.push(api<AiTargetSummary>(`/projects/${projectId}/ai-analysis/targets`).then(setAiTargetSummary))
     }
     if (mode === 'collection' && !progressOnly) {
       // The screen shows recent jobs only. Loading every historical job/company
@@ -152,7 +158,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     if (serviceFailure) throw serviceFailure.reason
   }, [projectId, mode, analysisPage])
 
-  useEffect(() => { setAnalysisPage(0) }, [projectId])
+  useEffect(() => { setAnalysisPage(0); setAiTargetScope('eligible') }, [projectId])
   useEffect(() => { reload().catch(e => { setDataLoading(false); setError(errorMessage(e)) }) }, [reload])
   useEffect(() => {
     if (!operations.some(job => ['queued', 'running'].includes(job.status))) return
@@ -278,9 +284,9 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
     try {
       if (!companyIds.length) {
         await api<OperationJob>(`/projects/${projectId}/operations`, 'POST', {
-          operation_type: 'ai_analysis', company_ids: [], force: false,
+          operation_type: 'ai_analysis', company_ids: [], force: false, ai_target_scope: aiTargetScope,
         })
-        await reload(); setNotice('AI判定をバックグラウンド処理へ登録しました。'); return
+        await reload(); setNotice(`${selectedAiTargetCount}社のAI判定をバックグラウンド処理へ登録しました。`); return
       }
       const results = await api<Company[]>(`/projects/${projectId}/ai-analysis`, 'POST', {
         company_ids: companyIds, limit: companyIds.length, force: false,
@@ -356,11 +362,22 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
           <button type="button" className={webBusy ? 'analysis-active' : undefined} aria-busy={webBusy} disabled={dataLoading || webBusy || analysisCounts.webPending + analysisCounts.webFailed === 0}
             onClick={() => void analyze()}>{webBusy ? (webJob?.status === 'queued' ? 'サイト解析 待機中…' : 'サイト解析中…') : 'サイト解析を開始'}</button>
-          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={dataLoading || aiBusy || analysisCounts.aiPending === 0}
+          <button type="button" className={aiBusy ? 'analysis-active' : undefined} aria-busy={aiBusy} disabled={dataLoading || aiBusy || selectedAiTargetCount === 0}
             onClick={() => void analyzeAi()}>{aiBusy ? (aiJob?.status === 'queued' ? 'AI判定 待機中…' : 'AI判定中…') : 'AI判定を開始'}</button>
           <button type="button" className={formBusy ? 'analysis-active' : undefined} aria-busy={formBusy}
             disabled={dataLoading || formBusy || analysisCounts.webCompleted === 0 || (formAnalysisSummary?.counts.unanalyzed ?? 0) === 0}
             onClick={() => void analyzeForms()}>{formBusy ? (formJob?.status === 'queued' ? 'サイト解析 待機中…' : 'サイト解析中…') : 'フォームを含むサイト解析'}</button>
+      </div>
+      <div className="mt-4 rounded border p-3" aria-label="AI判定対象">
+        <p className="m-0"><strong>AI判定対象：{selectedAiTargetCount}社</strong>（API利用見込み：最大{selectedAiTargetCount}回）</p>
+        <p className="muted mb-0 mt-2 text-sm">既定では送信可能・フォーム確認待ち、またはメールアドレスがあり連絡禁止でない企業だけを判定します。</p>
+        <details className="mt-2">
+          <summary>詳細設定</summary>
+          <label className="mt-2 flex items-center gap-2">
+            <input type="checkbox" checked={aiTargetScope === 'all'} onChange={event => setAiTargetScope(event.target.checked ? 'all' : 'eligible')} />
+            Web解析済みの未判定企業をすべて対象にする（{aiTargetSummary.all_count}社）
+          </label>
+        </details>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3" aria-label="各解析の目的">
         <article className="rounded border p-3"><strong>1. Web解析</strong><p className="muted mb-0 mt-2 text-sm">公式サイトから事業内容・連絡先を取得します。AI判定とフォーム解析の基礎情報になります。</p></article>

@@ -94,6 +94,12 @@ class AiAnalysisInput(Input):
     company_ids: list[UUID] = Field(default_factory=list, max_length=20)
     limit: int = Field(default=20, ge=1, le=20)
     force: bool = False
+    target_scope: Literal["eligible", "all"] = "eligible"
+
+
+class AiAnalysisTargetsOut(BaseModel):
+    eligible_count: int
+    all_count: int
 
 
 class CompanyAiAnalysisInput(Input):

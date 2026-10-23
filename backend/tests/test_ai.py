@@ -1,6 +1,16 @@
+from datetime import datetime, timezone
 from uuid import uuid4
 
-from app.models import Company, Project, TargetProfile
+from sqlalchemy import select
+
+from app.models import (
+    Company,
+    FormDmReadinessResult,
+    FormProfile,
+    OperationJob,
+    Project,
+    TargetProfile,
+)
 from app.services import ai_analysis
 from app.services.ai import AiAnalysisError, AiUsage, AnalysisDecision, rank_for_score
 
@@ -38,7 +48,11 @@ def make_project(auth, objective="採用支援の提案"):
 
 def make_analyzable_company(auth, db, project_id, url="https://ai.example"):
     auth.post(f"/api/projects/{project_id}/collection-jobs/urls", json={"urls": [url]})
-    data = auth.get(f"/api/projects/{project_id}/companies").json()[0]
+    data = next(
+        item
+        for item in auth.get(f"/api/projects/{project_id}/companies").json()
+        if item["website_url"] == url
+    )
     company = db.get(Company, data["id"])
     company.analysis_status = "completed"
     company.business_summary = "企業向け採用支援サービスを提供"
@@ -129,6 +143,81 @@ def test_batch_ai_analysis_and_access_isolation(auth, users, db, monkeypatch):
     )
     assert auth.post(f"/api/companies/{first['id']}/ai-analysis", json={}).status_code == 404
     assert auth.post(f"/api/projects/{project['id']}/ai-analysis", json={}).status_code == 404
+
+
+def test_ai_default_targets_sendable_review_or_contactable_email(auth, db, monkeypatch):
+    project = make_project(auth)
+    companies = [
+        make_analyzable_company(auth, db, project["id"], f"https://target-{index}.example")
+        for index in range(6)
+    ]
+    rows = [db.get(Company, company["id"]) for company in companies]
+    rows[3].email = "sales@example.com"
+    rows[4].email = "blocked@example.com"
+    rows[4].do_not_contact = True
+    snapshot = OperationJob(
+        project_id=project["id"],
+        operation_type="form_dm_readiness",
+        status="completed",
+        finished_at=datetime.now(timezone.utc),
+    )
+    db.add(snapshot)
+    db.flush()
+    for company, reason, review in (
+        (rows[0], "READY", False),
+        (rows[1], "BROWSER_READY", False),
+        (rows[2], "NEEDS_MAPPING_REVIEW", True),
+    ):
+        profile = db.scalar(select(FormProfile).where(FormProfile.company_id == company.id))
+        if profile is None:
+            profile = FormProfile(company_id=company.id, form_url=company.website_url)
+            db.add(profile)
+            db.flush()
+        db.add(
+            FormDmReadinessResult(
+                job_id=snapshot.id,
+                company_id=company.id,
+                profile_id=profile.id,
+                primary_reason=reason,
+                secondary_reasons=[],
+                review_queue_eligible=review,
+            )
+        )
+    db.commit()
+
+    targets = auth.get(f"/api/projects/{project['id']}/ai-analysis/targets")
+    assert targets.status_code == 200
+    assert targets.json() == {"eligible_count": 4, "all_count": 6}
+
+    provider = FakeProvider(decision(65))
+    monkeypatch.setattr(ai_analysis, "get_ai_provider", lambda: provider)
+    default_run = auth.post(
+        f"/api/projects/{project['id']}/ai-analysis",
+        json={"limit": 20},
+    )
+    assert default_run.status_code == 200
+    assert len(default_run.json()) == 4
+    assert len(provider.contexts) == 4
+
+    all_run = auth.post(
+        f"/api/projects/{project['id']}/ai-analysis",
+        json={"limit": 20, "target_scope": "all"},
+    )
+    assert all_run.status_code == 200
+    assert len(all_run.json()) == 2
+
+
+def test_ai_operation_defaults_to_eligible_scope(auth, db):
+    project = make_project(auth)
+
+    response = auth.post(
+        f"/api/projects/{project['id']}/operations",
+        json={"operation_type": "ai_analysis"},
+    )
+
+    assert response.status_code == 202
+    job = db.get(OperationJob, response.json()["id"])
+    assert job.payload["ai_target_scope"] == "eligible"
 
 
 def test_rank_thresholds_are_profile_driven_and_safe():

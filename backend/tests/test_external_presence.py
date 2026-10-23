@@ -75,11 +75,19 @@ def test_search_on(db, sample, monkeypatch, found, expected):
         )
 
     monkeypatch.setattr(collection, "search_serper", search)
-    extra_searches(db, job, PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}))
+    extra_searches(
+        db,
+        job,
+        PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}, max_extra_searches=1),
+    )
     assert len(calls) == 1
     assert status(db, company)["status"] == expected
     assert status(db, company)["discovery_method"] == "EXPLICIT_SEARCH"
-    extra_searches(db, job, PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}))
+    extra_searches(
+        db,
+        job,
+        PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}, max_extra_searches=1),
+    )
     assert len(calls) == 1  # Committed attempts cannot be replayed.
 
 
@@ -101,6 +109,12 @@ def test_required_overrides_off(db, sample, monkeypatch):
     )
     assert len(calls) == 1
     assert status(db, company)["discovery_method"] == "REQUIRED_VERIFICATION"
+
+
+def test_new_plan_defaults_to_no_optional_searches():
+    plan = PresenceSearchPlan()
+    assert plan.max_extra_searches == 0
+    assert PresenceSearchPlan.model_validate({"max_extra_searches": 5}).max_extra_searches == 5
 
 
 @pytest.mark.parametrize(
@@ -178,7 +192,11 @@ def test_timeout_and_error_are_not_absence(db, sample, monkeypatch):
     _, job, company = sample
     job.created_at = datetime.now(timezone.utc) - timedelta(minutes=10)
     monkeypatch.setattr(collection, "search_serper", lambda *a: pytest.fail("timeout"))
-    extra_searches(db, job, PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}))
+    extra_searches(
+        db,
+        job,
+        PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}, max_extra_searches=1),
+    )
     assert status(db, company)["status"] == "ERROR"
     job.created_at = datetime.now(timezone.utc)
 
@@ -186,7 +204,11 @@ def test_timeout_and_error_are_not_absence(db, sample, monkeypatch):
         raise ExternalServiceError("test failure")
 
     monkeypatch.setattr(collection, "search_serper", fail)
-    extra_searches(db, job, PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}))
+    extra_searches(
+        db,
+        job,
+        PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}, max_extra_searches=1),
+    )
     assert status(db, company)["reason"] == "SEARCH_FAILED"
     assert db.scalar(select(func.count()).select_from(ExternalPresenceSearch)) == 1
 
@@ -198,7 +220,11 @@ def test_name_only_result_needs_review(db, sample, monkeypatch):
         "search_serper",
         lambda *a: [Candidate(company.company_name, "https://instagram.com/other")],
     )
-    extra_searches(db, job, PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}))
+    extra_searches(
+        db,
+        job,
+        PresenceSearchPlan(modes={"INSTAGRAM": "SEARCH"}, max_extra_searches=1),
+    )
     assert status(db, company)["status"] == "ERROR"
     assert status(db, company)["reason"] == "ENTITY_UNCERTAIN"
 

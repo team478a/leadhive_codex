@@ -757,9 +757,13 @@ def selected_companies(db, job: OperationJob, ai: bool) -> list[Company]:
     if payload.get("company_ids"):
         query = query.where(Company.id.in_(payload["company_ids"]))
     elif ai:
-        query = query.where(Company.analysis_status == "completed")
-        if not payload.get("force"):
-            query = query.where(Company.ai_status.in_(("pending", "failed", "skipped")))
+        from app.services.ai_targeting import ai_company_query
+
+        query = ai_company_query(
+            job.project_id,
+            scope=payload.get("ai_target_scope", "all"),
+            force=payload.get("force", False),
+        )
     elif not payload.get("force"):
         query = query.where(Company.analysis_status.in_(("pending", "failed")))
     return list(db.scalars(query.order_by(Company.created_at).limit(100)).all())
@@ -774,9 +778,12 @@ def next_analysis_batch(
     """Select eligible records not already processed by this job."""
     query = select(Company).where(Company.project_id == job.project_id)
     if ai:
-        query = query.where(
-            Company.analysis_status == "completed",
-            Company.ai_status.in_(("pending", "failed", "skipped")),
+        from app.services.ai_targeting import ai_company_query
+
+        query = ai_company_query(
+            job.project_id,
+            scope=job.payload.get("ai_target_scope", "all"),
+            force=job.payload.get("force", False),
         )
     else:
         query = query.where(

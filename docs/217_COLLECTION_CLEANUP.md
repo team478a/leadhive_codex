@@ -34,7 +34,7 @@
 | 解析とAI判定 | フォーム解析、Web解析、AI判定は別操作として存在し、API内で直接実行される入口も残る | サイト解析の一本化はAPI・worker双方の呼び出し元を列挙してから行う。送信可否判定を変えず、既存操作履歴を保つ |
 | 非企業の除外 | `NON_COMPANY_SUSPECTED` は送信可否側で扱われる | URL・タイトルだけで確定できる除外だけを保存前へ移す。曖昧なものを誤って捨てず、送信可否側の既存判定も残す |
 | 検索の入口 | 同期 `POST /collection-jobs/search` がAPIに存在する。worker、目標件数、スケジューラ、フォーム起点にも検索経路がある | ソースコードにAPIがあることと、画面から利用されていることを区別する。フロントエンドからの参照・古いジョブの状態を確認してから停止する |
-| SNS追加検索 | `PresenceSearchPlan.max_extra_searches` の新規既定値は `5` | PR-2で新規既定値を0にする。保存済みプランの値は移行・書き換えしない。必須媒体の既存動作を維持する |
+| SNS追加検索 | `PresenceSearchPlan.max_extra_searches` の新規既定値は `0` | 保存済みプランの値は移行・書き換えず、必須媒体は追加検索上限が0でも確認する |
 | 利用状況ログ | `LeadProcessingUsage` に `search` / `ai` のprovider、model、status、時刻、費用推定・token等を保存する経路がある | 費用推定と観測済みリクエストを報告できるが、計測は部分的。SDK操作は物理HTTP回数と一致しない場合があり、欠損を0回・0円と解釈しない |
 | SNS検索履歴 | `ExternalPresenceSearch` は外部アクセス前に記録をcommitし、statusを持つ | 件数は「検索記録/試行」と表示する。全件を完了したAPI呼び出し数として表示しない |
 | 条件提案 | `/collection-conditions/propose` は提案を返すだけで、提案本文や提案イベントを保存しない。確定条件は `CollectionConditionRequest`、人の事実確認は `CollectionFactReview` に別保存される | 過去90日の提案呼び出し数は復元できない。PR-0では「過去分なし/計測不能」と表示し、将来分だけを本文非保存のイベント件数として計測する。確定・確認件数と混ぜない |
