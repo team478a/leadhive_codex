@@ -328,6 +328,93 @@ def test_search_schedule_crud_due_enqueue_and_company_limit(auth, db, monkeypatc
     assert auth.delete(f"/api/search-schedules/{schedule_id}").status_code == 204
 
 
+def test_google_places_new_entrypoints_are_retired_but_history_is_preserved(auth, db):
+    project = make_project(auth, db)
+    payload = {
+        "operation_type": "collect_search",
+        "source": "google_places",
+        "keywords": ["店舗"],
+        "region": "東京都",
+        "max_results": 20,
+    }
+    response = auth.post(f"/api/projects/{project['id']}/operations", json=payload)
+    assert response.status_code == 410
+    assert "Google Maps / Places" in response.json()["detail"]
+    schedule_payload = {
+        "name": "旧Places定期収集",
+        "source": "google_places",
+        "keywords": ["店舗"],
+        "region": "東京都",
+        "max_results": 20,
+        "interval_hours": 24,
+        "company_limit": 100,
+        "active": True,
+    }
+    created = auth.post(f"/api/projects/{project['id']}/search-schedules", json=schedule_payload)
+    assert created.status_code == 410
+    schedule = SearchSchedule(
+        project_id=project["id"],
+        next_run_at=datetime.now(timezone.utc) - timedelta(minutes=1),
+        **schedule_payload,
+    )
+    history = CollectionJob(
+        project_id=project["id"],
+        source="google_places",
+        keyword="過去の店舗",
+        region="東京都",
+        status="completed",
+        found_count=2,
+        saved_count=1,
+    )
+    db.add_all([schedule, history])
+    db.commit()
+    assert auth.get(f"/api/projects/{project['id']}/search-schedules").json()[0]["id"] == str(
+        schedule.id
+    )
+    assert (
+        auth.get(f"/api/projects/{project['id']}/collection-performance").json()[0]["source"]
+        == "google_places"
+    )
+    assert auth.post(f"/api/search-schedules/{schedule.id}/run").status_code == 410
+    updated = auth.put(f"/api/search-schedules/{schedule.id}", json=schedule_payload)
+    assert updated.status_code == 410
+    assert worker.enqueue_due_schedules(db) == 0
+    db.refresh(schedule)
+    assert schedule.active is False
+    assert "Google Maps / Places" in schedule.last_error
+
+
+def test_google_places_job_queued_before_retirement_can_finish(auth, db, monkeypatch):
+    project = make_project(auth, db)
+    job = OperationJob(
+        project_id=project["id"],
+        operation_type="collect_search",
+        payload={
+            "source": "google_places",
+            "keywords": ["店舗"],
+            "region": "東京都",
+            "max_results": 20,
+        },
+    )
+    db.add(job)
+    db.commit()
+    job_id = job.id
+    calls = []
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(db))
+    monkeypatch.setattr(worker, "sync_inbound_mail", lambda _db: False)
+    monkeypatch.setattr(
+        worker,
+        "run_collection",
+        lambda _db, queued, _worker_id: calls.append(queued.id),
+    )
+
+    assert worker.run_once() is True
+    db.expire_all()
+    completed = db.get(OperationJob, job_id)
+    assert calls == [job_id]
+    assert completed.status == "completed"
+
+
 def test_analysis_refresh_schedule_crud_and_due_enqueue(auth, db):
     project = make_project(auth, db)
     company = add_company(auth, db, project["id"])

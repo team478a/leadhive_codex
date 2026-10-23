@@ -4,12 +4,10 @@ from io import BytesIO
 import pytest
 from sqlalchemy import func, select
 
-from app import collection_routes
 from app.models import CollectionJob, Company
 from app.services import collection
 from app.services.collection import (
     Candidate,
-    ExternalServiceError,
     canonicalize_url,
     parse_csv,
     parse_urls,
@@ -254,37 +252,16 @@ def test_csv_collection_and_duplicate_name_address(auth):
     )
 
 
-def test_search_jobs_success_and_external_failure(auth, monkeypatch):
+def test_sync_search_endpoint_is_retired(auth, db):
     project = make_project(auth)
-
-    def fake_search(keyword, region, max_results):
-        return [Candidate(f"{keyword}株式会社", f"https://{keyword}.example")]
-
-    monkeypatch.setattr(collection_routes, "search_serper", fake_search)
-    response = auth.post(
-        f"/api/projects/{project['id']}/collection-jobs/search",
-        json={
-            "source": "serper",
-            "keywords": ["alpha", "beta"],
-            "region": "東京",
-            "max_results": 5,
-        },
-    )
-    assert response.status_code == 201
-    assert len(response.json()) == 2
-    assert all(job["status"] == "completed" and job["saved_count"] == 1 for job in response.json())
-
-    def unavailable(*args):
-        raise ExternalServiceError("検索サービスを利用できません。")
-
-    monkeypatch.setattr(collection_routes, "search_google_places", unavailable)
-    response = auth.post(
-        f"/api/projects/{project['id']}/collection-jobs/search",
-        json={"source": "google_places", "keywords": ["運送"], "region": "大阪", "max_results": 5},
-    )
-    job = response.json()[0]
-    assert job["status"] == "failed" and job["error_count"] == 1
-    assert job["error_message"] == "検索サービスを利用できません。"
+    for source in ("serper", "google_places", "gbizinfo"):
+        response = auth.post(
+            f"/api/projects/{project['id']}/collection-jobs/search",
+            json={"source": source, "keywords": ["運送"], "region": "大阪", "max_results": 5},
+        )
+        assert response.status_code == 410
+        assert "同期検索収集APIは終了" in response.json()["detail"]
+    assert db.scalar(select(func.count()).select_from(CollectionJob)) == 0
 
 
 def test_collection_access_is_isolated(auth, users):

@@ -1,18 +1,9 @@
-import type { FormDeliveryBatch, OutreachTemplate } from './types'
+import type { FormDeliveryBatch } from './types'
 
 type Props = {
-  selectedCount: number
-  templates: OutreachTemplate[]
-  templateId: string
   batches: FormDeliveryBatch[]
-  confirmed: boolean
   busy: boolean
-  onTemplateChange: (value: string) => void
-  onConfirmedChange: (value: boolean) => void
-  onCreate: () => void
-  onExecute: (batch: FormDeliveryBatch) => void
   onCancel: (batch: FormDeliveryBatch) => void
-  onRetry: (itemId: string) => void
 }
 
 const itemStatusNames: Record<string, string> = {
@@ -25,51 +16,20 @@ const itemStatusNames: Record<string, string> = {
 }
 
 export function CompanyFormBatchesPanel({
-  selectedCount,
-  templates,
-  templateId,
   batches,
-  confirmed,
   busy,
-  onTemplateChange,
-  onConfirmedChange,
-  onCreate,
-  onExecute,
   onCancel,
-  onRetry,
 }: Props) {
   return (
     <section className="panel mt-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h2>一括フォームDM</h2>
+          <h2>過去の一括フォームDM</h2>
           <p className="muted mt-2 text-sm">
-            一覧で選択した企業へ同じフォーム文面をキュー化します。通常フォームだけを承認後に最大20社ずつ送信し、入力項目が不足するフォームはCodex支援対象として残します。
+            旧一括フォームDMとForm Codex Queueの新規受付は終了しました。過去の結果と二重送信防止記録は保持しています。
           </p>
         </div>
-        <span className="badge">選択 {selectedCount} 社</span>
-      </div>
-
-      <div className="detail-grid mt-4">
-        <label className="field">
-          フォーム文面テンプレート
-          <select value={templateId} onChange={event => onTemplateChange(event.target.value)}>
-            <option value="">選択してください</option>
-            {templates
-              .filter(item => item.channel === 'form')
-              .map(item => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
-        </label>
-      </div>
-
-      <div className="actions">
-        <button disabled={busy || !templateId || selectedCount === 0} onClick={onCreate}>
-          選択企業で一括DMを作成
-        </button>
+        <span className="badge">履歴 {batches.length} 件</span>
       </div>
 
       {batches.map(batch => {
@@ -109,26 +69,9 @@ export function CompanyFormBatchesPanel({
               ))}
             </div>
 
-            {batch.status === 'ready' && (
-              <>
-                <label className="checkbox-row mt-3">
-                  <input
-                    type="checkbox"
-                    checked={confirmed}
-                    onChange={event => onConfirmedChange(event.target.checked)}
-                  />
-                  対象企業、文面、送信済み・連絡禁止の除外を確認し、通常フォームへの一括送信を承認します。
-                </label>
-                <div className="actions">
-                  <button disabled={busy || !confirmed} onClick={() => onExecute(batch)}>
-                    最大20社を順次送信
-                  </button>
-                  <button className="danger" disabled={busy} onClick={() => onCancel(batch)}>
-                    中止
-                  </button>
-                </div>
-              </>
-            )}
+            {['ready', 'running'].includes(batch.status) && <div className="actions">
+              <button className="danger" disabled={busy} onClick={() => onCancel(batch)}>未完了分を中止</button>
+            </div>}
 
             {batch.items.filter(item => item.status === 'unknown').map(item => (
               <p className="error text-sm mt-2" role="alert" key={item.id}>
@@ -143,18 +86,9 @@ export function CompanyFormBatchesPanel({
                 </p>
               ))}
 
-            {batch.items
-              .filter(item => item.status === 'failed')
-              .map(item => (
-                <div className="actions mt-2" key={item.id}>
-                  <span className="error text-sm">
-                    {item.company_name}：{item.reason || '送信に失敗しました。'}
-                  </span>
-                  <button className="secondary" disabled={busy} onClick={() => onRetry(item.id)}>
-                    再試行待ちに戻す
-                  </button>
-                </div>
-              ))}
+            {batch.items.filter(item => item.status === 'failed').map(item => <p className="error text-sm mt-2" key={item.id}>
+              {item.company_name}：{item.reason || '送信に失敗しました。'}
+            </p>)}
           </article>
         )
       })}

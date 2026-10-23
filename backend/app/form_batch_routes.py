@@ -32,6 +32,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
+from app.services.feature_retirement import reject_legacy_form_entry
 from app.services.form_codex import build_codex_form_payload
 from app.services.form_delivery import FormDeliveryError
 from app.services.form_profile_delivery import (
@@ -112,6 +113,7 @@ def create_form_batch(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    reject_legacy_form_entry()
     template = db.get(OutreachTemplate, body.template_id)
     if template is None or template.project_id != project_id or template.channel != "form":
         raise HTTPException(422, "このプロジェクトのフォーム文面テンプレートを選択してください。")
@@ -176,6 +178,7 @@ def list_form_codex_queue(
     project_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     project_access(project_id, db, user, write=False)
+    reject_legacy_form_entry()
     if (
         not settings.outbound_enabled
         or not settings.legacy_form_delivery_enabled
@@ -237,6 +240,7 @@ def update_form_codex_task(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    reject_legacy_form_entry()
     require_legacy_form_enabled()
     item = db.get(FormDeliveryBatchItem, item_id)
     if item is None:
@@ -378,6 +382,7 @@ def retry_form_batch_item(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    reject_legacy_form_entry()
     require_legacy_form_enabled()
     if not body.confirmed:
         raise HTTPException(422, "対象フォームを確認して再試行を承認してください。")
@@ -416,6 +421,7 @@ def execute_form_batch(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    reject_legacy_form_entry()
     require_legacy_form_enabled()
     if not body.confirmed:
         raise HTTPException(422, "対象件数と文面を確認して一括送信を承認してください。")

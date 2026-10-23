@@ -18,6 +18,7 @@ const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places', gbizinfo: 'gBizINFO（法人情報）',
   url: 'URL直接入力', csv: 'CSVインポート',
 }
+const availableSources = Object.entries(sourceNames).filter(([value]) => value !== 'google_places')
 const statusNames = { running: '実行中', completed: '完了', failed: '失敗' }
 const operationStatusNames: Record<OperationJob['status'], string> = {
   queued: '待機中', running: '実行中', completed: '完了', failed: '失敗', cancelled: 'キャンセル',
@@ -401,7 +402,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
         <Field label="収集元"><select value={source} onChange={e => {
           const next = e.target.value as CollectionSource; setSource(next); setFile(null)
           setKeywords(next === 'url' ? '' : suggestedKeywordText)
-        }}>{Object.entries(sourceNames).map(([value, label]) =>
+        }}>{availableSources.map(([value, label]) =>
           <option key={value} value={value}>{label}</option>)}</select></Field>
         {source === 'serper' && <Field label="収集方法"><select value={collectionMethod} onChange={event => {
           const method = event.target.value as 'company_first' | 'form_first'
@@ -499,14 +500,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
       {schedules.map(schedule => <article className="job-row block" key={schedule.id}><div className="flex justify-between gap-3"><strong>{schedule.name}</strong><span className="badge">{schedule.active ? '有効' : '停止中'}</span></div>
         <p className="muted my-2 text-sm">{schedule.keywords.join(' / ')}・{schedule.interval_hours}時間ごと・上限{schedule.company_limit}社</p>
         <p className="muted text-sm">次回 {new Date(schedule.next_run_at).toLocaleString('ja-JP')}</p>{schedule.last_error && <p className="error mt-2 mb-0">{schedule.last_error}</p>}
-        <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}/run`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>今すぐ実行</button>
+        {schedule.source === 'google_places' ? <p className="muted mt-2 text-sm">Google Maps / Placesの新規収集停止に伴い、このテンプレートは再実行できません。過去の実績は保持されます。</p> : <div className="mt-3 flex flex-wrap gap-2"><button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}/run`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>今すぐ実行</button>
           <button type="button" className="secondary" onClick={() => void api(`/search-schedules/${schedule.id}`, 'PUT', {
             name: schedule.name, source: schedule.source, keywords: schedule.keywords,
             region: schedule.region, max_results: schedule.max_results,
             interval_hours: schedule.interval_hours, company_limit: schedule.company_limit,
             active: !schedule.active,
-          }).then(() => reload()).catch(e => setError(errorMessage(e)))}>{schedule.active ? '停止' : '再開'}</button>
-          <button type="button" className="danger" onClick={() => void api(`/search-schedules/${schedule.id}`, 'DELETE').then(() => reload()).catch(e => setError(errorMessage(e)))}>削除</button></div>
+          }).then(() => reload()).catch(e => setError(errorMessage(e)))}>{schedule.active ? '停止' : '再開'}</button></div>}
+          <button type="button" className="danger mt-3" onClick={() => void api(`/search-schedules/${schedule.id}`, 'DELETE').then(() => reload()).catch(e => setError(errorMessage(e)))}>削除</button>
       </article>)}
       {analytics.length > 0 && <div className="mt-6 overflow-x-auto"><h3 className="mb-3">テンプレート別成果</h3><table><thead><tr><th>テンプレート</th><th>検索数</th><th>発見</th><th>保存</th><th>保存率</th><th>重複率</th><th>公式外</th><th>エラー</th></tr></thead>
         <tbody>{analytics.map(item => <tr key={item.schedule_id}><td>{item.name}</td><td>{item.run_count}</td><td>{item.found_count}</td><td>{item.saved_count}</td><td>{item.save_rate}%</td><td>{item.duplicate_rate}%</td><td>{item.excluded_count}</td><td>{item.error_count}</td></tr>)}</tbody></table></div>}

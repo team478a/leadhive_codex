@@ -6,7 +6,7 @@ const services: Array<{
   id: ApplicationService
   name: string
   purpose: string
-  sourceKey: keyof Pick<ApplicationSettings, 'openai_api_key_source' | 'serper_api_key_source' | 'google_places_api_key_source' | 'gbizinfo_api_token_source'>
+  sourceKey: keyof Pick<ApplicationSettings, 'openai_api_key_source' | 'serper_api_key_source' | 'gbizinfo_api_token_source'>
   steps: string[]
   notes: string
   links: Array<{ label: string; href: string }>
@@ -21,19 +21,6 @@ const services: Array<{
     ],
     notes: '公式サイトでは初回2,500クエリを無料で試せます。継続利用前にDashboardで残量と料金を確認してください。',
     links: [{ label: 'Serper公式サイトを開く', href: 'https://serper.dev/' }],
-  },
-  {
-    id: 'google_places', name: 'Google Places API（New）', purpose: '地図上の店舗・事業所情報を検索する', sourceKey: 'google_places_api_key_source',
-    steps: [
-      'Google Cloud Consoleでプロジェクトを作成または選択します。',
-      'プロジェクトへ請求先アカウントを設定します。',
-      'APIライブラリで「Places API（New）」を有効にします。',
-      '「APIとサービス → 認証情報」でAPIキーを作成します。',
-      'APIの制限を「Places API（New）」に設定し、本番ではサーバーIPも制限します。',
-      'この画面の「Google Places APIキー」へ貼り付けて保存します。',
-    ],
-    notes: 'Google Maps Platformは従量課金です。予算アラートと利用上限を設定してから本番利用してください。',
-    links: [{ label: 'Google公式の設定手順を開く', href: 'https://developers.google.com/maps/documentation/places/web-service/get-api-key' }],
   },
   {
     id: 'openai', name: 'OpenAI API', purpose: '企業のAI判定と営業文面の生成に使う', sourceKey: 'openai_api_key_source',

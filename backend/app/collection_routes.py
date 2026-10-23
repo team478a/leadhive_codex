@@ -22,19 +22,10 @@ from app.schemas import (
     UrlCollectionInput,
 )
 from app.security import current_user
-from app.services.collection import (
-    ExternalServiceError,
-    parse_csv,
-    parse_csv_with_mapping,
-    parse_urls,
-    read_csv,
-    search_gbizinfo,
-    search_google_places,
-    search_serper,
-)
+from app.services.collection import parse_csv, parse_csv_with_mapping, parse_urls, read_csv
 from app.services.collection_discovery import discovery_summary
-from app.services.collection_jobs import fail_job, save_candidates, start_job
-from app.services.processing_usage import measured_search
+from app.services.collection_jobs import save_candidates, start_job
+from app.services.feature_retirement import SYNC_SEARCH_RETIREMENT_MESSAGE
 
 router = APIRouter(prefix="/api")
 
@@ -179,27 +170,7 @@ def collect_search(
     user: User = Depends(current_user),
 ):
     owned_project(project_id, db, user)
-    jobs = []
-    budget_job_id = None
-    for keyword in body.keywords:
-        job = start_job(db, project_id, body.source, keyword, body.region)
-        budget_job_id = budget_job_id or job.id
-        job.presence_search_plan = body.presence_search.model_dump(mode="json")
-        db.commit()
-        try:
-            search = {
-                "serper": search_serper,
-                "google_places": search_google_places,
-                "gbizinfo": search_gbizinfo,
-            }[body.source]
-            candidates = measured_search(db, job, search, keyword, body.region, body.max_results)
-            jobs.append(save_candidates(db, job, candidates, keyword))
-            from app.services.external_presence import extra_searches
-
-            extra_searches(db, job, body.presence_search, budget_job_id=budget_job_id)
-        except ExternalServiceError as exc:
-            jobs.append(fail_job(db, job, exc.public_message))
-    return jobs
+    raise HTTPException(410, SYNC_SEARCH_RETIREMENT_MESSAGE)
 
 
 @router.post(

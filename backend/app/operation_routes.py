@@ -29,6 +29,7 @@ from app.schemas import (
 )
 from app.security import current_user
 from app.services.browser_form_analysis import select_browser_analysis_targets
+from app.services.feature_retirement import reject_google_places
 from app.services.operations import add_operation_job, refresh_company_ids
 
 router = APIRouter(prefix="/api")
@@ -318,6 +319,7 @@ def create_search_schedule(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    reject_google_places(body.source)
     schedule = SearchSchedule(
         project_id=project_id,
         **body.model_dump(),
@@ -337,6 +339,8 @@ def update_search_schedule(
     user: User = Depends(current_user),
 ):
     schedule = owned_schedule(schedule_id, db, user)
+    reject_google_places(schedule.source)
+    reject_google_places(body.source)
     for key, value in body.model_dump().items():
         setattr(schedule, key, value)
     schedule.next_run_at = datetime.now(timezone.utc) + timedelta(hours=body.interval_hours)
@@ -359,6 +363,7 @@ def run_search_schedule(
     schedule_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     schedule = owned_schedule(schedule_id, db, user)
+    reject_google_places(schedule.source)
     active = db.scalar(
         select(OperationJob.id).where(
             OperationJob.project_id == schedule.project_id,
@@ -397,6 +402,8 @@ def enqueue_operation(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    if body.operation_type == "collect_search":
+        reject_google_places(body.source)
     operation_type = (
         "site_analysis"
         if body.operation_type in {"web_analysis", "form_intelligence"}
@@ -698,6 +705,7 @@ def continue_collection(
     job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     source = owned_operation(job_id, db, user)
+    reject_google_places((source.payload or {}).get("source"))
     if source.status != "completed" or source.operation_type != "collect_search":
         raise HTTPException(409, "完了した検索収集だけ続きから再開できます。")
     progress = (source.payload or {}).get("collection_progress") or {}
@@ -843,6 +851,8 @@ def retry_operation(
     job_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
 ):
     source = owned_operation(job_id, db, user)
+    if source.operation_type == "collect_search":
+        reject_google_places((source.payload or {}).get("source"))
     if source.operation_type == "cf7_observation":
         raise HTTPException(409, "静的フォーム観察は検証専用です。再実行はできません。")
     if source.operation_type == "prepare_outreach":
