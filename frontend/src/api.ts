@@ -37,7 +37,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
       lastNetworkError = false
     } catch {
       lastNetworkError = true
-      continue
+      break
     }
     if (response.status !== 503) break
     const unavailable = await response.clone().json().catch(() => ({}))
