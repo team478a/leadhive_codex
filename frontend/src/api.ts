@@ -40,6 +40,8 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
       continue
     }
     if (response.status !== 503) break
+    const unavailable = await response.clone().json().catch(() => ({}))
+    if (unavailable.detail !== 'データベースを利用できません。') break
   }
   if (!response || lastNetworkError) throw networkError(method, path)
   if (!response.ok) {

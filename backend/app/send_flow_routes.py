@@ -68,7 +68,7 @@ def enqueue_bulk_template_drafts(
         .where(
             OperationJob.project_id == project_id,
             OperationJob.operation_type == "form_dm_readiness",
-            OperationJob.status.in_(("queued", "running")),
+            OperationJob.status == "running",
         )
         .limit(1)
     ):

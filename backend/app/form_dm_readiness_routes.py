@@ -405,7 +405,7 @@ def _active_form_reanalysis(db: Session, project_id: UUID) -> OperationJob | Non
         .where(
             OperationJob.project_id == project_id,
             OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
-            OperationJob.status.in_(("queued", "running")),
+            OperationJob.status == "running",
         )
         .order_by(OperationJob.created_at.desc())
         .limit(1)
@@ -681,7 +681,7 @@ def recalculate_form_dm_readiness(
         .where(
             OperationJob.project_id == project_id,
             OperationJob.operation_type == "bulk_template_drafts",
-            OperationJob.status.in_(("queued", "running")),
+            OperationJob.status == "running",
         )
         .limit(1)
     ):
