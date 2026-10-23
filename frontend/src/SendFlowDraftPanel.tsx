@@ -6,6 +6,14 @@ import { FormDmReadinessPanel } from './FormDmReadinessPanel'
 
 type BulkResults = { created: string[]; skipped_existing: string[]; excluded: { company_id: string; reason_code: string; reason?: string }[] }
 type BulkJob = OperationJob & { bulk_template_results?: BulkResults }
+type FormDraftTargets = {
+  total: number
+  per_run_limit: number
+  by_primary_reason: Record<string, number>
+  readiness_aggregated_at: string | null
+}
+const browserFormReasons = ['CF7', 'JS_SUBMIT', 'MULTIPART_ONLY', 'CONFIRMATION_PAGE', 'CONFIRMATION_UNKNOWN', 'JAVASCRIPT_CONFIRMATION', 'NO_NATIVE_SUBMIT', 'CUSTOM_SUBMIT_HANDLER']
+const validationFormReasons = ['NON_POST_METHOD', 'DUPLICATE_INPUTS']
 const exclusionLabels: Record<string, string> = {
   company_not_found: '企業が見つかりません', form_profile_missing: 'フォーム解析結果なし',
   form_profile_changed: 'フォーム情報が変更済み', company_do_not_contact: '連絡禁止',
@@ -27,7 +35,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, onNeedTemplat
   const [offset, setOffset] = useState(0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
   const [selectEligibleEmailCompanies, setSelectEligibleEmailCompanies] = useState(false)
-  const [formTargetCount, setFormTargetCount] = useState<number | null>(null)
+  const [formTargets, setFormTargets] = useState<FormDraftTargets | null>(null)
   const [readinessDetailsOpen, setReadinessDetailsOpen] = useState(false)
   const [job, setJob] = useState<BulkJob | null>(null)
   const [busy, setBusy] = useState(false)
@@ -43,11 +51,13 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, onNeedTemplat
     Promise.all([
       api<OutreachTemplate[]>(`/projects/${projectId}/outreach-templates`),
       api<CompanyPage>(`/projects/${projectId}/company-list?offset=${offset}&limit=20&sort=company_name`),
-      api<{ counts: Record<string, number> }>(`/projects/${projectId}/form-dm-readiness`),
-    ]).then(([nextTemplates, page, readiness]) => {
+      channel === 'form'
+        ? api<FormDraftTargets>(`/projects/${projectId}/outreach-drafts/bulk-from-template/form-targets`)
+        : Promise.resolve(null),
+    ]).then(([nextTemplates, page, nextFormTargets]) => {
       if (!live) return
       setTemplates(nextTemplates); setCompanies(page.items); setTotal(page.total)
-      setFormTargetCount(readiness.counts.NO_FORM_DRAFT ?? 0)
+      setFormTargets(nextFormTargets)
       setTemplateId(current => current && nextTemplates.some(item => item.id === current && item.channel === channel)
         ? current : nextTemplates.find(item => item.channel === channel)?.id ?? '')
     }).catch(e => { if (live) setError(errorMessage(e)) })
@@ -63,6 +73,9 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, onNeedTemplat
         setJob(current)
         if (['completed', 'failed', 'cancelled'].includes(current.status)) {
           setNotice(current.status === 'completed' ? '一括下書き作成が完了しました。送信可否を再集計します。' : '一括下書き作成が完了しませんでした。進捗を確認してください。')
+          if (channel === 'form' && current.status === 'completed') {
+            void api<FormDraftTargets>(`/projects/${projectId}/outreach-drafts/bulk-from-template/form-targets`).then(setFormTargets).catch(e => setError(errorMessage(e)))
+          }
           onCreated(channel)
         }
       }).catch(e => setError(errorMessage(e)))
@@ -82,6 +95,9 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, onNeedTemplat
       setJob(createdJob)
       if (createdJob.status === 'completed') {
         setNotice('一括下書き作成が完了しました。送信可否を再集計します。')
+        if (channel === 'form') {
+          void api<FormDraftTargets>(`/projects/${projectId}/outreach-drafts/bulk-from-template/form-targets`).then(setFormTargets).catch(e => setError(errorMessage(e)))
+        }
         onCreated(channel)
       } else if (createdJob.status === 'queued' || createdJob.status === 'running') {
         setNotice('バックグラウンドで下書きを作成しています。')
@@ -92,6 +108,9 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, onNeedTemplat
   }
 
   const results = job?.bulk_template_results
+  const formTargetCount = formTargets?.total ?? null
+  const browserFormTargetCount = browserFormReasons.reduce((sum, reason) => sum + (formTargets?.by_primary_reason[reason] ?? 0), 0)
+  const validationFormTargetCount = validationFormReasons.reduce((sum, reason) => sum + (formTargets?.by_primary_reason[reason] ?? 0), 0)
   const exclusionCounts = Object.entries((results?.excluded ?? []).reduce<Record<string, number>>((counts, item) => {
     counts[item.reason_code] = (counts[item.reason_code] ?? 0) + 1
     return counts
@@ -118,7 +137,19 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, onNeedTemplat
           })}
         </div>
         <div className="actions mt-2"><button type="button" className="secondary" disabled={offset === 0 || activeJob} onClick={() => setOffset(value => Math.max(0, value - 20))}>前の20社</button><span>{total ? `${Math.floor(offset / 20) + 1} / ${Math.ceil(total / 20)}` : '0社'}</span><button type="button" className="secondary" disabled={offset + companies.length >= total || activeJob} onClick={() => setOffset(value => value + 20)}>次の20社</button></div>
-      </> : <div className="rounded-lg border p-4"><strong>送信可否：フォーム文面なし</strong><p className="muted mt-2">最新の集計で「フォーム文面なし」と判定された企業から、最大500社を対象にします。集計対象 {formTargetCount ?? '…'}社。</p></div>}
+      </> : <div className="rounded-lg border p-4"><strong>送信可否：フォーム文面なし</strong>
+        {formTargets && !formTargets.readiness_aggregated_at
+          ? <p className="error mt-2">先に送信可否を再集計してください。</p>
+          : <>
+            <p className="mt-2">文面を作成できる企業：{formTargetCount ?? '…'}社（1回に最大{formTargets?.per_run_limit ?? 500}社。あと{formTargetCount === null ? '…' : Math.ceil(formTargetCount / (formTargets?.per_run_limit ?? 500))}回）</p>
+            {!!formTargets && <details className="mt-2"><summary>対象の内訳</summary>
+              <p className="muted text-sm">文面なしだけ：{formTargets.by_primary_reason.NO_FORM_DRAFT ?? 0}社</p>
+              <p className="muted text-sm">ブラウザー送信の候補：{browserFormTargetCount}社</p>
+              <p className="muted text-sm">要検証：{validationFormTargetCount}社</p>
+            </details>}
+            <p className="muted mt-2 text-sm">CAPTCHAのあるフォーム、連絡禁止、非企業の疑い、送信済みの企業には作成しません。作成後に送信可否を自動で再集計します。</p>
+          </>}
+      </div>}
       {error && <p role="alert" className="error">{error}</p>}{notice && <p role="status">{notice}</p>}
       {job && <div className="rounded-lg border p-4" role="status" aria-label="一括作成の進捗">
         <strong>{job.status === 'completed' ? '作成完了' : job.status === 'failed' ? '失敗' : job.status === 'cancelled' ? '停止' : '作成中'} · {job.processed_count}/{job.total_count}社</strong>
@@ -130,7 +161,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, onNeedTemplat
         </>}
       </div>}
       <div className="actions flex-wrap">
-        <button disabled={!canWrite || busy || activeJob || !templateId || (channel === 'email' && !selectedIds.length && !selectEligibleEmailCompanies) || (channel === 'form' && !formTargetCount)} onClick={() => void createDrafts()}>{busy ? '登録中…' : activeJob ? 'バックグラウンド処理中…' : channel === 'form' ? `フォーム下書きを一括作成（最大${Math.min(formTargetCount ?? 0, 500)}社）` : selectEligibleEmailCompanies ? '条件一致企業に下書きを作成（最大500社）' : `選択した${selectedIds.length}社に下書きを作成`}</button>
+        <button disabled={!canWrite || busy || activeJob || !templateId || (channel === 'email' && !selectedIds.length && !selectEligibleEmailCompanies) || (channel === 'form' && (!formTargets?.readiness_aggregated_at || !formTargetCount))} onClick={() => void createDrafts()}>{busy ? '登録中…' : activeJob ? 'バックグラウンド処理中…' : channel === 'form' ? `フォーム下書きを一括作成（最大${Math.min(formTargetCount ?? 0, formTargets?.per_run_limit ?? 500)}社）` : selectEligibleEmailCompanies ? '条件一致企業に下書きを作成（最大500社）' : `選択した${selectedIds.length}社に下書きを作成`}</button>
         {job?.status === 'completed' && <button type="button" className="secondary" onClick={onNext}>{channel === 'form' ? '次へ：フォームを確認' : '次へ：承認して送る'}</button>}
       </div>
       <details className="mt-4" onToggle={event => setReadinessDetailsOpen(event.currentTarget.open)}><summary>フォームの送信可否集計・詳細</summary>{readinessDetailsOpen && <div className="mt-4"><p className="muted text-sm mb-3">フォーム文面なしの一括作成対象と、送信可否の理由を確認できます。</p><FormDmReadinessPanel projectId={projectId} canWrite={canWrite} /></div>}</details>

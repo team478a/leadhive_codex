@@ -2,7 +2,8 @@ import re
 from urllib.parse import urlsplit
 from uuid import UUID
 
-from sqlalchemy import and_, func, not_, or_, select
+from sqlalchemy import and_, case, cast, func, not_, or_, select
+from sqlalchemy.dialects.postgresql import JSONPATH
 from sqlalchemy.orm import Session, aliased
 
 from app.models import (
@@ -25,32 +26,127 @@ from app.services.outreach_template_validation import has_stop_method
 from app.services.suppression import active_suppression_scope_condition
 
 CHUNK_SIZE = 100
+FORM_DRAFT_TARGET_LIMIT = 500
+FORM_DRAFT_BROWSER_PRIMARY_REASONS = (
+    "CF7",
+    "JS_SUBMIT",
+    "MULTIPART_ONLY",
+    "CONFIRMATION_PAGE",
+    "CONFIRMATION_UNKNOWN",
+    "JAVASCRIPT_CONFIRMATION",
+    "NO_NATIVE_SUBMIT",
+    "CUSTOM_SUBMIT_HANDLER",
+)
+FORM_DRAFT_VALIDATION_PRIMARY_REASONS = ("NON_POST_METHOD", "DUPLICATE_INPUTS")
+FORM_DRAFT_ALLOWED_PRIMARY_REASONS = (
+    "NO_FORM_DRAFT",
+    *FORM_DRAFT_BROWSER_PRIMARY_REASONS,
+    *FORM_DRAFT_VALIDATION_PRIMARY_REASONS,
+)
+FORM_DRAFT_BLOCKING_REASONS = (
+    "CONTACT_PROHIBITED",
+    "NON_COMPANY_SUSPECTED",
+    "ALREADY_SENT_OR_UNKNOWN",
+    "RESERVATION_FORM",
+    "CAPTCHA_VISIBLE",
+    "CAPTCHA_INVISIBLE",
+    "CAPTCHA_LEGACY",
+    "EXTERNAL_ACTION",
+    "FILE_ATTACHMENT",
+    "MULTIPART_OR_FILE",
+    "MISSING_NAME_ATTRIBUTE",
+    "NO_INPUT_FIELDS",
+)
 PLACEHOLDER_PATTERN = re.compile(r"\{\{(会社名|送信者名|送信者会社名|送信者メール|送信者電話)\}\}")
 
 
-def readiness_targets(db: Session, project_id: UUID) -> list[dict[str, str | None]]:
+def _readiness_target_statement(db: Session, project_id: UUID):
     from app.form_dm_readiness_routes import latest_completed_job
 
     snapshot = latest_completed_job(db, project_id)
     if snapshot is None:
-        return []
-    rows = db.execute(
+        return None, None
+    existing_form_draft = (
+        select(OutreachDraft.id)
+        .where(
+            OutreachDraft.company_id == FormDmReadinessResult.company_id,
+            OutreachDraft.channel == "form",
+        )
+        .correlate(FormDmReadinessResult)
+        .exists()
+    )
+    has_no_form_draft = or_(
+        FormDmReadinessResult.primary_reason == "NO_FORM_DRAFT",
+        FormDmReadinessResult.secondary_reasons.contains(["NO_FORM_DRAFT"]),
+    )
+    has_blocking_reason = or_(
+        FormDmReadinessResult.primary_reason.in_(FORM_DRAFT_BLOCKING_REASONS),
+        *[
+            FormDmReadinessResult.secondary_reasons.contains([reason])
+            for reason in FORM_DRAFT_BLOCKING_REASONS
+        ],
+        FormDmReadinessResult.primary_reason.like("NON_COMPANY_%"),
+        func.jsonb_path_exists(
+            FormDmReadinessResult.secondary_reasons,
+            cast('$[*] ? (@ like_regex "^NON_COMPANY_")', JSONPATH),
+        ),
+    )
+    priority = case(
+        (FormDmReadinessResult.primary_reason == "NO_FORM_DRAFT", 0),
+        (FormDmReadinessResult.primary_reason.in_(FORM_DRAFT_BROWSER_PRIMARY_REASONS), 1),
+        else_=2,
+    )
+    statement = (
         select(FormDmReadinessResult.company_id, FormDmReadinessResult.profile_id)
+        .add_columns(FormDmReadinessResult.primary_reason)
         .join(Company, Company.id == FormDmReadinessResult.company_id)
         .where(
             FormDmReadinessResult.job_id == snapshot.id,
-            FormDmReadinessResult.primary_reason == "NO_FORM_DRAFT",
-            ~FormDmReadinessResult.secondary_reasons.contains(["NON_COMPANY_SUSPECTED"]),
+            FormDmReadinessResult.primary_reason.in_(FORM_DRAFT_ALLOWED_PRIMARY_REASONS),
+            has_no_form_draft,
+            ~has_blocking_reason,
             Company.project_id == project_id,
             Company.status != "excluded",
+            ~existing_form_draft,
         )
-        .order_by(Company.company_name, Company.id)
-        .limit(500)
-    ).all()
+        .order_by(priority, Company.company_name, Company.id)
+    )
+    return statement, snapshot
+
+
+def readiness_targets(db: Session, project_id: UUID) -> list[dict[str, str | None]]:
+    statement, _snapshot = _readiness_target_statement(db, project_id)
+    if statement is None:
+        return []
+    rows = db.execute(statement.limit(FORM_DRAFT_TARGET_LIMIT)).all()
     return [
         {"company_id": str(company_id), "profile_id": str(profile_id)}
-        for company_id, profile_id in rows
+        for company_id, profile_id, _primary_reason in rows
     ]
+
+
+def readiness_target_summary(db: Session, project_id: UUID) -> dict:
+    statement, snapshot = _readiness_target_statement(db, project_id)
+    if statement is None or snapshot is None:
+        return {
+            "total": 0,
+            "per_run_limit": FORM_DRAFT_TARGET_LIMIT,
+            "by_primary_reason": {},
+            "readiness_aggregated_at": None,
+        }
+    targets = statement.order_by(None).subquery()
+    rows = db.execute(
+        select(targets.c.primary_reason, func.count())
+        .select_from(targets)
+        .group_by(targets.c.primary_reason)
+    ).all()
+    by_primary_reason = {reason: count for reason, count in rows}
+    return {
+        "total": sum(by_primary_reason.values()),
+        "per_run_limit": FORM_DRAFT_TARGET_LIMIT,
+        "by_primary_reason": by_primary_reason,
+        "readiness_aggregated_at": snapshot.finished_at,
+    }
 
 
 def email_draft_targets(db: Session, project_id: UUID) -> list[dict[str, str | None]]:

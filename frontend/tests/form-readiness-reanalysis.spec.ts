@@ -29,6 +29,10 @@ test('reanalyzes only the selected readiness reason and shows bounded job progre
   } }))
   await page.route(`**/api/projects/${fixture.project_id}/outreach-templates`, route => route.fulfill({ json: [] }))
   await page.route(`**/api/projects/${fixture.project_id}/company-list?**`, route => route.fulfill({ json: { items: [], total: 0, offset: 0, limit: 20 } }))
+  await page.route(`**/api/projects/${fixture.project_id}/outreach-drafts/bulk-from-template/form-targets`, route => route.fulfill({ json: {
+    total: 0, per_run_limit: 500, by_primary_reason: {},
+    readiness_aggregated_at: new Date().toISOString(),
+  } }))
   await page.route(`**/api/projects/${fixture.project_id}/form-dm-readiness**`, async route => {
     const request = route.request()
     const url = new URL(request.url())
