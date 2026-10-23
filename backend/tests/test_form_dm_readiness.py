@@ -4,6 +4,7 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 
 from app.form_dm_readiness_routes import READINESS_CSV_FIELDS, readiness_csv_rows
 from app.models import Company, FormProfile, FormProfileField, Project, ProjectMember
@@ -115,6 +116,103 @@ def test_form_dm_readiness_recalculate_joins_active_job_after_enqueue_race(
     assert response.status_code == 202, response.text
     assert response.json()["id"] == str(active_job.id)
     assert response.json()["status"] == "queued"
+
+
+def test_form_dm_readiness_retries_a_transient_batch_database_error(
+    auth, form_source, db, monkeypatch
+):
+    from app.models import FormDmReadinessResult, OperationJob
+    from app.worker import run_form_dm_readiness
+
+    project = form_source[0]
+    job = OperationJob(
+        project_id=project.id,
+        operation_type="form_dm_readiness",
+        status="running",
+        worker_id=uuid4(),
+    )
+    db.add(job)
+    db.commit()
+    real_commit = db.commit
+    commit_calls = 0
+
+    def transient_commit():
+        nonlocal commit_calls
+        commit_calls += 1
+        if commit_calls == 2:
+            raise OperationalError("synthetic disconnect", {}, ConnectionError())
+        real_commit()
+
+    monkeypatch.setattr(db, "commit", transient_commit)
+    monkeypatch.setattr("app.worker.time.sleep", lambda _seconds: None)
+
+    run_form_dm_readiness(db, job, job.worker_id)
+
+    assert commit_calls >= 3
+    assert db.scalar(select(FormDmReadinessResult).where(FormDmReadinessResult.job_id == job.id))
+
+
+def test_form_dm_readiness_resumes_from_persisted_results(form_source, db):
+    from app.models import FormDmReadinessResult, OperationJob
+    from app.worker import run_form_dm_readiness
+
+    project, company, _draft, profile, _sender, _fields = form_source
+    worker_id = uuid4()
+    job = OperationJob(
+        project_id=project.id,
+        operation_type="form_dm_readiness",
+        status="running",
+        worker_id=worker_id,
+    )
+    db.add(job)
+    db.flush()
+    db.add(
+        FormDmReadinessResult(
+            job_id=job.id,
+            company_id=company.id,
+            profile_id=profile.id,
+            primary_reason="READY",
+            secondary_reasons=[],
+            review_queue_eligible=True,
+            classified_at=datetime.now(timezone.utc),
+        )
+    )
+    db.commit()
+
+    run_form_dm_readiness(db, job, worker_id)
+
+    db.refresh(job)
+    assert job.total_count == 1
+    assert job.processed_count == 1
+    assert job.success_count == 1
+    assert (
+        len(
+            db.scalars(
+                select(FormDmReadinessResult).where(FormDmReadinessResult.job_id == job.id)
+            ).all()
+        )
+        == 1
+    )
+
+
+def test_form_dm_readiness_waits_for_bulk_draft_creation(auth, form_source, db):
+    from app.models import OperationJob
+
+    project = form_source[0]
+    db.add(
+        OperationJob(
+            project_id=project.id,
+            operation_type="bulk_template_drafts",
+            status="running",
+            worker_id=uuid4(),
+        )
+    )
+    db.commit()
+
+    response = auth.post(f"/api/projects/{project.id}/form-dm-readiness/recalculate")
+
+    assert response.status_code == 409
+    assert "一括作成中" in response.json()["detail"]
 
 
 def test_form_dm_readiness_classifies_prohibition_before_captcha(auth, form_source, db):

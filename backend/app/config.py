@@ -9,6 +9,10 @@ class Settings(BaseSettings):
         env_file=Path(__file__).resolve().parents[2] / ".env", extra="ignore"
     )
     database_url: str = "postgresql+psycopg://postgres:postgres@localhost:5432/leadhive_v2"
+    database_pool_size: int = Field(default=2, ge=1, le=20)
+    database_max_overflow: int = Field(default=0, ge=0, le=20)
+    database_pool_timeout_seconds: int = Field(default=10, ge=1, le=60)
+    database_pool_recycle_seconds: int = Field(default=300, ge=30, le=3600)
     cors_origins: str = "http://localhost:5173"
     cookie_secure: bool = False
     session_hours: int = 12

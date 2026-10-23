@@ -249,7 +249,7 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
       }}>再集計</button>}</div>
       {activeStep === step.id && <div className="mt-5">
         {step.id === 1 && <>
-          <SendFlowDraftPanel key={`drafts-${project.id}-${channel}-${templateRevision}`} projectId={project.id} channel={channel} canWrite={canWrite} onNeedTemplate={templateId => { setTemplateEditorTemplateId(templateId ?? ''); setTemplateEditorOpen(true) }} onCreated={afterDrafts} onNext={() => goToStep(channel === 'form' ? 2 : approvalStep)} />
+          <SendFlowDraftPanel key={`drafts-${project.id}-${channel}-${templateRevision}`} projectId={project.id} channel={channel} canWrite={canWrite} readinessBusy={Boolean(readinessJob && ['queued', 'running'].includes(readinessJob.status))} onNeedTemplate={templateId => { setTemplateEditorTemplateId(templateId ?? ''); setTemplateEditorOpen(true) }} onCreated={afterDrafts} onNext={() => goToStep(channel === 'form' ? 2 : approvalStep)} />
           <details className="mt-4" open={templateEditorOpen} onToggle={event => setTemplateEditorOpen(event.currentTarget.open)}><summary>テンプレートを新しく作る・編集する</summary><div className="mt-4"><SendFlowTemplatePanel key={`templates-${project.id}-${channel}-${templateEditorTemplateId}`} projectId={project.id} channel={channel} canWrite={canWrite} initialTemplateId={templateEditorTemplateId} onTemplateCountChange={count => { setTemplateCount(count); setTemplateRevision(value => value + 1) }} /></div></details>
         </>}
         {channel === 'form' && step.id === 2 && <>

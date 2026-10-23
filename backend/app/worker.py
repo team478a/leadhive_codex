@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from threading import Event, Thread
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.config import settings
 from app.database import SessionLocal
@@ -54,6 +55,7 @@ from app.services.worker_heartbeat import record_worker_heartbeat
 logger = logging.getLogger("leadhive")
 EMAIL_CLAIM_LOCK_ID = 4_781_001
 HEARTBEAT_INTERVAL_SECONDS = 30
+READINESS_DATABASE_RETRY_LIMIT = 4
 
 
 def lease_deadline() -> datetime:
@@ -1125,77 +1127,132 @@ def run_form_dm_readiness(db, job: OperationJob, worker_id: uuid.UUID) -> None:
     from app.models import FormAnalysisLog
 
     original_job = job
+    job_id = job.id
     query = _ranked_form_rows(job.project_id)
-    job.total_count = (
-        db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
-    )
-    job.processed_count = job.success_count = job.failed_count = 0
-    db.commit()
+    for attempt in range(READINESS_DATABASE_RETRY_LIMIT + 1):
+        try:
+            job.total_count = (
+                db.scalar(select(func.count()).select_from(query.order_by(None).subquery())) or 0
+            )
+            job.processed_count = job.success_count = job.failed_count = 0
+            db.commit()
+            break
+        except DBAPIError as exc:
+            db.rollback()
+            transient = isinstance(exc, OperationalError) or exc.connection_invalidated
+            if not transient or attempt >= READINESS_DATABASE_RETRY_LIMIT:
+                raise
+            logger.warning(
+                "form readiness database retry phase=initialize attempt=%s",
+                attempt + 1,
+            )
+            time.sleep(2**attempt)
+            job = db.get(OperationJob, job_id)
+            if job is None:
+                return
     offset = 0
     while True:
-        if stop_requested(db, job, worker_id):
-            break
-        rows = db.execute(query.offset(offset).limit(200)).all()
-        if not rows:
-            break
-        classified_at = datetime.now(timezone.utc)
-        profile_fingerprints = {
-            profile.id: profile.fingerprint for _, profile in rows if profile is not None
-        }
-        confirmed_review_pairs = {
-            (profile_id, fingerprint)
-            for profile_id, fingerprint, confirmed in db.execute(
-                select(
-                    FormAnalysisLog.form_profile_id,
-                    FormAnalysisLog.details["profile_fingerprint"].astext,
-                    FormAnalysisLog.details["confirmed_no_sales_prohibition"].astext,
-                ).where(
-                    FormAnalysisLog.form_profile_id.in_(profile_fingerprints),
-                    FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+        batch_complete = False
+        for attempt in range(READINESS_DATABASE_RETRY_LIMIT + 1):
+            try:
+                job = db.get(OperationJob, job_id)
+                if job is None or stop_requested(db, job, worker_id):
+                    return
+                persisted_count = (
+                    db.scalar(
+                        select(func.count())
+                        .select_from(FormDmReadinessResult)
+                        .where(FormDmReadinessResult.job_id == job_id)
+                    )
+                    or 0
                 )
-            ).all()
-            if confirmed == "true"
-        }
-        results = []
-        for company, profile in rows:
-            outcome = classify_profile(db, company, profile)
-            reasons = [outcome["primary_reason"], *outcome["secondary_reasons"]]
-            ready_confirmation_required = (
-                outcome["primary_reason"] == "READY"
-                and profile.is_primary is True
-                and (profile.id, profile.fingerprint) not in confirmed_review_pairs
-            )
-            queue_eligible = (
-                profile.is_primary is True
-                and len(profile.fingerprint or "") == 64
-                and (bool(REVIEW_REASONS.intersection(reasons)) or ready_confirmation_required)
-                and not bool(
-                    (BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS).intersection(reasons)
-                    if outcome["primary_reason"] == "BROWSER_READY"
-                    else BLOCKING_REASONS.intersection(reasons)
+                offset = max(offset, persisted_count)
+                rows = db.execute(query.offset(offset).limit(200)).all()
+                if not rows:
+                    job.processed_count = persisted_count
+                    job.success_count = persisted_count
+                    job.failed_count = 0
+                    job.lease_expires_at = lease_deadline()
+                    db.commit()
+                    return
+                classified_at = datetime.now(timezone.utc)
+                profile_fingerprints = {
+                    profile.id: profile.fingerprint for _, profile in rows if profile is not None
+                }
+                confirmed_review_pairs = {
+                    (profile_id, fingerprint)
+                    for profile_id, fingerprint, confirmed in db.execute(
+                        select(
+                            FormAnalysisLog.form_profile_id,
+                            FormAnalysisLog.details["profile_fingerprint"].astext,
+                            FormAnalysisLog.details["confirmed_no_sales_prohibition"].astext,
+                        ).where(
+                            FormAnalysisLog.form_profile_id.in_(profile_fingerprints),
+                            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+                        )
+                    ).all()
+                    if confirmed == "true"
+                }
+                results = []
+                for company, profile in rows:
+                    outcome = classify_profile(db, company, profile)
+                    reasons = [outcome["primary_reason"], *outcome["secondary_reasons"]]
+                    ready_confirmation_required = (
+                        outcome["primary_reason"] == "READY"
+                        and profile.is_primary is True
+                        and (profile.id, profile.fingerprint) not in confirmed_review_pairs
+                    )
+                    queue_eligible = (
+                        profile.is_primary is True
+                        and len(profile.fingerprint or "") == 64
+                        and (
+                            bool(REVIEW_REASONS.intersection(reasons))
+                            or ready_confirmation_required
+                        )
+                        and not bool(
+                            (BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS).intersection(
+                                reasons
+                            )
+                            if outcome["primary_reason"] == "BROWSER_READY"
+                            else BLOCKING_REASONS.intersection(reasons)
+                        )
+                    )
+                    results.append(
+                        FormDmReadinessResult(
+                            job_id=job_id,
+                            company_id=company.id,
+                            profile_id=profile.id,
+                            primary_reason=outcome["primary_reason"],
+                            secondary_reasons=outcome["secondary_reasons"],
+                            review_queue_eligible=queue_eligible,
+                            classified_at=classified_at,
+                        )
+                    )
+                db.add_all(results)
+                job.processed_count = offset + len(rows)
+                job.success_count = offset + len(rows)
+                job.lease_expires_at = lease_deadline()
+                db.commit()
+                offset += len(rows)
+                db.expunge_all()
+                db.add(original_job)
+                db.refresh(original_job)
+                job = original_job
+                batch_complete = True
+                break
+            except DBAPIError as exc:
+                db.rollback()
+                transient = isinstance(exc, OperationalError) or exc.connection_invalidated
+                if not transient or attempt >= READINESS_DATABASE_RETRY_LIMIT:
+                    raise
+                logger.warning(
+                    "form readiness database retry phase=batch offset=%s attempt=%s",
+                    offset,
+                    attempt + 1,
                 )
-            )
-            results.append(
-                FormDmReadinessResult(
-                    job_id=original_job.id,
-                    company_id=company.id,
-                    profile_id=profile.id,
-                    primary_reason=outcome["primary_reason"],
-                    secondary_reasons=outcome["secondary_reasons"],
-                    review_queue_eligible=queue_eligible,
-                    classified_at=classified_at,
-                )
-            )
-        db.add_all(results)
-        job.processed_count += len(rows)
-        job.success_count += len(rows)
-        job.lease_expires_at = lease_deadline()
-        db.commit()
-        offset += len(rows)
-        db.expunge_all()
-        db.add(original_job)
-        db.refresh(original_job)
-        job = original_job
+                time.sleep(2**attempt)
+        if not batch_complete:
+            return
 
 
 def run_form_approval_batch(db, job: OperationJob, worker_id: uuid.UUID) -> None:

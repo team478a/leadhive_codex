@@ -22,6 +22,14 @@ services:
         fromDatabase:
           name: leadhive-staging-db
           property: connectionString
+      - key: DATABASE_POOL_SIZE
+        value: "2"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "0"
+      - key: DATABASE_POOL_TIMEOUT_SECONDS
+        value: "10"
+      - key: DATABASE_POOL_RECYCLE_SECONDS
+        value: "300"
       - key: SETTINGS_ENCRYPTION_KEY
         sync: false
       - key: CORS_ORIGINS
@@ -96,6 +104,14 @@ services:
         fromDatabase:
           name: leadhive-staging-db
           property: connectionString
+      - key: DATABASE_POOL_SIZE
+        value: "2"
+      - key: DATABASE_MAX_OVERFLOW
+        value: "0"
+      - key: DATABASE_POOL_TIMEOUT_SECONDS
+        value: "10"
+      - key: DATABASE_POOL_RECYCLE_SECONDS
+        value: "300"
       - key: WORKER_PAUSED
         value: "false"
       - key: BROWSER_FORM_ANALYSIS_ENABLED

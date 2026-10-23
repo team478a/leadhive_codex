@@ -405,7 +405,7 @@ def _active_form_reanalysis(db: Session, project_id: UUID) -> OperationJob | Non
         .where(
             OperationJob.project_id == project_id,
             OperationJob.operation_type.in_(("form_intelligence", "site_analysis")),
-            OperationJob.status.in_(("queued", "running")),
+            OperationJob.status == "running",
         )
         .order_by(OperationJob.created_at.desc())
         .limit(1)
@@ -676,6 +676,16 @@ def recalculate_form_dm_readiness(
     project_access(project_id, db, user)
     if _active_form_reanalysis(db, project_id):
         raise HTTPException(409, "フォーム再解析が実行中です。完了後に再集計してください。")
+    if db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "bulk_template_drafts",
+            OperationJob.status == "running",
+        )
+        .limit(1)
+    ):
+        raise HTTPException(409, "フォーム下書きの一括作成中です。完了後に再集計してください。")
     active_job = db.scalar(
         select(OperationJob.id)
         .where(
