@@ -71,7 +71,11 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     else if (projectIds.some(id => path === `/api/projects/${id}/outreach-templates`) && method === 'POST') {
       savedTemplate = { ...body, id: 'new-template', project_id: path.split('/')[3], created_by_user_id: 'send-flow-user', created_at: '2026-10-17T00:00:00Z', updated_at: '2026-10-17T00:00:00Z' }
       data = savedTemplate
-    } else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', project_id: path.split('/')[3], company_name: '確認候補株式会社', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }], total: 1, offset: 0, limit: 20 }
+    } else if (path.endsWith('/outreach-drafts/bulk-from-template/form-targets')) data = {
+      total: 1, per_run_limit: 500, by_primary_reason: { NO_FORM_DRAFT: 1 },
+      readiness_aggregated_at: '2026-10-16T00:00:00Z',
+    }
+    else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', project_id: path.split('/')[3], company_name: '確認候補株式会社', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }], total: 1, offset: 0, limit: 20 }
     else if (path.endsWith('/form-dm-readiness')) data = { counts: { NO_FORM_DRAFT: 1, READY: 1 }, review_queue_eligible: 7, ready_confirmation_pending: 0, total: 2, offset: 0, limit: 20, items: [], last_aggregated_at: '2026-10-16T00:00:00Z', active_job: null, read_only: true, external_requests: 0 }
     else if (path.endsWith('/form-review-queue')) data = { total: 0, offset: 0, limit: 20, items: [], read_only: true, external_requests: 0 }
     else if (path.endsWith('/outreach-drafts/bulk-from-template') && method === 'POST') {
