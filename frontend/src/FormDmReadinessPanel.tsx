@@ -155,11 +155,20 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
       if (result && !result.last_aggregated_at && !result.active_job) void recalculate()
     })
   }, [recalculate, refresh])
+  const activeJobId = data?.active_job?.id
+  const activeJobStatus = data?.active_job?.status
   useEffect(() => {
-    if (!data?.active_job) return
-    const timer = window.setInterval(() => { void refresh() }, 3000)
+    if (!activeJobId || !['queued', 'running'].includes(activeJobStatus ?? '')) return
+    const timer = window.setInterval(() => {
+      void api<OperationJob>(`/operations/${activeJobId}`)
+        .then(current => {
+          setData(previous => previous ? { ...previous, active_job: current } : previous)
+          if (['completed', 'failed', 'cancelled'].includes(current.status)) void refresh()
+        })
+        .catch(e => setError(errorMessage(e)))
+    }, 3000)
     return () => window.clearInterval(timer)
-  }, [data?.active_job, refresh])
+  }, [activeJobId, activeJobStatus, refresh])
   const reanalysisJobId = reanalysisJob?.id
   const reanalysisJobStatus = reanalysisJob?.status
   useEffect(() => {
@@ -178,15 +187,13 @@ export function FormDmReadinessPanel({ projectId, canWrite }: { projectId: strin
   useEffect(() => {
     if (!browserJob?.id || !['queued', 'running'].includes(browserJob.status)) return
     const timer = window.setInterval(() => {
-      api<OperationJob[]>(`/projects/${projectId}/operations?limit=100`).then(rows => {
-        const current = rows.find(job => job.id === browserJob.id)
-        if (!current) return
+      api<OperationJob>(`/operations/${browserJob.id}`).then(current => {
         setBrowserJob(current)
         if (['completed', 'failed', 'cancelled'].includes(current.status)) void refresh()
       }).catch(e => setError(errorMessage(e)))
     }, 2000)
     return () => window.clearInterval(timer)
-  }, [browserJob?.id, browserJob?.status, projectId, refresh])
+  }, [browserJob?.id, browserJob?.status, refresh])
   const browserBusy = Boolean(browserJob && ['queued', 'running'].includes(browserJob.status))
   return <section className="panel mb-5" aria-label="フォームDM送信可否">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2>フォームDMの送信可否</h2>
