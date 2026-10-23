@@ -25,6 +25,11 @@ async function openReadiness(page: Page, flags: BrowserFlags) {
   } }))
   await page.route(`**/api/projects/${fixture.project_id}/outreach-templates`, route => route.fulfill({ json: [] }))
   await page.route(`**/api/projects/${fixture.project_id}/company-list?**`, route => route.fulfill({ json: { items: [], total: 0, offset: 0, limit: 20 } }))
+  await page.route(`**/api/projects/${fixture.project_id}/outreach-drafts/bulk-from-template/form-targets`, route => route.fulfill({ json: {
+    total: 1263, per_run_limit: 500,
+    by_primary_reason: { NO_FORM_DRAFT: 126, CF7: 1000, NON_POST_METHOD: 137 },
+    readiness_aggregated_at: new Date().toISOString(),
+  } }))
   await page.route(`**/api/projects/${fixture.project_id}/pipeline-stages/summary`, route => route.fulfill({ json: {
     total_companies: 7,
     generated_at: new Date().toISOString(),
@@ -66,6 +71,12 @@ async function openReadiness(page: Page, flags: BrowserFlags) {
 
 test('shows browser analysis disabled state and remaining targets', async ({ page }) => {
   const panel = await openReadiness(page, { analysis: false, dryRun: false, delivery: false })
+  const draftPanel = page.getByRole('region', { name: '送信先と文面の準備' })
+  await expect(draftPanel.getByText('文面を作成できる企業：1263社（1回に最大500社。あと3回）')).toBeVisible()
+  await draftPanel.getByText('対象の内訳').click()
+  await expect(draftPanel.getByText('文面なしだけ：126社')).toBeVisible()
+  await expect(draftPanel.getByText('ブラウザー送信の候補：1000社')).toBeVisible()
+  await expect(draftPanel.getByText('要検証：137社')).toBeVisible()
   const pipeline = panel.locator('[aria-label="全体の流れ"]')
   await expect(pipeline.getByText('全体の流れ（全7社）')).toBeVisible()
   await expect(pipeline.getByText('フォーム未発見：2社')).toBeVisible()

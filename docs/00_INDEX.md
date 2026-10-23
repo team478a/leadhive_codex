@@ -59,6 +59,7 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 ## 実装・運用記録
 
+- `219_BULK_FORM_DRAFT_TARGETS.md`：フォーム文面の一括作成対象拡張、対象件数API、画面の残り実行回数表示。
 - `218_PIPELINE_STAGE_CSV.md`：全企業を1社1行で分類する段階CSVと段階別件数。
 
 - `BROWSER_SEND_ENABLEMENT_IMPLEMENTATION.md`：ブラウザー解析対象の安全な絞り込み、残件表示、解析後の送信可否自動再集計。

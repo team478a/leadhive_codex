@@ -23,15 +23,32 @@ from app.models import (
     User,
 )
 from app.project_access import project_access
-from app.schema_outreach import BulkOutreachDraftInput
+from app.schema_outreach import BulkFormDraftTargetsOut, BulkOutreachDraftInput
 from app.schema_workflow import OperationJobOut
 from app.security import current_user
-from app.services.bulk_template_drafts import email_draft_targets, readiness_targets
+from app.services.bulk_template_drafts import (
+    email_draft_targets,
+    readiness_target_summary,
+    readiness_targets,
+)
 from app.services.operations import add_operation_job
 from app.services.outreach_template_validation import has_stop_method
 
 router = APIRouter(prefix="/api", tags=["Send flow"])
 SEND_FLOW_JOB = "bulk_template_drafts"
+
+
+@router.get(
+    "/projects/{project_id}/outreach-drafts/bulk-from-template/form-targets",
+    response_model=BulkFormDraftTargetsOut,
+)
+def bulk_form_draft_targets(
+    project_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    return readiness_target_summary(db, project_id)
 
 
 @router.post(

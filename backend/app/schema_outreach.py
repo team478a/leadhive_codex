@@ -79,6 +79,13 @@ class BulkOutreachDraftInput(Input):
         return self
 
 
+class BulkFormDraftTargetsOut(BaseModel):
+    total: int
+    per_run_limit: int
+    by_primary_reason: dict[str, int]
+    readiness_aggregated_at: datetime | None
+
+
 class OutreachDraftApprovalOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
