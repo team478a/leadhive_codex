@@ -8,7 +8,7 @@ services:
     name: leadhive-staging-api
     runtime: docker
     region: singapore
-    plan: 0.5c-512mb
+    plan: 1c-2g
     branch: main
     autoDeployTrigger: "off"
     numInstances: 1

@@ -5,7 +5,7 @@ from threading import Barrier
 
 from sqlalchemy import select
 
-from app import worker
+from app import operation_routes, worker
 from app.models import (
     AnalysisRefreshSchedule,
     ApplicationSettings,
@@ -81,6 +81,49 @@ def test_enqueue_worker_progress_and_duplicate_prevention(auth, db, monkeypatch)
     assert job["processed_count"] == 1 and job["success_count"] == 1
     assert job["attempt_count"] == 1
     assert auth.post(f"/api/operations/{job['id']}/acknowledge").status_code == 409
+
+
+def test_operation_status_endpoints_project_only_required_payload_fields(auth, client, users, db):
+    project = make_project(auth, db)
+    job = OperationJob(
+        project_id=project["id"],
+        operation_type="collect_search",
+        status="running",
+        payload={
+            "collection_progress": {"processed": 12},
+            "collection_runtime_history": [{"attempt": 1}],
+            "unused_large_value": "x" * 1_000_000,
+        },
+        total_count=20,
+        processed_count=12,
+    )
+    db.add(job)
+    db.commit()
+
+    selected = operation_routes.operation_summary_statement().column_descriptions
+    assert not any(description["expr"].compare(OperationJob.payload) for description in selected)
+
+    listed = auth.get(f"/api/projects/{project['id']}/operations?limit=100")
+    assert listed.status_code == 200
+    assert listed.json()[0]["collection_progress"] == {"processed": 12}
+    assert listed.json()[0]["collection_runtime_history"] == [{"attempt": 1}]
+    assert "unused_large_value" not in listed.text
+
+    detail = auth.get(f"/api/operations/{job.id}")
+    assert detail.status_code == 200
+    assert detail.json()["processed_count"] == 12
+    assert "unused_large_value" not in detail.text
+
+    from tests.conftest import PASSWORD
+
+    client.post("/api/auth/logout")
+    assert (
+        client.post(
+            "/api/auth/login", json={"email": users[1].email, "password": PASSWORD}
+        ).status_code
+        == 200
+    )
+    assert client.get(f"/api/operations/{job.id}").status_code == 404
 
 
 def test_master_site_backfill_is_explicit_and_runs_in_main_worker(auth, db, monkeypatch):

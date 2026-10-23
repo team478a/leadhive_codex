@@ -33,6 +33,59 @@ from app.services.operations import add_operation_job, refresh_company_ids
 
 router = APIRouter(prefix="/api")
 
+_OPERATION_PAYLOAD_FIELDS = (
+    "collection_progress",
+    "collection_runtime",
+    "collection_runtime_history",
+    "article_saved_count",
+    "source_operation_ids",
+    "results",
+    "bulk_template_results",
+    "readiness_reanalysis_reason",
+    "readiness_reanalysis_matched_count",
+)
+
+
+def operation_summary_statement():
+    """Select operation status without materializing the complete JSON payload."""
+    return select(
+        OperationJob.id,
+        OperationJob.project_id,
+        OperationJob.operation_type,
+        OperationJob.status,
+        OperationJob.total_count,
+        OperationJob.processed_count,
+        OperationJob.success_count,
+        OperationJob.failed_count,
+        OperationJob.cancel_requested,
+        OperationJob.attempt_count,
+        OperationJob.acknowledged_at,
+        OperationJob.error_message,
+        OperationJob.created_at,
+        OperationJob.started_at,
+        OperationJob.finished_at,
+        OperationJob.payload["condition_binding"].label("condition_binding"),
+        *(OperationJob.payload[field].label(field) for field in _OPERATION_PAYLOAD_FIELDS),
+    )
+
+
+def operation_summary(row) -> OperationJobOut:
+    values = dict(row._mapping)
+    condition_binding = values.pop("condition_binding") or {}
+    payload = {
+        field: value
+        for field in _OPERATION_PAYLOAD_FIELDS
+        if (value := values.pop(field)) is not None
+    }
+    return OperationJobOut.model_validate(
+        {
+            **values,
+            "condition_request_id": condition_binding.get("request_id"),
+            "condition_version": condition_binding.get("version"),
+            "payload": payload,
+        }
+    )
+
 
 def owned_operation(job_id: UUID, db: Session, user: User) -> OperationJob:
     job = db.get(OperationJob, job_id)
@@ -717,12 +770,26 @@ def list_operations(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user, write=False)
-    return db.scalars(
-        select(OperationJob)
+    rows = db.execute(
+        operation_summary_statement()
         .where(OperationJob.project_id == project_id)
         .order_by(OperationJob.created_at.desc(), OperationJob.id)
         .limit(limit)
     ).all()
+    return [operation_summary(row) for row in rows]
+
+
+@router.get("/operations/{job_id}", response_model=OperationJobOut)
+def get_operation(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    row = db.execute(operation_summary_statement().where(OperationJob.id == job_id)).one_or_none()
+    if row is None:
+        raise HTTPException(404, "処理ジョブが見つかりません。")
+    project_access(row.project_id, db, user, write=False)
+    return operation_summary(row)
 
 
 @router.get("/operations/{job_id}/collection-conditions")
