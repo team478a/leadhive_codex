@@ -63,6 +63,16 @@ def enqueue_bulk_template_drafts(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user)
+    if body.channel == "form" and db.scalar(
+        select(OperationJob.id)
+        .where(
+            OperationJob.project_id == project_id,
+            OperationJob.operation_type == "form_dm_readiness",
+            OperationJob.status.in_(("queued", "running")),
+        )
+        .limit(1)
+    ):
+        raise HTTPException(409, "送信可否の再集計中です。完了後に下書きを作成してください。")
     template = db.scalar(
         select(OutreachTemplate).where(
             OutreachTemplate.id == body.template_id,

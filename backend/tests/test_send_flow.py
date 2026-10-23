@@ -165,6 +165,32 @@ def test_bulk_template_drafts_can_select_saved_no_form_draft_readiness(auth, db,
     ]
 
 
+def test_bulk_template_drafts_waits_for_active_readiness(auth, db, form_source):
+    project, _company, _draft, _profile, _sender, _fields = form_source
+    template = make_template(auth, str(project.id), channel="form")
+    db.add(
+        OperationJob(
+            project_id=project.id,
+            operation_type="form_dm_readiness",
+            status="running",
+            worker_id=uuid4(),
+        )
+    )
+    db.commit()
+
+    response = auth.post(
+        f"/api/projects/{project.id}/outreach-drafts/bulk-from-template",
+        json={
+            "template_id": template["id"],
+            "channel": "form",
+            "readiness_reason": "NO_FORM_DRAFT",
+        },
+    )
+
+    assert response.status_code == 409
+    assert "再集計中" in response.json()["detail"]
+
+
 def test_bulk_template_drafts_excludes_non_company_suspected_readiness(auth, db, form_source):
     project, company, _draft, profile, _sender, _fields = form_source
     snapshot = OperationJob(

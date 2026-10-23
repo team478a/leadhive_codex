@@ -23,16 +23,25 @@ function networkError(method: string, path: string) {
 }
 
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  let response: Response
-  try {
-    response = await fetch(`/api${path}`, {
-      method, credentials: 'include',
-      headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    })
-  } catch {
-    throw networkError(method, path)
+  const retryDelays = method === 'GET' ? [0, 1000, 2000, 4000, 8000] : [0]
+  let response: Response | undefined
+  let lastNetworkError = false
+  for (const delay of retryDelays) {
+    if (delay) await new Promise(resolve => window.setTimeout(resolve, delay))
+    try {
+      response = await fetch(`/api${path}`, {
+        method, credentials: 'include',
+        headers: body === undefined ? {} : { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      })
+      lastNetworkError = false
+    } catch {
+      lastNetworkError = true
+      continue
+    }
+    if (response.status !== 503) break
   }
+  if (!response || lastNetworkError) throw networkError(method, path)
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
     if (response.status === 401 && path !== '/auth/login') {
