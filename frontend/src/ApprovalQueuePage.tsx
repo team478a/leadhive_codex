@@ -26,8 +26,9 @@ const reasonNames: Record<string, string> = {
   'request expired': '候補の有効期限が切れました。新しい有効な証拠で再準備してください。',
 }
 
-export function ApprovalQueuePage({ projects, projectRoles, initialProjectId, inlineRequest }: {
+export function ApprovalQueuePage({ projects, projectRoles, initialProjectId, inlineRequest, isAdmin = false }: {
   projects: Project[]; projectRoles: Record<string, ProjectMember['role']>; initialProjectId?: string
+  isAdmin?: boolean
   inlineRequest?: { id: string; projectId: string; canWrite: boolean; onChanged?: () => Promise<unknown>; onBusyChange?: (busy: boolean) => void }
 }) {
   const [projectId, setProjectId] = useState(inlineRequest?.projectId ?? (projects.some(p => p.id === initialProjectId) ? initialProjectId! : projects[0]?.id ?? ''))
@@ -148,7 +149,7 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId, in
     <ApprovedEmailPanel key={projectId} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     <ApprovedFormPanel key={`form-dispatch-${projectId}`} projectId={projectId} items={items} canWrite={canWrite} refresh={refresh} />
     {canWrite && <FormApprovalPreparationPanel key={`form-${projectId}`} projectId={projectId} refresh={refresh} />}
-    {canWrite && <CF7CandidatePreparationPanel key={`cf7-${projectId}`} projectId={projectId} refresh={refresh} />}
+    {isAdmin && canWrite && <CF7CandidatePreparationPanel key={`cf7-${projectId}`} projectId={projectId} refresh={refresh} />}
     </>}
     <fieldset disabled={busy || !projectId}>
       <div className="flex flex-wrap gap-3"><button type="button" className="secondary" onClick={() => act(refresh)}>最新の状態を取得</button>
@@ -173,8 +174,8 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId, in
       </div>}
       {selected && <article className="panel mt-4">
         <h2>{selected.company_name} の提案内容</h2>
-        {selected.delivery_method === 'cf7_candidate_only' && <p role="status">CF7候補内容の承認のみです。送信予約・実送信には使用できません。</p>}
-        {selected.delivery_method === 'cf7_real_candidate_only' && <section aria-label="実サイトCF7候補の承認資料">
+        {isAdmin && selected.delivery_method === 'cf7_candidate_only' && <p role="status">CF7候補内容の承認のみです。送信予約・実送信には使用できません。</p>}
+        {isAdmin && selected.delivery_method === 'cf7_real_candidate_only' && <section aria-label="実サイトCF7候補の承認資料">
           <p role="status">実サイトCF7候補内容の承認です。承認後も送信予約・実送信には使用できません。</p>
           {selected.cf7_real_handoff ? <>
             <p>版別契約：{selected.cf7_real_handoff.snapshot.contract.contract_family} / 変換データ：{selected.cf7_real_handoff.snapshot.encoding.wire_size.toLocaleString('ja-JP')} bytes</p>
@@ -182,12 +183,12 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId, in
             <p className="break-all">引き継ぎhash：{selected.cf7_real_handoff.snapshot_hash}</p>
           </> : <p role="alert">確認資料を表示できません。最新状態を取得してください。</p>}
         </section>}
-        {selected.delivery_method === 'cf7_real_reservation' && <section aria-label="CF7予約承認資料">
+        {isAdmin && selected.delivery_method === 'cf7_real_reservation' && <section aria-label="CF7予約承認資料">
           <p role="status">予約のみの再承認です。実送信には使用できません。</p>
           {selected.cf7_reservation_plan ? <p className="break-all">元の承認：{selected.cf7_reservation_plan.source_approval_id} / v{selected.cf7_reservation_plan.source_approval_version} / 証拠期限：{date(selected.cf7_reservation_plan.expires_at)}</p> : <p role="alert">予約資料を表示できません。</p>}
         </section>}
-        {canWrite && selected.delivery_method === 'cf7_real_candidate_only' && selected.status === 'APPROVED' && <CF7ReservationPreparationPanel key={selected.id} requestId={selected.id} refresh={refresh} />}
-        {selected.delivery_method === 'cf7_candidate_only' && <>
+        {isAdmin && canWrite && selected.delivery_method === 'cf7_real_candidate_only' && selected.status === 'APPROVED' && <CF7ReservationPreparationPanel key={selected.id} requestId={selected.id} refresh={refresh} />}
+        {isAdmin && selected.delivery_method === 'cf7_candidate_only' && <>
           {selected.cf7_candidate_snapshot ? <CF7CandidateDetails snapshot={selected.cf7_candidate_snapshot} hash={selected.cf7_candidate_snapshot_hash} observation={selected.cf7_observation} />
             : <p role="alert">候補証拠を表示できません。最新の状態を取得してください。</p>}
           <p className="break-all">履歴ID: {selected.proposal_id} / 改訂元: {selected.supersedes_request_id || '初版'}</p>
@@ -220,7 +221,7 @@ export function ApprovalQueuePage({ projects, projectRoles, initialProjectId, in
           {selected.status === 'PENDING' && <button type="button" className="secondary" disabled={!reason.trim()} onClick={() => decide('reject')}>却下</button>}{' '}
           <button type="button" className="secondary" disabled={!reason.trim()} onClick={() => decide('revoke')}>取消</button>
         </div>}
-        {canWrite && selected.delivery_method === 'cf7_candidate_only' && <CF7CandidatePreparationPanel key={`cf7-revision-${selected.id}`} projectId={projectId} refresh={refresh} revision={selected} />}
+        {isAdmin && canWrite && selected.delivery_method === 'cf7_candidate_only' && <CF7CandidatePreparationPanel key={`cf7-revision-${selected.id}`} projectId={projectId} refresh={refresh} revision={selected} />}
       </article>}
     </fieldset>
     {!inlineRequest && <details className="panel"><summary>監査記録（最新100件）</summary><ul>{events.map(event => <li key={event.id}>{date(event.timestamp)} · {event.principal_type} · {event.event} · {event.reason}</li>)}</ul></details>}

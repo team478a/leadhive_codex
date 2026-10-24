@@ -13,6 +13,12 @@ from tests.test_cf7_candidate_preparation import prepare
 from tests.test_cf7_candidate_preparation import source as source
 
 
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
+
+
 def revision_preview(auth, old):
     return auth.post(
         f"/api/approval-requests/{old['id']}/cf7-revision-preview",

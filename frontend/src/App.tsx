@@ -62,7 +62,7 @@ type Editor = { type: 'project'; value?: Project; profileId?: string } | { type:
 const statusNames = { draft: '下書き', active: '進行中', archived: 'アーカイブ' }
 
 function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
-  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'organization' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'usage' | 'targets' | 'sales' | 'results' | 'analysis'>(window.location.hash === '#raw' ? 'raw' : 'targets')
+  const [tab, setTab] = useState<'dashboard' | 'projects' | 'collection' | 'companies' | 'profiles' | 'deliveries' | 'settings' | 'organization' | 'approvals' | 'raw' | 'operation' | 'installation' | 'improvements' | 'usage' | 'targets' | 'sales' | 'results' | 'analysis'>(window.location.hash === '#raw' && user.is_admin ? 'raw' : 'targets')
   const [menuOpen, setMenuOpen] = useState(false)
   const menuButton = useRef<HTMLButtonElement>(null)
   useEffect(() => {
@@ -194,7 +194,7 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
         }}>✓ 承認キュー</button>
         <p className="nav-label">管理・ガイド</p>
         <button className={tab === 'organization' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('organization'); setEditor(null); setNotice('') }}>利用企業設定</button>
-        <button className={tab === 'raw' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('raw'); setMenuOpen(false); setEditor(null); setNotice('') }}>◎ 収集結果の確認（検証用）</button>
+        {user.is_admin && <button className={tab === 'raw' ? 'nav-item selected' : 'nav-item'} onClick={() => { setTab('raw'); setMenuOpen(false); setEditor(null); setNotice('') }}>◎ 収集結果の確認（検証用）</button>}
         <button className={tab === 'dashboard' ? 'nav-item selected' : 'nav-item'} onClick={() => {
           setTab('dashboard'); setEditor(null); setNotice('')
         }}>⌂ ダッシュボード{unreadNotifications > 0 && ` (${unreadNotifications})`}</button>
@@ -277,17 +277,17 @@ function Workspace({ user, onLogout }: { user: User; onLogout: () => void }) {
           <>{completionCompanyId && completionReturnContext && <section className="panel mb-4" aria-label="作業キューへの戻り先">
             <p>企業詳細の変更は必要に応じて保存してください。戻る操作で自動保存・承認・送信は行いません。</p>
             <button className="secondary mt-3" onClick={() => { setCompletionCompanyId(null); setTab('dashboard'); setNotice('') }}>作業キューへ戻る</button>
-          </section>}<CompaniesPage projects={projects} projectRoles={projectRoles} initialProjectId={collectionProjectId} initialReplyInboundEmailId={replyInboundEmailId} initialFollowupCompanyId={followupCompanyId} initialCompanyId={completionCompanyId} /></> : loaded && tab === 'dashboard' ?
-          <DashboardPage completionReturnContext={completionReturnContext} onOpenCompany={(context, companyId) => {
+          </section>}<CompaniesPage isAdmin={user.is_admin} projects={projects} projectRoles={projectRoles} initialProjectId={collectionProjectId} initialReplyInboundEmailId={replyInboundEmailId} initialFollowupCompanyId={followupCompanyId} initialCompanyId={completionCompanyId} /></> : loaded && tab === 'dashboard' ?
+          <DashboardPage isAdmin={user.is_admin} completionReturnContext={completionReturnContext} onOpenCompany={(context, companyId) => {
             setCompletionReturnContext(context); setCollectionProjectId(context.projectId); setReplyInboundEmailId(null); setFollowupCompanyId(null); setCompletionCompanyId(companyId); setTab('companies'); setNotice('')
           }} onUnreadChange={setUnreadNotifications} onOpenInboundReply={(projectId, inboundEmailId) => {
             setCompletionCompanyId(null); setCollectionProjectId(projectId); setFollowupCompanyId(null); setReplyInboundEmailId(inboundEmailId); setTab('companies'); setNotice('')
           }} onOpenFollowup={(projectId, companyId) => {
             setCompletionCompanyId(null); setCollectionProjectId(projectId); setReplyInboundEmailId(null); setFollowupCompanyId(companyId); setTab('companies'); setNotice('')
           }} /> : loaded && tab === 'settings' ?
-          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'usage' && user.is_admin ? <UsageReportPage /> : loaded && tab === 'organization' ? <OrganizationSettingsPanel isAdmin={user.is_admin} /> : loaded && tab === 'raw' ? <RawCollectionBenchmarkPage /> : loaded && tab === 'deliveries' ?
+          <SmtpSettingsPage defaultRecipient={user.email} /> : loaded && tab === 'usage' && user.is_admin ? <UsageReportPage /> : loaded && tab === 'organization' ? <OrganizationSettingsPanel isAdmin={user.is_admin} /> : loaded && tab === 'raw' && user.is_admin ? <RawCollectionBenchmarkPage /> : loaded && tab === 'deliveries' ?
           <EmailDeliveriesPage key={collectionProjectId} initialProjectId={collectionProjectId} projects={projects} projectRoles={projectRoles} /> : loaded && tab === 'approvals' ?
-          <ApprovalQueuePage key={collectionProjectId} initialProjectId={collectionProjectId} projects={projects} projectRoles={projectRoles} /> : loaded && <>
+          <ApprovalQueuePage key={collectionProjectId} isAdmin={user.is_admin} initialProjectId={collectionProjectId} projects={projects} projectRoles={projectRoles} /> : loaded && <>
           <div className="section-heading"><h2>プロファイル一覧</h2><span className="badge">{profiles.length} 件</span></div>
           <p className="muted mb-5">標準プロファイルは複製して編集できます。案件専用の条件も、複製して設定してください。</p>
           {profiles.length === 0 && <p className="panel empty">プロファイルがありません。新規作成してください。</p>}

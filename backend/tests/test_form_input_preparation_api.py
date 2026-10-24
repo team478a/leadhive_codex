@@ -93,7 +93,5 @@ def test_other_project_viewer_and_secret_sender_boundary(auth, db, users, monkey
     db.add(ProjectMember(project_id=company.project_id, user_id=users[1].id, role="viewer"))
     db.commit()
     response = auth.get(path)
-    assert response.status_code == 200
-    assert "sender@example.com" not in response.text
-    # Existing project write checks hide inaccessible write resources with 404.
+    assert response.status_code == 404
     assert auth.post(path + "/reviews", json=payload).status_code == 404
