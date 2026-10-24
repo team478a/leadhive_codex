@@ -1,10 +1,13 @@
 """Human form review queue; records review evidence but never sends or approves."""
 
+import csv
+import io
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import Field, StrictBool
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.orm import Session
@@ -40,8 +43,9 @@ from app.services.form_choice_groups import (
 from app.services.form_choice_groups import (
     supported as choice_group_supported,
 )
-from app.services.form_intelligence.consent import CONSENT_KEYS
+from app.services.form_intelligence.consent import CONSENT_KEYS, consent_policy_category
 from app.services.form_intelligence.fields import GROUP_REVIEW_MARKER, mapping_review_reason
+from app.services.form_intelligence.rules import normalize_required_label
 from app.services.form_profile_delivery import sender_values
 from app.services.form_review_binding import field_material as _field_material
 from app.services.form_review_binding import fields_hash as _fields_hash
@@ -58,6 +62,7 @@ from app.services.master_data import (
 
 router = APIRouter(prefix="/api", tags=["Form review queue"])
 PAGE_SIZE = 20
+TECHNICAL_FIELD_TYPES = {"hidden", "submit", "button", "reset", "image"}
 
 
 class FieldDecision(Input):
@@ -133,6 +138,208 @@ def _current_review_log(db: Session, profile: FormProfile, fields: list[FormProf
         ),
         None,
     )
+
+
+def _queue_filter():
+    review_log_exists = (
+        select(FormAnalysisLog.id)
+        .where(
+            FormAnalysisLog.form_profile_id == FormProfile.id,
+            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
+            FormAnalysisLog.details["profile_fingerprint"].astext == FormProfile.fingerprint,
+        )
+        .exists()
+    )
+    ready_confirmation_only = and_(
+        FormDmReadinessResult.primary_reason == "READY",
+        FormProfile.form_status == "READY",
+        FormProfile.is_primary.is_(True),
+        FormProfile.delivery_supported.is_(True),
+        FormProfile.sales_contact_status == "ALLOWED",
+        FormProfile.captcha_type == "CAPTCHA_NONE",
+        FormProfile.confirmation_page.is_(False),
+        Company.do_not_contact.is_(False),
+        ~review_log_exists,
+    )
+    return or_(FormDmReadinessResult.review_queue_eligible.is_(True), ready_confirmation_only)
+
+
+def _review_reason_codes(result: FormDmReadinessResult) -> list[str]:
+    codes = [result.primary_reason, *result.secondary_reasons]
+    if result.primary_reason == "READY":
+        return codes
+    blocking_codes = (
+        BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS
+        if result.primary_reason == "BROWSER_READY"
+        else BLOCKING_REASONS
+    )
+    if not REVIEW_REASONS.intersection(codes) or blocking_codes.intersection(codes):
+        return []
+    return list(dict.fromkeys(codes))
+
+
+def _summary_data(db: Session, project_id: UUID) -> dict:
+    snapshot = latest_completed_job(db, project_id)
+    if snapshot is None:
+        return {
+            "total": 0,
+            "by_readiness_reason": {},
+            "by_review_message": [],
+            "unresolved_required_labels": [],
+            "consent_fields": {
+                "privacy_only_single_checkbox": 0,
+                "mixed_privacy_newsletter": 0,
+                "other": 0,
+            },
+        }
+    rows = db.execute(
+        select(FormDmReadinessResult, FormProfile)
+        .join(Company, Company.id == FormDmReadinessResult.company_id)
+        .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
+        .where(FormDmReadinessResult.job_id == snapshot.id, _queue_filter())
+    ).all()
+    queue_rows = [(result, profile) for result, profile in rows if _review_reason_codes(result)]
+    by_readiness_reason: dict[str, int] = {}
+    by_review_message: dict[str, int] = {}
+    profile_ids = set()
+    for result, profile in queue_rows:
+        profile_ids.add(profile.id)
+        for code in _review_reason_codes(result):
+            by_readiness_reason[code] = by_readiness_reason.get(code, 0) + 1
+        message = (profile.review_reason or "").strip()
+        if message:
+            by_review_message[message] = by_review_message.get(message, 0) + 1
+
+    fields = (
+        list(
+            db.scalars(
+                select(FormProfileField).where(FormProfileField.form_profile_id.in_(profile_ids))
+            ).all()
+        )
+        if profile_ids
+        else []
+    )
+    unresolved: dict[tuple[str, str], dict] = {}
+    consent_counts = {
+        "privacy_only_single_checkbox": 0,
+        "mixed_privacy_newsletter": 0,
+        "other": 0,
+    }
+    for field in fields:
+        field_data = {
+            "label": field.label,
+            "field_type": field.field_type,
+            "mapped_key": field.mapped_key,
+            "options": field.options if isinstance(field.options, list) else [],
+        }
+        if field.mapped_key in CONSENT_KEYS:
+            category = consent_policy_category(field_data)
+            consent_counts[category] += 1
+        if (
+            not field.required
+            or field.decision_source == "MANUAL"
+            or field.field_type in TECHNICAL_FIELD_TYPES
+            or (field.mapped_key != "unknown" and field.confidence >= 0.8)
+        ):
+            continue
+        source_label = (field.label or field.name or "").strip()
+        normalized_label = normalize_required_label(source_label)
+        key = (normalized_label, field.field_type)
+        item = unresolved.setdefault(
+            key,
+            {
+                "normalized_label": normalized_label,
+                "field_type": field.field_type,
+                "profile_ids": set(),
+                "example_labels": set(),
+            },
+        )
+        item["profile_ids"].add(field.form_profile_id)
+        if source_label:
+            item["example_labels"].add(source_label)
+    unresolved_rows = [
+        {
+            "normalized_label": item["normalized_label"],
+            "field_type": item["field_type"],
+            "form_count": len(item["profile_ids"]),
+            "example_labels": sorted(item["example_labels"])[:5],
+        }
+        for item in unresolved.values()
+    ]
+    unresolved_rows.sort(
+        key=lambda item: (-item["form_count"], item["normalized_label"], item["field_type"])
+    )
+    return {
+        "total": len(queue_rows),
+        "by_readiness_reason": dict(sorted(by_readiness_reason.items())),
+        "by_review_message": [
+            {"message": message, "count": count}
+            for message, count in sorted(
+                by_review_message.items(), key=lambda item: (-item[1], item[0])
+            )
+        ],
+        "unresolved_required_labels": unresolved_rows[:50],
+        "consent_fields": consent_counts,
+    }
+
+
+def _csv_safe(value: object) -> str:
+    text = "" if value is None else str(value)
+    return "'" + text if text.startswith(("=", "+", "-", "@")) else text
+
+
+def _summary_csv_rows(summary: dict):
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\n")
+    writer.writerow(["section", "key", "field_type", "count", "examples"])
+    yield "\ufeff" + output.getvalue()
+    output.seek(0)
+    output.truncate(0)
+    rows = [["total", "total", "", summary["total"], ""]]
+    rows.extend(
+        ["readiness_reason", key, "", count, ""]
+        for key, count in summary["by_readiness_reason"].items()
+    )
+    rows.extend(
+        ["review_message", item["message"], "", item["count"], ""]
+        for item in summary["by_review_message"]
+    )
+    rows.extend(
+        [
+            "unresolved_required_label",
+            item["normalized_label"],
+            item["field_type"],
+            item["form_count"],
+            " / ".join(item["example_labels"]),
+        ]
+        for item in summary["unresolved_required_labels"]
+    )
+    rows.extend(
+        ["consent_field", key, "", count, ""] for key, count in summary["consent_fields"].items()
+    )
+    for row in rows:
+        writer.writerow([_csv_safe(value) for value in row])
+        yield output.getvalue()
+        output.seek(0)
+        output.truncate(0)
+
+
+@router.get("/projects/{project_id}/form-review-queue/summary")
+def get_form_review_queue_summary(
+    project_id: UUID,
+    format: Literal["json", "csv"] = Query("json"),
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=False)
+    summary = _summary_data(db, project_id)
+    if format == "csv":
+        return StreamingResponse(
+            _summary_csv_rows(summary),
+            media_type="text/csv; charset=utf-8",
+            headers={"Content-Disposition": 'attachment; filename="form-review-queue-summary.csv"'},
+        )
+    return summary
 
 
 def _display_value(mapped_key: str, choices: dict[str, str], draft: OutreachDraft | None) -> str:
@@ -247,29 +454,7 @@ def get_form_review_queue(
             "read_only": True,
             "external_requests": 0,
         }
-    review_log_exists = (
-        select(FormAnalysisLog.id)
-        .where(
-            FormAnalysisLog.form_profile_id == FormProfile.id,
-            FormAnalysisLog.details["operation"].astext == "form_review_confirmed",
-            FormAnalysisLog.details["profile_fingerprint"].astext == FormProfile.fingerprint,
-        )
-        .exists()
-    )
-    ready_confirmation_only = and_(
-        FormDmReadinessResult.primary_reason == "READY",
-        FormProfile.form_status == "READY",
-        FormProfile.is_primary.is_(True),
-        FormProfile.delivery_supported.is_(True),
-        FormProfile.sales_contact_status == "ALLOWED",
-        FormProfile.captcha_type == "CAPTCHA_NONE",
-        FormProfile.confirmation_page.is_(False),
-        Company.do_not_contact.is_(False),
-        ~review_log_exists,
-    )
-    queue_filter = or_(
-        FormDmReadinessResult.review_queue_eligible.is_(True), ready_confirmation_only
-    )
+    queue_filter = _queue_filter()
     base = (
         select(FormDmReadinessResult.id)
         .join(Company, Company.id == FormDmReadinessResult.company_id)
@@ -291,18 +476,10 @@ def get_form_review_queue(
     ).all()
     items = []
     for result, company, profile in rows:
-        codes = [result.primary_reason, *result.secondary_reasons]
-        ready_only = result.primary_reason == "READY"
-        browser_ready = result.primary_reason == "BROWSER_READY"
-        blocking_codes = (
-            BLOCKING_REASONS - BROWSER_REVIEW_DIAGNOSTIC_REASONS
-            if browser_ready
-            else BLOCKING_REASONS
-        )
-        if not ready_only and (
-            not REVIEW_REASONS.intersection(codes) or blocking_codes.intersection(codes)
-        ):
+        codes = _review_reason_codes(result)
+        if not codes:
             continue
+        ready_only = result.primary_reason == "READY"
         fields = _field_rows(db, profile.id)
         if not ready_only and _current_review_log(db, profile, fields):
             continue

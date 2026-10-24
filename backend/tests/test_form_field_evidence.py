@@ -5,6 +5,7 @@ from bs4 import BeautifulSoup
 
 from app.services.form_intelligence.analyzer import _profile_status
 from app.services.form_intelligence.fields import mapping_review_reason, parse_form_fields
+from app.services.form_intelligence.rules import rule_mapping
 
 
 def parse(markup):
@@ -64,6 +65,21 @@ def test_cf7_required_and_acceptance_but_not_optional():
 def test_definition_list_heading_maps_field():
     fields = parse('<form><dl><dt>電話番号 必須</dt><dd><input name="opaque"></dd></dl></form>')
     assert fields[0]["mapped_key"] == "phone" and fields[0]["required"]
+
+
+@pytest.mark.parametrize(
+    ("label", "expected"),
+    [
+        ("よみがな", "furigana"),
+        ("ヨミガナ", "furigana"),
+        ("読み仮名", "furigana"),
+        ("お名前（かな）", "furigana"),
+        ("よみがな（姓）", "last_name_furigana"),
+        ("ヨミガナ（名）", "first_name_furigana"),
+    ],
+)
+def test_furigana_spelling_variants(label, expected):
+    assert rule_mapping(label, "text") == (expected, 0.9)
 
 
 @pytest.mark.parametrize(
