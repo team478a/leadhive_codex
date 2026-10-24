@@ -57,7 +57,7 @@ from app.model_feedback_review import (
 )
 from app.model_form_dm_readiness import FormDmReadinessResult
 from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfileField
-from app.model_form_label_rule import FormLabelRule
+from app.model_form_label_rule import FormLabelAiSuggestion, FormLabelRule
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
 from app.model_form_observation_job import FormObservationJobEvent
 from app.model_lead_completion import (
@@ -210,6 +210,7 @@ __all__ = [
     "FormProfile",
     "FormProfileField",
     "FormLabelRule",
+    "FormLabelAiSuggestion",
     "FormDmReadinessResult",
     "FormAnalysisLog",
     "ApplicationSettings",
