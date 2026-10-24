@@ -22,6 +22,8 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
     reason_codes: ['READY'], ready_confirmation_only: true, fields: [], groups: [], saved_groups: [],
   })
   const submitted: { profile_id: string; action: string; confirmed_no_sales_prohibition: boolean }[] = []
+  const policyActions: string[] = []
+  let policyEnabled = false
   await page.route(`**/api/projects/${fixture.project_id}/send-flow-summary`, route =>
     route.fulfill({ json: {
       readiness_completed_at: null, target_company_count: 3,
@@ -40,6 +42,21 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
       unresolved_required_labels: [{ normalized_label: 'よみがな', field_type: 'text', form_count: 2, example_labels: ['よみがな（必須）'] }],
       consent_fields: { privacy_only_single_checkbox: 1, mixed_privacy_newsletter: 1, other: 0 },
     } }))
+  await page.route(`**/api/projects/${fixture.project_id}/consent-policy**`, async route => {
+    const action = new URL(route.request().url()).pathname.split('/').at(-1)
+    if (route.request().method() === 'POST') {
+      policyActions.push(action!)
+      if (action === 'enable') policyEnabled = true
+      if (action === 'disable') policyEnabled = false
+    }
+    const setting = {
+      policy: 'CONSENT_POLICY_V1',
+      conditions: ['個人情報同意に対応付けられたチェック欄であること', 'メルマガ配信を含まないこと'],
+      enabled: policyEnabled, enabled_at: policyEnabled ? '2026-10-24T00:00:00Z' : null,
+      can_manage: true, active_job: null,
+    }
+    await route.fulfill({ json: action === 'enable' || action === 'reset' ? { setting, job: null } : setting })
+  })
   await page.route(`**/api/projects/${fixture.project_id}/form-dm-readiness`, route =>
     route.fulfill({ json: { counts: { READY: 1 }, review_queue_eligible: 3, ready_confirmation_pending: 1, total: 4, items: [] } }))
   await page.route('**/api/form-profiles/*/review-decision', async route => {
@@ -69,6 +86,12 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   const panel = page.getByRole('region', { name: 'フォーム確認キュー' })
   await expect(panel.getByRole('heading', { name: 'フォーム確認キュー' })).toBeVisible()
   await expect(panel.getByRole('heading', { name: '確認が必要な理由の集計（4件）' })).toBeVisible()
+  const policyPanel = panel.getByRole('region', { name: '同意欄の自動判断設定' })
+  await expect(policyPanel.getByText('CONSENT_POLICY_V1。送信・承認は行わず')).toBeVisible()
+  await policyPanel.getByLabel('上記の条件に当てはまる同意欄を、プロジェクトの方針として自動でチェックすることを承認します').check()
+  await policyPanel.getByRole('button', { name: '承認して有効にする' }).click()
+  await expect(policyPanel.getByText('有効', { exact: true })).toBeVisible()
+  expect(policyActions).toEqual(['enable'])
   await expect(panel.getByText('よみがな（text）: 2フォーム')).toBeVisible()
   await expect(panel.getByRole('heading', { name: '先頭のスキップ候補' })).toBeVisible()
   await expect(panel.getByText('_wpcf7')).toHaveCount(0)

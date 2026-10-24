@@ -254,7 +254,7 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
         </>}
         {channel === 'form' && step.id === 2 && <>
           {formReadinessStale && <p role="alert" className="error">集計が古いため再集計してください</p>}
-          <FormReviewQueue key={`form-review-${project.id}-${reviewRevision}`} projectId={project.id} canWrite={canWrite} />
+          <FormReviewQueue key={`form-review-${project.id}-${reviewRevision}`} projectId={project.id} canWrite={canWrite} canManagePolicy={roles[project.id] === 'owner'} />
           <div className="actions"><button type="button" className="secondary" disabled={!canWrite || Boolean(readinessJob && ['queued', 'running'].includes(readinessJob.status))} onClick={() => {
             if (!projectId) return
             setSummaryError(''); setReadinessStale(true)

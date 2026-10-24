@@ -52,7 +52,7 @@ class FormProfileFieldOut(BaseModel):
     required: bool
     mapped_key: MappedKey
     confidence: float
-    decision_source: Literal["DOM", "RULE", "JEV", "OPENAI", "MANUAL"]
+    decision_source: Literal["DOM", "RULE", "JEV", "OPENAI", "MANUAL", "POLICY"]
     recommended_value: str
     options: list
     placeholder: str

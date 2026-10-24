@@ -39,7 +39,7 @@ CAPTCHA_TYPES = (
     "CAPTCHA_IMAGE",
     "CAPTCHA_OTHER",
 )
-DECISION_SOURCES = ("DOM", "RULE", "JEV", "OPENAI", "MANUAL")
+DECISION_SOURCES = ("DOM", "RULE", "JEV", "OPENAI", "MANUAL", "POLICY")
 
 
 class FormProfile(Timestamps, Base):
@@ -108,7 +108,7 @@ class FormProfileField(Timestamps, Base):
             "confidence >= 0 AND confidence <= 1", name="ck_form_profile_field_confidence"
         ),
         CheckConstraint(
-            "decision_source IN ('DOM', 'RULE', 'JEV', 'OPENAI', 'MANUAL')",
+            "decision_source IN ('DOM', 'RULE', 'JEV', 'OPENAI', 'MANUAL', 'POLICY')",
             name="ck_form_profile_field_decision_source",
         ),
     )
@@ -139,7 +139,7 @@ class FormAnalysisLog(Base):
             "event_type IN ('analysis_started', 'contact_page_found', 'form_found', "
             "'field_detected', 'field_mapped', 'ai_decision_requested', "
             "'ai_decision_completed', 'captcha_detected', 'sales_prohibition_detected', "
-            "'analysis_completed', 'analysis_failed', 'manual_corrected')",
+            "'analysis_completed', 'analysis_failed', 'manual_corrected', 'policy_applied')",
             name="ck_form_analysis_log_event_type",
         ),
         CheckConstraint("duration_ms >= 0", name="ck_form_analysis_log_duration"),

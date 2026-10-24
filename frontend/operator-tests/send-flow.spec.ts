@@ -84,6 +84,10 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
       unresolved_required_labels: [],
       consent_fields: { privacy_only_single_checkbox: 0, mixed_privacy_newsletter: 0, other: 0 },
     }
+    else if (path.endsWith('/consent-policy')) data = {
+      policy: 'CONSENT_POLICY_V1', conditions: ['個人情報同意だけを対象にする'], enabled: false,
+      enabled_at: null, can_manage: true, active_job: null,
+    }
     else if (path.endsWith('/form-review-queue')) data = { total: 0, offset: 0, limit: 20, items: [], read_only: true, external_requests: 0 }
     else if (path.endsWith('/outreach-drafts/bulk-from-template') && method === 'POST') {
       bulkDraftBody = body

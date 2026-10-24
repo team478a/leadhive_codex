@@ -1,4 +1,5 @@
 from contextlib import nullcontext
+from datetime import datetime, timezone
 from types import SimpleNamespace
 
 import pytest
@@ -7,12 +8,20 @@ from sqlalchemy import select
 
 from app import worker
 from app.form_intelligence_routes import _profile_out
-from app.models import ApplicationSettings, Company, FormAnalysisLog, FormProfileField, OperationJob
+from app.models import (
+    ApplicationSettings,
+    Company,
+    FormAnalysisLog,
+    FormProfileField,
+    OperationJob,
+    Project,
+)
 from app.services import form_intelligence as form_intelligence_service
 from app.services import web_analysis
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_intelligence import analyzer
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
+from app.services.form_intelligence.consent import CONSENT_POLICY_VERSION
 from app.services.form_intelligence.fingerprint import form_fingerprint
 from app.services.form_intelligence.providers import (
     AmbiguousField,
@@ -436,6 +445,45 @@ def test_manual_unknown_body_stays_review_after_reanalysis(auth, db, monkeypatch
     refreshed = analyze_form_profiles(db, company)[0]
     assert refreshed["form_status"] == "REVIEW_REQUIRED"
     assert next(f for f in refreshed["fields"] if f["name"] == "message")["mapped_key"] == "unknown"
+
+
+def test_enabled_consent_policy_reapplies_and_preserves_manual_on_reanalysis(auth, db, monkeypatch):
+    project_data, company = make_company(auth, db)
+    project = db.get(Project, project_data["id"])
+    project.consent_policy_enabled = True
+    project.consent_policy_version = CONSENT_POLICY_VERSION
+    project.consent_policy_enabled_by_user_id = project.user_id
+    project.consent_policy_enabled_at = datetime.now(timezone.utc)
+    db.commit()
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<a href="/contact">お問い合わせ</a>',
+            "https://form-intelligence.example/contact": (
+                '<form method="post"><input name="email" type="email" required>'
+                '<textarea name="message" required></textarea>'
+                '<label><input name="privacy" type="checkbox" value="yes" required>'
+                '個人情報の取扱いに同意する</label><button type="submit">送信</button></form>'
+            ),
+        },
+    )
+
+    profile = analyze_form_profiles(db, company)[0]
+    consent = next(field for field in profile["fields"] if field["name"] == "privacy")
+    assert (consent["decision_source"], consent["recommended_value"]) == ("POLICY", "yes")
+
+    corrected = auth.patch(
+        f"/api/form-profile-fields/{consent['id']}",
+        json={
+            "mapped_key": "privacy_consent",
+            "recommended_value": "yes",
+            "reason": "運営者が確認済み",
+        },
+    )
+    assert corrected.status_code == 200
+    refreshed = analyze_form_profiles(db, company)[0]
+    consent = next(field for field in refreshed["fields"] if field["name"] == "privacy")
+    assert (consent["decision_source"], consent["recommended_value"]) == ("MANUAL", "yes")
 
 
 def test_ai_receives_only_ambiguous_fields_and_cannot_override_rule_results(auth, db, monkeypatch):

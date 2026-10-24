@@ -27,6 +27,7 @@ from app.services.contact_discovery import (
     is_contact_path,
     same_site,
 )
+from app.services.form_consent_policy import apply_after_analysis
 from app.services.form_intelligence.compatibility import assess_delivery_compatibility
 from app.services.form_intelligence.fields import mapping_review_reason, parse_form_fields
 from app.services.form_intelligence.fingerprint import form_fingerprint
@@ -516,6 +517,7 @@ def analyze_company_forms(
                 profile_id=profile.id,
                 details={"finding": "MASTER_CACHE_REUSED", "master_form_id": str(cached.id)},
             )
+            apply_after_analysis(db, company, [profile])
             db.commit()
             return [profile]
 
@@ -1008,6 +1010,7 @@ def analyze_company_forms(
             for current_profile in profiles:
                 current_profile.is_primary = current_profile.id == primary.id
         _save_master_form_structures(db, company, profiles)
+        apply_after_analysis(db, company, profiles)
         db.commit()
         return list(
             db.scalars(

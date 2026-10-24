@@ -25,6 +25,7 @@ from app.company_routes import router as company_router
 from app.company_workflow_routes import router as company_workflow_router
 from app.completion_metrics_routes import router as completion_metrics_router
 from app.config import settings
+from app.consent_policy_routes import router as consent_policy_router
 from app.database import SessionLocal
 from app.destination_choice_routes import router as destination_choice_router
 from app.destination_review_routes import router as destination_review_router
@@ -172,6 +173,7 @@ app.include_router(dm_preparation_router)
 app.include_router(dm_approval_router)
 app.include_router(site_identity_review_router)
 app.include_router(completion_metrics_router)
+app.include_router(consent_policy_router)
 
 
 app.add_middleware(

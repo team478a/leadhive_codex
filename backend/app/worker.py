@@ -131,6 +131,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
                     "form_approval_batch",
                     "bulk_template_drafts",
                     "master_site_backfill",
+                    "consent_policy",
                 )
             )
             if not settings.outbound_enabled
@@ -562,6 +563,7 @@ def claim_job(db) -> OperationJob | None:
                     "form_approval_batch",
                     "bulk_template_drafts",
                     "master_site_backfill",
+                    "consent_policy",
                 )
             )
             if not settings.outbound_enabled
@@ -1653,6 +1655,7 @@ def run_once() -> bool:
         db.commit()
         try:
             from app.services.bulk_template_drafts import run_bulk_template_drafts
+            from app.services.form_consent_policy import run_consent_policy
             from app.services.master_data import backfill_project_sites
             from app.services.sales_preparation import run_preparation
 
@@ -1674,6 +1677,9 @@ def run_once() -> bool:
                 ),
                 "master_site_backfill": lambda db, job, worker: backfill_project_sites(
                     db, job, worker, stop_requested
+                ),
+                "consent_policy": lambda db, job, worker: run_consent_policy(
+                    db, job, worker, stop_requested, progress
                 ),
             }[job.operation_type](db, job, worker_id)
             job = db.get(OperationJob, job_id)
@@ -1697,7 +1703,10 @@ def run_once() -> bool:
                 job.worker_id = None
                 job.lease_expires_at = None
                 job.finished_at = datetime.now(timezone.utc)
-                if job.operation_type == "site_analysis" and job.processed_count:
+                if (
+                    job.operation_type in {"site_analysis", "consent_policy"}
+                    and job.processed_count
+                ):
                     from app.services.site_analysis import enqueue_readiness_after_site_analysis
 
                     enqueue_readiness_after_site_analysis(db, job.project_id)

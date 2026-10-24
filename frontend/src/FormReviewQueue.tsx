@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, download, errorMessage } from './api'
 import { formMappedKeyLabels } from './formMappingLabels'
-import type { FormMappedKey } from './types'
+import type { FormMappedKey, OperationJob } from './types'
 
 type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[]; suggested_mapped_key?: string; same_organization_suggestion?: boolean; other_organization_suggestion?: boolean }
 type ChoiceGroup = { group_id: string; source_hash: string; label: string; supported: boolean; members: { field_id: string; label: string; required: boolean; options: { value: string; label: string }[] }[] }
@@ -9,11 +9,15 @@ type SavedGroup = { group_id: string; source_hash: string; label: string; requir
 type Item = { company_id: string; company_name: string; profile_id: string; form_url: string; fingerprint: string; fields_hash: string; reason_codes: string[]; ready_confirmation_only: boolean; fields: Field[]; groups: ChoiceGroup[]; saved_groups: SavedGroup[] }
 type Queue = { total: number; offset: number; limit: number; items: Item[] }
 type QueueSummary = { total: number; by_readiness_reason: Record<string, number>; by_review_message: { message: string; count: number }[]; unresolved_required_labels: { normalized_label: string; field_type: string; form_count: number; example_labels: string[] }[]; consent_fields: { privacy_only_single_checkbox: number; mixed_privacy_newsletter: number; other: number } }
+type PolicyStatus = { policy: string; conditions: string[]; enabled: boolean; enabled_at: string | null; can_manage: boolean; active_job: OperationJob | null }
 const keys: FormMappedKey[] = ['company_name', 'department', 'position', 'contact_name', 'last_name', 'first_name', 'furigana', 'last_name_furigana', 'first_name_furigana', 'email', 'phone', 'phone_area_code', 'phone_exchange_code', 'phone_line_number', 'postal_code', 'postal_code_first', 'postal_code_last', 'prefecture', 'city', 'address', 'building', 'website', 'contact_category', 'contact_method', 'subject', 'message', 'privacy_consent', 'newsletter_consent', 'other', 'unknown']
 
-export function FormReviewQueue({ projectId, canWrite }: { projectId: string; canWrite: boolean }) {
+export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { projectId: string; canWrite: boolean; canManagePolicy: boolean }) {
   const [items, setItems] = useState<Item[]>([]); const [total, setTotal] = useState(0); const [index, setIndex] = useState(0)
   const [summary, setSummary] = useState<QueueSummary | null>(null)
+  const [policy, setPolicy] = useState<PolicyStatus | null>(null)
+  const [policyAccepted, setPolicyAccepted] = useState(false); const [resetAccepted, setResetAccepted] = useState(false)
+  const [policyBusy, setPolicyBusy] = useState(false)
   const [busy, setBusy] = useState(false); const [error, setError] = useState(''); const [notice, setNotice] = useState('')
   const [mapping, setMapping] = useState<Record<string, string>>({}); const [values, setValues] = useState<Record<string, string>>({})
   const [checked, setChecked] = useState<Record<string, boolean>>({}); const [rule, setRule] = useState<Record<string, string>>({})
@@ -27,19 +31,47 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
     if (!projectId) return
     setBusy(true); setError('')
     try {
-      const [result, summaryResult] = await Promise.all([
+      const [result, summaryResult, policyResult] = await Promise.all([
         api<Queue>(`/projects/${projectId}/form-review-queue`),
         api<QueueSummary>(`/projects/${projectId}/form-review-queue/summary`),
+        api<PolicyStatus>(`/projects/${projectId}/consent-policy`),
       ])
       const queueItems = Array.isArray(result?.items) ? result.items : []
       const sortedItems = [...queueItems].sort((a, b) => Number(skippedProfileIds.current.has(a.profile_id)) - Number(skippedProfileIds.current.has(b.profile_id)))
       setItems(sortedItems); setTotal(Number.isFinite(result?.total) ? result.total : sortedItems.length)
       setSummary(summaryResult)
+      setPolicy(policyResult)
       setIndex(Math.max(0, sortedItems.findIndex(queueItem => !skippedProfileIds.current.has(queueItem.profile_id))))
     }
     catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }, [projectId])
   useEffect(() => { void load() }, [load])
+  useEffect(() => {
+    if (!policy?.active_job || !['queued', 'running'].includes(policy.active_job.status)) return
+    const timer = window.setInterval(() => {
+      api<PolicyStatus>(`/projects/${projectId}/consent-policy`).then(result => {
+        const wasActive = Boolean(policy.active_job)
+        setPolicy(result)
+        if (wasActive && !result.active_job) void load()
+      }).catch(cause => setError(errorMessage(cause)))
+    }, 2000)
+    return () => window.clearInterval(timer)
+  }, [load, policy?.active_job, projectId])
+  const changePolicy = useCallback(async (action: 'enable' | 'disable' | 'reset') => {
+    if (!policy || policyBusy || !canManagePolicy) return
+    setPolicyBusy(true); setError(''); setNotice('')
+    try {
+      if (action === 'disable') {
+        setPolicy(await api<PolicyStatus>(`/projects/${projectId}/consent-policy/disable`, 'POST'))
+        setNotice('自動判断を無効にしました。すでに決めた欄は保持しています。')
+      } else {
+        const result = await api<{ setting: PolicyStatus }>(`/projects/${projectId}/consent-policy/${action}`, 'POST', { policy: policy.policy, accepted: action === 'enable' ? policyAccepted : resetAccepted })
+        setPolicy(result.setting)
+        setNotice(action === 'enable' ? '同意欄の自動判断を開始しました。送信・承認は行いません。' : 'このルールで決めた欄の取り消しを開始しました。')
+        if (action === 'enable') setPolicyAccepted(false); else setResetAccepted(false)
+      }
+    } catch (cause) { setError(errorMessage(cause)) } finally { setPolicyBusy(false) }
+  }, [canManagePolicy, policy, policyAccepted, policyBusy, projectId, resetAccepted])
   const canConfirm = Boolean(item && item.groups.every(g => g.supported) && item.saved_groups.every(g => g.reviewable))
   useEffect(() => {
     if (!item) return
@@ -97,6 +129,16 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
         <div><strong>未解決の項目名（上位10件）</strong><ul className="mt-1">{summary.unresolved_required_labels.slice(0, 10).map(row => <li key={`${row.normalized_label}-${row.field_type}`}>{row.normalized_label || '名称不明'}（{row.field_type}）: {row.form_count}フォーム</li>)}</ul></div>
         <div><strong>同意欄の内訳</strong><ul className="mt-1"><li>個人情報のみ・単一チェック: {summary.consent_fields.privacy_only_single_checkbox}件</li><li>個人情報とメルマガが混在: {summary.consent_fields.mixed_privacy_newsletter}件</li><li>その他: {summary.consent_fields.other}件</li></ul></div>
       </div>
+    </section>}
+    {policy && <section className="mt-4 border-t pt-4" aria-label="同意欄の自動判断設定">
+      <div className="flex flex-wrap items-center justify-between gap-2"><h3>同意欄の自動判断</h3><span className="badge">{policy.enabled ? '有効' : '無効'}</span></div>
+      <p className="muted mt-2 text-sm">{policy.policy}。送信・承認は行わず、送信可否の確認は通常どおり残ります。</p>
+      <ol className="mt-3 list-decimal pl-5 text-sm">{policy.conditions.map(condition => <li key={condition}>{condition}</li>)}</ol>
+      {policy.active_job && <p className="mt-3" role="status">処理中 {policy.active_job.processed_count}/{policy.active_job.total_count}フォーム（成功 {policy.active_job.success_count}・失敗 {policy.active_job.failed_count}）</p>}
+      {canManagePolicy && !policy.enabled && <><label className="mt-3 block"><input type="checkbox" checked={policyAccepted} onChange={event => setPolicyAccepted(event.target.checked)} /> 上記の条件に当てはまる同意欄を、プロジェクトの方針として自動でチェックすることを承認します</label><button className="mt-3" type="button" disabled={!policyAccepted || policyBusy || Boolean(policy.active_job)} onClick={() => void changePolicy('enable')}>承認して有効にする</button></>}
+      {canManagePolicy && policy.enabled && <button className="secondary mt-3" type="button" disabled={policyBusy || Boolean(policy.active_job)} onClick={() => void changePolicy('disable')}>自動判断を無効にする</button>}
+      {canManagePolicy && <details className="mt-4"><summary>このルールで決めた欄を未決定に戻す</summary><p className="muted mt-2 text-sm">手動で決めた欄には触れません。自動判断が有効なままなら、次回の解析時に条件へ一致する欄へ再適用されます。</p><label className="mt-2 block"><input type="checkbox" checked={resetAccepted} onChange={event => setResetAccepted(event.target.checked)} /> POLICYで決めた欄だけを未決定に戻すことを確認しました</label><button className="secondary mt-3" type="button" disabled={!resetAccepted || policyBusy || Boolean(policy.active_job)} onClick={() => void changePolicy('reset')}>未決定に戻す</button></details>}
+      {!canManagePolicy && <p className="muted mt-3 text-sm">この設定はプロジェクト所有者だけが変更できます。</p>}
     </section>}
     {busy && <p className="mt-3">読み込み中…</p>}{!busy && !item && <p className="mt-3">確認対象はありません（{total}件）。</p>}
     {item && <div className="mt-4">
