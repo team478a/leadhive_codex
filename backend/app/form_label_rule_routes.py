@@ -8,13 +8,27 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
-from app.models import Company, FormLabelRule, FormProfile, OperationJob, User
+from app.models import (
+    Company,
+    FormLabelAiSuggestion,
+    FormLabelRule,
+    FormProfile,
+    OperationJob,
+    User,
+)
 from app.project_access import project_access
 from app.schema_core import Input
 from app.schemas import OperationJobOut
 from app.security import current_user
+from app.services.application_settings import apply_application_settings
+from app.services.form_intelligence.providers import (
+    FormDecisionError,
+    get_form_decision_provider,
+)
 from app.services.form_intelligence.rules import STANDARD_KEYS, normalize_required_label
+from app.services.form_label_ai_suggestions import build_ai_suggestion
 from app.services.form_label_rules import profile_ids_for_rule
 from app.services.operations import add_operation_job
 
@@ -29,6 +43,12 @@ class FormLabelRuleInput(Input):
     field_type: str = Field(min_length=1, max_length=50)
     mapped_key: str = Field(min_length=1, max_length=50)
     recommended_value: str = Field(default="", max_length=500)
+    ai_suggestion_id: UUID | None = None
+
+
+class FormLabelAiSuggestionInput(Input):
+    normalized_label: str = Field(min_length=1, max_length=500)
+    field_type: str = Field(min_length=1, max_length=50)
 
 
 def _active_job(db: Session, project_id: UUID) -> OperationJob | None:
@@ -59,6 +79,25 @@ def _rule_out(rule: FormLabelRule) -> dict:
     }
 
 
+def _suggestion_out(suggestion: FormLabelAiSuggestion) -> dict:
+    return {
+        "id": suggestion.id,
+        "project_id": suggestion.project_id,
+        "normalized_label": suggestion.normalized_label,
+        "field_type": suggestion.field_type,
+        "suggested_mapped_key": suggestion.suggested_mapped_key,
+        "confidence": suggestion.confidence,
+        "sample_count": suggestion.sample_count,
+        "provider": suggestion.provider,
+        "model": suggestion.model,
+        "status": suggestion.status,
+        "reason": suggestion.reason,
+        "accepted_rule_id": suggestion.accepted_rule_id,
+        "created_at": suggestion.created_at,
+        "resolved_at": suggestion.resolved_at,
+    }
+
+
 def _enqueue(db: Session, rule: FormLabelRule, action: Literal["apply", "reset"], user: User):
     if _active_job(db, rule.project_id) is not None:
         raise HTTPException(409, "項目名ルールの処理がすでに実行中です。")
@@ -79,17 +118,102 @@ def list_form_label_rules(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user, write=False)
+    apply_application_settings(db)
     rules = db.scalars(
         select(FormLabelRule)
         .where(FormLabelRule.project_id == project_id)
         .order_by(FormLabelRule.created_at.desc(), FormLabelRule.id.desc())
     ).all()
     active_job = _active_job(db, project_id)
+    suggestions = db.scalars(
+        select(FormLabelAiSuggestion)
+        .where(
+            FormLabelAiSuggestion.project_id == project_id,
+            FormLabelAiSuggestion.status.in_(("ACTIVE", "UNAVAILABLE")),
+        )
+        .order_by(FormLabelAiSuggestion.created_at.desc(), FormLabelAiSuggestion.id.desc())
+    ).all()
     return {
         "rules": [_rule_out(rule) for rule in rules],
+        "ai_suggestions": [_suggestion_out(suggestion) for suggestion in suggestions],
+        "ai_available": bool(settings.openai_api_key),
         "active_job": OperationJobOut.model_validate(active_job) if active_job else None,
         "allowed_mapped_keys": ALLOWED_KEYS,
     }
+
+
+@router.post("/projects/{project_id}/form-label-rules/ai-suggestions")
+def create_form_label_ai_suggestion(
+    project_id: UUID,
+    body: FormLabelAiSuggestionInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project = project_access(project_id, db, user, write=True)
+    normalized_label = normalize_required_label(body.normalized_label)
+    existing = db.scalar(
+        select(FormLabelAiSuggestion).where(
+            FormLabelAiSuggestion.project_id == project_id,
+            FormLabelAiSuggestion.normalized_label == normalized_label,
+            FormLabelAiSuggestion.field_type == body.field_type,
+            FormLabelAiSuggestion.status.in_(("ACTIVE", "UNAVAILABLE")),
+        )
+    )
+    if existing is not None:
+        return _suggestion_out(existing)
+    apply_application_settings(db)
+    provider = get_form_decision_provider()
+    if provider is None:
+        raise HTTPException(409, "OpenAI APIキーが未設定のためAI候補を作成できません。")
+    try:
+        suggestion = build_ai_suggestion(
+            db,
+            project,
+            user,
+            normalized_label,
+            body.field_type,
+            provider,
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(422, str(exc)) from exc
+    except FormDecisionError as exc:
+        db.rollback()
+        raise HTTPException(503, str(exc)) from exc
+    except IntegrityError:
+        db.rollback()
+        suggestion = db.scalar(
+            select(FormLabelAiSuggestion).where(
+                FormLabelAiSuggestion.project_id == project_id,
+                FormLabelAiSuggestion.normalized_label == normalized_label,
+                FormLabelAiSuggestion.field_type == body.field_type,
+                FormLabelAiSuggestion.status.in_(("ACTIVE", "UNAVAILABLE")),
+            )
+        )
+        if suggestion is None:
+            raise
+    db.refresh(suggestion)
+    return _suggestion_out(suggestion)
+
+
+@router.post("/projects/{project_id}/form-label-rules/ai-suggestions/{suggestion_id}/dismiss")
+def dismiss_form_label_ai_suggestion(
+    project_id: UUID,
+    suggestion_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    project_access(project_id, db, user, write=True)
+    suggestion = db.get(FormLabelAiSuggestion, suggestion_id)
+    if suggestion is None or suggestion.project_id != project_id:
+        raise HTTPException(404, "AI候補が見つかりません。")
+    if suggestion.status in {"ACTIVE", "UNAVAILABLE"}:
+        suggestion.status = "DISMISSED"
+        suggestion.resolved_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(suggestion)
+    return _suggestion_out(suggestion)
 
 
 @router.get("/projects/{project_id}/form-label-rules/preview")
@@ -143,9 +267,22 @@ def create_form_label_rule(
         )
     if body.recommended_value and body.field_type not in {"select", "radio"}:
         raise HTTPException(422, "既定の選択値はselectまたはradioだけに設定できます。")
+    normalized_label = normalize_required_label(body.normalized_label)
+    suggestion = None
+    if body.ai_suggestion_id is not None:
+        suggestion = db.get(FormLabelAiSuggestion, body.ai_suggestion_id)
+        if suggestion is None or suggestion.project_id != project_id:
+            raise HTTPException(404, "AI候補が見つかりません。")
+        if (
+            suggestion.status != "ACTIVE"
+            or suggestion.normalized_label != normalized_label
+            or suggestion.field_type != body.field_type
+            or suggestion.suggested_mapped_key != body.mapped_key
+        ):
+            raise HTTPException(422, "AI候補と保存する項目名ルールが一致しません。")
     rule = FormLabelRule(
         project_id=project_id,
-        normalized_label=normalize_required_label(body.normalized_label),
+        normalized_label=normalized_label,
         field_type=body.field_type,
         mapped_key=body.mapped_key,
         recommended_value=body.recommended_value,
@@ -154,6 +291,10 @@ def create_form_label_rule(
     db.add(rule)
     try:
         db.flush()
+        if suggestion is not None:
+            suggestion.status = "ACCEPTED"
+            suggestion.accepted_rule_id = rule.id
+            suggestion.resolved_at = datetime.now(timezone.utc)
         job = _enqueue(db, rule, "apply", user)
         db.commit()
     except IntegrityError as exc:
