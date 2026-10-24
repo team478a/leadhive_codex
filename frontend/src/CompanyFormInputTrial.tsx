@@ -23,8 +23,9 @@ function readRecord(activity: Activity): RecordValue | null {
   } catch { return null }
 }
 
-export function CompanyFormInputTrial({ company, profiles, activities, readOnly, busy, onSave }: {
+export function CompanyFormInputTrial({ company, profiles, activities, readOnly, busy, onSave, isAdmin }: {
   company: Company; profiles: FormProfile[]; activities: Activity[]; readOnly: boolean; busy: boolean
+  isAdmin: boolean
   onSave: (note: string) => Promise<boolean>
 }) {
   const [url, setUrl] = useState(company.contact_url || '')
@@ -47,7 +48,7 @@ export function CompanyFormInputTrial({ company, profiles, activities, readOnly,
     setMessage('')
     if (await onSave(prefix + JSON.stringify(value))) { setMessage('入力確認を記録しました。送信承認や営業可否は変更していません。'); setOutcome('NOT_CHECKED'); setNote('') }
   }
-  return <><LiveInputHandoff company={company} profiles={companyProfiles} activities={activities} readOnly={readOnly || busy} prohibited={company.do_not_contact || companyProfiles.some(p => p.sales_contact_status === 'PROHIBITED')} onSave={onSave} /><OfflineInputHandoff company={company} activities={activities} readOnly={readOnly} busy={busy} prohibited={company.do_not_contact || companyProfiles.some(p => p.sales_contact_status === 'PROHIBITED')} onSave={onSave} /><section className="panel mt-4" aria-label="フォーム入力の実運用記録">
+  return <>{isAdmin && <><LiveInputHandoff company={company} profiles={companyProfiles} activities={activities} readOnly={readOnly || busy} prohibited={company.do_not_contact || companyProfiles.some(p => p.sales_contact_status === 'PROHIBITED')} onSave={onSave} /><OfflineInputHandoff company={company} activities={activities} readOnly={readOnly} busy={busy} prohibited={company.do_not_contact || companyProfiles.some(p => p.sales_contact_status === 'PROHIBITED')} onSave={onSave} /></>}<section className="panel mt-4" aria-label="フォーム入力の実運用記録">
     <h3>入力を試した結果を残す</h3>
     <p>元フォームで人が確認した結果を記録します。自動入力・送信は行いません。営業NGを見つけた場合は「営業NGリストへ移す」を使ってください。</p>
     {blocked && <p className="notice">この企業・フォームは送信禁止です。入力成功を記録しても禁止は解除されません。</p>}

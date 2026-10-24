@@ -18,6 +18,12 @@ from app.services.raw_repeat import candidate_key, pair_features, stability
 from tests.test_raw_collection import benchmark, collect
 
 
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
+
+
 def test_repeat_runs_are_independent_and_bounded(auth, db, monkeypatch):
     b = benchmark(auth)
     rows = collect(auth, b, monkeypatch, count=12)
@@ -171,7 +177,7 @@ def test_pair_truth_version_hash_session_and_permissions(auth, db, monkeypatch, 
     )
 
 
-def test_viewer_pair_read_only(auth, db, monkeypatch, users):
+def test_non_admin_cannot_read_or_review_pairs(auth, db, monkeypatch, users):
     from app.models import ProjectMember
     from tests.conftest import PASSWORD
 
@@ -182,17 +188,17 @@ def test_viewer_pair_read_only(auth, db, monkeypatch, users):
     db.commit()
     auth.post("/api/auth/login", json={"email": users[1].email, "password": PASSWORD})
     preview = auth.get(path)
-    assert preview.status_code == 200
+    assert preview.status_code == 404
     denied = auth.post(
         path + "/reviews",
         json={
             "session_id": str(users[1].id),
-            "pair_hash": preview.json()["pair_hash"],
+            "pair_hash": "0" * 64,
             "expected_version": 0,
             "outcome": "SAME",
             "reason": "Synthetic review",
             "evidence_url": "https://evidence.example/page",
         },
     )
-    assert denied.status_code == 404  # Existing project boundary masks write denial
+    assert denied.status_code == 404
     assert db.scalar(select(func.count()).select_from(RawPairReview)) == 0

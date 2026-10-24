@@ -38,7 +38,7 @@ from app.schema_approval import (
     Proposal,
     Revision,
 )
-from app.security import COOKIE_NAME, current_user, token_digest
+from app.security import COOKIE_NAME, current_admin, current_user, token_digest
 from app.services import human_approval as service
 from app.services.approval_principals import authenticate_agent
 from app.services.form_adapter_preparation import adapter_preparation
@@ -46,6 +46,11 @@ from app.services.form_adapter_preparation import enabled as adapter_enabled
 from app.services.form_approval_preparation import preparation
 
 router = APIRouter(prefix="/api", tags=["Human Approval Foundation A2"])
+ADMIN_ONLY_DELIVERY_METHODS = {
+    "cf7_candidate_only",
+    "cf7_real_candidate_only",
+    "cf7_real_reservation",
+}
 
 
 def request_item(db, request_id):
@@ -60,6 +65,8 @@ def request_item(db, request_id):
 def human_item(db, request_id, user, write=True, owner=False):
     item = db.get(ApprovalRequest, request_id)
     if not item:
+        raise HTTPException(404, "提案が見つかりません。")
+    if item.delivery_method in ADMIN_ONLY_DELIVERY_METHODS and not user.is_admin:
         raise HTTPException(404, "提案が見つかりません。")
     # Lock authorization rows for the decision transaction (not just the UI role).
     db.scalar(select(Project).where(Project.id == item.project_id).with_for_update())
@@ -265,9 +272,11 @@ def prepare_browser_form_approval(
     )
 
 
-def list_items(db, project_id, status, limit, offset):
+def list_items(db, project_id, status, limit, offset, *, include_admin_only=False):
     # Validate the displayed page; dispatch and every decision also validate independently.
     query = select(ApprovalRequest).where(ApprovalRequest.project_id == project_id)
+    if not include_admin_only:
+        query = query.where(ApprovalRequest.delivery_method.not_in(ADMIN_ONLY_DELIVERY_METHODS))
     if status:
         query = query.where(ApprovalRequest.status == status)
     items = db.scalars(
@@ -378,7 +387,7 @@ def list_human(
     user: User = Depends(current_user),
 ):
     project_access(project_id, db, user, write=False)
-    return list_items(db, project_id, status, limit, offset)
+    return list_items(db, project_id, status, limit, offset, include_admin_only=user.is_admin)
 
 
 @router.get("/approval-requests/{request_id}")
@@ -525,7 +534,7 @@ def revise_agent(
 ):
     agent = authenticate_agent(request, db, project_id, "outreach:prepare")
     previous = request_item(db, request_id)
-    if previous.project_id != project_id:
+    if previous.project_id != project_id or previous.delivery_method in ADMIN_ONLY_DELIVERY_METHODS:
         raise HTTPException(404, "提案が見つかりません。")
     service.expected(previous, body)
     service.invalidate_if_needed(db, previous)
@@ -534,7 +543,7 @@ def revise_agent(
 
 @router.get("/approval-requests/{request_id}/cf7-reservation-preview")
 def cf7_reservation_preview(
-    request_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    request_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_admin)
 ):
     from app.services import cf7_real_reservation
 
@@ -553,7 +562,7 @@ def cf7_reservation_request(
     request_id: UUID,
     body: FormPreparation,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     from app.services import cf7_real_reservation
 

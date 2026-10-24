@@ -35,6 +35,7 @@ const states: Record<string, string> = {
 }
 
 type Props = {
+  isAdmin: boolean
   profileId: string
   companyId: string
   formUrl: string
@@ -70,7 +71,7 @@ function ChoiceReview({ field, readOnly, saving, onSave }: { field: FormProfileF
   </div>
 }
 
-export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, fingerprint, fields, readOnly, saving, onCorrect, onRefresh }: Props) {
+export function CompanyFormReviewMaterial({ isAdmin, profileId, companyId, formUrl, fingerprint, fields, readOnly, saving, onCorrect, onRefresh }: Props) {
   const [material, setMaterial] = useState<Material | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
@@ -136,7 +137,7 @@ export function CompanyFormReviewMaterial({ profileId, companyId, formUrl, finge
       </section>}
       <h3 className="mt-4">選択・同意・入力先の確認</h3>
       {material.adapter_prerequisites && <CompanyFormAdapterPrerequisites report={material.adapter_prerequisites} />}
-      <CompanyFormInputPreparation key={`${profileId}:${material.profile_fingerprint}:${material.draft_id}:${fieldVersion}:${JSON.stringify(material.items)}`} profileId={profileId} readOnly={readOnly} />
+      {isAdmin && <CompanyFormInputPreparation key={`${profileId}:${material.profile_fingerprint}:${material.draft_id}:${fieldVersion}:${JSON.stringify(material.items)}`} profileId={profileId} readOnly={readOnly} />}
       <p className="muted text-sm mt-2">確認対象の一覧です。記録済みの項目も表示します。件数は未確認件数や送信可能件数ではありません。</p>
       {material.profile_fingerprint === fingerprint && !material.items.some(item => reviewStates.has(item.review_state)) && <p className="muted mt-3">個別の選択確認対象はありません。窓口・本文・送信経路の確認は引き続き必要です。</p>}
       {material.profile_fingerprint === fingerprint && material.items.some(item => item.review_state === 'GROUP_SELECTION_REVIEW_REQUIRED') && <CompanyFormChoiceGroups profileId={profileId} readOnly={readOnly} onSaved={async () => { await onRefresh(); await load() }} />}

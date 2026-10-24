@@ -178,8 +178,10 @@ def save_candidates(
             continue
         if job.source == "serper" and candidate.website_url:
             kind, reason = classify_candidate(candidate)
-            if kind in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"} or (
-                kind == "JOB_PR" and reason == "EXTERNAL_PLATFORM"
+            if (
+                kind in {"SOCIAL", "PORTAL_DIRECTORY", "OTHER"}
+                or (kind == "JOB_PR" and reason == "EXTERNAL_PLATFORM")
+                or (kind == "ARTICLE" and reason == "AGGREGATION_TITLE")
             ):
                 job.excluded_count += 1
                 mark_discovery(db, job, candidate, "NON_COMPANY_SOURCE")

@@ -234,7 +234,7 @@ def test_project_viewer_and_agent_denied(auth, db, users, monkeypatch):
     assert auth.get(base + "/cf7-reservation-preview").status_code == 404
     db.add(ProjectMember(project_id=company.project_id, user_id=users[1].id, role="viewer"))
     db.commit()
-    assert auth.get(base + "/cf7-reservation-preview").status_code == 200
+    assert auth.get(base + "/cf7-reservation-preview").status_code == 404
     assert auth.post(base + "/cf7-reservation-request", json=body).status_code == 404
     assert reserve(auth, item).status_code == 404
 

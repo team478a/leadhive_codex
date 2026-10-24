@@ -10,6 +10,12 @@ from app.models import Activity, Company, Project, ProjectMember, TargetProfile
 from app.pc_input_routes import PREFIX, REPORT_PREFIX, seal
 
 
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
+
+
 @pytest.fixture
 def task(auth, db, users, monkeypatch):
     monkeypatch.setattr(settings, "pc_diagnostic_transfer_enabled", True)

@@ -45,6 +45,7 @@ for (const role of ['owner', 'viewer'] as const) {
     })
     await page.goto('/')
     await expect(page.getByRole('heading', { name: '収集ターゲット設定', level: 1 })).toBeVisible()
+    await expect(page.getByRole('button', { name: '◎ 収集結果の確認（検証用）' })).toHaveCount(0)
     const targets = page.getByRole('region', { name: '収集ターゲット設定' })
     await expect(targets).toContainText('SNS運用代行 / Instagram運用代行')
     expect(calls.filter(c => c.method === 'POST')).toEqual([])

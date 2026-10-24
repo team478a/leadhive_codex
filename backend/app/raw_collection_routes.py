@@ -24,7 +24,7 @@ from app.models import (
     User,
 )
 from app.project_access import accessible_project_condition, project_access
-from app.security import current_user
+from app.security import current_admin
 from app.services.collection import ExternalServiceError, search_gbizinfo, search_serper
 from app.services.contact_destinations import normalize_destination
 from app.services.raw_benchmark import OUTCOMES, commit_id, digest, latest_review, report
@@ -100,7 +100,7 @@ def public_review(row):
 
 
 @router.get("/sources")
-def sources(user: User = Depends(current_user)):
+def sources(user: User = Depends(current_admin)):
     return [
         {"source": "serper", "configured": bool(settings.serper_api_key), "pilot_allowed": True},
         {
@@ -119,7 +119,7 @@ def sources(user: User = Depends(current_user)):
 
 
 @router.post("", status_code=201)
-def create(body: CreateInput, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def create(body: CreateInput, db: Session = Depends(get_db), user: User = Depends(current_admin)):
     profile = TargetProfile(
         user_id=user.id,
         profile_name="RAW BENCHMARK",
@@ -153,7 +153,7 @@ def create(body: CreateInput, db: Session = Depends(get_db), user: User = Depend
 
 
 @router.get("")
-def listing(db: Session = Depends(get_db), user: User = Depends(current_user)):
+def listing(db: Session = Depends(get_db), user: User = Depends(current_admin)):
     rows = db.scalars(
         select(RawBenchmark)
         .join(Project)
@@ -180,7 +180,7 @@ def raw_candidate_key(snapshot):
 
 
 @router.get("/{benchmark_id}/report")
-def summary(benchmark_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def summary(benchmark_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_admin)):
     benchmark = access(db, user, benchmark_id)
     value = report(db, benchmark)
     try:
@@ -196,7 +196,7 @@ def snapshots(
     benchmark_id: UUID,
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     benchmark = access(db, user, benchmark_id)
     rows = db.scalars(
@@ -225,7 +225,7 @@ def collect(
     benchmark_id: UUID,
     body: QueryInput,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     benchmark = access(db, user, benchmark_id, write=True)
     if body.source == "google_places":
@@ -341,7 +341,7 @@ def cancel(
     benchmark_id: UUID,
     run_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     benchmark = access(db, user, benchmark_id, write=True)
     db.scalar(select(Project.id).where(Project.id == benchmark.project_id).with_for_update())
@@ -363,7 +363,7 @@ def start_review(
     snapshot_id: UUID,
     body: StartReviewInput,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     snapshot, _, _ = observation(db, user, snapshot_id)
     if snapshot.snapshot_hash != body.snapshot_hash:
@@ -384,7 +384,7 @@ def review(
     snapshot_id: UUID,
     body: ReviewInput,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     snapshot, run, _ = observation(db, user, snapshot_id)
     previous = latest_review(db, snapshot.id)

@@ -19,7 +19,7 @@ from app.config import settings
 from app.database import get_db
 from app.models import Activity, User
 from app.project_access import company_access
-from app.security import current_user
+from app.security import current_admin
 from app.services.feature_usage import add_feature_usage_event
 
 router = APIRouter(prefix="/api")
@@ -137,7 +137,7 @@ def issue(
     company_id: UUID,
     binding: Binding,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     enabled()
     company = company_access(company_id, db, user)
@@ -265,7 +265,7 @@ def revoke(
     company_id: UUID,
     trial_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     company_access(company_id, db, user)
     item, value = locked_trial(trial_id, db)

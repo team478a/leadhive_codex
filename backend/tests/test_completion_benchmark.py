@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
+import pytest
 from sqlalchemy import func, select
 
 from app.models import (
@@ -28,6 +29,12 @@ from app.services.benchmark_summary import costs, summarize
 from app.services.lead_identity import identity_hash
 from tests.test_completion_metrics import fixture_cohort
 from tests.test_dm_preparation import preparation_fixture
+
+
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
 
 
 def packed(codes, *, alternatives=None, status="HOLD", match=None):

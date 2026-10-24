@@ -34,6 +34,7 @@ const captchaNames: Record<FormProfile['captcha_type'], string> = {
 }
 
 type Props = {
+  isAdmin: boolean
   company: Company
   profiles: FormProfile[]
   logs: FormAnalysisLog[]
@@ -60,7 +61,7 @@ function reviewedValue(field: FormProfileField) {
   return isReviewedChoice(field.mapped_key) && field.decision_source !== 'MANUAL' ? '' : field.recommended_value
 }
 
-export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, readOnly, onAnalyze, onSelectPrimary, onCorrect, onRefresh }: Props) {
+export function CompanyFormIntelligencePanel({ isAdmin, company, profiles, logs, busy, readOnly, onAnalyze, onSelectPrimary, onCorrect, onRefresh }: Props) {
   const [drafts, setDrafts] = useState<Record<string, { mappedKey: FormMappedKey; value: string }>>({})
   const latestAnalysis = Math.max(0, ...logs.filter(log => log.event_type === 'analysis_started').map(log => Date.parse(log.created_at)))
   const externalCandidates = logs.filter(log => log.details.finding === 'EXTERNAL_CONTACT_UNVERIFIED' && Date.parse(log.created_at) >= latestAnalysis).filter((log, index, all) => all.findIndex(item => item.details.url === log.details.url) === index)
@@ -96,7 +97,7 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
       {profile.review_reason && <p className="notice mt-3">要確認の理由：{profile.review_reason}</p>}
       {profile.error_message && <p className="error mt-3">{profile.error_message}</p>}
       <CompanyFormReviewGuidance profile={profile} />
-      <CompanyFormReviewMaterial key={profile.id} profileId={profile.id} companyId={company.id} formUrl={profile.form_url} fingerprint={profile.fingerprint} fields={profile.fields} readOnly={readOnly} saving={busy} onCorrect={onCorrect} onRefresh={onRefresh} />
+      <CompanyFormReviewMaterial isAdmin={isAdmin} key={profile.id} profileId={profile.id} companyId={company.id} formUrl={profile.form_url} fingerprint={profile.fingerprint} fields={profile.fields} readOnly={readOnly} saving={busy} onCorrect={onCorrect} onRefresh={onRefresh} />
       {profile.fields.length > 0 && <div className="company-table-wrap mt-4"><table className="company-table form-field-table"><thead><tr><th>元の項目</th><th>種類</th><th>標準マッピング</th><th>確度・根拠</th><th>推奨値</th><th></th></tr></thead><tbody>
         {profile.fields.map(field => {
           const draft = drafts[field.id] ?? { mappedKey: field.mapped_key, value: reviewedValue(field) }

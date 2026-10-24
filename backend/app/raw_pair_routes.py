@@ -19,7 +19,7 @@ from app.models import (
     User,
 )
 from app.raw_collection_routes import access, observation
-from app.security import current_user
+from app.security import current_admin
 from app.services.contact_destinations import normalize_destination
 from app.services.raw_benchmark import digest
 from app.services.raw_repeat import pair_features
@@ -52,7 +52,10 @@ def pair(db, user, left_id, right_id, *, write=False):
 
 @router.get("/pairs/{left_id}/{right_id}")
 def preview(
-    left_id: UUID, right_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    left_id: UUID,
+    right_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
 ):
     left, right, features, hash_value, previous = pair(db, user, left_id, right_id)
     return {
@@ -81,7 +84,7 @@ def review(
     right_id: UUID,
     body: PairInput,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     left, right, features, hash_value, previous = pair(db, user, left_id, right_id, write=True)
     if body.pair_hash != hash_value or body.expected_version != (
