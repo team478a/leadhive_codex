@@ -43,6 +43,8 @@ FORM_DRAFT_ALLOWED_PRIMARY_REASONS = (
     *FORM_DRAFT_BROWSER_PRIMARY_REASONS,
     *FORM_DRAFT_VALIDATION_PRIMARY_REASONS,
 )
+FORM_DRAFT_ALLOWED_UNCERTAIN_REASONS = {"form_review_required", "form_ready"}
+FORM_DRAFT_ALLOWED_PROFILE_STATUSES = ("READY", "REVIEW_REQUIRED")
 FORM_DRAFT_BLOCKING_REASONS = (
     "CONTACT_PROHIBITED",
     "NON_COMPANY_SUSPECTED",
@@ -100,6 +102,7 @@ def _readiness_target_statement(db: Session, project_id: UUID):
         select(FormDmReadinessResult.company_id, FormDmReadinessResult.profile_id)
         .add_columns(FormDmReadinessResult.primary_reason)
         .join(Company, Company.id == FormDmReadinessResult.company_id)
+        .join(FormProfile, FormProfile.id == FormDmReadinessResult.profile_id)
         .where(
             FormDmReadinessResult.job_id == snapshot.id,
             FormDmReadinessResult.primary_reason.in_(FORM_DRAFT_ALLOWED_PRIMARY_REASONS),
@@ -107,6 +110,9 @@ def _readiness_target_statement(db: Session, project_id: UUID):
             ~has_blocking_reason,
             Company.project_id == project_id,
             Company.status != "excluded",
+            FormProfile.sales_contact_status == "ALLOWED",
+            FormProfile.captcha_type == "CAPTCHA_NONE",
+            FormProfile.form_status.in_(FORM_DRAFT_ALLOWED_PROFILE_STATUSES),
             ~existing_form_draft,
         )
         .order_by(priority, Company.company_name, Company.id)
@@ -374,7 +380,12 @@ def run_bulk_template_drafts(
                 decision_reason = decision.reason_code
                 decision_message = decision.message
                 decision_status = decision.status
-            if decision_status != "ALLOWED":
+            form_draft_allowed = decision_status == "ALLOWED" or (
+                channel == "form"
+                and decision_status == "UNCERTAIN"
+                and decision_reason in FORM_DRAFT_ALLOWED_UNCERTAIN_REASONS
+            )
+            if not form_draft_allowed:
                 results["excluded"].append(
                     {
                         "company_id": str(company_id),
