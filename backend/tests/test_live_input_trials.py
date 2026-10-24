@@ -12,6 +12,12 @@ from app.main import app
 from app.models import Activity, Company, Project, ProjectMember, SuppressionEntry, TargetProfile
 
 
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
+
+
 @pytest.fixture
 def trial(auth, db, users, monkeypatch):
     monkeypatch.setattr(settings, "live_form_input_enabled", True)
@@ -303,6 +309,8 @@ def test_result_cookie_and_project_boundary(trial, db, users):
     )
     assert post_report(task, live_report(task)).status_code == 200
     client.post("/api/auth/logout")
+    users[1].is_admin = True
+    db.commit()
     client.post(
         "/api/auth/login", json={"email": users[1].email, "password": "test-only-long-password"}
     )

@@ -35,6 +35,12 @@ from tests.test_approval_foundation import workspace as workspace
 from tests.test_cf7_candidate_contract import candidate
 
 
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
+
+
 @pytest.fixture
 def source(db, workspace, users, monkeypatch):
     monkeypatch.setattr(settings, "cf7_candidate_preparation_enabled", True)
@@ -306,6 +312,10 @@ def test_agent_mixed_cookie_viewer_and_other_project_denied(auth, source, db, us
     db.add(ProjectMember(project_id=source[0].id, user_id=users[1].id, role="viewer"))
     db.commit()
     assert auth.get(url(source, "preview")).status_code == 404
+    assert all(
+        row["id"] != item["id"]
+        for row in auth.get(f"/api/projects/{source[0].id}/approval-requests").json()
+    )
     assert (
         auth.post(f"/api/approval-requests/{item['id']}/challenge", json=expected(item)).status_code
         == 404
@@ -359,6 +369,7 @@ def test_editor_can_approve_but_payload_hash_version_and_proof_expiry_bound(
 ):
     from tests.conftest import PASSWORD
 
+    users[1].is_admin = True
     db.add(ProjectMember(project_id=source[0].id, user_id=users[1].id, role="editor"))
     db.commit()
     auth.post("/api/auth/login", json={"email": users[1].email, "password": PASSWORD})

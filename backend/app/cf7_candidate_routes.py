@@ -11,7 +11,7 @@ from app.approval_routes import human_item, lock_preparation_sources, preparatio
 from app.database import get_db
 from app.models import CF7Observation, User
 from app.schema_approval import ExpectedPayload, FormPreparation, StrictInput
-from app.security import current_user
+from app.security import current_admin
 from app.services import cf7_candidate_preparation as service
 from app.services import human_approval as approval
 from app.services.cf7_candidate_contract import Selection
@@ -53,19 +53,22 @@ def sources(db, draft_id, user):
 
 
 @router.get("/cf7-candidate-preparation-status")
-def status(user: User = Depends(current_user)):
+def status(user: User = Depends(current_admin)):
     return {"enabled": service.enabled(), "non_executable": True}
 
 
 @router.get("/outreach-drafts/{draft_id}/cf7-candidate-preview")
-def preview(draft_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)):
+def preview(draft_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_admin)):
     company, draft = sources(db, draft_id, user)
     return service.preparation(db, company, draft)[1]
 
 
 @router.post("/outreach-drafts/{draft_id}/cf7-candidate-preview")
 def selected_preview(
-    draft_id: UUID, body: Choices, db: Session = Depends(get_db), user: User = Depends(current_user)
+    draft_id: UUID,
+    body: Choices,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
 ):
     company, draft = sources(db, draft_id, user)
     return service.preparation(db, company, draft, body.selections)[1]
@@ -73,7 +76,10 @@ def selected_preview(
 
 @router.post("/outreach-drafts/{draft_id}/cf7-candidate-request", status_code=201)
 def prepare(
-    draft_id: UUID, body: Prepare, db: Session = Depends(get_db), user: User = Depends(current_user)
+    draft_id: UUID,
+    body: Prepare,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_admin),
 ):
     company, draft = sources(db, draft_id, user)
     return serialize(
@@ -95,7 +101,7 @@ def revision_sources(db, request_id, user, expected=None):
 
 @router.get("/approval-requests/{request_id}/cf7-revision-preview")
 def revision_preview(
-    request_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    request_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_admin)
 ):
     _, company, draft, version = revision_sources(db, request_id, user)
     return service.preparation(db, company, draft, version=version)[1]
@@ -106,7 +112,7 @@ def selected_revision_preview(
     request_id: UUID,
     body: RevisionChoices,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     _, company, draft, version = revision_sources(db, request_id, user, body)
     return service.preparation(db, company, draft, body.selections, version)[1]
@@ -117,7 +123,7 @@ def revise_candidate(
     request_id: UUID,
     body: RevisionPrepare,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     previous, company, draft, _ = revision_sources(db, request_id, user, body)
     return serialize(

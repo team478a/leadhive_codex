@@ -84,13 +84,8 @@ def test_preview_rebuilds_server_payload_without_writes_or_send(auth, db, users,
     assert auth.get(path + "/approval-handoff-preview").status_code == 404
     db.add(ProjectMember(project_id=company.project_id, user_id=users[1].id, role="viewer"))
     db.commit()
-    viewer = auth.get(path + "/contract-preview")
-    assert viewer.json()["status"] == "HOLD" and "sender@example.com" not in viewer.text
-    viewer_handoff = auth.get(path + "/approval-handoff-preview")
-    assert (
-        viewer_handoff.json()["status"] == "HOLD"
-        and "sender@example.com" not in viewer_handoff.text
-    )
+    assert auth.get(path + "/contract-preview").status_code == 404
+    assert auth.get(path + "/approval-handoff-preview").status_code == 404
     auth.post(
         "/api/auth/login", json={"email": users[0].email, "password": "test-only-long-password"}
     )

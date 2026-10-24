@@ -32,8 +32,9 @@ import type { Activity, AiReview, Deal, DealPipeline, EmailCampaign, FormDeliver
 
 type Filters = CompanyFilterValues
 
-export function CompaniesPage({ projects, projectRoles, initialProjectId, initialReplyInboundEmailId, initialFollowupCompanyId, initialCompanyId }: {
+export function CompaniesPage({ projects, projectRoles, initialProjectId, initialReplyInboundEmailId, initialFollowupCompanyId, initialCompanyId, isAdmin }: {
   projects: Project[]
+  isAdmin: boolean
   projectRoles: Record<string, ProjectMember['role']>
   initialProjectId: string
   initialReplyInboundEmailId: string | null
@@ -817,7 +818,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
       onFeedbackSaved={() => { void reload().catch(e => setError(errorMessage(e))); setSelected(null); setNotice('確認結果を保存しました。送信承認は行っていません。') }}
     />
     {selected && <CompanySalesNgAction key={`sales-ng-${selected.id}`} company={selected} busy={busy} readOnly={readOnly} onMark={markSalesNg} />}
-    {selected && <CompanyFormInputTrial key={`input-trial-${selected.id}`} company={selected} profiles={formProfiles} activities={activities} readOnly={readOnly} busy={busy} onSave={recordInputTrial} />}
+    {selected && <CompanyFormInputTrial key={`input-trial-${selected.id}`} isAdmin={isAdmin} company={selected} profiles={formProfiles} activities={activities} readOnly={readOnly} busy={busy} onSave={recordInputTrial} />}
     {selected && <div ref={companyDetailsRef} className="scroll-mt-6" tabIndex={-1} aria-label="企業詳細">
     <CompanyDetailsPanel
       company={selected}
@@ -845,6 +846,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     />
     </div>}
     {selected && <CompanyFormIntelligencePanel
+      isAdmin={isAdmin}
       company={selected}
       profiles={formProfiles}
       logs={formAnalysisLogs}

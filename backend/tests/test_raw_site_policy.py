@@ -9,6 +9,12 @@ from app.services.scraper import is_aggregator_domain
 from tests.test_raw_collection import benchmark
 
 
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
+
+
 @pytest.mark.parametrize(
     "host",
     [

@@ -31,6 +31,12 @@ from app.services.raw_capture import capture, capturing
 from tests.conftest import PASSWORD
 
 
+@pytest.fixture(autouse=True)
+def admin_user(users, db):
+    users[0].is_admin = True
+    db.commit()
+
+
 def benchmark(auth):
     response = auth.post(
         "/api/raw-benchmarks", json={"region": "兵庫県姫路市", "industry": "美容院"}
@@ -202,7 +208,7 @@ def test_review_validation_scope_and_time(auth, db, users, monkeypatch):
     db.add(ProjectMember(project_id=UUID(b["project_id"]), user_id=users[1].id, role="viewer"))
     db.commit()
     auth.post("/api/auth/login", json={"email": users[1].email, "password": PASSWORD})
-    assert auth.get(f"/api/raw-benchmarks/{b['id']}/report").status_code == 200
+    assert auth.get(f"/api/raw-benchmarks/{b['id']}/report").status_code == 404
     assert auth.post(path, json={"snapshot_hash": row["snapshot_hash"]}).status_code == 404
     db.execute(delete(ProjectMember).where(ProjectMember.project_id == UUID(b["project_id"])))
     db.commit()

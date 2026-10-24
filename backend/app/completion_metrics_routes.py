@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Company, LeadCompletionCohort, LeadReviewSession, User
 from app.project_access import project_access
-from app.security import current_user
+from app.security import current_admin, current_user
 from app.services.cohort_destinations import page as destination_page
 from app.services.completion_metrics import create_cohort, report
 from app.services.lead_identity import identity_hash
@@ -207,5 +207,7 @@ def destinations(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
+    if benchmark:
+        current_admin(user)
     cohort, project = owned_cohort(db, user, cohort_id)
     return destination_page(db, cohort, project, offset, limit, expected_context_hash, benchmark)
