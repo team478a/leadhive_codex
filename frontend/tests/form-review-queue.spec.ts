@@ -23,6 +23,8 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   })
   const submitted: { profile_id: string; action: string; confirmed_no_sales_prohibition: boolean }[] = []
   const policyActions: string[] = []
+  const labelRuleActions: string[] = []
+  const labelRules: { id: string; normalized_label: string; field_type: string; mapped_key: string; recommended_value: string; status: 'ACTIVE' | 'RETIRED'; created_at: string; retired_at: string | null }[] = []
   let policyEnabled = false
   await page.route(`**/api/projects/${fixture.project_id}/send-flow-summary`, route =>
     route.fulfill({ json: {
@@ -56,6 +58,25 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
       can_manage: true, active_job: null,
     }
     await route.fulfill({ json: action === 'enable' || action === 'reset' ? { setting, job: null } : setting })
+  })
+  await page.route(`**/api/projects/${fixture.project_id}/form-label-rules**`, async route => {
+    const url = new URL(route.request().url())
+    if (url.pathname.endsWith('/preview')) {
+      await route.fulfill({ json: { form_count: 2, examples: [{ company_name: '確認例企業', form_url: 'https://example.com/contact' }] } })
+      return
+    }
+    if (route.request().method() === 'POST' && url.pathname.endsWith('/form-label-rules')) {
+      const body = route.request().postDataJSON()
+      labelRuleActions.push(`create:${body.normalized_label}:${body.mapped_key}`)
+      labelRules.push({ id: 'rule-1', normalized_label: body.normalized_label, field_type: body.field_type, mapped_key: body.mapped_key, recommended_value: body.recommended_value, status: 'ACTIVE', created_at: '2026-10-24T00:00:00Z', retired_at: null })
+      await route.fulfill({ status: 202, json: { rule: labelRules[0], job: null } })
+      return
+    }
+    if (route.request().method() === 'POST' && url.pathname.endsWith('/retire')) {
+      labelRuleActions.push('retire:rule-1'); labelRules[0].status = 'RETIRED'; labelRules[0].retired_at = '2026-10-24T00:01:00Z'
+      await route.fulfill({ json: labelRules[0] }); return
+    }
+    await route.fulfill({ json: { rules: labelRules, active_job: null, allowed_mapped_keys: ['furigana', 'email', 'message', 'other'] } })
   })
   await page.route(`**/api/projects/${fixture.project_id}/form-dm-readiness`, route =>
     route.fulfill({ json: { counts: { READY: 1 }, review_queue_eligible: 3, ready_confirmation_pending: 1, total: 4, items: [] } }))
@@ -93,6 +114,17 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   await expect(policyPanel.getByText('有効', { exact: true })).toBeVisible()
   expect(policyActions).toEqual(['enable'])
   await expect(panel.getByText('よみがな（text）: 2フォーム')).toBeVisible()
+  await panel.getByRole('tab', { name: '項目名ごとに決める' }).click()
+  await panel.getByLabel('よみがなの対応先').selectOption('furigana')
+  page.once('dialog', dialog => dialog.accept())
+  await panel.getByRole('button', { name: 'このルールを保存して2フォームに反映' }).click()
+  await expect(panel.getByText('項目名ルールを保存し、バックグラウンド反映を開始しました。')).toBeVisible()
+  expect(labelRuleActions).toEqual(['create:よみがな:furigana'])
+  page.once('dialog', dialog => dialog.accept())
+  await panel.getByRole('button', { name: '無効にする' }).click()
+  await expect(panel.getByText('ルールを無効にしました。反映済みの項目は保持しています。')).toBeVisible()
+  expect(labelRuleActions).toEqual(['create:よみがな:furigana', 'retire:rule-1'])
+  await panel.getByRole('tab', { name: 'フォームごとに確認' }).click()
   await expect(panel.getByRole('heading', { name: '先頭のスキップ候補' })).toBeVisible()
   await expect(panel.getByText('_wpcf7')).toHaveCount(0)
   await panel.getByRole('button', { name: '仕組み用の項目を表示（1件）' }).click()

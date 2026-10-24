@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, download, errorMessage } from './api'
 import { formMappedKeyLabels } from './formMappingLabels'
+import { FormLabelRulesTab } from './FormLabelRulesTab'
 import type { FormMappedKey, OperationJob } from './types'
 
 type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[]; suggested_mapped_key?: string; same_organization_suggestion?: boolean; other_organization_suggestion?: boolean }
@@ -15,6 +16,7 @@ const keys: FormMappedKey[] = ['company_name', 'department', 'position', 'contac
 export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { projectId: string; canWrite: boolean; canManagePolicy: boolean }) {
   const [items, setItems] = useState<Item[]>([]); const [total, setTotal] = useState(0); const [index, setIndex] = useState(0)
   const [summary, setSummary] = useState<QueueSummary | null>(null)
+  const [reviewTab, setReviewTab] = useState<'forms' | 'labels'>('forms')
   const [policy, setPolicy] = useState<PolicyStatus | null>(null)
   const [policyAccepted, setPolicyAccepted] = useState(false); const [resetAccepted, setResetAccepted] = useState(false)
   const [policyBusy, setPolicyBusy] = useState(false)
@@ -122,7 +124,9 @@ export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { proj
   return <section className="panel mb-5" aria-label="フォーム確認キュー">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><h2>フォーム確認キュー</h2><p className="muted mt-2 text-sm">保存済み解析の人手確認です。外部アクセス、AI、承認、送信は行いません。</p></div><button className="secondary" disabled={busy} onClick={() => void load()}>更新</button></div>
     {error && <p role="alert" className="error mt-3">{error}</p>}{notice && <p role="status" className="mt-3">{notice}</p>}
-    {summary && <section className="mt-4 border-t pt-4" aria-label="フォーム確認の集計">
+    <div className="mt-4 flex gap-2" role="tablist" aria-label="フォーム確認キューの表示"><button type="button" role="tab" aria-selected={reviewTab === 'forms'} className={reviewTab === 'forms' ? '' : 'secondary'} onClick={() => setReviewTab('forms')}>フォームごとに確認</button><button type="button" role="tab" aria-selected={reviewTab === 'labels'} className={reviewTab === 'labels' ? '' : 'secondary'} onClick={() => setReviewTab('labels')}>項目名ごとに決める</button></div>
+    {reviewTab === 'labels' && summary && <FormLabelRulesTab projectId={projectId} canWrite={canWrite} unresolved={summary.unresolved_required_labels} onChanged={load} />}
+    {reviewTab === 'forms' && summary && <section className="mt-4 border-t pt-4" aria-label="フォーム確認の集計">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3>確認が必要な理由の集計（{summary.total}件）</h3><button type="button" className="secondary" onClick={() => void download(`/projects/${projectId}/form-review-queue/summary?format=csv`, 'form-review-queue-summary.csv').catch(cause => setError(errorMessage(cause)))}>集計CSVをダウンロード</button></div>
       <div className="mt-3 grid gap-3 md:grid-cols-3">
         <div><strong>理由別</strong><ul className="mt-1">{Object.entries(summary.by_readiness_reason).map(([reason, count]) => <li key={reason}>{reason}: {count}件</li>)}</ul></div>
@@ -130,7 +134,7 @@ export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { proj
         <div><strong>同意欄の内訳</strong><ul className="mt-1"><li>個人情報のみ・単一チェック: {summary.consent_fields.privacy_only_single_checkbox}件</li><li>個人情報とメルマガが混在: {summary.consent_fields.mixed_privacy_newsletter}件</li><li>その他: {summary.consent_fields.other}件</li></ul></div>
       </div>
     </section>}
-    {policy && <section className="mt-4 border-t pt-4" aria-label="同意欄の自動判断設定">
+    {reviewTab === 'forms' && policy && <section className="mt-4 border-t pt-4" aria-label="同意欄の自動判断設定">
       <div className="flex flex-wrap items-center justify-between gap-2"><h3>同意欄の自動判断</h3><span className="badge">{policy.enabled ? '有効' : '無効'}</span></div>
       <p className="muted mt-2 text-sm">{policy.policy}。送信・承認は行わず、送信可否の確認は通常どおり残ります。</p>
       <ol className="mt-3 list-decimal pl-5 text-sm">{policy.conditions.map(condition => <li key={condition}>{condition}</li>)}</ol>
@@ -140,8 +144,8 @@ export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { proj
       {canManagePolicy && <details className="mt-4"><summary>このルールで決めた欄を未決定に戻す</summary><p className="muted mt-2 text-sm">手動で決めた欄には触れません。自動判断が有効なままなら、次回の解析時に条件へ一致する欄へ再適用されます。</p><label className="mt-2 block"><input type="checkbox" checked={resetAccepted} onChange={event => setResetAccepted(event.target.checked)} /> POLICYで決めた欄だけを未決定に戻すことを確認しました</label><button className="secondary mt-3" type="button" disabled={!resetAccepted || policyBusy || Boolean(policy.active_job)} onClick={() => void changePolicy('reset')}>未決定に戻す</button></details>}
       {!canManagePolicy && <p className="muted mt-3 text-sm">この設定はプロジェクト所有者だけが変更できます。</p>}
     </section>}
-    {busy && <p className="mt-3">読み込み中…</p>}{!busy && !item && <p className="mt-3">確認対象はありません（{total}件）。</p>}
-    {item && <div className="mt-4">
+    {reviewTab === 'forms' && busy && <p className="mt-3">読み込み中…</p>}{reviewTab === 'forms' && !busy && !item && <p className="mt-3">確認対象はありません（{total}件）。</p>}
+    {reviewTab === 'forms' && item && <div className="mt-4">
       <p className="muted">{index + 1}件目 / {total}件 · {item.reason_codes.join('、')}</p><h3 className="mt-2">{item.company_name}</h3>
       <a className="break-all text-sm" href={item.form_url} target="_blank" rel="noreferrer">フォームを開いて目視確認 ↗</a>
       {!item.ready_confirmation_only && <><p className="mt-3">解析された入力項目・値</p>
