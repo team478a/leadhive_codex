@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { CompanyFormReviewMaterial } from './CompanyFormReviewMaterial'
 import { CompanyFormReviewGuidance } from './CompanyFormReviewGuidance'
+import { formMappedKeyLabels } from './formMappingLabels'
 import type { Company, FormAnalysisLog, FormMappedKey, FormProfile, FormProfileField } from './types'
 
 const mappedKeys: FormMappedKey[] = [
@@ -11,13 +12,6 @@ const mappedKeys: FormMappedKey[] = [
   'website', 'contact_category', 'contact_method', 'subject', 'message', 'privacy_consent',
   'newsletter_consent', 'other', 'unknown',
 ]
-const mappedKeyLabels: Partial<Record<FormMappedKey, string>> = {
-  last_name_furigana: '姓のフリガナ', first_name_furigana: '名のフリガナ',
-  phone_area_code: '電話番号（市外局番）', phone_exchange_code: '電話番号（市内局番）',
-  phone_line_number: '電話番号（加入者番号）', postal_code_first: '郵便番号（前半）',
-  postal_code_last: '郵便番号（後半）', contact_method: '連絡方法',
-  privacy_consent: '個人情報同意', newsletter_consent: 'メルマガ登録',
-}
 const statusNames: Record<FormProfile['form_status'], string> = {
   UNANALYZED: '未解析', READY: '送信準備完了', REVIEW_REQUIRED: '要確認',
   BLOCKED: '送信対象外', STALE: '変更あり', ERROR: '解析失敗',
@@ -100,7 +94,7 @@ export function CompanyFormIntelligencePanel({ company, profiles, logs, busy, re
       {profile.fields.length > 0 && <div className="company-table-wrap mt-4"><table className="company-table form-field-table"><thead><tr><th>元の項目</th><th>種類</th><th>標準マッピング</th><th>確度・根拠</th><th>推奨値</th><th></th></tr></thead><tbody>
         {profile.fields.map(field => {
           const draft = drafts[field.id] ?? { mappedKey: field.mapped_key, value: reviewedValue(field) }
-          return <tr key={field.id} id={`form-field-${field.id}`} tabIndex={-1}><td><strong>{field.label || field.name || '名称なし'}</strong><p className="muted text-xs break-all">{field.name || field.selector}</p>{field.required && <span className="required-mark">必須</span>}</td><td>{field.field_type}{field.options.length > 0 && <p className="muted text-xs">{field.options.map(option => option.label || option.value).filter(Boolean).join(' / ')}</p>}</td><td><select aria-label={`${field.label}の標準マッピング`} value={draft.mappedKey} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, mappedKey: event.target.value as FormMappedKey } })}>{mappedKeys.map(key => <option key={key} value={key}>{mappedKeyLabels[key] ?? key}</option>)}</select></td><td>{Math.round(field.confidence * 100)}%<p className="muted text-xs">{field.decision_source}</p></td><td>{isReviewedChoice(draft.mappedKey) ? <><select aria-label={`${field.label}の${draft.mappedKey === 'contact_method' ? '連絡方法' : '同意選択'}`} value={draft.value} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, value: event.target.value } })}><option value="">{draft.mappedKey === 'contact_method' || field.required ? '確認して選択してください' : '選択しない（任意欄）'}</option>{field.options.map((option, index) => <option key={index} value={option.value || ''}>{option.label || option.value}</option>)}</select><p className="muted text-xs">{draft.mappedKey === 'contact_method' ? '選択した方法のメール・電話を送信者設定で確認し、修正を保存してください。' : '同意内容を確認してください。任意欄は選択しない状態も保存できます。'}</p></> : <input aria-label={`${field.label}の推奨値`} value={draft.value} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, value: event.target.value } })} placeholder="選択肢の推奨値" />}</td><td><button className="secondary" disabled={busy || readOnly || (draft.mappedKey === field.mapped_key && draft.value === field.recommended_value && (!isReviewedChoice(draft.mappedKey) || field.decision_source === 'MANUAL'))} onClick={() => onCorrect(field, draft.mappedKey, draft.value)}>修正を保存</button></td></tr>
+          return <tr key={field.id} id={`form-field-${field.id}`} tabIndex={-1}><td><strong>{field.label || field.name || '名称なし'}</strong><p className="muted text-xs break-all">{field.name || field.selector}</p>{field.required && <span className="required-mark">必須</span>}</td><td>{field.field_type}{field.options.length > 0 && <p className="muted text-xs">{field.options.map(option => option.label || option.value).filter(Boolean).join(' / ')}</p>}</td><td><select aria-label={`${field.label}の標準マッピング`} value={draft.mappedKey} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, mappedKey: event.target.value as FormMappedKey } })}>{mappedKeys.map(key => <option key={key} value={key}>{formMappedKeyLabels[key]}</option>)}</select></td><td>{Math.round(field.confidence * 100)}%<p className="muted text-xs">{field.decision_source}</p></td><td>{isReviewedChoice(draft.mappedKey) ? <><select aria-label={`${field.label}の${draft.mappedKey === 'contact_method' ? '連絡方法' : '同意選択'}`} value={draft.value} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, value: event.target.value } })}><option value="">{draft.mappedKey === 'contact_method' || field.required ? '確認して選択してください' : '選択しない（任意欄）'}</option>{field.options.map((option, index) => <option key={index} value={option.value || ''}>{option.label || option.value}</option>)}</select><p className="muted text-xs">{draft.mappedKey === 'contact_method' ? '選択した方法のメール・電話を送信者設定で確認し、修正を保存してください。' : '同意内容を確認してください。任意欄は選択しない状態も保存できます。'}</p></> : <input aria-label={`${field.label}の推奨値`} value={draft.value} disabled={readOnly} onChange={event => setDrafts({ ...drafts, [field.id]: { ...draft, value: event.target.value } })} placeholder="選択肢の推奨値" />}</td><td><button className="secondary" disabled={busy || readOnly || (draft.mappedKey === field.mapped_key && draft.value === field.recommended_value && (!isReviewedChoice(draft.mappedKey) || field.decision_source === 'MANUAL'))} onClick={() => onCorrect(field, draft.mappedKey, draft.value)}>修正を保存</button></td></tr>
         })}
       </tbody></table></div>}
     </article>)}
