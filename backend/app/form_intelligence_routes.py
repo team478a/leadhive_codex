@@ -43,7 +43,7 @@ from app.services.form_adapter_prerequisites import assess as assess_adapter_pre
 from app.services.form_choice_groups import GroupReviewInput, inventory, record_review
 from app.services.form_execution_plan import PlanError
 from app.services.form_input_preparation import prepare as prepare_form_inputs
-from app.services.form_intelligence.fields import mapping_review_reason
+from app.services.form_intelligence.profile_status import recompute_stored_profile_status
 from app.services.form_live_check import check as check_live_form
 from app.services.form_live_check import latest as latest_live_check
 from app.services.form_live_check import record as record_live_check
@@ -664,51 +664,7 @@ def correct_form_field(
     field.recommended_value = body.recommended_value
     field.confidence = 1.0
     field.decision_source = "MANUAL"
-    fields = db.scalars(
-        select(FormProfileField).where(
-            FormProfileField.form_profile_id == profile.id,
-            ~FormProfileField.field_type.in_(("hidden", "submit", "button", "reset", "image")),
-        )
-    ).all()
-    mapping_reason = mapping_review_reason(
-        [
-            {
-                key: getattr(item, key)
-                for key in (
-                    "field_type",
-                    "label",
-                    "mapped_key",
-                    "confidence",
-                    "required",
-                    "options",
-                    "recommended_value",
-                    "decision_source",
-                )
-            }
-            for item in fields
-        ]
-    )
-    if profile.sales_contact_status == "PROHIBITED":
-        profile.form_status = "BLOCKED"
-    elif profile.form_status in {"STALE", "ERROR", "BLOCKED"}:
-        # Correcting a stored value is not a fresh observation of the website.
-        profile.delivery_supported = False
-    elif (
-        not profile.form_found
-        or profile.sales_contact_status == "UNCERTAIN"
-        or profile.captcha_type != "CAPTCHA_NONE"
-        or not profile.delivery_supported
-        or profile.confirmation_page is None
-        or mapping_reason
-    ):
-        profile.form_status = "REVIEW_REQUIRED"
-        if not profile.delivery_supported and not profile.review_reason:
-            profile.review_reason = "このフォームはブラウザまたはCodex支援での操作が必要です。"
-        elif mapping_reason:
-            profile.review_reason = mapping_reason
-    else:
-        profile.form_status = "READY"
-        profile.review_reason = ""
+    recompute_stored_profile_status(db, profile)
     db.add(
         FormAnalysisLog(
             company_id=profile.company_id,

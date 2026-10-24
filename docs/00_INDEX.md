@@ -59,6 +59,7 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 
 ## 実装・運用記録
 
+- `221_FORM_REVIEW_REDUCTION_Q2.md`：プロジェクト所有者が承認した安全条件による同意欄の自動判断、監査、取り消し。
 - `219_BULK_FORM_DRAFT_TARGETS.md`：フォーム文面の一括作成対象拡張、対象件数API、画面の残り実行回数表示。
 - `218_PIPELINE_STAGE_CSV.md`：全企業を1社1行で分類する段階CSVと段階別件数。
 

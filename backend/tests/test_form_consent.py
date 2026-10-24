@@ -6,7 +6,7 @@ import pytest
 from bs4 import BeautifulSoup
 
 from app.services.form_delivery import _parse_form
-from app.services.form_intelligence.consent import consent_review_reason
+from app.services.form_intelligence.consent import consent_policy_decision, consent_review_reason
 from app.services.form_intelligence.fields import mapping_review_reason, parse_form_fields
 
 
@@ -52,6 +52,38 @@ def test_valid_human_choice_and_optional_optout():
             options=[{"value": "yes", "label": "メルマガ希望"}],
         )
     )
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"mapped_key": "other"},
+        {"field_type": "select"},
+        {"options": []},
+        {"options": [{"value": "", "label": "同意"}]},
+        {"options": [{"value": "yes", "label": "個人情報"}, {"value": "no", "label": "拒否"}]},
+        {"label": "利用規約に同意", "options": [{"value": "yes", "label": "同意"}]},
+        {"label": "個人情報とメルマガ配信に同意"},
+        {"label": "個人情報に同意しない"},
+        {"label": "個人情報の取扱い（必須性未確認）"},
+        {"decision_source": "MANUAL"},
+    ],
+)
+def test_consent_policy_requires_every_privacy_condition(changes):
+    assert consent_policy_decision(consent(**({"decision_source": "RULE"} | changes))) is None
+
+
+def test_consent_policy_checks_privacy_and_leaves_optional_newsletter_unchecked():
+    assert consent_policy_decision(consent(decision_source="RULE")) == "checked"
+    optional = consent(
+        mapped_key="newsletter_consent",
+        label="メールマガジン配信",
+        required=False,
+        decision_source="RULE",
+    )
+    assert consent_policy_decision(optional) == "unchecked"
+    assert consent_policy_decision(optional | {"required": True}) is None
+    assert not consent_review_reason(consent(decision_source="POLICY"))
 
 
 @pytest.mark.parametrize(

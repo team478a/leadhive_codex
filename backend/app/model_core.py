@@ -81,6 +81,14 @@ class Project(Timestamps, Base):
     sales_objective: Mapped[str] = mapped_column(Text)
     region: Mapped[str] = mapped_column(String(500))
     status: Mapped[str] = mapped_column(String(20), default="draft")
+    consent_policy_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default="false"
+    )
+    consent_policy_version: Mapped[str] = mapped_column(String(50), default="", server_default="")
+    consent_policy_enabled_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), index=True
+    )
+    consent_policy_enabled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class ProjectMember(Timestamps, Base):
