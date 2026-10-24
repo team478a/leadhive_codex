@@ -664,6 +664,7 @@ def correct_form_field(
     field.recommended_value = body.recommended_value
     field.confidence = 1.0
     field.decision_source = "MANUAL"
+    field.label_rule_id = None
     recompute_stored_profile_status(db, profile)
     db.add(
         FormAnalysisLog(

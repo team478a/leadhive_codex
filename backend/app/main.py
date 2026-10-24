@@ -40,6 +40,7 @@ from app.form_approval_bulk_routes import router as form_approval_bulk_router
 from app.form_batch_routes import router as form_batch_router
 from app.form_dm_readiness_routes import router as form_dm_readiness_router
 from app.form_intelligence_routes import router as form_intelligence_router
+from app.form_label_rule_routes import router as form_label_rule_router
 from app.form_observation_job_routes import router as form_observation_job_router
 from app.form_observation_routes import router as form_observation_router
 from app.form_operations_routes import router as form_operations_router
@@ -283,6 +284,7 @@ app.include_router(form_batch_router)
 app.include_router(form_approval_bulk_router)
 app.include_router(form_dm_readiness_router)
 app.include_router(form_review_queue_router)
+app.include_router(form_label_rule_router)
 app.include_router(form_intelligence_router)
 app.include_router(form_observation_router)
 app.include_router(form_observation_job_router)

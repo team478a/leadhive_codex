@@ -12,6 +12,7 @@ from app.models import (
     ApplicationSettings,
     Company,
     FormAnalysisLog,
+    FormLabelRule,
     FormProfileField,
     OperationJob,
     Project,
@@ -484,6 +485,49 @@ def test_enabled_consent_policy_reapplies_and_preserves_manual_on_reanalysis(aut
     refreshed = analyze_form_profiles(db, company)[0]
     consent = next(field for field in refreshed["fields"] if field["name"] == "privacy")
     assert (consent["decision_source"], consent["recommended_value"]) == ("MANUAL", "yes")
+
+
+def test_active_label_rule_reapplies_only_to_dictionary_unknown_on_reanalysis(
+    auth, db, users, monkeypatch
+):
+    project_data, company = make_company(auth, db)
+    rule = FormLabelRule(
+        project_id=project_data["id"],
+        normalized_label="社内識別子",
+        field_type="text",
+        mapped_key="position",
+        created_by_user_id=users[0].id,
+    )
+    db.add(rule)
+    db.commit()
+    install_pages(
+        monkeypatch,
+        {
+            "https://form-intelligence.example": '<a href="/contact">お問い合わせ</a>',
+            "https://form-intelligence.example/contact": (
+                '<form method="post"><input name="email" type="email" required>'
+                '<label>社内識別子<input name="custom_code" type="text" required></label>'
+                '<textarea name="message" required></textarea>'
+                '<button type="submit">送信</button></form>'
+            ),
+        },
+    )
+
+    first = analyze_form_profiles(db, company)[0]
+    first_custom = next(field for field in first["fields"] if field["name"] == "custom_code")
+    first_email = next(field for field in first["fields"] if field["name"] == "email")
+    assert (first_custom["mapped_key"], first_custom["decision_source"]) == (
+        "position",
+        "RULE",
+    )
+    assert first_custom["label_rule_id"] == str(rule.id)
+    assert first_email["mapped_key"] == "email"
+    assert first_email["label_rule_id"] is None
+
+    second = analyze_form_profiles(db, company)[0]
+    second_custom = next(field for field in second["fields"] if field["name"] == "custom_code")
+    assert second_custom["mapped_key"] == "position"
+    assert second_custom["label_rule_id"] == str(rule.id)
 
 
 def test_ai_receives_only_ambiguous_fields_and_cannot_override_rule_results(auth, db, monkeypatch):

@@ -116,6 +116,9 @@ class FormProfileField(Timestamps, Base):
     form_profile_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("form_profiles.id", ondelete="CASCADE"), index=True
     )
+    label_rule_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("form_label_rules.id", ondelete="SET NULL"), index=True
+    )
     position: Mapped[int] = mapped_column(Integer)
     selector: Mapped[str] = mapped_column(Text, default="")
     label: Mapped[str] = mapped_column(String(500), default="")

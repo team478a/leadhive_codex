@@ -125,7 +125,7 @@ class OperationJob(Base):
             "'form_intelligence', 'prepare_outreach', 'cf7_observation', 'extract_articles', "
             "'form_dm_readiness', 'form_approval_batch', 'bulk_template_drafts', "
             "'browser_form_analysis', 'site_analysis', 'master_site_backfill', "
-            "'consent_policy')",
+            "'consent_policy', 'form_label_rule')",
             name="ck_operation_job_type",
         ),
         CheckConstraint(

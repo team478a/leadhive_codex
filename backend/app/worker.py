@@ -132,6 +132,7 @@ def recover_stale_jobs(db) -> tuple[int, int]:
                     "bulk_template_drafts",
                     "master_site_backfill",
                     "consent_policy",
+                    "form_label_rule",
                 )
             )
             if not settings.outbound_enabled
@@ -564,6 +565,7 @@ def claim_job(db) -> OperationJob | None:
                     "bulk_template_drafts",
                     "master_site_backfill",
                     "consent_policy",
+                    "form_label_rule",
                 )
             )
             if not settings.outbound_enabled
@@ -1656,6 +1658,7 @@ def run_once() -> bool:
         try:
             from app.services.bulk_template_drafts import run_bulk_template_drafts
             from app.services.form_consent_policy import run_consent_policy
+            from app.services.form_label_rules import run_form_label_rule
             from app.services.master_data import backfill_project_sites
             from app.services.sales_preparation import run_preparation
 
@@ -1681,6 +1684,9 @@ def run_once() -> bool:
                 "consent_policy": lambda db, job, worker: run_consent_policy(
                     db, job, worker, stop_requested, progress
                 ),
+                "form_label_rule": lambda db, job, worker: run_form_label_rule(
+                    db, job, worker, stop_requested, progress
+                ),
             }[job.operation_type](db, job, worker_id)
             job = db.get(OperationJob, job_id)
             db.refresh(job)
@@ -1704,7 +1710,7 @@ def run_once() -> bool:
                 job.lease_expires_at = None
                 job.finished_at = datetime.now(timezone.utc)
                 if (
-                    job.operation_type in {"site_analysis", "consent_policy"}
+                    job.operation_type in {"site_analysis", "consent_policy", "form_label_rule"}
                     and job.processed_count
                 ):
                     from app.services.site_analysis import enqueue_readiness_after_site_analysis

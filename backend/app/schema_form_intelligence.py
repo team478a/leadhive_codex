@@ -44,6 +44,7 @@ class FormProfileFieldOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
     form_profile_id: UUID
+    label_rule_id: UUID | None
     position: int
     selector: str
     label: str
