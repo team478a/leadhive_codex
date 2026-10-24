@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
+import { formMappedKeyLabels } from './formMappingLabels'
+import type { FormMappedKey } from './types'
 
 type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[]; suggested_mapped_key?: string; same_organization_suggestion?: boolean; other_organization_suggestion?: boolean }
 type ChoiceGroup = { group_id: string; source_hash: string; label: string; supported: boolean; members: { field_id: string; label: string; required: boolean; options: { value: string; label: string }[] }[] }
 type SavedGroup = { group_id: string; source_hash: string; label: string; required_observed: boolean; reviewable: boolean; options: { option_id: string; label: string; value: string }[] }
 type Item = { company_id: string; company_name: string; profile_id: string; form_url: string; fingerprint: string; fields_hash: string; reason_codes: string[]; ready_confirmation_only: boolean; fields: Field[]; groups: ChoiceGroup[]; saved_groups: SavedGroup[] }
 type Queue = { total: number; offset: number; limit: number; items: Item[] }
-const keys = ['company_name', 'department', 'position', 'contact_name', 'last_name', 'first_name', 'furigana', 'last_name_furigana', 'first_name_furigana', 'email', 'phone', 'phone_area_code', 'phone_exchange_code', 'phone_line_number', 'postal_code', 'postal_code_first', 'postal_code_last', 'prefecture', 'city', 'address', 'building', 'website', 'contact_category', 'contact_method', 'subject', 'message', 'privacy_consent', 'newsletter_consent', 'other', 'unknown']
+const keys: FormMappedKey[] = ['company_name', 'department', 'position', 'contact_name', 'last_name', 'first_name', 'furigana', 'last_name_furigana', 'first_name_furigana', 'email', 'phone', 'phone_area_code', 'phone_exchange_code', 'phone_line_number', 'postal_code', 'postal_code_first', 'postal_code_last', 'prefecture', 'city', 'address', 'building', 'website', 'contact_category', 'contact_method', 'subject', 'message', 'privacy_consent', 'newsletter_consent', 'other', 'unknown']
 
 export function FormReviewQueue({ projectId, canWrite }: { projectId: string; canWrite: boolean }) {
   const [items, setItems] = useState<Item[]>([]); const [total, setTotal] = useState(0); const [index, setIndex] = useState(0)
@@ -76,9 +78,9 @@ export function FormReviewQueue({ projectId, canWrite }: { projectId: string; ca
       <a className="break-all text-sm" href={item.form_url} target="_blank" rel="noreferrer">フォームを開いて目視確認 ↗</a>
       {!item.ready_confirmation_only && <><p className="mt-3">解析された入力項目・値</p>
       {item.fields.map(f => <div className="border-t py-3" key={f.id}><strong>{f.label || f.name || '名称不明'}{f.required ? '（必須）' : ''}</strong>
-        <label className="field mt-2">対応項目<select disabled={!canWrite || busy} value={mapping[f.id] || f.mapped_key} onChange={e => setMapping(v => ({ ...v, [f.id]: e.target.value }))}>{keys.map(k => <option value={k} key={k}>{k}</option>)}</select></label>
-        {f.same_organization_suggestion && <p className="muted text-xs">同一組織の別フォームで確認された候補：{f.suggested_mapped_key}。今回のフォームでも確認してください。</p>}
-        {f.other_organization_suggestion && <p className="muted text-xs">他の利用企業で確認された候補（提案）：{f.suggested_mapped_key}。この利用企業では未確認です。</p>}
+        <label className="field mt-2">対応項目<select disabled={!canWrite || busy} value={mapping[f.id] || f.mapped_key} onChange={e => setMapping(v => ({ ...v, [f.id]: e.target.value }))}>{keys.map(k => <option value={k} key={k}>{formMappedKeyLabels[k]}</option>)}</select></label>
+        {f.same_organization_suggestion && <p className="muted text-xs">同一組織の別フォームで確認された候補：{formMappedKeyLabels[f.suggested_mapped_key as FormMappedKey] ?? f.suggested_mapped_key}。今回のフォームでも確認してください。</p>}
+        {f.other_organization_suggestion && <p className="muted text-xs">他の利用企業で確認された候補（提案）：{formMappedKeyLabels[f.suggested_mapped_key as FormMappedKey] ?? f.suggested_mapped_key}。この利用企業では未確認です。</p>}
         {mapping[f.id] === 'privacy_consent' ? <label className="mt-2 block"><input type="checkbox" checked={checked[f.id] === true} onChange={e => setChecked(v => ({ ...v, [f.id]: e.target.checked }))} /> 必須の同意内容を読み、同意チェックを明示的に選択</label>
           : mapping[f.id] === 'newsletter_consent' ? <p className="muted">メルマガ同意は常に未選択です。</p>
             : f.options?.length ? <label className="field mt-2">選択値<select value={values[f.id] || ''} onChange={e => setValues(v => ({ ...v, [f.id]: e.target.value }))}><option value="">未選択</option>{f.options.map((o, i) => <option key={`${o.value}-${i}`} value={o.value}>{o.label || o.value}</option>)}</select></label>
