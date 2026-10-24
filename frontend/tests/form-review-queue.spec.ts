@@ -8,8 +8,14 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   const items = ['先頭のスキップ候補', '次の確認候補', '連絡対象外候補'].map((company_name, index) => ({
     company_id: `company-${index}`, company_name, profile_id: `profile-${index}`,
     form_url: `https://example.com/contact-${index}`, fingerprint: 'a'.repeat(64), fields_hash: 'b'.repeat(64),
-    reason_codes: ['REVIEW_REQUIRED'], ready_confirmation_only: false, fields: [], groups: [], saved_groups: [],
+    reason_codes: ['REVIEW_REQUIRED'], ready_confirmation_only: false,
+    fields: [] as { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[] }[],
+    groups: [], saved_groups: [],
   }))
+  items[0].fields = [
+    { id: 'visible-field', label: 'お問い合わせ内容', name: 'message', field_type: 'textarea', required: true, mapped_key: 'message', recommended_value: '', display_value: '本文', options: [] },
+    { id: 'hidden-field', label: '', name: '_wpcf7', field_type: 'hidden', required: false, mapped_key: 'other', recommended_value: '123', display_value: '123', options: [] },
+  ]
   items.push({
     company_id: 'company-ready', company_name: '準備可能・未確認候補', profile_id: 'profile-ready',
     form_url: 'https://example.com/contact-ready', fingerprint: 'c'.repeat(64), fields_hash: 'd'.repeat(64),
@@ -26,6 +32,14 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
     } }))
   await page.route(`**/api/projects/${fixture.project_id}/form-review-queue`, route =>
     route.fulfill({ json: { total: items.length, offset: 0, limit: 50, items } }))
+  await page.route(`**/api/projects/${fixture.project_id}/form-review-queue/summary`, route =>
+    route.fulfill({ json: {
+      total: items.length,
+      by_readiness_reason: { NEEDS_MAPPING_REVIEW: 3, READY: 1 },
+      by_review_message: [{ message: '入力項目の確認が必要です。', count: 3 }],
+      unresolved_required_labels: [{ normalized_label: 'よみがな', field_type: 'text', form_count: 2, example_labels: ['よみがな（必須）'] }],
+      consent_fields: { privacy_only_single_checkbox: 1, mixed_privacy_newsletter: 1, other: 0 },
+    } }))
   await page.route(`**/api/projects/${fixture.project_id}/form-dm-readiness`, route =>
     route.fulfill({ json: { counts: { READY: 1 }, review_queue_eligible: 3, ready_confirmation_pending: 1, total: 4, items: [] } }))
   await page.route('**/api/form-profiles/*/review-decision', async route => {
@@ -54,7 +68,14 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
 
   const panel = page.getByRole('region', { name: 'フォーム確認キュー' })
   await expect(panel.getByRole('heading', { name: 'フォーム確認キュー' })).toBeVisible()
+  await expect(panel.getByRole('heading', { name: '確認が必要な理由の集計（4件）' })).toBeVisible()
+  await expect(panel.getByText('よみがな（text）: 2フォーム')).toBeVisible()
   await expect(panel.getByRole('heading', { name: '先頭のスキップ候補' })).toBeVisible()
+  await expect(panel.getByText('_wpcf7')).toHaveCount(0)
+  await panel.getByRole('button', { name: '仕組み用の項目を表示（1件）' }).click()
+  await expect(panel.getByText('_wpcf7')).toBeVisible()
+  await panel.getByRole('button', { name: '仕組み用の項目を隠す' }).click()
+  await expect(panel.getByText('_wpcf7')).toHaveCount(0)
   const noProhibition = panel.getByLabel('フォームを開いて確認し、営業お断り・営業禁止の記載がないことを確認しました')
   await expect(panel.getByRole('button', { name: '確認して次へ' })).toBeDisabled()
   await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
