@@ -77,6 +77,13 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     }
     else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', project_id: path.split('/')[3], company_name: '確認候補株式会社', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }], total: 1, offset: 0, limit: 20 }
     else if (path.endsWith('/form-dm-readiness')) data = { counts: { NO_FORM_DRAFT: 1, READY: 1 }, review_queue_eligible: 7, ready_confirmation_pending: 0, total: 2, offset: 0, limit: 20, items: [], last_aggregated_at: '2026-10-16T00:00:00Z', active_job: null, read_only: true, external_requests: 0 }
+    else if (path.endsWith('/form-review-queue/summary')) data = {
+      total: 0,
+      by_readiness_reason: {},
+      review_message_counts: {},
+      unresolved_required_labels: [],
+      consent_fields: { privacy_only_single_checkbox: 0, mixed_privacy_newsletter: 0, other: 0 },
+    }
     else if (path.endsWith('/form-review-queue')) data = { total: 0, offset: 0, limit: 20, items: [], read_only: true, external_requests: 0 }
     else if (path.endsWith('/outreach-drafts/bulk-from-template') && method === 'POST') {
       bulkDraftBody = body

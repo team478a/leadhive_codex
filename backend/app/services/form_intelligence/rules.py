@@ -41,13 +41,40 @@ FIELD_RULES: tuple[tuple[str, tuple[str, ...]], ...] = (
     ("position", ("役職", "肩書", "position", "title")),
     (
         "last_name_furigana",
-        ("姓のふりがな", "ふりがな（姓）", "フリガナ（姓）", "last name kana"),
+        (
+            "姓のふりがな",
+            "ふりがな（姓）",
+            "フリガナ（姓）",
+            "よみがな（姓）",
+            "ヨミガナ（姓）",
+            "読み仮名（姓）",
+            "last name kana",
+        ),
     ),
     (
         "first_name_furigana",
-        ("名のふりがな", "ふりがな（名）", "フリガナ（名）", "first name kana"),
+        (
+            "名のふりがな",
+            "ふりがな（名）",
+            "フリガナ（名）",
+            "よみがな（名）",
+            "ヨミガナ（名）",
+            "読み仮名（名）",
+            "first name kana",
+        ),
     ),
-    ("furigana", ("ふりがな", "フリガナ")),
+    (
+        "furigana",
+        (
+            "ふりがな",
+            "フリガナ",
+            "よみがな",
+            "ヨミガナ",
+            "読み仮名",
+            "お名前（かな）",
+            "お名前（カナ）",
+        ),
+    ),
     (
         "last_name",
         (
@@ -147,6 +174,15 @@ PROHIBITED_PATTERNS = tuple(
 
 def normalize(value: str) -> str:
     return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", value)).strip().lower()
+
+
+def normalize_required_label(value: str) -> str:
+    """Normalize a field label while removing visual required markers."""
+    normalized = normalize(value)
+    normalized = re.sub(r"\(\s*必須\s*\)", " ", normalized)
+    normalized = re.sub(r"\s*必須\s*$", "", normalized)
+    normalized = re.sub(r"[※*]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
 
 
 def dom_mapping(field_type: str, name: str) -> tuple[str, float] | None:

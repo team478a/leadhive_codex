@@ -1,12 +1,15 @@
+import csv
+import io
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import object_session
 
 from app.models import (
     FormAnalysisLog,
     FormDmReadinessResult,
+    FormProfileField,
     MasterFormReview,
     OperationJob,
     Organization,
@@ -52,6 +55,176 @@ def test_queue_is_read_only_and_returns_review_fingerprint(auth, form_source, db
     assert len(result["items"][0]["fingerprint"]) == 64
     db.expire_all()
     assert db.get(type(profile), profile_id).updated_at == before
+
+
+def test_queue_summary_counts_unresolved_consent_and_is_read_only(auth, form_source, db):
+    project, _, _, profile, _, fields = form_source
+    profile_id = profile.id
+    profile_type = type(profile)
+    path = make_reviewable(form_source)
+    profile = db.get(profile_type, profile_id)
+    additions = [
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=9,
+            name="reading1",
+            label="よみがな (必須)",
+            field_type="text",
+            required=True,
+            mapped_key="unknown",
+            confidence=0.1,
+            decision_source="RULE",
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=10,
+            name="reading2",
+            label="よみがな（必須）",
+            field_type="text",
+            required=True,
+            mapped_key="unknown",
+            confidence=0.1,
+            decision_source="RULE",
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=11,
+            name="reading3",
+            label="よみがな※",
+            field_type="text",
+            required=True,
+            mapped_key="unknown",
+            confidence=0.1,
+            decision_source="RULE",
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=12,
+            name="manual",
+            label="手動で決定済み",
+            field_type="text",
+            required=True,
+            mapped_key="unknown",
+            confidence=0.1,
+            decision_source="MANUAL",
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=13,
+            name="technical",
+            label="仕組み用",
+            field_type="hidden",
+            required=True,
+            mapped_key="unknown",
+            confidence=0.1,
+            decision_source="DOM",
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=14,
+            name="privacy",
+            label="個人情報の取扱いに同意",
+            field_type="checkbox",
+            required=True,
+            mapped_key="privacy_consent",
+            confidence=1.0,
+            decision_source="RULE",
+            options=[{"value": "yes", "label": "同意する"}],
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=15,
+            name="mixed",
+            label="個人情報とメールマガジン配信に同意",
+            field_type="checkbox",
+            required=False,
+            mapped_key="privacy_consent",
+            confidence=1.0,
+            decision_source="RULE",
+            options=[{"value": "yes", "label": "同意する"}],
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=16,
+            name="newsletter",
+            label="メルマガ登録",
+            field_type="checkbox",
+            required=False,
+            mapped_key="newsletter_consent",
+            confidence=1.0,
+            decision_source="RULE",
+            options=[{"value": "yes", "label": "登録する"}],
+        ),
+        FormProfileField(
+            form_profile_id=profile.id,
+            position=17,
+            name="formula",
+            label="=SUM(A1:A2)",
+            field_type="text",
+            required=True,
+            mapped_key="unknown",
+            confidence=0.1,
+            decision_source="RULE",
+        ),
+    ]
+    profile.review_reason = "=入力項目の確認が必要です。"
+    db.add_all(additions)
+    db.commit()
+    before_jobs = db.scalar(select(func.count()).select_from(OperationJob))
+    before_logs = db.scalar(select(func.count()).select_from(FormAnalysisLog))
+    before_updated_at = profile.updated_at
+
+    response = auth.get(path + "/summary")
+
+    assert response.status_code == 200, response.text
+    summary = response.json()
+    assert summary["total"] == 1
+    assert summary["by_readiness_reason"]["NEEDS_MAPPING_REVIEW"] == 1
+    assert summary["by_review_message"] == [{"message": "=入力項目の確認が必要です。", "count": 1}]
+    reading = next(
+        item
+        for item in summary["unresolved_required_labels"]
+        if item["normalized_label"] == "よみがな"
+    )
+    assert reading == {
+        "normalized_label": "よみがな",
+        "field_type": "text",
+        "form_count": 1,
+        "example_labels": ["よみがな (必須)", "よみがな※", "よみがな（必須）"],
+    }
+    labels = {item["normalized_label"] for item in summary["unresolved_required_labels"]}
+    assert "手動で決定済み" not in labels and "仕組み用" not in labels
+    assert summary["consent_fields"] == {
+        "privacy_only_single_checkbox": 1,
+        "mixed_privacy_newsletter": 1,
+        "other": 1,
+    }
+    db.refresh(profile)
+    assert db.scalar(select(func.count()).select_from(OperationJob)) == before_jobs
+    assert db.scalar(select(func.count()).select_from(FormAnalysisLog)) == before_logs
+    assert profile.updated_at == before_updated_at
+
+    exported = auth.get(path + "/summary?format=csv")
+    assert exported.content.startswith(b"\xef\xbb\xbf")
+    rows = list(csv.DictReader(io.StringIO(exported.content.decode("utf-8-sig"))))
+    formula_values = {row["key"] for row in rows if row["section"] != "total"}
+    assert "'=入力項目の確認が必要です。" in formula_values
+    assert "'=sum(a1:a2)" in formula_values
+
+
+def test_queue_summary_requires_project_read_access(auth, form_source, db, users):
+    outsider_email = users[1].email
+    path = make_reviewable(form_source) + "/summary"
+    assert auth.post("/api/auth/logout").status_code == 204
+    assert (
+        auth.post(
+            "/api/auth/login",
+            json={"email": outsider_email, "password": "test-only-long-password"},
+        ).status_code
+        == 200
+    )
+
+    assert auth.get(path).status_code == 404
 
 
 def test_review_confirmation_is_profile_bound_and_non_executable(auth, form_source, db):
