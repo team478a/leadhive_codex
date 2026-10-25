@@ -34,19 +34,14 @@ def enqueue_continuation(
         or plan["snapshot"].get("total_request_budget")
         or plan["snapshot"].get("request_budget", 50)
     )
-    original_auto_continue = bool(
-        chain.get("auto_continue") or plan["snapshot"].get("auto_continue")
-    )
     if automatic:
         remaining = total_limit - total_requests
-    elif original_auto_continue:
+    else:
         remaining = total_limit - total_requests
         if remaining <= 0:
             total_limit = total_requests + AUTO_CONTINUE_BUDGET_EXTENSION
             remaining = AUTO_CONTINUE_BUDGET_EXTENSION
         automatic = True
-    else:
-        remaining = 50
     if remaining <= 0:
         return None
 

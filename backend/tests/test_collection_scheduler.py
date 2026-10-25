@@ -175,10 +175,15 @@ def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
     resumed = auth.post(f"/api/operations/{job_id}/continue")
     assert resumed.status_code == 202
     child_id = resumed.json()["id"]
+    resumed_row = db.get(OperationJob, UUID(child_id))
+    assert resumed_row.payload["collection_chain"]["auto_continue"] is True
+    assert resumed_row.payload["collection_chain"]["total_request_budget"] == 1050
     worker.run_once()
     child = result(auth, child_id)
     assert child["collection_progress"]["requests"] == 50
     assert child["collection_progress"]["total_requests"] == 100
+    assert child["collection_progress"]["total_request_budget"] == 1050
+    assert child["collection_progress"]["stop_reason"] == "AUTO_CONTINUING"
     assert child["collection_progress"]["collected_count"] == 100
     assert child["collection_progress"]["continued_from"] == job_id
     child_attempts = list(
