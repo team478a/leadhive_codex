@@ -1,13 +1,18 @@
 import { test, expect, type Page } from '@playwright/test'
 import { navigateWorkspace } from '../tests/navigation'
 
-async function setup(page: Page, count = 2, role = 'editor', openGuide = true, archivedCount = 0) {
+async function setup(page: Page, count = 2, role = 'editor', openGuide = true, archivedCount = 0, failFirstAuthNetwork = false) {
   const mutations: string[] = []
+  let authAttempts = 0
   const projects = Array.from({ length: count }, (_, index) => ({ id: `project-${index}`, project_name: `担当プロジェクト${index + 1}`, region: '大阪府', status: index < archivedCount ? 'archived' : 'draft', sales_objective: '公開情報だけで提案', target_profile_id: 'profile' }))
   let profile = { id: 'profile', profile_name: '確認用プロファイル', active: true, default_regions: ['大阪府'], search_keywords: [], positive_keywords: [], negative_keywords: [], exclusion_keywords: [], description: '', scoring_rules: {}, ai_instruction: '' }
   await page.addInitScript(() => localStorage.setItem('leadhive:onboarding:operator@example.test', 'dismissed'))
   await page.route('**/api/**', async route => {
     const path = new URL(route.request().url()).pathname
+    if (path === '/api/auth/me' && failFirstAuthNetwork && authAttempts++ === 0) {
+      await route.abort('connectionreset')
+      return
+    }
     if (route.request().method() !== 'GET') mutations.push(path)
     let body: unknown = []
     if (path.startsWith('/api/projects/') && route.request().method() === 'PUT') {
@@ -58,6 +63,11 @@ test('explicit project selection, safe guidance, navigation preserves project an
   await expect(list).toBeVisible()
   expect(await list.evaluate(element => !!(element.compareDocumentPosition([...document.querySelectorAll('h2')].find(item => item.textContent === '配信・追客・管理')!) & Node.DOCUMENT_POSITION_FOLLOWING))).toBe(true)
   expect(mutations).toEqual([])
+})
+
+test('GET requests retry a transient network disconnect', async ({ page }) => {
+  await setup(page, 2, 'editor', false, 0, true)
+  await expect(page.getByRole('heading', { name: '担当プロジェクト1', exact: true })).toBeVisible()
 })
 
 async function openInstallation(page: Page) {

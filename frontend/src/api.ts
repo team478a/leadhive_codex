@@ -37,6 +37,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
       lastNetworkError = false
     } catch {
       lastNetworkError = true
+      if (method === 'GET') continue
       break
     }
     if (response.status !== 503) break
