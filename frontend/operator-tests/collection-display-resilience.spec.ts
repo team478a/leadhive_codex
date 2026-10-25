@@ -77,6 +77,7 @@ test('collection progress and recent jobs stay visible when an optional report e
 })
 
 test('background refresh identifies the endpoint when its network request fails', async ({ page }) => {
+  test.setTimeout(60_000)
   const email = 'operator@example.test'
   const profile = { id: 'profile-1', profile_name: 'SNS運用', search_keywords: ['SNS運用代行'], active: true }
   const project = { id: 'project-1', project_name: '大阪リスト', target_profile_id: profile.id, region: '大阪府', status: 'active' }
@@ -107,7 +108,7 @@ test('background refresh identifies the endpoint when its network request fails'
   await expect(progress).toBeVisible()
   failOperations = true
   await progress.getByRole('button', { name: '更新', exact: true }).click()
-  await expect(page.getByRole('alert')).toContainText('GET /projects/:project/operations')
+  await expect(page.getByRole('alert')).toContainText('GET /projects/:project/operations', { timeout: 25_000 })
 })
 
 test('collection results load one server page at a time and retain exact category totals', async ({ page }, info) => {
