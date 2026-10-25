@@ -234,6 +234,17 @@ def test_auto_continue_stops_at_explicit_total_budget(auth, db, monkeypatch):
     )
     assert queued == 0
 
+    resumed = auth.post(f"/api/operations/{child_id}/continue")
+    assert resumed.status_code == 202
+    continuation = resumed.json()
+    assert continuation["collection_progress"]["request_budget"] == 50
+    assert continuation["collection_progress"]["total_requests"] == 51
+    assert continuation["collection_progress"]["total_request_budget"] == 1051
+    assert continuation["collection_progress"]["stop_reason"] is None
+    resumed_row = db.get(OperationJob, UUID(continuation["id"]))
+    assert resumed_row.payload["collection_chain"]["auto_continue"] is True
+    assert resumed_row.payload["collection_chain"]["total_request_budget"] == 1051
+
 
 def test_auto_continue_repeats_until_goal_across_prefecture_cursor(auth, db, monkeypatch):
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", False)

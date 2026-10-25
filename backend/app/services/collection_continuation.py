@@ -7,6 +7,8 @@ from app.models import OperationJob
 from app.services.collection_query_plan import stamp_plan
 from app.services.operations import add_operation_job
 
+AUTO_CONTINUE_BUDGET_EXTENSION = 1000
+
 
 def enqueue_continuation(
     db: Session, source: OperationJob, *, automatic: bool
@@ -32,7 +34,19 @@ def enqueue_continuation(
         or plan["snapshot"].get("total_request_budget")
         or plan["snapshot"].get("request_budget", 50)
     )
-    remaining = total_limit - total_requests if automatic else 50
+    original_auto_continue = bool(
+        chain.get("auto_continue") or plan["snapshot"].get("auto_continue")
+    )
+    if automatic:
+        remaining = total_limit - total_requests
+    elif original_auto_continue:
+        remaining = total_limit - total_requests
+        if remaining <= 0:
+            total_limit = total_requests + AUTO_CONTINUE_BUDGET_EXTENSION
+            remaining = AUTO_CONTINUE_BUDGET_EXTENSION
+        automatic = True
+    else:
+        remaining = 50
     if remaining <= 0:
         return None
 
