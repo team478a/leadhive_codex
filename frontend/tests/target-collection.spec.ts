@@ -18,7 +18,7 @@ test('collection uses a count goal and displays why searching ended', async ({ p
     await page.getByRole('combobox', { name: 'プロジェクト', exact: true }).selectOption(fixture.project_id)
     await expect(page.getByLabel('収集する新規候補数（目標）')).toHaveAttribute('max', '10000')
     await page.getByLabel('収集する新規候補数（目標）').fill('150')
-    await expect(page.getByLabel('検索の総上限（安全上限）')).toHaveValue('1000')
+    await expect(page.getByLabel('検索の総上限（安全上限）')).toHaveValue('5000')
     await expect(page.getByLabel('検索の総上限（安全上限）')).toHaveAttribute('max', '5000')
     await expect(page.getByLabel('目標件数まで50回ごとに自動で続きを実行する（おすすめ）')).toBeChecked()
     await page.getByLabel('目標件数まで50回ごとに自動で続きを実行する（おすすめ）').uncheck()

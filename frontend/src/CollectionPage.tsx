@@ -58,7 +58,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const [region, setRegion] = useState('全国')
   const [maxResults, setMaxResults] = useState(20)
   const [targetCount, setTargetCount] = useState(100)
-  const [searchRequestLimit, setSearchRequestLimit] = useState(1000)
+  const [searchRequestLimit, setSearchRequestLimit] = useState(5000)
   const [autoContinue, setAutoContinue] = useState(true)
   const [file, setFile] = useState<File | null>(null)
   const [csvPreview, setCsvPreview] = useState<CsvPreview | null>(null)
@@ -466,11 +466,11 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
           {collectionMethod === 'company_first' && <><label className="checkbox-row"><input type="checkbox" checked={autoContinue} disabled={loading} onChange={event => {
             const enabled = event.target.checked
             setAutoContinue(enabled)
-            setSearchRequestLimit(enabled ? Math.max(searchRequestLimit, 1000) : Math.min(searchRequestLimit, 50))
+            setSearchRequestLimit(enabled ? 5000 : Math.min(searchRequestLimit, 50))
           }} />目標件数まで50回ごとに自動で続きを実行する（おすすめ）</label>
           <Field label={autoContinue ? '検索の総上限（安全上限）' : '今回の検索回数上限'}><input type="number" min={autoContinue ? 50 : 1} max={autoContinue ? 5000 : 50} required value={searchRequestLimit}
             onChange={event => setSearchRequestLimit(Number(event.target.value))} disabled={loading} /></Field>
-          <p className="muted text-sm">目標件数は最大10,000社です。検索1ジョブは最大50回で区切りますが、自動継続をONにすると総上限{searchRequestLimit}回まで次のジョブへ引き継ぎます。重複・対象外は目標件数に含めません。総上限に達したときは収集画面上部の「続きから収集を再開」から再開できます。検索API費用が発生します。追加調査は別の上限です。</p></>}
+          <p className="muted text-sm">目標件数は最大10,000社です。検索1ジョブは最大50回で区切りますが、自動継続をONにすると総上限{searchRequestLimit}回まで次のジョブへ引き継ぎます。重複・対象外は目標件数に含めません。総上限に達した後に「続きから収集を再開」を押すと、追加1,000回を新しい安全上限として自動継続します。検索API費用が発生します。追加調査は別の上限です。</p></>}
         </>}
         {source === 'csv' && <div><Field label="取り込み単位"><select value={recordType} onChange={e => setRecordType(e.target.value)}><option value="company">企業単位（同じドメインは1社）</option><option value="location">店舗単位（同じサイトの別店舗を保持）</option></select></Field><p className="muted text-sm">店舗単位では店名と住所（住所がなければURL）で重複を判定します。予約・ポータルサイトは参考URLとして保存し、公式サイト解析やフォーム送信には使用しません。</p></div>}
         {source === 'csv' && csvPreview && <div className="mt-4"><p className="muted text-sm">{csvPreview.row_count}行を検出しました。取込先ごとにCSV列を指定してください。</p><div className="grid gap-3 mt-3 sm:grid-cols-2">{Object.entries({ company_name: '会社名', website_url: 'WebサイトURL', phone: '電話', email: 'メール', address: '住所', reference_url: '参考URL（任意）' }).map(([field, label]) => <Field key={field} label={label}><select required={field !== 'reference_url'} value={csvMapping[field] ?? ''} onChange={e => setCsvMapping({ ...csvMapping, [field]: e.target.value })}><option value="">列を選択</option>{csvPreview.headers.map(header => <option key={header} value={header}>{header}</option>)}</select></Field>)}</div><div className="overflow-x-auto"><table><thead><tr>{csvPreview.headers.map(header => <th key={header}>{header}</th>)}</tr></thead><tbody>{csvPreview.sample_rows.map((row, index) => <tr key={index}>{csvPreview.headers.map(header => <td key={header}>{row[header]}</td>)}</tr>)}</tbody></table></div></div>}
