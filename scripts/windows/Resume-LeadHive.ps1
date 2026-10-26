@@ -7,7 +7,7 @@ try {
     $values = Read-LeadHiveEnvironment
     if ($values['LEADHIVE_MAINTENANCE_REQUIRED'] -eq 'true') { throw 'Incomplete maintenance must be recovered first.' }
     Set-LeadHiveEnvironmentValue 'LEADHIVE_WORKER_PAUSED' 'true'
-    Invoke-LeadHiveCompose stop worker
+    Invoke-LeadHiveCompose stop worker worker-collect
     $sendingEnabled = $values['LEADHIVE_OUTBOUND_ENABLED'] -eq 'true'
     $blockers = Invoke-LeadHiveDatabaseReport -ResumeCheck
     $pending = ($blockers.PSObject.Properties | Measure-Object -Property Value -Sum).Sum
@@ -26,9 +26,9 @@ try {
         Write-Host 'Collection/analysis worker only. All LeadHive outbound execution remains disabled.'
     }
     Set-LeadHiveEnvironmentValue 'LEADHIVE_WORKER_PAUSED' 'false'
-    try { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--force-recreate', 'worker') } catch {
+    try { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--force-recreate', 'worker', 'worker-collect') } catch {
         Set-LeadHiveEnvironmentValue 'LEADHIVE_WORKER_PAUSED' 'true'
-        Invoke-LeadHiveCompose stop worker
+        Invoke-LeadHiveCompose stop worker worker-collect
         throw
     }
 } finally { $lock.ReleaseMutex(); $lock.Dispose() }

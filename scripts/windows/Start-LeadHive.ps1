@@ -15,6 +15,6 @@ Invoke-LeadHiveCompose run --rm migrate
 if ($values['LEADHIVE_WORKER_PAUSED'] -eq 'true') {
     Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'web')
     Write-Host 'Worker remains paused. Use Resume-LeadHive.cmd after review.'
-} else { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'worker', 'web') }
+} else { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'worker', 'worker-collect', 'web') }
 $url = Wait-LeadHive
 Start-LeadHiveBrowser $url

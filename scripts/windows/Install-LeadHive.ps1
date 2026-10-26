@@ -31,7 +31,7 @@ $values = Read-LeadHiveEnvironment
 if ($values['LEADHIVE_MAINTENANCE_REQUIRED'] -eq 'true') { throw 'Maintenance recovery is required. Installation will not resume services.' }
 if ($values['LEADHIVE_WORKER_PAUSED'] -eq 'true') {
     Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'web')
-} else { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'worker', 'web') }
+} else { Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', 'api', 'worker', 'worker-collect', 'web') }
 $url = Wait-LeadHive
 
 $userStatus = (& docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv -f $script:LeadHiveCompose exec -T api python -m app.cli --status).Trim()

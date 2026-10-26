@@ -34,7 +34,7 @@ try {
         [IO.File]::WriteAllText($script:LeadHiveEnv, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding($false)))
         Register-LeadHiveInstance -CreateNew
     }
-    Invoke-LeadHiveCompose stop api worker web
+    Invoke-LeadHiveCompose stop api worker worker-collect web
     Invoke-LeadHiveCompose build
     Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--wait', 'db')
     Restore-LeadHiveIntoNewDatabase $resolvedBackup
