@@ -5,6 +5,7 @@ export interface RuntimeCapacity {
   database: { max_connections: number | null; shared_buffers: string | null; current_connections: number | null; database_size_bytes: number | null; pool_size: number; max_overflow: number }
   workers: Array<{ instance_id: string; worker_type: string; host_name: string; commit_id: string; last_seen_at: string; include_operation_types: string[] | null; exclude_operation_types: string[] | null; current_operation: { operation_type: string; project_id: string; project_name: string } | null }>
   jobs_last_24_hours: Array<{ operation_type: string; count: number; total_run_seconds: number; average_wait_seconds: number }>
+  serper_429_last_24_hours: number
 }
 export interface ApplicationSettings {
   public_app_url: string; openai_model: string; gbizinfo_api_base_url: string; auto_site_analysis: boolean
@@ -193,6 +194,7 @@ export interface OutreachQueueItem {
   due_state: 'overdue' | 'today' | 'upcoming' | 'unset'
 }
 export interface OperationJob {
+  queue_position?: number | null
   collection_progress?: { target_count: number; collected_count: number; discovered_count?: number; review_required_count?: number; no_match_count?: number; conditions_applied?: boolean; requests: number; total_requests?: number; request_budget: number; total_request_budget?: number; continuation_count?: number; stop_reason: string | null; scheduler_version?: string; coverage_status?: string; region_mode?: string; planned_regions?: number; unsearched_regions?: number; current_region?: string | null; planned_queries?: number; unsearched_queries?: number; pending_queries?: number; failed_queries?: number; capped_queries?: number; unknown_attempts?: number; next_operation_id?: string; continued_from?: string; queued_wait_ms?: number; run_ms?: number; timing?: { serper_ms?: number; candidate_fetch_ms?: number; corporate_lookup_ms?: number; save_ms?: number; inline_analysis_ms?: number; inventory_ms?: number; idle_ms?: number }; counts?: { search_results?: number; fetched_candidates?: number; already_known?: number; fetch_failures?: number; new_companies?: number; skipped_known_before_fetch?: number; inline_analyzed?: number } } | null
   condition_request_id?: string | null
   condition_version?: number | null

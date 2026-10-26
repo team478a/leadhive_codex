@@ -9,6 +9,9 @@ x-backend-environment: &backend-environment
   COOKIE_SECURE: "false"
   SETTINGS_ENCRYPTION_KEY: ${SETTINGS_ENCRYPTION_KEY}
   PUBLIC_APP_URL: ${PUBLIC_APP_URL:-http://localhost:8787}
+  LEADHIVE_COLLECT_WORKERS: ${LEADHIVE_COLLECT_WORKERS:-2}
+  SERPER_MAX_REQUESTS_PER_SECOND: ${SERPER_MAX_REQUESTS_PER_SECOND:-2}
+  GBIZINFO_MAX_REQUESTS_PER_SECOND: ${GBIZINFO_MAX_REQUESTS_PER_SECOND:-1}
 
 x-backend-service: &backend-service
   build:
@@ -79,6 +82,8 @@ services:
       WORKER_PAUSED: ${LEADHIVE_WORKER_PAUSED:-false}
       WORKER_OPERATION_TYPES: collect_search
     command: ["python", "-m", "app.worker"]
+    deploy:
+      replicas: ${LEADHIVE_COLLECT_WORKERS:-2}
     depends_on:
       api:
         condition: service_healthy
