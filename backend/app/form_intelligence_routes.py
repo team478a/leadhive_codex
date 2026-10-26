@@ -32,7 +32,7 @@ from app.schemas import (
     FormProfileSummaryOut,
     OperationJobOut,
 )
-from app.security import current_user
+from app.security import current_admin, current_user
 from app.services.cf7_approval_handoff import prepare as prepare_approval_handoff
 from app.services.cf7_candidate_preparation import profile_source_hash
 from app.services.cf7_real_contract_preview import preview as preview_real_contract
@@ -336,7 +336,7 @@ def _input_preparation(profile: FormProfile, db: Session, user: User) -> dict:
 
 @router.get("/form-profiles/{profile_id}/input-preparation")
 def get_input_preparation(
-    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_admin)
 ):
     return _input_preparation(_owned_profile(profile_id, db, user, write=False), db, user)
 
@@ -346,7 +346,7 @@ def record_input_preparation(
     profile_id: UUID,
     data: FormInputReviewInput,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     _owned_profile(profile_id, db, user)
     profile = db.scalar(
@@ -388,7 +388,7 @@ def record_input_preparation(
 
 @router.get("/form-profiles/{profile_id}/contract-preview")
 def get_contract_preview(
-    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_admin)
 ):
     profile = _owned_profile(profile_id, db, user, write=False)
     report = _input_preparation(profile, db, user)
@@ -414,7 +414,7 @@ def get_contract_preview(
 
 @router.get("/form-profiles/{profile_id}/approval-handoff-preview")
 def get_approval_handoff_preview(
-    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_user)
+    profile_id: UUID, db: Session = Depends(get_db), user: User = Depends(current_admin)
 ):
     profile = _owned_profile(profile_id, db, user, write=False)
     return prepare_approval_handoff(
@@ -431,7 +431,7 @@ def create_real_approval_request(
     profile_id: UUID,
     data: RealApprovalPreparation,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     from app.approval_routes import lock_preparation_sources, serialize
     from app.services.cf7_real_approval import create_request

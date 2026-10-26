@@ -19,7 +19,7 @@ from app.models import Activity, FormProfile, User
 from app.pc_input_routes import PREFIX as OLD_PREFIX
 from app.pc_input_routes import encode, seal
 from app.project_access import company_access
-from app.security import current_user
+from app.security import current_admin
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.feature_usage import add_feature_usage_event
 from app.services.pinned_read_transport import TransportBlocked, target
@@ -113,7 +113,7 @@ def issue(
     company_id: UUID,
     plan: InputPlan,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     enabled()
     company = company_access(company_id, db, user)
@@ -296,7 +296,7 @@ def read_result(
     company_id: UUID,
     trial_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     company_access(company_id, db, user, write=False)
     item = db.get(Activity, trial_id)
@@ -327,7 +327,7 @@ def revoke(
     company_id: UUID,
     trial_id: UUID,
     db: Session = Depends(get_db),
-    user: User = Depends(current_user),
+    user: User = Depends(current_admin),
 ):
     company_access(company_id, db, user)
     item = db.scalar(select(Activity).where(Activity.id == trial_id).with_for_update())

@@ -103,17 +103,17 @@ def synthetic_pages():
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_worker_replay_saves_article_titles_but_excludes_known_media(auth, db, monkeypatch, fair):
-    replay(auth, db, monkeypatch, synthetic_pages(), fair=fair, expected_saved=13)
+def test_worker_replay_excludes_aggregation_titles_and_known_media(auth, db, monkeypatch, fair):
+    replay(auth, db, monkeypatch, synthetic_pages(), fair=fair, expected_saved=6)
     articles = list(
         db.scalars(
             select(CollectionDiscoveryHit).where(CollectionDiscoveryHit.classification == "ARTICLE")
         )
     )
     assert len(articles) == 7
-    assert all(hit.disposition == "SAVED" for hit in articles)
+    assert all(hit.disposition == "NON_COMPANY_SOURCE" for hit in articles)
     assert all(hit.classification_reason == "AGGREGATION_TITLE" for hit in articles)
-    # These are provisional candidates, not Human-verified businesses.
+    # Saved official-site candidates are still pending human analysis.
     companies = list(db.scalars(select(Company)))
     assert all(company.analysis_status == "pending" for company in companies)
 
@@ -142,7 +142,7 @@ def test_worker_replay_defers_job_title_without_known_media_domain(auth, db, mon
         "title": "北海道札幌市のSNS運用の求人・仕事・採用",
         "link": "https://unknown-company.example.test/careers",
     }
-    replay(auth, db, monkeypatch, pages, fair=fair, expected_saved=13)
+    replay(auth, db, monkeypatch, pages, fair=fair, expected_saved=7)
     hit = db.scalar(
         select(CollectionDiscoveryHit).where(
             CollectionDiscoveryHit.classification_reason == "TITLE_HINT_REQUIRES_REVIEW"

@@ -15,11 +15,11 @@ function validHistory(value: DeliveryFunnel): boolean {
   return !!value && [value.prepared_ever, value.human_approved, value.sent].every(v => typeof v === 'boolean') && !!value.results && Object.keys(resultNames).every(key => Number.isSafeInteger(value.results[key]) && value.results[key] >= 0) && [value.attempt_count, value.queued, value.blocked, value.cancelled, value.preflight_failed, value.unverified_records].every(v => Number.isSafeInteger(v) && v >= 0) && Object.values(value.results).reduce((sum, n) => sum + n, 0) === value.attempt_count && value.sent === (value.attempt_count > 0) && (!value.sent || value.human_approved) && (!value.human_approved || value.prepared_ever)
 }
 type Row = CompletionWorkRow & { delivery_funnel: DeliveryFunnel; dm_ready: boolean; dm_ready_reason: string | null; company_id: string; status: string; reasons: Reason[]; destinations: { key: string; type: string; status: string; shared: boolean }[] }
-type Page = { benchmark_meta: BenchmarkMeta; cohort_id: string; cohort_hash: string; context_hash: string; definition_version: string; aggregation_definition: string; discovered: number; offset: number; inspected: number; next_offset: number | null; started_at: string; measured_at: string; rows: Row[] }
+type Page = { benchmark_meta?: BenchmarkMeta; cohort_id: string; cohort_hash: string; context_hash: string; definition_version: string; aggregation_definition: string; discovered: number; offset: number; inspected: number; next_offset: number | null; started_at: string; measured_at: string; rows: Row[] }
 type Summary = { benchmarkMeta?: BenchmarkMeta; rows: Row[]; history: History; dmReady: number; dmReasons: Record<string, number>; processed: number; states: Record<string, number>; destinations: Record<string, { leads: number; ready: boolean; shared: boolean }>; reasons: Record<string, { reason: Reason; count: number; states: Set<string> }>; first: string; last: string; complete: boolean }
 const empty = (): Summary => ({ rows: [], history: emptyHistory(), dmReady: 0, dmReasons: {}, processed: 0, states: { READY: 0, REVIEW: 0, HOLD: 0, BLOCKED: 0 }, destinations: {}, reasons: {}, first: '', last: '', complete: false })
 
-export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered, onOpenCompany, initialFilters }: { cohortId: string; cohortHash: string; discovered: number; onOpenCompany: (id: string, filters: CompletionQueueFilters) => void; initialFilters?: CompletionQueueFilters }) {
+export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered, onOpenCompany, initialFilters, isAdmin }: { isAdmin: boolean; cohortId: string; cohortHash: string; discovered: number; onOpenCompany: (id: string, filters: CompletionQueueFilters) => void; initialFilters?: CompletionQueueFilters }) {
   const [filters, setFilters] = useState<CompletionQueueFilters>(initialFilters ?? { state: 'ALL', reason: 'ALL', page: 0 })
   const [data, setData] = useState<Summary>(empty)
   const [busy, setBusy] = useState(false)
@@ -37,12 +37,12 @@ export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered,
     const seen = new Set<string>()
     try {
       while (true) {
-        const batch = await api<Page>(`/completion-cohorts/${cohortId}/destination-diagnostics?benchmark=true&offset=${offset}&limit=25${context ? `&expected_context_hash=${context}` : ''}`)
+        const batch = await api<Page>(`/completion-cohorts/${cohortId}/destination-diagnostics?benchmark=${isAdmin}&offset=${offset}&limit=25${context ? `&expected_context_hash=${context}` : ''}`)
         if (current !== generation.current) return
         if (batch.cohort_id !== cohortId || batch.cohort_hash !== cohortHash || batch.discovered !== discovered || batch.offset !== offset || batch.inspected !== batch.rows.length || (!batch.inspected && discovered > 0) || (context && context !== batch.context_hash)) throw new ApiError(409, '集計対象または営業条件が変わりました。再集計してください。')
         if (definition && definition !== `${batch.definition_version}:${batch.aggregation_definition}`) throw new ApiError(409, '診断方式が変わりました。再集計してください。')
         definition = `${batch.definition_version}:${batch.aggregation_definition}`
-        if (batch.benchmark_meta?.definition !== 'completion-benchmark-v1' || !batch.benchmark_meta.cost || batch.rows.some(row => !validBenchmark(row))) throw new ApiError(409, 'Benchmarkの証跡を確認できません。再集計してください。')
+        if (isAdmin && (batch.benchmark_meta?.definition !== 'completion-benchmark-v1' || !batch.benchmark_meta.cost || batch.rows.some(row => !validBenchmark(row)))) throw new ApiError(409, 'Benchmarkの証跡を確認できません。再集計してください。')
         context = batch.context_hash
         const next = offset + batch.inspected
         if (next > discovered || batch.next_offset !== (next < discovered ? next : null)) throw new ApiError(409, '集計範囲を確認できません。再集計してください。')
@@ -75,7 +75,7 @@ export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered,
           }
         }
         result.rows = [...result.rows, ...batch.rows]
-        result.benchmarkMeta = batch.benchmark_meta
+        result.benchmarkMeta = isAdmin ? batch.benchmark_meta : undefined
         result.processed = next
         result.first ||= batch.started_at
         result.last = batch.measured_at
@@ -112,7 +112,7 @@ export function CohortDestinationDiagnostics({ cohortId, cohortHash, discovered,
         <p>予約・実行前 {data.history.queued}件 / 安全停止 {data.history.blocked}件 / 取消 {data.history.cancelled}件 / 実行前失敗 {data.history.preflightFailed}件 / 証跡不一致 {data.history.unverified}件</p>
         <p className="muted">根拠付きDMの承認提案に紐付く履歴のみです。旧経路の履歴を推定して混ぜません。過去の承認記録は取消・期限切れ後も残り、現在の送信許可とは異なります。予約だけでは送信実行に数えません。フォーム受付・SMTP受付は相手の閲覧や返信を意味しません。UNKNOWNの自動再送は行いません。</p>
       </section>
-      {data.benchmarkMeta && <CompletionBenchmark rows={data.rows} discovered={discovered} complete={data.complete} metadata={data.benchmarkMeta} onReason={code => { setFilters({ state: 'ALL', reason: code, page: 0 }); document.querySelector('[aria-label="Lead Completion作業キュー"]')?.scrollIntoView({ block: 'start' }) }} />}
+      {isAdmin && data.benchmarkMeta && <CompletionBenchmark rows={data.rows} discovered={discovered} complete={data.complete} metadata={data.benchmarkMeta} onReason={code => { setFilters({ state: 'ALL', reason: code, page: 0 }); document.querySelector('[aria-label="Lead Completion作業キュー"]')?.scrollIntoView({ block: 'start' }) }} />}
       <CompletionWorkQueue rows={data.rows} complete={data.complete} filters={filters} onFiltersChange={setFilters} onOpenCompany={onOpenCompany} />
       <h4 className="mt-4">不足・停止理由と次の作業</h4>
       <p className="muted">READY以外のLeadを理由ごとに一度だけ数えます。一つのLeadに複数理由があるため合計は候補数と一致しません。別窓口の理由も含むので、企業詳細で窓口別に確認してください。</p>

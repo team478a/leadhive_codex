@@ -253,6 +253,10 @@ def test_manual_url_import_is_not_changed_by_serper_directory_policy(auth, db):
 
 def test_company_like_titles_are_saved_and_public_domain_filter_is_narrow(auth, db, monkeypatch):
     project = make_project(auth)
+    aggregation_titles = [
+        "【神戸市】おすすめ工務店10選",
+        "名古屋市の居酒屋ランキング20選",
+    ]
     titles = [
         "【公式】株式会社山田工務店",
         "株式会社ABC | 名古屋市",
@@ -262,6 +266,9 @@ def test_company_like_titles_are_saved_and_public_domain_filter_is_narrow(auth, 
         "ABC株式会社 2026年度採用",
     ]
     candidates = [
+        collection.Candidate(title, f"https://aggregation-{index}.example.test/")
+        for index, title in enumerate(aggregation_titles)
+    ] + [
         collection.Candidate(title, f"https://title-{index}.example.test/")
         for index, title in enumerate(titles)
     ]
@@ -288,10 +295,17 @@ def test_company_like_titles_are_saved_and_public_domain_filter_is_narrow(auth, 
     hits = db.scalars(
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
-    assert [hit.disposition for hit in hits[: len(titles)]] == ["SAVED"] * len(titles)
+    assert [hit.disposition for hit in hits[: len(aggregation_titles)]] == [
+        "NON_COMPANY_SOURCE"
+    ] * len(aggregation_titles)
+    company_start = len(aggregation_titles)
+    assert [hit.disposition for hit in hits[company_start : company_start + len(titles)]] == [
+        "SAVED"
+    ] * len(titles)
     saved_names = set(db.scalars(select(Company.company_name)))
+    assert not set(aggregation_titles) & saved_names
     assert set(titles) <= saved_names
-    assert [hit.disposition for hit in hits[len(titles) :]] == [
+    assert [hit.disposition for hit in hits[company_start + len(titles) :]] == [
         "SAVED",
         "SAVED",
         "SAVED",
@@ -488,7 +502,7 @@ def test_search_page_hints_are_shared_with_ingestion(url, title, kind):
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_known_sources_are_excluded_but_article_titles_are_saved(auth, db, monkeypatch, fair):
+def test_known_sources_and_aggregation_titles_are_excluded(auth, db, monkeypatch, fair):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
@@ -512,9 +526,9 @@ def test_known_sources_are_excluded_but_article_titles_are_saved(auth, db, monke
     assert [hit.disposition for hit in hits] == [
         "NON_COMPANY_SOURCE",
         "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
         "SAVED",
         "SAVED",
-        "DUPLICATE",
         "TARGET_LIMIT",
         "TARGET_LIMIT",
     ]
@@ -526,7 +540,7 @@ def test_known_sources_are_excluded_but_article_titles_are_saved(auth, db, monke
 
 
 @pytest.mark.parametrize("fair", [False, True])
-def test_aggregation_title_is_saved_as_a_reviewable_candidate(auth, db, monkeypatch, fair):
+def test_aggregation_title_is_rejected_before_company_save(auth, db, monkeypatch, fair):
     from app import worker
 
     monkeypatch.setattr(settings, "collection_fair_scheduler_enabled", fair)
@@ -544,9 +558,9 @@ def test_aggregation_title_is_saved_as_a_reviewable_candidate(auth, db, monkeypa
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
     assert [h.disposition for h in hits] == [
+        "NON_COMPANY_SOURCE",
+        "NON_COMPANY_SOURCE",
         "SAVED",
-        "SAVED",
-        "DUPLICATE",
         "TARGET_LIMIT",
     ]
     assert len(hits) == len(rows)
@@ -641,19 +655,18 @@ def test_additional_media_keep_raw_and_do_not_consume_goal(auth, db, monkeypatch
     provider(monkeypatch, rows)
     monkeypatch.setattr(worker, "apply_application_settings", lambda db: None)
     assert worker.run_once()
-    assert set(db.scalars(select(Company.domain))) == {"unknown.test", "restaurant.test"}
+    assert set(db.scalars(select(Company.domain))) == {"restaurant.test"}
     hits = db.scalars(
         select(CollectionDiscoveryHit).order_by(CollectionDiscoveryHit.position)
     ).all()
-    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 5 + [
-        "SAVED",
+    assert [h.disposition for h in hits] == ["NON_COMPANY_SOURCE"] * 6 + [
         "SAVED",
         "TARGET_LIMIT",
     ]
     assert [h.snapshot["link"] for h in hits] == [row["link"] for row in rows]
-    assert all(h.company_id is None for h in hits[:5])
+    assert all(h.company_id is None for h in hits[:6])
     job = db.scalar(
         select(CollectionJob).where(CollectionJob.operation_job_id == UUID(operation_id))
     )
-    assert job.saved_count == 2
-    assert job.excluded_count == 5
+    assert job.saved_count == 1
+    assert job.excluded_count == 6
