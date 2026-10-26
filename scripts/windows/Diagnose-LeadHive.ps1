@@ -70,6 +70,22 @@ if ((Get-Command docker -ErrorAction SilentlyContinue) -and (Test-Path $script:L
         & docker compose --env-file $script:LeadHiveEnv -f $script:LeadHiveCompose config --quiet
         if ($LASTEXITCODE -eq 0) { "Valid" } else { "Invalid" }
     }
+    Add-Diagnostic "LeadHive container CPU and memory" {
+        Resolve-LeadHiveComposeProject
+        $containerIds = @(& docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv `
+            -f $script:LeadHiveCompose ps -q | Where-Object { $_ })
+        if ($containerIds.Count -eq 0) {
+            "No LeadHive containers are running."
+        } else {
+            & docker stats --no-stream --format "table {{.Name}}`t{{.CPUPerc}}`t{{.MemUsage}}`t{{.MemPerc}}" @containerIds
+        }
+    }
+    Add-Diagnostic "LeadHive runtime capacity summary" {
+        Resolve-LeadHiveComposeProject
+        & docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv `
+            -f $script:LeadHiveCompose exec -T api python -m app.runtime_capacity
+        if ($LASTEXITCODE -ne 0) { "Runtime summary is unavailable." }
+    }
 }
 
 $lines.Add("")

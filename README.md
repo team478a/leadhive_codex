@@ -217,6 +217,7 @@ backend/.venv/Scripts/python -m alembic -c backend/alembic.ini revision --autoge
 | Method | Path | 内容 |
 | --- | --- | --- |
 | GET | `/api/health` | DB疎通、障害時503（認証不要） |
+| GET | `/api/admin/runtime-capacity` | 管理者向けworker・CPU・メモリ・DB容量診断 |
 | POST | `/api/auth/login` | メール・パスワード認証、Cookie発行 |
 | POST | `/api/auth/logout` | セッション失効、Cookie削除 |
 | GET | `/api/auth/me` | 現在のユーザー |
