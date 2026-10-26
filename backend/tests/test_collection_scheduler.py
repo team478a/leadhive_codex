@@ -2,6 +2,7 @@
 
 from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
@@ -53,6 +54,17 @@ def attempts(db):
     )
 
 
+def test_metric_recording_failure_does_not_stop_collection(monkeypatch):
+    monkeypatch.setattr(
+        scheduler,
+        "_metric_state",
+        lambda _job: (_ for _ in ()).throw(RuntimeError("metrics unavailable")),
+    )
+    job = SimpleNamespace(payload={})
+    scheduler._add_metrics(job, timing={"serper_ms": 1})
+    assert job.payload == {}
+
+
 def test_fair_pages_keep_duplicate_gap_and_bound_tail(auth, db, monkeypatch):
     _, job_id = setup(auth, db, monkeypatch, keywords=["a", "b"], target=20)
     calls = []
@@ -68,8 +80,21 @@ def test_fair_pages_keep_duplicate_gap_and_bound_tail(auth, db, monkeypatch):
     assert state["discovered_count"] == 4
     assert state["requests"] == 10
     assert state["stop_reason"] == "QUERIES_EXHAUSTED"
+    assert state["run_ms"] >= 0 and state["queued_wait_ms"] >= 0
+    assert set(state["timing"]) == set(scheduler.TIMING_KEYS)
+    assert set(state["counts"]) == set(scheduler.COUNT_KEYS)
     assert all(t.stop_reason == "NO_NEW_TARGETS" for t in db.scalars(select(CollectionQueryTask)))
     assert all(a.state == "SUCCEEDED" for a in attempts(db))
+
+    stats = auth.get(f"/api/operations/{job_id}/collection-query-stats")
+    assert stats.status_code == 200
+    assert {(row["keyword"], row["search_count"]) for row in stats.json()} == {
+        ("a", 5),
+        ("b", 5),
+    }
+    csv_response = auth.get(f"/api/operations/{job_id}/collection-query-stats.csv")
+    assert csv_response.status_code == 200
+    assert csv_response.content.startswith(b"\xef\xbb\xbf")
 
 
 def test_empty_first_page_does_not_end_query(auth, db, monkeypatch):

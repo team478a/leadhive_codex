@@ -4,6 +4,8 @@ import logging
 import re
 import threading
 import time
+from collections import deque
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace
 from urllib.parse import urljoin, urlsplit, urlunsplit
 
@@ -84,6 +86,46 @@ TRADE_LINK_HINTS = ("特定商取引法", "特商法")
 
 _HOST_LAST_GET: dict[str, float] = {}
 _HOST_GET_LOCK = threading.Lock()
+
+
+def _empty_collection_metrics() -> dict:
+    return {
+        "timing": {"candidate_fetch_ms": 0, "corporate_lookup_ms": 0},
+        "counts": {
+            "search_results": 0,
+            "fetched_candidates": 0,
+            "already_known": 0,
+            "fetch_failures": 0,
+            "new_companies": 0,
+            "skipped_known_before_fetch": 0,
+            "inline_analyzed": 0,
+        },
+    }
+
+
+def _fetch_candidates_by_host(items: list[tuple[int, str, str]], stopped) -> dict[int, tuple]:
+    """Fetch different hosts concurrently while serializing each host's candidates."""
+    queues: dict[str, deque[tuple[int, str]]] = {}
+    host_order: deque[str] = deque()
+    for index, contact_url, host in items:
+        if host not in queues:
+            queues[host] = deque()
+            host_order.append(host)
+        queues[host].append((index, contact_url))
+    results: dict[int, tuple] = {}
+    concurrency = settings.form_first_fetch_concurrency
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        while host_order:
+            if stopped():
+                break
+            selected = [host_order.popleft() for _ in range(min(concurrency, len(host_order)))]
+            batch = [(host, *queues[host].popleft()) for host in selected]
+            fetched = list(executor.map(lambda item: _fetch_candidate(item[2]), batch))
+            for (host, index, _), result in zip(batch, fetched, strict=True):
+                results[index] = result
+                if queues[host]:
+                    host_order.append(host)
+    return results
 
 
 def build_form_first_queries(
@@ -596,6 +638,7 @@ def _queue_form_analysis(db, project_id, company_ids: list) -> None:
         list(dict.fromkeys(company_ids)),
         automatic=True,
         expunge=False,
+        extra_payload={"form_first_not_before_epoch": time.time() + 3},
     )
 
 
@@ -617,6 +660,8 @@ def _needs_form_analysis(db, company_id) -> bool:
 def process_search_results(
     db, collection_job, candidates: list[Candidate], payload: dict, stopped
 ) -> list[Candidate]:
+    metrics = _empty_collection_metrics()
+    metrics["counts"]["search_results"] = len(candidates)
     prefetched_by_company = {}
     prefetched_by_host = {}
     query_type, industry_keyword = query_result_type(
@@ -625,7 +670,9 @@ def process_search_results(
     accepted: list[Candidate] = []
     known_company_ids = []
     created_hosts = []
-    for result in candidates:
+    fetch_items: list[tuple[int, str, str]] = []
+    prepared: dict[int, tuple[str, str]] = {}
+    for index, result in enumerate(candidates):
         if stopped():
             break
         reason = classify_search_result(db, collection_job.project_id, result)
@@ -636,9 +683,36 @@ def process_search_results(
             contact_url, host = canonicalize_url(result.website_url or "")
         except (ValueError, UnicodeError):
             continue
-        fetch_reason, pages = _fetch_candidate(contact_url)
+        existing = _known_company(db, collection_job.project_id, host)
+        if (
+            existing is not None
+            and existing.contact_url
+            and existing.form_first_contact_url
+            and not _needs_form_analysis(db, existing.id)
+        ):
+            metrics["counts"]["already_known"] += 1
+            metrics["counts"]["skipped_known_before_fetch"] += 1
+            _record_hit(db, result, "FORM_FIRST", "REJECT_ALREADY_KNOWN", query_type)
+            mark_discovery(db, collection_job, result, "DUPLICATE", existing)
+            continue
+        prepared[index] = (contact_url, host)
+        fetch_items.append((index, contact_url, host))
+
+    fetch_started = time.perf_counter()
+    fetched = _fetch_candidates_by_host(fetch_items, stopped)
+    metrics["timing"]["candidate_fetch_ms"] = round((time.perf_counter() - fetch_started) * 1000)
+    metrics["counts"]["fetched_candidates"] = len(fetched)
+
+    for index, result in enumerate(candidates):
+        if index not in prepared or index not in fetched:
+            continue
+        if stopped():
+            break
+        contact_url, host = prepared[index]
+        fetch_reason, pages = fetched[index]
         _record_hit(db, result, "FORM_FIRST", fetch_reason, query_type)
         if fetch_reason not in {"FORM_FOUND", "FORM_JS_SUSPECTED", "RESERVATION_FORM"}:
+            metrics["counts"]["fetch_failures"] += 1
             continue
         is_reservation = fetch_reason == "RESERVATION_FORM"
         selected_contact_url = next(
@@ -666,6 +740,7 @@ def process_search_results(
             continue
         existing = _known_company(db, collection_job.project_id, host)
         if existing:
+            metrics["counts"]["already_known"] += 1
             added_contact_url = bool(not is_reservation and not existing.contact_url)
             if added_contact_url:
                 existing.contact_url = selected_contact_url
@@ -696,6 +771,7 @@ def process_search_results(
             ),
         )
         if identity_duplicate:
+            metrics["counts"]["already_known"] += 1
             added_contact_url = bool(not is_reservation and not identity_duplicate.contact_url)
             if added_contact_url:
                 identity_duplicate.contact_url = selected_contact_url
@@ -714,7 +790,11 @@ def process_search_results(
             )
             mark_discovery(db, collection_job, result, "DUPLICATE", identity_duplicate)
             continue
+        corporate_started = time.perf_counter()
         corporate = lookup_corporate_number(company_name, facts.get("address", {}).get("value", ""))
+        metrics["timing"]["corporate_lookup_ms"] += round(
+            (time.perf_counter() - corporate_started) * 1000
+        )
         _record_hit(
             db,
             result,
@@ -787,10 +867,12 @@ def process_search_results(
                     prefetched_by_company[existing.id] = prefetched_by_host[host]
     collection_job._form_first_prefetched_by_company = prefetched_by_company
     collection_job._form_first_prefetched_by_host = prefetched_by_host
+    collection_job._form_first_metrics = metrics
     return accepted
 
 
 def queue_saved_company_analysis(db, collection_job, candidates: list[Candidate]) -> None:
+    metrics = getattr(collection_job, "_form_first_metrics", _empty_collection_metrics())
     reservation_candidates = [
         candidate
         for candidate in candidates
@@ -841,21 +923,25 @@ def queue_saved_company_analysis(db, collection_job, candidates: list[Candidate]
 
     if auto_site_analysis_enabled(db):
         analysis_ids = list(dict.fromkeys([*missing_profile_ids, *prefetched_by_company]))
-        for company_id in analysis_ids:
-            company = by_id.get(company_id)
-            page_rows = prefetched_by_company.get(company_id)
-            if page_rows is None and company is not None:
-                page_rows = prefetched_by_host.get(
-                    (company.domain or "").lower().removeprefix("www.")
-                )
-            if company is None or not page_rows:
-                pending_ids.append(company_id)
-                continue
-            page_cache = PageFetchCache()
-            for _, url, html in page_rows:
-                page_cache.remember(FetchedPage(url=url, html=html))
-            analyze_site_company(db, company, page_cache=page_cache)
-            analyzed_inline = True
+        if settings.form_first_inline_site_analysis:
+            for company_id in analysis_ids:
+                company = by_id.get(company_id)
+                page_rows = prefetched_by_company.get(company_id)
+                if page_rows is None and company is not None:
+                    page_rows = prefetched_by_host.get(
+                        (company.domain or "").lower().removeprefix("www.")
+                    )
+                if company is None or not page_rows:
+                    pending_ids.append(company_id)
+                    continue
+                page_cache = PageFetchCache()
+                for _, url, html in page_rows:
+                    page_cache.remember(FetchedPage(url=url, html=html))
+                analyze_site_company(db, company, page_cache=page_cache)
+                metrics["counts"]["inline_analyzed"] += 1
+                analyzed_inline = True
+        else:
+            pending_ids = analysis_ids
         if pending_ids:
             _queue_form_analysis(db, collection_job.project_id, pending_ids)
         elif analyzed_inline and collection_job.operation_job_id:
@@ -870,6 +956,7 @@ def queue_saved_company_analysis(db, collection_job, candidates: list[Candidate]
                 db.commit()
     if missing_profile_ids or reservation_candidates:
         db.commit()
+    collection_job._form_first_metrics = metrics
 
 
 def _save_reservation_profile(db, company: Company, reservation_url: str) -> None:

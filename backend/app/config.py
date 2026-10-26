@@ -22,7 +22,11 @@ class Settings(BaseSettings):
     pc_diagnostic_transfer_enabled: bool = False
     live_form_input_enabled: bool = False
     worker_paused: bool = False
+    worker_operation_types: str = ""
+    worker_exclude_operation_types: str = ""
     collection_fair_scheduler_enabled: bool = False
+    form_first_fetch_concurrency: int = Field(default=4, ge=1, le=8)
+    form_first_inline_site_analysis: bool = False
     collection_discovery_max_operation_hits: int = Field(default=5000, ge=100, le=5000)
     collection_discovery_field_chars: int = Field(default=4000, ge=100, le=4000)
     collection_discovery_retention_days: int = Field(default=90, ge=1, le=365)

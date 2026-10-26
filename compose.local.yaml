@@ -66,6 +66,18 @@ services:
     environment:
       <<: *backend-environment
       WORKER_PAUSED: ${LEADHIVE_WORKER_PAUSED:-false}
+      WORKER_EXCLUDE_OPERATION_TYPES: collect_search
+    command: ["python", "-m", "app.worker"]
+    depends_on:
+      api:
+        condition: service_healthy
+
+  worker-collect:
+    <<: *backend-service
+    environment:
+      <<: *backend-environment
+      WORKER_PAUSED: ${LEADHIVE_WORKER_PAUSED:-false}
+      WORKER_OPERATION_TYPES: collect_search
     command: ["python", "-m", "app.worker"]
     depends_on:
       api:
