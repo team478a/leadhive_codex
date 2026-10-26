@@ -8,6 +8,25 @@ interface Limits {
   paused: boolean; version: number; can_manage: boolean; execution_enabled: boolean
 }
 
+const limitRanges: Array<[keyof Limits, string, number, number]> = [
+  ['daily_limit', 'フォーム24時間上限', 1, 1000],
+  ['hourly_limit', 'フォーム1時間上限', 1, 100],
+  ['minimum_interval_seconds', 'フォーム試行間隔（秒）', 60, 86400],
+  ['site_interval_seconds', '同じサイトへの試行間隔（秒）', 60, 86400],
+  ['recipient_cooldown_days', '全プロジェクトのフォーム送信を数える期間（日）', 1, 365],
+  ['recipient_cooldown_limit', '1送信先あたりの期間内上限', 1, 100],
+]
+
+function limitsValidationError(limits: Limits) {
+  for (const [key, label, minimum, maximum] of limitRanges) {
+    const value = limits[key]
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < minimum || value > maximum) {
+      return `${label}は${minimum}〜${maximum}の整数で入力してください。`
+    }
+  }
+  return ''
+}
+
 export function FormDispatchLimitsSettingsPanel() {
   const [limits, setLimits] = useState<Limits | null>(null)
   const [saved, setSaved] = useState<Limits | null>(null)
@@ -28,6 +47,8 @@ export function FormDispatchLimitsSettingsPanel() {
   }, [])
   async function save() {
     if (!limits) return
+    const validationError = limitsValidationError(limits)
+    if (validationError) { setError(validationError); setNotice(''); return }
     setBusy(true); setError(''); setNotice('')
     try {
       const updated = await api<Limits>('/form-dispatch-limits', 'PUT', {

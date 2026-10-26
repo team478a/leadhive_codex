@@ -116,12 +116,22 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     else if (path.endsWith('/cf7-candidate-preparation-status')) data = { enabled: true }
     else if (path.endsWith('/form-approval-readiness')) data = { items: [], total: 0, counts: {} }
     else if (path.endsWith('/companies')) data = []
+    else if (path === '/api/admin/runtime-capacity') data = {
+      generated_at: '2026-10-17T00:00:00Z',
+      process: { cpu_count: 2, cpu_limit: 1, memory_limit_bytes: 536870912, memory_current_bytes: 134217728 },
+      database: { max_connections: 100, shared_buffers: '128MB', current_connections: 3, database_size_bytes: 1048576, pool_size: 5, max_overflow: 5 },
+      workers: [], jobs_last_24_hours: [],
+    }
     else if (path === '/api/admin/application-settings') data = { public_app_url: '', openai_model: '', gbizinfo_api_base_url: '', settings_encryption_ready: true, openai_api_key_source: 'unset', serper_api_key_source: 'unset', google_places_api_key_source: 'unset', gbizinfo_api_token_source: 'unset' }
     else if (path === '/api/admin/smtp-settings') data = null
     else if (path === '/api/admin/form-sender-settings') data = { company_name: '', department: '', position: '', contact_name: '', last_name: '', first_name: '', furigana: '', email: '', phone: '', postal_code: '', prefecture: '', city: '', address: '', building: '', website: '', updated_at: null }
     else if (path === '/api/admin/inbound-mail-settings') data = null
     else if (path === '/api/admin/inbound-emails') data = []
-    else if (path === '/api/form-dispatch-limits') data = { daily_limit: 100, hourly_limit: 10, minimum_interval_seconds: 60, site_interval_seconds: 300, paused: false, version: 1, can_manage: true, execution_enabled: false }
+    else if (path === '/api/form-dispatch-limits') data = {
+      daily_limit: 100, hourly_limit: 10, minimum_interval_seconds: 60, site_interval_seconds: 300,
+      recipient_cooldown_days: 30, recipient_cooldown_limit: 2,
+      paused: false, version: 1, can_manage: true, execution_enabled: false,
+    }
     else if (method === 'POST' || method === 'PUT') data = { id: 'mock', status: 'completed' }
     await route.fulfill({ status, json: data })
   })
@@ -251,11 +261,12 @@ test('advanced approval and verification panels remain on their dedicated pages'
 })
 
 test('environment-wide form dispatch limits are available in Settings', async ({ page }) => {
-  await setup(page)
+  const { pageErrors } = await setup(page)
   const sales = page.getByRole('region', { name: '営業作業', exact: true })
   const approvalStep = sales.locator('[aria-label="2. 承認して送る"]')
   await approvalStep.getByRole('button').first().click()
   await approvalStep.getByRole('button', { name: '運用設定で確認・変更' }).click()
   await expect(page.getByRole('heading', { name: '運用設定', level: 1 })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'フォーム送信上限' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'フォーム送信上限' })).toBeVisible({ timeout: 15_000 })
+  expect(pageErrors).toEqual([])
 })

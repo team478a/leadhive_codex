@@ -64,7 +64,11 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
     payload_hash: 'b'.repeat(64), payload_version: 1, status: 'PENDING', created_by_principal_type: 'HUMAN',
     created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString(),
   }
-  let limits = { daily_limit: 30, hourly_limit: 5, minimum_interval_seconds: 60, site_interval_seconds: 300, paused: false, version: 1, can_manage: true, execution_enabled: false }
+  let limits = {
+    daily_limit: 30, hourly_limit: 5, minimum_interval_seconds: 60, site_interval_seconds: 300,
+    recipient_cooldown_days: 30, recipient_cooldown_limit: 2,
+    paused: false, version: 1, can_manage: true, execution_enabled: false,
+  }
   await page.route(`**/api/projects/${fixture.project_id}/approval-requests?**`, route => route.fulfill({ json: [item] }))
   await page.route('**/api/form-dispatch-limits', route => {
     if (route.request().method() === 'PUT') {
@@ -73,6 +77,8 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
       expect(body.password).toBe('mock-human-password')
       expect(body.execution_enabled).toBeUndefined()
       expect(body.site_interval_seconds).toBe(600)
+      expect(body.recipient_cooldown_days).toBe(30)
+      expect(body.recipient_cooldown_limit).toBe(2)
       limits = { ...limits, daily_limit: body.daily_limit, site_interval_seconds: body.site_interval_seconds, paused: body.paused, version: limits.version + 1 }
     }
     return route.fulfill({ json: limits })
@@ -115,10 +121,13 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
   await navigateWorkspace(page, '⚙ 運用設定')
   const limitsPanel = page.getByRole('region', { name: 'フォーム送信上限' })
   await expect(limitsPanel.getByText(/保存済み：直近24時間30件/)).toBeVisible()
-  await limitsPanel.getByLabel('フォーム24時間上限').fill('500')
+  await limitsPanel.getByLabel('フォーム24時間上限').fill('0')
   await limitsPanel.getByLabel('同じサイトへの試行間隔（秒）').fill('600')
   await limitsPanel.getByLabel('フォーム実行を一時停止').check()
   await limitsPanel.getByLabel('上限変更用管理者パスワード').fill('mock-human-password')
+  await limitsPanel.getByRole('button', { name: '管理者再認証してフォーム上限を保存' }).click()
+  await expect(limitsPanel.getByRole('alert')).toHaveText('フォーム24時間上限は1〜1000の整数で入力してください。')
+  await limitsPanel.getByLabel('フォーム24時間上限').fill('500')
   await limitsPanel.getByRole('button', { name: '管理者再認証してフォーム上限を保存' }).click()
   await expect(limitsPanel.getByText(/保存済み：直近24時間500件.*一時停止中.*OFF/)).toBeVisible()
   await expect(limitsPanel.getByText(/同じサイト600秒/)).toBeVisible()
