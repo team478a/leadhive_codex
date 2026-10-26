@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 
 from app.models import WorkerHeartbeat
+from app.runtime_capacity import cgroup_capacity
 from app.runtime_version import short_commit
 from app.worker import record_worker_heartbeat, stamp_operation_runtime
 
@@ -41,6 +42,7 @@ def test_operation_job_payload_records_executing_worker(monkeypatch):
 
     monkeypatch.setattr(worker, "RUNTIME_COMMIT", "abc1234")
     monkeypatch.setattr(worker, "WORKER_HOST", "worker-host")
+    monkeypatch.setattr(worker, "WORKER_INSTANCE_ID", "worker-instance")
     job = OperationJob(payload={"input": "kept"})
 
     stamp_operation_runtime(job)
@@ -49,6 +51,7 @@ def test_operation_job_payload_records_executing_worker(monkeypatch):
         "input": "kept",
         "executed_by_commit": "abc1234",
         "executed_by_host": "worker-host",
+        "executed_by_instance_id": "worker-instance",
     }
 
 
@@ -94,3 +97,36 @@ def test_runtime_info_shows_recent_worker_and_omits_stale(auth, db):
     assert workers_by_id["browser-prefix-as-application"]["commit_id"] == "abc1234"
     assert workers_by_id["browser-prefix-as-application"]["host_name"] == "recent-host"
     assert "stale-worker" not in workers_by_id
+
+
+def test_runtime_capacity_is_admin_only_and_contains_no_database_url(auth, users, db):
+    assert auth.get("/api/admin/runtime-capacity").status_code == 404
+    users[0].is_admin = True
+    db.commit()
+    record_worker_heartbeat(
+        db,
+        instance_id="capacity-worker",
+        host_name="capacity-host",
+        commit_id="abc1234",
+    )
+
+    response = auth.get("/api/admin/runtime-capacity")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["process"]["cpu_count"] is not None
+    assert body["database"]["pool_size"] >= 1
+    assert body["workers"][0]["instance_id"] == "capacity-worker"
+    serialized = response.text.lower()
+    assert "database_url" not in serialized
+    assert "postgresql" not in serialized
+    assert "password" not in serialized
+
+
+def test_cgroup_capacity_tolerates_missing_files(tmp_path):
+    assert cgroup_capacity(tmp_path) == {
+        "cpu_count": __import__("os").cpu_count(),
+        "cpu_limit": None,
+        "memory_limit_bytes": None,
+        "memory_current_bytes": None,
+    }
