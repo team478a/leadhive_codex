@@ -263,6 +263,7 @@ class OperationJobOut(BaseModel):
         return value[-5:] if isinstance(value, list) else []
 
     id: UUID
+    queue_position: int | None = None
     condition_request_id: UUID | None = None
     condition_version: int | None = None
     project_id: UUID

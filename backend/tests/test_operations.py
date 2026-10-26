@@ -126,6 +126,38 @@ def test_operation_status_endpoints_project_only_required_payload_fields(auth, c
     assert client.get(f"/api/operations/{job.id}").status_code == 404
 
 
+def test_collection_queue_position_is_global_across_projects(auth, db):
+    first_project = make_project(auth, db)
+    second_project = make_project(auth, db)
+    now = datetime.now(timezone.utc)
+    first = OperationJob(
+        project_id=first_project["id"],
+        operation_type="collect_search",
+        status="queued",
+        created_at=now - timedelta(seconds=1),
+    )
+    second = OperationJob(
+        project_id=second_project["id"],
+        operation_type="collect_search",
+        status="queued",
+        created_at=now,
+    )
+    db.add_all((first, second))
+    db.commit()
+    queued = db.scalars(
+        select(OperationJob)
+        .where(OperationJob.operation_type == "collect_search", OperationJob.status == "queued")
+        .order_by(OperationJob.created_at, OperationJob.id)
+    ).all()
+    assert first_project["id"] != second_project["id"]
+    assert [item.id for item in queued][-2:] == [first.id, second.id]
+
+    response = auth.get(f"/api/projects/{second_project['id']}/operations")
+
+    assert response.status_code == 200
+    assert response.json()[0]["queue_position"] == 2
+
+
 def test_master_site_backfill_is_explicit_and_runs_in_main_worker(auth, db, monkeypatch):
     project = make_project(auth, db)
     company = Company(

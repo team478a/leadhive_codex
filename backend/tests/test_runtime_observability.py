@@ -108,6 +108,8 @@ def test_runtime_capacity_is_admin_only_and_contains_no_database_url(auth, users
         instance_id="capacity-worker",
         host_name="capacity-host",
         commit_id="abc1234",
+        include_operation_types="collect_search",
+        exclude_operation_types="form_delivery",
     )
 
     response = auth.get("/api/admin/runtime-capacity")
@@ -117,6 +119,9 @@ def test_runtime_capacity_is_admin_only_and_contains_no_database_url(auth, users
     assert body["process"]["cpu_count"] is not None
     assert body["database"]["pool_size"] >= 1
     assert body["workers"][0]["instance_id"] == "capacity-worker"
+    assert body["workers"][0]["include_operation_types"] == ["collect_search"]
+    assert body["workers"][0]["exclude_operation_types"] == ["form_delivery"]
+    assert body["serper_429_last_24_hours"] == 0
     serialized = response.text.lower()
     assert "database_url" not in serialized
     assert "postgresql" not in serialized

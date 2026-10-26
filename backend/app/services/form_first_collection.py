@@ -2,7 +2,6 @@
 
 import logging
 import re
-import threading
 import time
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
@@ -15,6 +14,7 @@ from sqlalchemy import select
 
 from app.config import settings
 from app.models import CollectionDiscoveryHit, Company, FormProfile
+from app.services.access_slots import AccessSlotDeferred, wait_for_api_access, wait_for_host_access
 from app.services.collection import Candidate, canonicalize_url
 from app.services.collection_discovery import classify_hit, mark_discovery
 from app.services.collection_jobs import duplicate_company
@@ -83,9 +83,6 @@ PHONE_LABELS = ("電話", "電話番号", "tel")
 BUSINESS_LABELS = ("事業内容", "事業概要", "業務内容")
 ABOUT_LINK_HINTS = ("会社概要", "会社案内", "企業情報", "about", "company")
 TRADE_LINK_HINTS = ("特定商取引法", "特商法")
-
-_HOST_LAST_GET: dict[str, float] = {}
-_HOST_GET_LOCK = threading.Lock()
 
 
 def _empty_collection_metrics() -> dict:
@@ -460,6 +457,7 @@ def lookup_corporate_number(company_name: str, address: str) -> dict[str, str]:
     if not settings.gbizinfo_api_token:
         return {"status": "CORPORATE_CHECK_SKIPPED", "corporate_number": ""}
     try:
+        wait_for_api_access("gbizinfo", settings.gbizinfo_max_requests_per_second)
         with httpx.Client(timeout=settings.external_api_timeout_seconds) as client:
             response = measured_request(
                 "gbizinfo",
@@ -470,7 +468,7 @@ def lookup_corporate_number(company_name: str, address: str) -> dict[str, str]:
             )
             response.raise_for_status()
             data = response.json()
-    except (httpx.HTTPError, ValueError) as exc:
+    except (AccessSlotDeferred, httpx.HTTPError, ValueError) as exc:
         logger.warning("form-first corporate lookup failed: type=%s", type(exc).__name__)
         return {"status": "CORPORATE_CHECK_ERROR", "corporate_number": ""}
     items = data.get("hojin-infos") or data.get("corporations") or data.get("items") or []
@@ -514,27 +512,16 @@ def _known_company(db, project_id, host) -> Company | None:
 
 
 def _minimum_host_interval(host: str) -> None:
-    with _HOST_GET_LOCK:
-        now = time.monotonic()
-        expired = [
-            previous_host
-            for previous_host, last_request in _HOST_LAST_GET.items()
-            if now - last_request >= 1.0
-        ]
-        for previous_host in expired:
-            _HOST_LAST_GET.pop(previous_host, None)
-        wait = max(0.0, 1.0 - (now - _HOST_LAST_GET.get(host, 0.0)))
-        if wait:
-            time.sleep(wait)
-        _HOST_LAST_GET[host] = time.monotonic()
+    wait_for_host_access(host)
 
 
 def _fetch_candidate(contact_url: str) -> tuple[str, list[tuple[str, str, str]]]:
     fetcher = SafeFetcher()
+    if hasattr(fetcher, "_interval_reserver"):
+        fetcher._interval_reserver = _minimum_host_interval
     pages: list[tuple[str, str, str]] = []
     fetch_count = 0
     try:
-        _minimum_host_interval(urlsplit(contact_url).hostname or "")
         fetcher.site_root = contact_url
         fetch_count += 1
         contact = fetcher.fetch_html(contact_url)
@@ -557,7 +544,6 @@ def _fetch_candidate(contact_url: str) -> tuple[str, list[tuple[str, str, str]]]
             root = contact
         else:
             fetch_count += 1
-            _minimum_host_interval(root_parts.hostname or "")
             root = fetcher.fetch_html(root_url)
             fetched_urls.add(root.url)
         if not same_site(contact.url, root.url):
@@ -586,7 +572,6 @@ def _fetch_candidate(contact_url: str) -> tuple[str, list[tuple[str, str, str]]]
                 if page_url in fetched_urls or fetch_count >= 4:
                     continue
                 fetch_count += 1
-                _minimum_host_interval(urlsplit(page_url).hostname or "")
                 try:
                     page = fetcher.fetch_html(page_url)
                 except ScrapeError:
@@ -614,7 +599,6 @@ def _fetch_candidate(contact_url: str) -> tuple[str, list[tuple[str, str, str]]]
             if url in fetched_urls:
                 continue
             fetch_count += 1
-            _minimum_host_interval(urlsplit(url).hostname or "")
             page = fetcher.fetch_html(url)
             fetched_urls.add(page.url)
             if not same_site(root.url, page.url):
@@ -622,6 +606,8 @@ def _fetch_candidate(contact_url: str) -> tuple[str, list[tuple[str, str, str]]]
             pages.append((kind, page.url, page.html))
         return selected_status, pages
     except ScrapeError as exc:
+        if "共有アクセス間隔" in str(exc):
+            return "RETRY_HOST_RATE_LIMIT", pages
         return "REJECT_ROBOTS" if "robots.txt" in str(exc) else "REJECT_FETCH_ERROR", pages
     finally:
         fetcher.close()

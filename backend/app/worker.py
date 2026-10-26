@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Event, Thread
 
-from sqlalchemy import case, func, or_, select
+from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.config import settings
@@ -68,6 +68,30 @@ def _operation_type_set(value: str) -> set[str]:
 def _collect_only_worker() -> bool:
     included = _operation_type_set(settings.worker_operation_types)
     return bool(included) and included <= {"collect_search"}
+
+
+def validate_worker_scope() -> None:
+    included = _operation_type_set(settings.worker_operation_types)
+    if "collect_search" in included and included != {"collect_search"}:
+        raise SystemExit("A collection worker may only include collect_search.")
+
+
+def warn_if_database_capacity_is_too_small() -> None:
+    configured_processes = settings.leadhive_collect_workers + 2
+    per_process = settings.database_pool_size + settings.database_max_overflow
+    required = configured_processes * per_process + 10
+    try:
+        with SessionLocal() as db:
+            maximum = int(db.execute(text("SHOW max_connections")).scalar_one())
+    except Exception as exc:
+        logger.warning("database connection capacity check failed: %s", type(exc).__name__)
+        return
+    if required > maximum:
+        logger.warning(
+            "configured database connection capacity may be exceeded: required=%s maximum=%s",
+            required,
+            maximum,
+        )
 
 
 def lease_deadline() -> datetime:
@@ -1680,6 +1704,9 @@ def run_once() -> bool:
     if settings.worker_paused:
         return False
     with SessionLocal() as db:
+        from app.services.access_slots import cleanup_old_access_slots
+
+        cleanup_old_access_slots()
         apply_application_settings(db)
         enqueue_due_schedules(db)
         collect_only = _collect_only_worker()
@@ -1835,8 +1862,10 @@ def main():
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--poll-seconds", type=float, default=2.0)
     args = parser.parse_args()
+    validate_worker_scope()
     if settings.worker_paused:
         raise SystemExit("Worker is paused for maintenance. Review recovery before resuming.")
+    warn_if_database_capacity_is_too_small()
     _heartbeat_once()
     stop_event = Event()
     heartbeat_thread = Thread(target=_heartbeat_loop, args=(stop_event,), daemon=True)

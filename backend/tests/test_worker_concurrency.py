@@ -1,8 +1,10 @@
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import nullcontext
 from datetime import datetime, timedelta, timezone
 from threading import Barrier
 
+import pytest
 from sqlalchemy import delete, func, select
 
 from app import worker
@@ -182,6 +184,60 @@ def test_worker_operation_type_filters_are_additive(monkeypatch):
             assert claimed.operation_type == "web_analysis"
     finally:
         delete_project(project_id, user_id)
+
+
+def test_two_collection_workers_claim_different_projects_concurrently(monkeypatch):
+    projects = [create_project(), create_project()]
+    barrier = Barrier(2)
+    with SessionLocal() as db:
+        db.add_all(
+            OperationJob(project_id=project_id, operation_type="collect_search", payload={})
+            for project_id, _ in projects
+        )
+        db.commit()
+    monkeypatch.setattr(worker.settings, "worker_operation_types", "collect_search")
+    monkeypatch.setattr(worker.settings, "worker_exclude_operation_types", "")
+
+    def claim():
+        with SessionLocal() as db:
+            barrier.wait(timeout=5)
+            job = worker.claim_job(db)
+            return job.id, job.project_id
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            claimed = list(executor.map(lambda _: claim(), range(2)))
+        assert len({job_id for job_id, _ in claimed}) == 2
+        assert {project_id for _, project_id in claimed} == {item[0] for item in projects}
+    finally:
+        for project_id, user_id in projects:
+            delete_project(project_id, user_id)
+
+
+def test_collection_worker_rejects_mixed_operation_scope(monkeypatch):
+    monkeypatch.setattr(worker.settings, "worker_operation_types", "collect_search,form_delivery")
+
+    with pytest.raises(SystemExit, match="only include collect_search"):
+        worker.validate_worker_scope()
+
+
+def test_worker_warns_when_configured_pool_capacity_exceeds_database(monkeypatch, caplog):
+    class Result:
+        def scalar_one(self):
+            return "10"
+
+    class Database:
+        def execute(self, _statement):
+            return Result()
+
+    monkeypatch.setattr(worker, "SessionLocal", lambda: nullcontext(Database()))
+    monkeypatch.setattr(worker.settings, "leadhive_collect_workers", 4)
+    monkeypatch.setattr(worker.settings, "database_pool_size", 2)
+    monkeypatch.setattr(worker.settings, "database_max_overflow", 0)
+
+    worker.warn_if_database_capacity_is_too_small()
+
+    assert "capacity may be exceeded" in caplog.text
 
 
 def test_site_analysis_requeues_at_batch_boundary_without_reprocessing(monkeypatch):

@@ -83,3 +83,12 @@ def legacy_delivery_test_mode(monkeypatch):
     monkeypatch.setattr(settings, "outbound_enabled", True)
     monkeypatch.setattr(settings, "legacy_form_delivery_enabled", True)
     monkeypatch.setattr(form_batch_routes, "reject_legacy_form_entry", lambda: None)
+
+
+@pytest.fixture(autouse=True)
+def shared_access_slot_test_mode(monkeypatch, request):
+    if "test_access_slots.py" in request.node.nodeid:
+        return
+    from app.services import access_slots
+
+    monkeypatch.setattr(access_slots, "reserve_access_slot", lambda *_args, **_kwargs: 0.0)

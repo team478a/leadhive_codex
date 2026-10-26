@@ -179,6 +179,9 @@ macOS / LinuxではPython実行パスを`backend/.venv/bin/python`に読み替�
 | `WORKER_MAX_ATTEMPTS` | ワーカー停止時の最大試行回数（1〜10、既定3） |
 | `WORKER_OPERATION_TYPES` | workerが取得する処理種別のカンマ区切り。未設定は全種別 |
 | `WORKER_EXCLUDE_OPERATION_TYPES` | workerが取得しない処理種別のカンマ区切り |
+| `LEADHIVE_COLLECT_WORKERS` | 配布版の収集専用worker数（1〜16、既定2） |
+| `SERPER_MAX_REQUESTS_PER_SECOND` | 全収集worker合計のSerper上限（既定2回/秒） |
+| `GBIZINFO_MAX_REQUESTS_PER_SECOND` | 全収集worker合計のgBizINFO上限（既定1回/秒） |
 | `FORM_FIRST_FETCH_CONCURRENCY` | フォーム起点候補の別ホスト並行取得数（1〜8、既定4） |
 | `FORM_FIRST_INLINE_SITE_ANALYSIS` | `true`でフォーム起点収集中のサイト解析を旧方式へ戻す（既定`false`） |
 | `PUBLIC_APP_URL` | メールの配信停止リンクに使う公開アプリURL |
@@ -279,6 +282,8 @@ Projectのstatusは`draft` / `active` / `archived`。
 画面からのSerper・Places検索はバックグラウンド処理へ登録するため、登録後も他の画面を操作できます。
 ワーカーはキーワードごとに収集ジョブを作り、`found_count`、`saved_count`、
 `duplicate_count`、`error_count`を記録します。外部API失敗もジョブを`failed`として保存します。
+配布版は収集専用workerを既定2個起動し、別プロジェクトの収集を同時に進めます。同一プロジェクトの
+収集は1件だけです。同一サイトへの取得間隔、Serper、gBizINFOの上限はDBで全worker間に共有します。
 CSVは5MB・1000行までで、`company_name, website_url, phone, email, address`列が必要です。
 同一プロジェクトではドメイン、URL、会社名＋住所で重複登録を防ぎます。
 

@@ -134,7 +134,7 @@ rollbackには元のbackupと旧版の検証済み配布物を使用する。旧
 
 ## 技術構成
 
-`compose.local.yaml`がPostgreSQL、FastAPI、通常のバックグラウンドワーカー、収集専用の`worker-collect`、Nginx配信のReact画面を起動する。通常workerは`collect_search`を除外し、収集専用workerは`collect_search`だけを取得する。DBは外部へ公開せず、Web画面だけを`127.0.0.1`へ公開する。Migrationは起動・更新時にAlembicで適用する。
+`compose.local.yaml`がPostgreSQL、FastAPI、通常のバックグラウンドワーカー、収集専用の`worker-collect`、Nginx配信のReact画面を起動する。通常workerは`collect_search`を除外し、収集専用workerは`collect_search`だけを取得する。`worker-collect`は`LEADHIVE_COLLECT_WORKERS`の数だけ起動し、既定は2個。DBは外部へ公開せず、Web画面だけを`127.0.0.1`へ公開する。Migrationは起動・更新時にAlembicで適用する。
 
 ## 配布パッケージの作成
 
@@ -153,6 +153,8 @@ backupsのenvには秘密値が含まれる。backup全体を暗号化保管し�
 バックアップに含まれたログインsession、再認証challenge、Agent credential、未処理・承認済みApprovalRequestは復元時に失効します。再ログインし、Agentを利用する場合は管理者が既存のcredential発行APIで再発行してください（Agent管理UIは未実装）。営業提案は再作成してHumanが再承認します。過去の文面・承認者・承認日時・監査履歴は保存されます。workerは別途確認して再開するまで停止したままです。
 
 ### 収集専用運用（G1.3）
+
+複数の収集workerは別プロジェクトを同時に処理する。同一プロジェクトは既存の一意制約により1件だけ実行する。同一サイトへの1秒間隔は`host_access_slots`で全workerに共有し、DB障害時のみ各process内の間隔制御へ退避する。SerperとgBizINFOも同じ共有予約を使う。管理画面の「運用設定」→「実行環境」でworker、接続数、直近24時間のSerper 429を確認してからworker数を増やす。
 
 配布の初期設定は外部送信停止です。収集・解析・企業管理・文面準備・Human承認は利用できますが、メール・フォーム・SMTPテスト・Codex送信支援は実行できません。画面上部で停止状態を確認できます。
 

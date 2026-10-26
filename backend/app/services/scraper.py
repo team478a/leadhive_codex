@@ -14,6 +14,7 @@ from bs4 import BeautifulSoup, UnicodeDammit
 
 from app.config import settings
 from app.services import site_extraction
+from app.services.access_slots import AccessSlotDeferred, wait_for_host_access
 from app.services.collection import canonicalize_url
 from app.services.contact_discovery import navigation_links, same_site
 from app.services.robots import robots_parser
@@ -222,7 +223,7 @@ def validate_public_url(url: str) -> str:
 
 
 class SafeFetcher:
-    def __init__(self):
+    def __init__(self, interval_reserver=wait_for_host_access):
         self.client = httpx.Client(
             timeout=settings.scraper_timeout_seconds,
             follow_redirects=False,
@@ -235,7 +236,7 @@ class SafeFetcher:
         self.site_root = ""
         self._request_count = 0
         self._started = time.monotonic()
-        self._last_request: dict[str, float] = {}
+        self._interval_reserver = interval_reserver
 
     def close(self):
         self.client.close()
@@ -259,13 +260,13 @@ class SafeFetcher:
         if self._request_count >= 32 or time.monotonic() - self._started >= 60:
             raise ScrapeError("Webサイト取得の回数・時間上限に達しました。")
         host = urlsplit(normalized).hostname or ""
-        wait = 1 - (time.monotonic() - self._last_request.get(host, 0))
-        if wait > 0:
-            time.sleep(wait)
+        try:
+            self._interval_reserver(host)
+        except AccessSlotDeferred as exc:
+            raise ScrapeError("共有アクセス間隔の待機上限を超えました。") from exc
         if time.monotonic() - self._started >= 60:
             raise ScrapeError("Webサイト取得の時間上限に達しました。")
         self._request_count += 1
-        self._last_request[host] = time.monotonic()
         try:
             with self.client.stream("GET", normalized) as response:
                 if response.status_code in {301, 302, 303, 307, 308}:

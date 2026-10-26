@@ -4,11 +4,11 @@ from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 
 from app.config import settings
 from app.database import SessionLocal
-from app.models import OperationJob, Project, WorkerHeartbeat
+from app.models import LeadProcessingUsage, OperationJob, Project, WorkerHeartbeat
 
 CGROUP_ROOT = Path("/sys/fs/cgroup")
 RECENT_WORKER_MINUTES = 5
@@ -146,8 +146,16 @@ def worker_capacity(db, now: datetime) -> list[dict]:
                 "host_name": worker.host_name,
                 "commit_id": worker.commit_id,
                 "last_seen_at": worker.last_seen_at,
-                "include_operation_types": None,
-                "exclude_operation_types": None,
+                "include_operation_types": [
+                    item.strip()
+                    for item in worker.include_operation_types.split(",")
+                    if item.strip()
+                ],
+                "exclude_operation_types": [
+                    item.strip()
+                    for item in worker.exclude_operation_types.split(",")
+                    if item.strip()
+                ],
                 "current_operation": current,
             }
         )
@@ -156,12 +164,21 @@ def worker_capacity(db, now: datetime) -> list[dict]:
 
 def runtime_capacity(db) -> dict:
     now = datetime.now(timezone.utc)
+    serper_429_count = db.scalar(
+        select(func.count())
+        .select_from(LeadProcessingUsage)
+        .where(
+            LeadProcessingUsage.started_at >= now - timedelta(hours=24),
+            LeadProcessingUsage.provider == "serper_429",
+        )
+    )
     return {
         "generated_at": now,
         "process": cgroup_capacity(),
         "database": database_capacity(db),
         "workers": worker_capacity(db, now),
         "jobs_last_24_hours": recent_job_stats(db, now),
+        "serper_429_last_24_hours": int(serper_429_count or 0),
     }
 
 
