@@ -33,6 +33,8 @@ def measured_request(provider, request, *args, **kwargs):
     status = "failed"
     try:
         response = request(*args, **kwargs)
+        if provider == "serper" and response.status_code == 429:
+            provider = "serper_429"
         if 200 <= response.status_code < 300:
             status = "completed"
         return response

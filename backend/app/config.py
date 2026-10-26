@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     worker_paused: bool = False
     worker_operation_types: str = ""
     worker_exclude_operation_types: str = ""
+    leadhive_collect_workers: int = Field(default=2, ge=1, le=16)
     collection_fair_scheduler_enabled: bool = False
     form_first_fetch_concurrency: int = Field(default=4, ge=1, le=8)
     form_first_inline_site_analysis: bool = False
@@ -44,9 +45,11 @@ class Settings(BaseSettings):
     email_feedback_webhook_enabled: bool = False
     email_feedback_webhook_secret: str = ""
     serper_api_key: str = ""
+    serper_max_requests_per_second: float = Field(default=2.0, ge=0.1, le=100)
     google_places_api_key: str = ""
     gbizinfo_api_token: str = ""
     gbizinfo_api_base_url: str = "https://api.info.gbiz.go.jp/hojin/v2/hojin"
+    gbizinfo_max_requests_per_second: float = Field(default=1.0, ge=0.1, le=100)
     external_api_timeout_seconds: float = 20.0
     scraper_timeout_seconds: float = 15.0
     scraper_max_bytes: int = 2_000_000

@@ -74,7 +74,7 @@ def operation_summary_statement():
     )
 
 
-def operation_summary(row) -> OperationJobOut:
+def operation_summary(row, queue_position: int | None = None) -> OperationJobOut:
     values = dict(row._mapping)
     condition_binding = values.pop("condition_binding") or {}
     payload = {
@@ -85,6 +85,7 @@ def operation_summary(row) -> OperationJobOut:
     return OperationJobOut.model_validate(
         {
             **values,
+            "queue_position": queue_position,
             "condition_request_id": condition_binding.get("request_id"),
             "condition_version": condition_binding.get("version"),
             "payload": payload,
@@ -832,7 +833,18 @@ def list_operations(
         .order_by(OperationJob.created_at.desc(), OperationJob.id)
         .limit(limit)
     ).all()
-    return [operation_summary(row) for row in rows]
+    queued_ids = list(
+        db.scalars(
+            select(OperationJob.id)
+            .where(
+                OperationJob.operation_type == "collect_search",
+                OperationJob.status == "queued",
+            )
+            .order_by(OperationJob.created_at, OperationJob.id)
+        ).all()
+    )
+    positions = {job_id: index for index, job_id in enumerate(queued_ids, start=1)}
+    return [operation_summary(row, positions.get(row.id)) for row in rows]
 
 
 @router.get("/operations/{job_id}", response_model=OperationJobOut)
@@ -845,7 +857,20 @@ def get_operation(
     if row is None:
         raise HTTPException(404, "処理ジョブが見つかりません。")
     project_access(row.project_id, db, user, write=False)
-    return operation_summary(row)
+    position = None
+    if row.operation_type == "collect_search" and row.status == "queued":
+        queued_ids = list(
+            db.scalars(
+                select(OperationJob.id)
+                .where(
+                    OperationJob.operation_type == "collect_search",
+                    OperationJob.status == "queued",
+                )
+                .order_by(OperationJob.created_at, OperationJob.id)
+            ).all()
+        )
+        position = queued_ids.index(row.id) + 1 if row.id in queued_ids else None
+    return operation_summary(row, position)
 
 
 @router.get("/operations/{job_id}/collection-query-stats")

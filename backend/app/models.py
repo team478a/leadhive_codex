@@ -60,6 +60,7 @@ from app.model_form_intelligence import FormAnalysisLog, FormProfile, FormProfil
 from app.model_form_label_rule import FormLabelAiSuggestion, FormLabelRule
 from app.model_form_observation import FormObservationEvent, FormObservationEvidence
 from app.model_form_observation_job import FormObservationJobEvent
+from app.model_host_access import HostAccessSlot
 from app.model_lead_completion import (
     ContactDestination,
     LeadDestinationLink,
@@ -189,6 +190,7 @@ __all__ = [
     "User",
     "TargetProfile",
     "WorkerHeartbeat",
+    "HostAccessSlot",
     "Project",
     "ProjectMember",
     "AuthSession",

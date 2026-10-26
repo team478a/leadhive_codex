@@ -3,6 +3,7 @@ from typing import Literal
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
+from app.config import settings
 from app.model_worker_heartbeat import WorkerHeartbeat
 from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST, WORKER_INSTANCE_ID
 
@@ -16,6 +17,8 @@ def record_worker_heartbeat(
     host_name: str = WORKER_HOST,
     commit_id: str = RUNTIME_COMMIT,
     worker_type: WorkerType = "application",
+    include_operation_types: str | None = None,
+    exclude_operation_types: str | None = None,
 ) -> None:
     now = datetime.now(timezone.utc)
     statement = pg_insert(WorkerHeartbeat).values(
@@ -23,6 +26,16 @@ def record_worker_heartbeat(
         worker_type=worker_type,
         host_name=host_name,
         commit_id=commit_id,
+        include_operation_types=(
+            settings.worker_operation_types
+            if include_operation_types is None
+            else include_operation_types
+        ),
+        exclude_operation_types=(
+            settings.worker_exclude_operation_types
+            if exclude_operation_types is None
+            else exclude_operation_types
+        ),
         last_seen_at=now,
     )
     db.execute(
@@ -32,6 +45,8 @@ def record_worker_heartbeat(
                 "worker_type": statement.excluded.worker_type,
                 "host_name": statement.excluded.host_name,
                 "commit_id": statement.excluded.commit_id,
+                "include_operation_types": statement.excluded.include_operation_types,
+                "exclude_operation_types": statement.excluded.exclude_operation_types,
                 "last_seen_at": statement.excluded.last_seen_at,
             },
         )

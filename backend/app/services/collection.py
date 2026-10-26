@@ -10,6 +10,7 @@ from uuid import UUID
 import httpx
 
 from app.config import settings
+from app.services.access_slots import AccessSlotDeferred, wait_for_api_access
 from app.services.discovery_capture import capture_serper
 from app.services.processing_usage import measured_request
 from app.services.raw_capture import capture
@@ -196,6 +197,7 @@ def search_serper_page(keyword: str, region: str, max_results: int, page: int) -
         raise ExternalServiceError("Serper APIキーが設定されていません。")
     query = f"{keyword} {region}".strip()
     try:
+        wait_for_api_access("serper", settings.serper_max_requests_per_second)
         with httpx.Client(timeout=settings.external_api_timeout_seconds) as client:
             response = measured_request(
                 "serper",
@@ -212,6 +214,12 @@ def search_serper_page(keyword: str, region: str, max_results: int, page: int) -
             )
             response.raise_for_status()
             data = response.json()
+    except AccessSlotDeferred as exc:
+        raise ExternalServiceError(
+            "検索APIの全体上限により再試行待ちです。",
+            retryable=True,
+            retry_after=exc.wait_seconds,
+        ) from exc
     except (httpx.HTTPError, ValueError) as exc:
         logger.error("external API error: provider=serper type=%s", type(exc).__name__)
         status = exc.response.status_code if isinstance(exc, httpx.HTTPStatusError) else None
@@ -348,6 +356,7 @@ def search_gbizinfo(keyword: str, region: str, max_results: int) -> list[Candida
     if not settings.gbizinfo_api_token:
         raise ExternalServiceError("gBizINFO APIトークンが設定されていません。")
     try:
+        wait_for_api_access("gbizinfo", settings.gbizinfo_max_requests_per_second)
         with httpx.Client(timeout=settings.external_api_timeout_seconds) as client:
             response = measured_request(
                 "gbizinfo",
@@ -363,6 +372,12 @@ def search_gbizinfo(keyword: str, region: str, max_results: int) -> list[Candida
             )
             response.raise_for_status()
             data = response.json()
+    except AccessSlotDeferred as exc:
+        raise ExternalServiceError(
+            "法人番号APIの全体上限により再試行待ちです。",
+            retryable=True,
+            retry_after=exc.wait_seconds,
+        ) from exc
     except (httpx.HTTPError, ValueError) as exc:
         logger.error("external API error: provider=gbizinfo type=%s", type(exc).__name__)
         raise ExternalServiceError("gBizINFO検索に失敗しました。設定を確認してください。") from exc

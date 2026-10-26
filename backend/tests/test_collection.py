@@ -79,7 +79,13 @@ def test_canonicalize_url_and_parsers():
 
 def test_serper_provider_request_and_mapping(monkeypatch):
     calls = []
+    slots = []
     monkeypatch.setattr(collection.settings, "serper_api_key", "secret-test-key")
+    monkeypatch.setattr(
+        collection,
+        "wait_for_api_access",
+        lambda provider, rate: slots.append((provider, rate)),
+    )
     monkeypatch.setattr(
         collection.httpx,
         "Client",
@@ -93,6 +99,7 @@ def test_serper_provider_request_and_mapping(monkeypatch):
     assert calls[0][0] == "https://google.serper.dev/search"
     assert calls[0][1]["json"]["q"] == "運送会社 大阪"
     assert calls[0][1]["headers"]["X-API-KEY"] == "secret-test-key"
+    assert slots == [("serper", collection.settings.serper_max_requests_per_second)]
 
 
 def test_google_places_provider_paginates_and_maps(monkeypatch):

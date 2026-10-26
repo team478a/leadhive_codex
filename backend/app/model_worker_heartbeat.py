@@ -16,6 +16,8 @@ class WorkerHeartbeat(Base):
     )
     host_name: Mapped[str] = mapped_column(String(255), nullable=False)
     commit_id: Mapped[str] = mapped_column(String(40), nullable=False)
+    include_operation_types: Mapped[str] = mapped_column(String(1000), default="")
+    exclude_operation_types: Mapped[str] = mapped_column(String(1000), default="")
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
