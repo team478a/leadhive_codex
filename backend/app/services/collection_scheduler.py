@@ -4,6 +4,7 @@ The operation lease fences ingestion. A lost reservation costs budget and become
 UNKNOWN. Repeating a search needs a new reservation; network exactly-once is not claimed.
 """
 
+import logging
 import time
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -30,9 +31,63 @@ from app.services.discovery_capture import capturing_discovery
 from app.services.external_presence import extra_searches
 from app.services.processing_usage import capture_usage, persist_usage
 
+logger = logging.getLogger("leadhive")
+
 
 class LostSearchLease(Exception):
     pass
+
+
+TIMING_KEYS = (
+    "serper_ms",
+    "candidate_fetch_ms",
+    "corporate_lookup_ms",
+    "save_ms",
+    "inline_analysis_ms",
+    "inventory_ms",
+    "idle_ms",
+)
+COUNT_KEYS = (
+    "search_results",
+    "fetched_candidates",
+    "already_known",
+    "fetch_failures",
+    "new_companies",
+    "skipped_known_before_fetch",
+    "inline_analyzed",
+)
+FULL_INVENTORY_INTERVAL = 10
+TARGET_RECHECK_RATIO = 0.9
+
+
+def _metric_state(job) -> tuple[dict, dict]:
+    progress = dict((job.payload or {}).get("collection_progress") or {})
+    timing = {key: int((progress.get("timing") or {}).get(key, 0)) for key in TIMING_KEYS}
+    counts = {key: int((progress.get("counts") or {}).get(key, 0)) for key in COUNT_KEYS}
+    return timing, counts
+
+
+def _add_metrics(job, *, timing: dict | None = None, counts: dict | None = None) -> None:
+    try:
+        progress = dict((job.payload or {}).get("collection_progress") or {})
+        current_timing, current_counts = _metric_state(job)
+        for key, value in (timing or {}).items():
+            if key in current_timing:
+                current_timing[key] += max(0, int(value))
+        for key, value in (counts or {}).items():
+            if key in current_counts:
+                current_counts[key] += max(0, int(value))
+        progress.update(timing=current_timing, counts=current_counts)
+        job.payload = {**(job.payload or {}), "collection_progress": progress}
+    except Exception as exc:
+        logger.warning("collection timing could not be recorded: type=%s", type(exc).__name__)
+
+
+def _inventory(db, job, conditions):
+    started = time.perf_counter()
+    inventory = target_collection.collection_inventory(db, job, conditions)
+    _add_metrics(job, timing={"inventory_ms": (time.perf_counter() - started) * 1000})
+    return inventory
 
 
 def fence(db, job, worker_id):
@@ -172,13 +227,23 @@ def fail_attempt(
         task.state, task.stop_reason = "SOURCE_ERROR", reason
 
 
-def summarize(db, job, root, tasks, attempts, conditions, reason=None):
+def summarize(db, job, root, tasks, attempts, conditions, reason=None, inventory=None):
     # Scope all retries through recorded attempt parents, not mutable Raw hits.
     chain = dict(job.payload.get("collection_chain") or {})
     root_ids = sorted(set(chain.get("root_ids", [])) | {str(root.id)})
     ids = sorted(set(root_ids) | {str(job.id)} | {str(a.operation_job_id) for a in attempts})
-    job.payload = {**job.payload, "collection_progress": {"operation_ids": ids}}
-    inventory = target_collection.collection_inventory(db, job, conditions)
+    previous_progress = dict((job.payload or {}).get("collection_progress") or {})
+    job.payload = {
+        **job.payload,
+        "collection_progress": {**previous_progress, "operation_ids": ids},
+    }
+    inventory = inventory if inventory is not None else _inventory(db, job, conditions)
+    timing, counts = _metric_state(job)
+    now = datetime.now(timezone.utc)
+    queued_wait_ms = 0
+    if job.started_at and job.created_at:
+        queued_wait_ms = max(0, round((job.started_at - job.created_at).total_seconds() * 1000))
+    run_ms = max(0, round((now - (job.started_at or now)).total_seconds() * 1000))
     successes = sum(a.state == "SUCCEEDED" for a in attempts)
     failed_queries = sum(t.state == "SOURCE_ERROR" for t in tasks)
     job.processed_count = successes
@@ -240,6 +305,10 @@ def summarize(db, job, root, tasks, attempts, conditions, reason=None):
             unsearched_regions=len({t.region for t in tasks})
             - len({t.region for t in tasks if t.last_attempt_order}),
             current_region=next((t.region for t in tasks if t.state == "READY"), None),
+            queued_wait_ms=queued_wait_ms,
+            run_ms=run_ms,
+            timing=timing,
+            counts=counts,
         ),
     }
     return inventory
@@ -247,6 +316,8 @@ def summarize(db, job, root, tasks, attempts, conditions, reason=None):
 
 def run(db, job, payload, conditions, stopped):
     worker_id = job.worker_id
+    inventory = None
+    inventory_is_full = False
     while True:
         if stopped():
             return
@@ -258,9 +329,24 @@ def run(db, job, payload, conditions, stopped):
                     fail_attempt(
                         db, attempt, task, "INTERRUPTED_UNKNOWN", unknown=True, retryable=True
                     )
-            inventory = summarize(db, job, root, tasks, attempts, conditions)
+            if inventory is None:
+                inventory = summarize(db, job, root, tasks, attempts, conditions)
+                inventory_is_full = True
+            else:
+                summarize(db, job, root, tasks, attempts, conditions, inventory=inventory)
+            match_count = sum(v == "MATCH" for v in inventory.values())
+            if (
+                not inventory_is_full
+                and payload["target_count"]
+                and match_count >= payload["target_count"] * TARGET_RECHECK_RATIO
+            ):
+                inventory = _inventory(db, job, conditions)
+                inventory_is_full = True
             reason = None
-            if sum(v == "MATCH" for v in inventory.values()) >= payload["target_count"]:
+            if (
+                inventory_is_full
+                and sum(v == "MATCH" for v in inventory.values()) >= payload["target_count"]
+            ):
                 reason = "TARGET_REACHED"
             elif len(attempts) >= min(
                 REQUEST_BUDGET, root.payload["query_plan"]["snapshot"]["request_budget"]
@@ -273,7 +359,8 @@ def run(db, job, payload, conditions, stopped):
                     else "QUERIES_EXHAUSTED"
                 )
             if reason:
-                summarize(db, job, root, tasks, attempts, conditions, reason)
+                inventory = _inventory(db, job, conditions)
+                summarize(db, job, root, tasks, attempts, conditions, reason, inventory)
                 db.commit()
                 return
             active_tasks = tasks
@@ -285,9 +372,11 @@ def run(db, job, payload, conditions, stopped):
             task = choose_task(active_tasks, datetime.now(timezone.utc))
             if task is None:
                 db.commit()
+                idle_started = time.perf_counter()
                 time.sleep(
                     0.2
                 )  # Heartbeat/cancel checked every loop, no long lease-blocking sleep.
+                _add_metrics(job, timing={"idle_ms": (time.perf_counter() - idle_started) * 1000})
                 continue
             collection = CollectionJob(
                 project_id=job.project_id,
@@ -310,8 +399,17 @@ def run(db, job, payload, conditions, stopped):
             db.add(attempt)
             db.flush()
             task.last_attempt_order = attempt.attempt_order
-            summarize(db, job, root, tasks, [*attempts, attempt], conditions)
+            summarize(
+                db,
+                job,
+                root,
+                tasks,
+                [*attempts, attempt],
+                conditions,
+                inventory=inventory,
+            )
             db.commit()  # Reservation is durable BEFORE any HTTP or raw persistence.
+            serper_started = time.perf_counter()
             with capture_usage() as usage, capturing_discovery() as discovery:
                 try:
                     candidates = search_serper_page(
@@ -320,6 +418,7 @@ def run(db, job, payload, conditions, stopped):
                     error = None
                 except ExternalServiceError as exc:
                     candidates, error = [], exc
+            _add_metrics(job, timing={"serper_ms": (time.perf_counter() - serper_started) * 1000})
             persist_discovery(db, collection, discovery)
             persist_usage(db, usage, job.project_id, collection_job_id=collection.id)
             if stopped():
@@ -341,21 +440,42 @@ def run(db, job, payload, conditions, stopped):
                 )
                 db.commit()
                 continue
-            before = target_collection.collection_inventory(db, job, conditions)
+            before = dict(inventory)
             raw_candidate_count = len(candidates)
 
             def finish():
-                after = target_collection.collection_inventory(db, job, conditions)
+                nonlocal inventory, inventory_is_full
+                after = dict(before)
+                after.update(
+                    target_collection.collection_job_inventory(db, collection.id, conditions)
+                )
                 growth = len(after.keys() - before.keys())
                 attempt.state, attempt.new_candidate_count = "SUCCEEDED", growth
                 attempt.finished_at = datetime.now(timezone.utc)
                 successful_page(task, growth)
                 collection.found_count = raw_candidate_count
+                inventory = after
+                inventory_is_full = False
+                if attempt.attempt_order % FULL_INVENTORY_INTERVAL == 0:
+                    inventory = _inventory(db, job, conditions)
+                    inventory_is_full = True
 
             if payload.get("collection_method") == "form_first":
                 from app.services.form_first_collection import process_search_results
 
                 candidates = process_search_results(db, collection, candidates, payload, stopped)
+                candidates = target_collection.bounded_candidates(
+                    db,
+                    collection,
+                    candidates,
+                    payload["target_count"] - sum(v == "MATCH" for v in before.values()),
+                )
+                form_metrics = getattr(collection, "_form_first_metrics", {})
+                _add_metrics(
+                    job,
+                    timing=form_metrics.get("timing"),
+                    counts=form_metrics.get("counts"),
+                )
             else:
                 candidates = target_collection.bounded_candidates(
                     db,
@@ -363,6 +483,7 @@ def run(db, job, payload, conditions, stopped):
                     candidates,
                     payload["target_count"] - sum(v == "MATCH" for v in before.values()),
                 )
+            save_started = time.perf_counter()
             save_candidates(
                 db,
                 collection,
@@ -370,11 +491,27 @@ def run(db, job, payload, conditions, stopped):
                 task.keyword,
                 before_commit=finish,
             )
+            _add_metrics(job, timing={"save_ms": (time.perf_counter() - save_started) * 1000})
+            if payload.get("collection_method") == "form_first":
+                _add_metrics(job, counts={"new_companies": attempt.new_candidate_count or 0})
             collection.found_count = raw_candidate_count
             if payload.get("collection_method") == "form_first":
                 from app.services.form_first_collection import queue_saved_company_analysis
 
+                analysis_started = time.perf_counter()
                 queue_saved_company_analysis(db, collection, candidates)
+                inline_ms = (time.perf_counter() - analysis_started) * 1000
+                form_metrics = getattr(collection, "_form_first_metrics", {})
+                if (form_metrics.get("counts") or {}).get("inline_analyzed"):
+                    _add_metrics(job, timing={"inline_analysis_ms": inline_ms})
+                _add_metrics(
+                    job,
+                    counts={
+                        "inline_analyzed": (form_metrics.get("counts") or {}).get(
+                            "inline_analyzed", 0
+                        )
+                    },
+                )
             # Existing bounded optional presence enrichment remains separate from discovery.
             if payload.get("presence_search") and not stopped():
                 collection.presence_search_plan = payload["presence_search"]
@@ -399,6 +536,7 @@ def run(db, job, payload, conditions, stopped):
                         != "NO_MATCH"
                     ),
                 )
+            db.commit()
         except LostSearchLease:
             db.rollback()
             return

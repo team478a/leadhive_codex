@@ -177,6 +177,10 @@ macOS / LinuxではPython実行パスを`backend/.venv/bin/python`に読み替�
 | `AI_MAX_WEBSITE_CHARS` | AIへ渡すWeb本文の最大文字数（既定30000） |
 | `WORKER_LEASE_SECONDS` | 実行中ジョブのリース秒数（60〜3600、既定300） |
 | `WORKER_MAX_ATTEMPTS` | ワーカー停止時の最大試行回数（1〜10、既定3） |
+| `WORKER_OPERATION_TYPES` | workerが取得する処理種別のカンマ区切り。未設定は全種別 |
+| `WORKER_EXCLUDE_OPERATION_TYPES` | workerが取得しない処理種別のカンマ区切り |
+| `FORM_FIRST_FETCH_CONCURRENCY` | フォーム起点候補の別ホスト並行取得数（1〜8、既定4） |
+| `FORM_FIRST_INLINE_SITE_ANALYSIS` | `true`でフォーム起点収集中のサイト解析を旧方式へ戻す（既定`false`） |
 | `PUBLIC_APP_URL` | メールの配信停止リンクに使う公開アプリURL |
 
 パスワードはArgon2idでハッシュ化。認証はランダムな不透明トークンをHttpOnly / SameSite=Lax

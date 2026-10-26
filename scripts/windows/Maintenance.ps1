@@ -75,7 +75,7 @@ function Suspend-LeadHiveForMaintenance {
     Set-LeadHiveEnvironmentValue 'LEADHIVE_OUTBOUND_ENABLED' 'false'
     Set-LeadHiveEnvironmentValue 'LEADHIVE_WORKER_PAUSED' 'true'
     Set-LeadHiveEnvironmentValue 'LEADHIVE_MAINTENANCE_REQUIRED' 'true'
-    Invoke-LeadHiveCompose stop api worker web
+    Invoke-LeadHiveCompose stop api worker worker-collect web
     Invoke-LeadHiveCompose -ComposeArguments @('up', '-d', '--wait', 'db')
 }
 
@@ -86,7 +86,7 @@ function Complete-LeadHiveMaintenance {
         $url = Wait-LeadHive
         Set-LeadHiveEnvironmentValue 'LEADHIVE_MAINTENANCE_REQUIRED' 'false'
     } catch {
-        Invoke-LeadHiveCompose stop api worker web
+        Invoke-LeadHiveCompose stop api worker worker-collect web
         throw
     }
     Write-Host "Maintenance completed: $url. Worker remains paused."

@@ -1,4 +1,6 @@
+import time
 from datetime import datetime, timedelta, timezone
+from threading import Lock
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -21,6 +23,142 @@ from app.services.collection_query_plan import plan_hash, plan_snapshot, planned
 from app.services.contact_discovery import contact_pages
 from app.services.scraper import FetchedPage, ScrapeError
 from tests.test_collection import make_project
+
+
+def test_known_analyzed_company_is_skipped_before_fetch(auth, db, monkeypatch):
+    project = make_project(auth)
+    project_id = UUID(project["id"])
+    company = Company(
+        project_id=project_id,
+        company_name="株式会社既存",
+        website_url="https://known.test/",
+        domain="known.test",
+        source="form_first",
+        contact_url="https://known.test/contact",
+        form_first_contact_url="https://known.test/contact",
+    )
+    db.add(company)
+    db.flush()
+    db.add(
+        FormProfile(
+            company_id=company.id,
+            form_url=company.contact_url,
+            form_status="READY",
+            last_analyzed_at=datetime.now(timezone.utc),
+        )
+    )
+    collection = start_job(db, project_id, "serper", "お問い合わせ", "東京都")
+    hit = CollectionDiscoveryHit(
+        collection_job_id=collection.id,
+        position=1,
+        snapshot={"link": company.contact_url, "title": "お問い合わせ"},
+        raw_hash="f" * 64,
+        classification="OFFICIAL_SITE_CANDIDATE",
+        classification_reason="OFFICIAL_IDENTITY_NOT_VERIFIED",
+        disposition="CAPTURED",
+        retain_until=datetime.now(timezone.utc) + timedelta(days=30),
+    )
+    db.add(hit)
+    db.commit()
+    monkeypatch.setattr(
+        form_first,
+        "_fetch_candidate",
+        lambda _url: pytest.fail("analyzed known company must not be fetched"),
+    )
+
+    accepted = form_first.process_search_results(
+        db,
+        collection,
+        [Candidate("お問い合わせ", company.contact_url, discovery_hit_id=hit.id)],
+        {},
+        lambda: False,
+    )
+
+    assert accepted == []
+    db.refresh(hit)
+    assert hit.classification_reason == "REJECT_ALREADY_KNOWN"
+    assert hit.disposition == "DUPLICATE"
+    assert collection._form_first_metrics["counts"]["skipped_known_before_fetch"] == 1
+
+
+def test_candidate_fetch_concurrency_serializes_hosts_and_honors_stop(monkeypatch):
+    monkeypatch.setattr(settings, "form_first_fetch_concurrency", 2)
+    lock = Lock()
+    active_by_host: dict[str, int] = {}
+    max_by_host: dict[str, int] = {}
+    global_active = 0
+    max_global = 0
+
+    def fetch(url):
+        nonlocal global_active, max_global
+        host = url.split("/")[2]
+        with lock:
+            active_by_host[host] = active_by_host.get(host, 0) + 1
+            max_by_host[host] = max(max_by_host.get(host, 0), active_by_host[host])
+            global_active += 1
+            max_global = max(max_global, global_active)
+        time.sleep(0.02)
+        with lock:
+            active_by_host[host] -= 1
+            global_active -= 1
+        return "FORM_FOUND", []
+
+    monkeypatch.setattr(form_first, "_fetch_candidate", fetch)
+    items = [
+        (0, "https://a.test/1", "a.test"),
+        (1, "https://a.test/2", "a.test"),
+        (2, "https://b.test/1", "b.test"),
+        (3, "https://b.test/2", "b.test"),
+    ]
+    result = form_first._fetch_candidates_by_host(items, lambda: False)
+    assert list(result) == [0, 2, 1, 3]
+    assert max_global == 2
+    assert max_by_host == {"a.test": 1, "b.test": 1}
+
+    checks = 0
+
+    def stopped():
+        nonlocal checks
+        checks += 1
+        return checks > 1
+
+    stopped_result = form_first._fetch_candidates_by_host(items, stopped)
+    assert set(stopped_result) == {0, 2}
+
+
+def test_site_analysis_is_deferred_by_default(auth, db, monkeypatch):
+    project = make_project(auth)
+    project_id = UUID(project["id"])
+    company = Company(
+        project_id=project_id,
+        company_name="株式会社Deferred",
+        website_url="https://deferred.test/",
+        domain="deferred.test",
+        source="form_first",
+        contact_url="https://deferred.test/contact",
+        form_first_contact_url="https://deferred.test/contact",
+    )
+    db.add(company)
+    collection = start_job(db, project_id, "serper", "お問い合わせ", "東京都")
+    db.commit()
+    monkeypatch.setattr(settings, "form_first_inline_site_analysis", False)
+    form_first.queue_saved_company_analysis(
+        db,
+        collection,
+        [
+            Candidate(
+                company_name=company.company_name,
+                website_url=company.website_url,
+                contact_url=company.contact_url,
+                form_first_contact_url=company.form_first_contact_url,
+                collection_method="form_first",
+                site_discovery={"form_first_form_status": "FORM_FOUND"},
+            )
+        ],
+    )
+    queued = db.scalar(select(OperationJob).where(OperationJob.operation_type == "site_analysis"))
+    assert queued is not None
+    assert str(company.id) in queued.payload["company_ids"]
 
 
 def test_form_first_queries_are_versioned_and_keep_the_query_modifiers():
@@ -554,6 +692,7 @@ def test_form_first_companies_join_active_site_analysis_job(auth, db, status):
 
 
 def test_existing_company_reuses_form_first_pages_for_site_analysis(auth, db, monkeypatch):
+    monkeypatch.setattr(settings, "form_first_inline_site_analysis", True)
     project = make_project(auth)
     project_id = UUID(project["id"])
     company = Company(
@@ -646,6 +785,7 @@ def test_existing_company_reuses_form_first_pages_for_site_analysis(auth, db, mo
 
 
 def test_new_form_first_company_uses_existing_candidate_ingestion(auth, db, monkeypatch):
+    monkeypatch.setattr(settings, "form_first_inline_site_analysis", True)
     project = make_project(auth)
     project_id = UUID(project["id"])
     collection = start_job(db, project_id, "serper", "intitle:お問い合わせ", "東京都")

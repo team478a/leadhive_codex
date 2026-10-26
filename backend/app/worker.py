@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from threading import Event, Thread
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.exc import DBAPIError, OperationalError
 
 from app.config import settings
@@ -57,6 +57,17 @@ logger = logging.getLogger("leadhive")
 EMAIL_CLAIM_LOCK_ID = 4_781_001
 HEARTBEAT_INTERVAL_SECONDS = 30
 READINESS_DATABASE_RETRY_LIMIT = 4
+SITE_ANALYSIS_BATCH_LIMIT = 50
+SITE_ANALYSIS_TIME_LIMIT_SECONDS = 300
+
+
+def _operation_type_set(value: str) -> set[str]:
+    return {item.strip() for item in value.split(",") if item.strip()}
+
+
+def _collect_only_worker() -> bool:
+    included = _operation_type_set(settings.worker_operation_types)
+    return bool(included) and included <= {"collect_search"}
 
 
 def lease_deadline() -> datetime:
@@ -544,34 +555,45 @@ def claim_job(db) -> OperationJob | None:
     from app.services.sending_window import allowed
 
     sending_allowed = allowed(db)
+    filters = [
+        OperationJob.status == "queued",
+        OperationJob.operation_type != "cf7_observation",
+        OperationJob.operation_type != "browser_form_analysis",
+        OperationJob.operation_type != "form_delivery" if not sending_allowed else True,
+        OperationJob.operation_type.in_(
+            (
+                "collect_search",
+                "web_analysis",
+                "site_analysis",
+                "ai_analysis",
+                "form_intelligence",
+                "prepare_outreach",
+                "extract_articles",
+                "form_dm_readiness",
+                "form_approval_batch",
+                "bulk_template_drafts",
+                "master_site_backfill",
+                "consent_policy",
+                "form_label_rule",
+            )
+        )
+        if not settings.outbound_enabled
+        else True,
+    ]
+    included = _operation_type_set(settings.worker_operation_types)
+    excluded = _operation_type_set(settings.worker_exclude_operation_types)
+    if included:
+        filters.append(OperationJob.operation_type.in_(included))
+    if excluded:
+        filters.append(OperationJob.operation_type.notin_(excluded))
     job = db.scalar(
         select(OperationJob)
-        .where(
-            OperationJob.status == "queued",
-            OperationJob.operation_type != "cf7_observation",
-            OperationJob.operation_type != "browser_form_analysis",
-            OperationJob.operation_type != "form_delivery" if not sending_allowed else True,
-            OperationJob.operation_type.in_(
-                (
-                    "collect_search",
-                    "web_analysis",
-                    "site_analysis",
-                    "ai_analysis",
-                    "form_intelligence",
-                    "prepare_outreach",
-                    "extract_articles",
-                    "form_dm_readiness",
-                    "form_approval_batch",
-                    "bulk_template_drafts",
-                    "master_site_backfill",
-                    "consent_policy",
-                    "form_label_rule",
-                )
-            )
-            if not settings.outbound_enabled
-            else True,
+        .where(*filters)
+        .order_by(
+            case((OperationJob.operation_type == "collect_search", 0), else_=1),
+            OperationJob.created_at,
+            OperationJob.id,
         )
-        .order_by(OperationJob.created_at, OperationJob.id)
         .with_for_update(skip_locked=True)
         .limit(1)
     )
@@ -855,8 +877,12 @@ def run_site_analysis(db, job: OperationJob, worker_id: uuid.UUID) -> None:
 
     job_id = job.id
     project_id = job.project_id
-    processed_ids: set[uuid.UUID] = set()
+    processed_ids: set[uuid.UUID] = {
+        uuid.UUID(value) for value in (job.payload or {}).get("processed_company_ids", [])
+    }
     explicit_ids = bool((job.payload or {}).get("company_ids"))
+    run_started = time.monotonic()
+    batch_processed = 0
 
     while True:
         current = db.get(OperationJob, job_id)
@@ -925,6 +951,14 @@ def run_site_analysis(db, job: OperationJob, worker_id: uuid.UUID) -> None:
         for company_id in company_ids:
             if stop_requested(db, current, worker_id):
                 return
+            delay = max(
+                0.0,
+                float((current.payload or {}).get("form_first_not_before_epoch", 0)) - time.time(),
+            )
+            if delay:
+                time.sleep(min(delay, 3.0))
+                if stop_requested(db, current, worker_id):
+                    return
             success = False
             company = db.get(Company, company_id)
             if company is not None:
@@ -949,6 +983,31 @@ def run_site_analysis(db, job: OperationJob, worker_id: uuid.UUID) -> None:
             if not progress(db, current, worker_id, success):
                 return
             processed_ids.add(company_id)
+            batch_processed += 1
+            current = db.get(OperationJob, job_id)
+            if current is None:
+                return
+            latest_payload = dict(current.payload or {})
+            latest_payload["company_ids"] = [
+                value
+                for value in latest_payload.get("company_ids", [])
+                if uuid.UUID(value) != company_id
+            ]
+            if latest_payload.get("force") and latest_payload.get("scan_unanalyzed"):
+                latest_payload["processed_company_ids"] = [
+                    str(value) for value in sorted(processed_ids, key=str)
+                ]
+            current.payload = latest_payload
+            if (latest_payload.get("company_ids") or latest_payload.get("scan_unanalyzed")) and (
+                batch_processed >= SITE_ANALYSIS_BATCH_LIMIT
+                or time.monotonic() - run_started >= SITE_ANALYSIS_TIME_LIMIT_SECONDS
+            ):
+                current.status = "queued"
+                current.worker_id = None
+                current.lease_expires_at = None
+                db.commit()
+                return
+            db.commit()
             db.expunge_all()
             db.add(job)
             db.refresh(job)
@@ -1622,15 +1681,17 @@ def run_once() -> bool:
     with SessionLocal() as db:
         apply_application_settings(db)
         enqueue_due_schedules(db)
-        enqueue_due_refresh_schedules(db)
+        collect_only = _collect_only_worker()
+        if not collect_only:
+            enqueue_due_refresh_schedules(db)
         recover_stale_jobs(db)
-        if settings.outbound_enabled:
+        if settings.outbound_enabled and not collect_only:
             recover_stale_email_deliveries(db)
-        if sync_inbound_mail(db):
+        if not collect_only and sync_inbound_mail(db):
             return True
         from app.services import approved_form, approved_form_worker
 
-        form_dispatch = approved_form.claim(db)
+        form_dispatch = None if collect_only else approved_form.claim(db)
         if form_dispatch is not None:
             form_dispatch_id = form_dispatch.id
             try:
@@ -1643,7 +1704,7 @@ def run_once() -> bool:
                     type(exc).__name__,
                 )
             return True
-        delivery = claim_email_delivery(db)
+        delivery = None if collect_only else claim_email_delivery(db)
         if delivery is not None:
             run_email_delivery(db, delivery)
             return True

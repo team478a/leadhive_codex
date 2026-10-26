@@ -134,7 +134,7 @@ rollbackには元のbackupと旧版の検証済み配布物を使用する。旧
 
 ## 技術構成
 
-`compose.local.yaml`がPostgreSQL、FastAPI、バックグラウンドワーカー、Nginx配信のReact画面を起動する。DBは外部へ公開せず、Web画面だけを`127.0.0.1`へ公開する。Migrationは起動・更新時にAlembicで適用する。
+`compose.local.yaml`がPostgreSQL、FastAPI、通常のバックグラウンドワーカー、収集専用の`worker-collect`、Nginx配信のReact画面を起動する。通常workerは`collect_search`を除外し、収集専用workerは`collect_search`だけを取得する。DBは外部へ公開せず、Web画面だけを`127.0.0.1`へ公開する。Migrationは起動・更新時にAlembicで適用する。
 
 ## 配布パッケージの作成
 

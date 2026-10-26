@@ -34,7 +34,9 @@ function Invoke-LeadHiveCompose {
     $values = Read-LeadHiveEnvironment
     Get-LeadHiveDatabaseName | Out-Null
     if ($values['LEADHIVE_WORKER_PAUSED'] -eq 'true' -and $ComposeArguments -contains 'up' -and
-        $ComposeArguments -contains 'worker') { throw 'Worker is paused. Use Resume-LeadHive.cmd after recovery review.' }
+        ($ComposeArguments -contains 'worker' -or $ComposeArguments -contains 'worker-collect')) {
+        throw 'Worker is paused. Use Resume-LeadHive.cmd after recovery review.'
+    }
     & docker compose -p $script:LeadHiveProject --env-file $script:LeadHiveEnv -f $script:LeadHiveCompose @ComposeArguments
     if ($LASTEXITCODE -ne 0) {
         throw "Docker Compose command failed."

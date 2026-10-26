@@ -1,15 +1,19 @@
+import csv
+import io
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.database import get_db
 from app.models import (
     AnalysisRefreshSchedule,
+    CollectionDiscoveryHit,
     CollectionJob,
+    CollectionQueryTask,
     Company,
     OperationJob,
     SearchSchedule,
@@ -94,6 +98,47 @@ def owned_operation(job_id: UUID, db: Session, user: User) -> OperationJob:
         raise HTTPException(404, "処理ジョブが見つかりません。")
     project_access(job.project_id, db, user)
     return job
+
+
+def _collection_query_rows(db: Session, job: OperationJob) -> list[dict]:
+    progress = (job.payload or {}).get("collection_progress") or {}
+    operation_ids = [UUID(value) for value in progress.get("operation_ids", [])] or [job.id]
+    root_id = UUID((job.payload or {}).get("query_plan", {}).get("root_operation_id", str(job.id)))
+    stop_reasons = {
+        (task.keyword, task.region): task.stop_reason or task.state
+        for task in db.scalars(
+            select(CollectionQueryTask).where(CollectionQueryTask.root_operation_id == root_id)
+        )
+    }
+    rows = db.execute(
+        select(
+            CollectionJob.keyword,
+            CollectionJob.region,
+            func.count(func.distinct(CollectionJob.id)),
+            func.count(CollectionDiscoveryHit.id),
+            func.sum(case((CollectionDiscoveryHit.disposition == "DUPLICATE", 1), else_=0)),
+            func.sum(case((CollectionDiscoveryHit.disposition == "SAVED", 1), else_=0)),
+        )
+        .outerjoin(
+            CollectionDiscoveryHit,
+            CollectionDiscoveryHit.collection_job_id == CollectionJob.id,
+        )
+        .where(CollectionJob.operation_job_id.in_(operation_ids))
+        .group_by(CollectionJob.keyword, CollectionJob.region)
+        .order_by(CollectionJob.region, CollectionJob.keyword)
+    ).all()
+    return [
+        {
+            "keyword": keyword,
+            "region": region,
+            "search_count": int(search_count or 0),
+            "candidate_count": int(candidate_count or 0),
+            "known_count": int(known_count or 0),
+            "new_count": int(new_count or 0),
+            "stop_reason": stop_reasons.get((keyword, region), ""),
+        }
+        for keyword, region, search_count, candidate_count, known_count, new_count in rows
+    ]
 
 
 def owned_schedule(schedule_id: UUID, db: Session, user: User) -> SearchSchedule:
@@ -801,6 +846,41 @@ def get_operation(
         raise HTTPException(404, "処理ジョブが見つかりません。")
     project_access(row.project_id, db, user, write=False)
     return operation_summary(row)
+
+
+@router.get("/operations/{job_id}/collection-query-stats")
+def collection_query_stats(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    job = owned_operation(job_id, db, user)
+    if job.operation_type != "collect_search":
+        raise HTTPException(404, "収集処理が見つかりません。")
+    return _collection_query_rows(db, job)
+
+
+@router.get("/operations/{job_id}/collection-query-stats.csv")
+def collection_query_stats_csv(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    job = owned_operation(job_id, db, user)
+    if job.operation_type != "collect_search":
+        raise HTTPException(404, "収集処理が見つかりません。")
+    output = io.StringIO()
+    writer = csv.writer(output, lineterminator="\r\n")
+    writer.writerow(("検索語", "地域", "検索回数", "候補数", "登録済み数", "新規数", "終了理由"))
+    for row in _collection_query_rows(db, job):
+        writer.writerow(row.values())
+    return Response(
+        content="\ufeff" + output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="collection-query-stats-{job.id}.csv"'
+        },
+    )
 
 
 @router.get("/operations/{job_id}/collection-conditions")

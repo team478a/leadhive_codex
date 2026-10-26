@@ -7,6 +7,7 @@ import { PresenceRequirements } from './PresenceRequirements'
 import { CollectionConditions, type ConditionRevision } from './CollectionConditions'
 import { ConditionCollectionReport } from './ConditionCollectionReport'
 import { CollectionProgress } from './CollectionProgress'
+import { CollectionQueryStats } from './CollectionQueryStats'
 import { CollectionDiscovery } from './CollectionDiscovery'
 import { Field } from './forms'
 import { prefectures } from './prefectures'
@@ -336,6 +337,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
         {visibleOperations.length === 0 ? <p className="muted mt-4">処理履歴はまだありません。</p> : visibleOperations.map(job =>
             <article className="job-row block" key={job.id}><div className="flex justify-between gap-3"><strong>{job.operation_type === 'prepare_outreach' ? '営業準備' : ['web_analysis', 'site_analysis'].includes(job.operation_type) ? 'サイト解析' : job.operation_type === 'ai_analysis' ? 'AI判定' : job.operation_type === 'form_intelligence' ? 'フォーム解析' : job.operation_type === 'extract_articles' ? '記事から企業を抽出' : '検索収集'}</strong><span className="badge">{operationStatusNames[job.status]}</span></div>
             {job.operation_type === 'extract_articles' ? <p className="muted my-2 text-sm">記事 {job.processed_count} / {job.total_count} 件（新規保存 {job.article_saved_count ?? 0} 社・失敗 {job.failed_count} 件）</p> : job.collection_progress ? <CollectionProgress progress={job.collection_progress} /> : <p className="muted my-2 text-sm">{job.processed_count} / {job.total_count} 件（成功 {job.success_count}・失敗 {job.failed_count}・試行 {job.attempt_count}）</p>}
+            {job.operation_type === 'collect_search' && job.collection_progress && <CollectionQueryStats jobId={job.id} />}
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>キャンセル</button>}

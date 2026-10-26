@@ -47,6 +47,24 @@ def collection_inventory(db, job, conditions):
     }
 
 
+def collection_job_inventory(db, collection_job_id, conditions):
+    """Evaluate only companies newly saved by one search attempt."""
+    companies = db.scalars(
+        select(Company)
+        .join(LeadSourceObservation, LeadSourceObservation.company_id == Company.id)
+        .where(
+            LeadSourceObservation.collection_job_id == collection_job_id,
+            LeadSourceObservation.identity_reasons.contains(["SINGLE_SOURCE_DISCOVERY"]),
+            Company.analysis_status.notin_(("duplicate", "excluded")),
+        )
+        .distinct()
+    ).all()
+    return {
+        str(company.id): evaluate(db, company, conditions)["state"] if conditions else "MATCH"
+        for company in companies
+    }
+
+
 def collected_companies(db, job, conditions):
     return {
         company_id

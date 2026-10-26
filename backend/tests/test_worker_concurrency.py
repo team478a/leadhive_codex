@@ -153,6 +153,83 @@ def test_two_workers_claim_each_operation_once():
         delete_project(project_id, user_id)
 
 
+def test_worker_operation_type_filters_are_additive(monkeypatch):
+    project_id, user_id = create_project()
+    with SessionLocal() as db:
+        db.add_all(
+            (
+                OperationJob(project_id=project_id, operation_type="collect_search", payload={}),
+                OperationJob(project_id=project_id, operation_type="web_analysis", payload={}),
+            )
+        )
+        db.commit()
+    try:
+        monkeypatch.setattr(worker.settings, "worker_operation_types", "collect_search")
+        monkeypatch.setattr(worker.settings, "worker_exclude_operation_types", "")
+        with SessionLocal() as db:
+            claimed = worker.claim_job(db)
+            assert claimed.operation_type == "collect_search"
+            claimed.status = "completed"
+            claimed.worker_id = None
+            claimed.lease_expires_at = None
+            db.commit()
+            assert worker.claim_job(db) is None
+
+        monkeypatch.setattr(worker.settings, "worker_operation_types", "")
+        monkeypatch.setattr(worker.settings, "worker_exclude_operation_types", "collect_search")
+        with SessionLocal() as db:
+            claimed = worker.claim_job(db)
+            assert claimed.operation_type == "web_analysis"
+    finally:
+        delete_project(project_id, user_id)
+
+
+def test_site_analysis_requeues_at_batch_boundary_without_reprocessing(monkeypatch):
+    project_id, user_id = create_project()
+    company_ids = [uuid.uuid4(), uuid.uuid4()]
+    with SessionLocal() as db:
+        db.add_all(
+            Company(
+                id=company_id,
+                project_id=project_id,
+                company_name=f"Site {index}",
+                website_url=f"https://site-{index}.example/",
+                domain=f"site-{index}.example",
+                source="url",
+            )
+            for index, company_id in enumerate(company_ids)
+        )
+        job = OperationJob(
+            project_id=project_id,
+            operation_type="site_analysis",
+            payload={"company_ids": [str(value) for value in company_ids]},
+        )
+        db.add(job)
+        db.commit()
+        job_id = job.id
+    analyzed = []
+    monkeypatch.setattr(worker, "SITE_ANALYSIS_BATCH_LIMIT", 1)
+    monkeypatch.setattr(worker.settings, "worker_operation_types", "site_analysis")
+    monkeypatch.setattr(worker.settings, "worker_exclude_operation_types", "")
+    monkeypatch.setattr(
+        "app.services.site_analysis.analyze_site_company",
+        lambda _db, company, **_kwargs: analyzed.append(company.id) or True,
+    )
+    try:
+        assert worker.run_once() is True
+        with SessionLocal() as db:
+            queued = db.get(OperationJob, job_id)
+            assert queued.status == "queued"
+            assert queued.payload["company_ids"] == [str(company_ids[1])]
+        assert worker.run_once() is True
+        with SessionLocal() as db:
+            completed = db.get(OperationJob, job_id)
+            assert completed.status == "completed"
+        assert analyzed == company_ids
+    finally:
+        delete_project(project_id, user_id)
+
+
 def test_two_workers_recover_one_expired_lease_once(monkeypatch):
     project_id, user_id = create_project()
     barrier = Barrier(2)
