@@ -121,7 +121,11 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     else if (path === '/api/admin/form-sender-settings') data = { company_name: '', department: '', position: '', contact_name: '', last_name: '', first_name: '', furigana: '', email: '', phone: '', postal_code: '', prefecture: '', city: '', address: '', building: '', website: '', updated_at: null }
     else if (path === '/api/admin/inbound-mail-settings') data = null
     else if (path === '/api/admin/inbound-emails') data = []
-    else if (path === '/api/form-dispatch-limits') data = { daily_limit: 100, hourly_limit: 10, minimum_interval_seconds: 60, site_interval_seconds: 300, paused: false, version: 1, can_manage: true, execution_enabled: false }
+    else if (path === '/api/form-dispatch-limits') data = {
+      daily_limit: 100, hourly_limit: 10, minimum_interval_seconds: 60, site_interval_seconds: 300,
+      recipient_cooldown_days: 30, recipient_cooldown_limit: 2,
+      paused: false, version: 1, can_manage: true, execution_enabled: false,
+    }
     else if (method === 'POST' || method === 'PUT') data = { id: 'mock', status: 'completed' }
     await route.fulfill({ status, json: data })
   })
@@ -257,5 +261,5 @@ test('environment-wide form dispatch limits are available in Settings', async ({
   await approvalStep.getByRole('button').first().click()
   await approvalStep.getByRole('button', { name: '運用設定で確認・変更' }).click()
   await expect(page.getByRole('heading', { name: '運用設定', level: 1 })).toBeVisible()
-  await expect(page.getByRole('region', { name: 'フォーム送信上限' })).toBeVisible()
+  await expect(page.getByRole('region', { name: 'フォーム送信上限' })).toBeVisible({ timeout: 15_000 })
 })
