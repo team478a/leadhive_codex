@@ -388,6 +388,8 @@ LeadHive V2 は、対象企業・店舗の収集、不足情報の補完、公�
 - [220_FORM_REVIEW_REDUCTION_Q1.md](220_FORM_REVIEW_REDUCTION_Q1.md): フォーム確認キューの理由・未解決項目・同意欄の計測、隠し項目の折りたたみ、読み仮名辞書の補完
 - [221_FORM_FIRST_COLLECTION_SPEEDUP.md](221_FORM_FIRST_COLLECTION_SPEEDUP.md): フォーム起点収集の事前重複判定、別ホスト並行取得、解析分離、収集専用worker、所要時間・検索語×地域集計
 
+- [222_MULTI_PROJECT_COLLECTION_CAPACITY.md](222_MULTI_PROJECT_COLLECTION_CAPACITY.md): 複数プロジェクト収集に先立つ管理者向け実行環境診断・ローカル容量調査・第2部の開始条件
+
 - [COLLECTION_QUERY_SCHEDULER.md](COLLECTION_QUERY_SCHEDULER.md): 工程2・公平な検索配分、停滞2回、永続予算、再開と部分結果
 
 - [COLLECTION_SITE_EXTRACTION.md](COLLECTION_SITE_EXTRACTION.md): 工程3・企業情報の根拠、公式照合、段階的問い合わせ探索と取得診断

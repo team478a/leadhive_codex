@@ -1,4 +1,11 @@
 export interface User { id: string; email: string; is_admin: boolean; created_at: string }
+export interface RuntimeCapacity {
+  generated_at: string
+  process: { cpu_count: number | null; cpu_limit: number | null; memory_limit_bytes: number | null; memory_current_bytes: number | null }
+  database: { max_connections: number | null; shared_buffers: string | null; current_connections: number | null; database_size_bytes: number | null; pool_size: number; max_overflow: number }
+  workers: Array<{ instance_id: string; worker_type: string; host_name: string; commit_id: string; last_seen_at: string; include_operation_types: string[] | null; exclude_operation_types: string[] | null; current_operation: { operation_type: string; project_id: string; project_name: string } | null }>
+  jobs_last_24_hours: Array<{ operation_type: string; count: number; total_run_seconds: number; average_wait_seconds: number }>
+}
 export interface ApplicationSettings {
   public_app_url: string; openai_model: string; gbizinfo_api_base_url: string; auto_site_analysis: boolean
   openai_api_key_source: 'database' | 'environment' | 'unset'

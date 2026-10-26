@@ -19,6 +19,7 @@ from app.models import (
     SmtpSettings,
     User,
 )
+from app.runtime_capacity import runtime_capacity
 from app.schema_settings import SmtpConnectionTestOut
 from app.schemas import (
     ApplicationSettingsInput,
@@ -58,6 +59,11 @@ from app.services.smtp_connection import check_smtp_connection
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api/admin")
+
+
+@router.get("/runtime-capacity")
+def get_runtime_capacity(db: Session = Depends(get_db), user: User = Depends(current_admin)):
+    return runtime_capacity(db)
 
 
 def application_settings_out(value: ApplicationSettings | None) -> ApplicationSettingsOut:

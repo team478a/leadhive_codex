@@ -31,7 +31,7 @@ from app.models import (
     SearchSchedule,
     TargetProfile,
 )
-from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST
+from app.runtime_version import RUNTIME_COMMIT, WORKER_HOST, WORKER_INSTANCE_ID
 from app.services.ai_analysis import analyze_company_ai
 from app.services.application_settings import apply_application_settings
 from app.services.bulk_form_delivery import process_form_batch_item
@@ -92,6 +92,7 @@ def stamp_operation_runtime(job: OperationJob) -> None:
         **(job.payload or {}),
         "executed_by_commit": RUNTIME_COMMIT,
         "executed_by_host": WORKER_HOST,
+        "executed_by_instance_id": WORKER_INSTANCE_ID,
     }
 
 

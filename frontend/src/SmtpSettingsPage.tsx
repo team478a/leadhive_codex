@@ -4,6 +4,7 @@ import { FormDispatchLimitsSettingsPanel } from './FormDispatchLimitsSettingsPan
 import { api, errorMessage } from './api'
 import { ServiceSetupGuide } from './ServiceSetupGuide'
 import { SmtpConnectionPanel } from './SmtpConnectionPanel'
+import { RuntimeCapacityPanel } from './RuntimeCapacityPanel'
 import type { ApplicationService, ApplicationSettings, FormSenderSettings, InboundEmail, InboundEmailCompanyCandidate, InboundMailSettings, ServiceConnectionTest, SmtpSettings } from './types'
 
 const empty = {
@@ -180,6 +181,7 @@ export function SmtpSettingsPage({ defaultRecipient }: { defaultRecipient: strin
       <div><strong>APIキーの保存状態</strong><p>{applicationSettings?.settings_encryption_ready ? '暗号化保存を利用できます。' : '暗号化キーが未設定のため、APIキーを保存できません。'}</p></div>
       <span>{applicationSettings?.updated_at ? `最終保存：${new Date(applicationSettings.updated_at).toLocaleString('ja-JP')}` : 'DB保存：まだありません'}</span>
     </div>
+    <RuntimeCapacityPanel />
     <SendingWindowPanel />
     <FormDispatchLimitsSettingsPanel />
     <ServiceSetupGuide settings={applicationSettings} testingService={testingService} testResults={serviceTests} onTest={(service, label) => void testService(service, label)} />
