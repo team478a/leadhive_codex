@@ -64,7 +64,11 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
     payload_hash: 'b'.repeat(64), payload_version: 1, status: 'PENDING', created_by_principal_type: 'HUMAN',
     created_at: new Date().toISOString(), expires_at: new Date(Date.now() + 86400000).toISOString(),
   }
-  let limits = { daily_limit: 30, hourly_limit: 5, minimum_interval_seconds: 60, site_interval_seconds: 300, paused: false, version: 1, can_manage: true, execution_enabled: false }
+  let limits = {
+    daily_limit: 30, hourly_limit: 5, minimum_interval_seconds: 60, site_interval_seconds: 300,
+    recipient_cooldown_days: 30, recipient_cooldown_limit: 2,
+    paused: false, version: 1, can_manage: true, execution_enabled: false,
+  }
   await page.route(`**/api/projects/${fixture.project_id}/approval-requests?**`, route => route.fulfill({ json: [item] }))
   await page.route('**/api/form-dispatch-limits', route => {
     if (route.request().method() === 'PUT') {
@@ -73,6 +77,8 @@ test('form bulk approval, idempotent reservation and saved administrator limits'
       expect(body.password).toBe('mock-human-password')
       expect(body.execution_enabled).toBeUndefined()
       expect(body.site_interval_seconds).toBe(600)
+      expect(body.recipient_cooldown_days).toBe(30)
+      expect(body.recipient_cooldown_limit).toBe(2)
       limits = { ...limits, daily_limit: body.daily_limit, site_interval_seconds: body.site_interval_seconds, paused: body.paused, version: limits.version + 1 }
     }
     return route.fulfill({ json: limits })
