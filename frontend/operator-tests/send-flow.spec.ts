@@ -24,7 +24,7 @@ const formProposal: Proposal = {
   delivery_method: 'form_direct', recipient: null, form_url: 'https://example.test/contact',
 }
 
-async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; failFirstReservation?: boolean; staleFormReadiness?: boolean } = {}) {
+async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; failFirstReservation?: boolean; staleFormReadiness?: boolean; failFormTargets?: boolean } = {}) {
   const email = 'send-flow@example.test'
   const projectIds = ['project-1', 'project-2']
   const calls: { path: string; method: string; body: Record<string, unknown> | null }[] = []
@@ -71,9 +71,12 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     else if (projectIds.some(id => path === `/api/projects/${id}/outreach-templates`) && method === 'POST') {
       savedTemplate = { ...body, id: 'new-template', project_id: path.split('/')[3], created_by_user_id: 'send-flow-user', created_at: '2026-10-17T00:00:00Z', updated_at: '2026-10-17T00:00:00Z' }
       data = savedTemplate
-    } else if (path.endsWith('/outreach-drafts/bulk-from-template/form-targets')) data = {
-      total: 1, per_run_limit: 500, by_primary_reason: { NO_FORM_DRAFT: 1 },
-      readiness_aggregated_at: '2026-10-16T00:00:00Z',
+    } else if (path.endsWith('/outreach-drafts/bulk-from-template/form-targets')) {
+      if (options.failFormTargets) { status = 500; data = { detail: '処理に失敗しました。' } }
+      else data = {
+        total: 1, per_run_limit: 500, by_primary_reason: { NO_FORM_DRAFT: 1 },
+        readiness_aggregated_at: '2026-10-16T00:00:00Z',
+      }
     }
     else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', project_id: path.split('/')[3], company_name: '確認候補株式会社', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }], total: 1, offset: 0, limit: 20 }
     else if (path.endsWith('/form-dm-readiness')) data = { counts: { NO_FORM_DRAFT: 1, READY: 1 }, review_queue_eligible: 7, ready_confirmation_pending: 0, total: 2, offset: 0, limit: 20, items: [], last_aggregated_at: '2026-10-16T00:00:00Z', active_job: null, read_only: true, external_requests: 0 }
@@ -196,6 +199,24 @@ test('email template and bulk draft creation use the server-selected eligible se
   const request = calls.find(call => call.path.endsWith('/outreach-drafts/bulk-from-template'))
   expect(request?.body).toMatchObject({ template_id: 'new-template', channel: 'email', readiness_reason: 'NO_EMAIL_DRAFT' })
   expect(request?.body).not.toHaveProperty('company_ids')
+})
+
+test('form template remains saved and selectable when target count loading fails', async ({ page }) => {
+  await setup(page, { channel: 'form', failFormTargets: true })
+  const sales = page.getByRole('region', { name: '営業作業', exact: true })
+  const draftPanel = sales.getByRole('region', { name: '送信先と文面の準備' })
+  await expect(draftPanel.getByRole('alert')).toContainText('送信可否の対象件数を読み込めませんでした')
+
+  await sales.locator('summary', { hasText: 'テンプレートを新しく作る・編集する' }).click()
+  const editor = sales.getByRole('region', { name: '文面テンプレート' })
+  await editor.getByLabel('テンプレート名').fill('フォーム初回案内')
+  await editor.getByLabel('本文').fill('今後のご案内が不要な場合は、このフォームへの返信でお知らせください。')
+  await editor.getByRole('button', { name: 'テンプレートを保存' }).click()
+
+  await expect(editor.getByRole('status')).toContainText('テンプレートを保存しました')
+  await expect(draftPanel.getByLabel('使用するテンプレート').locator('option')).toHaveText(['選択してください', 'フォーム初回案内'])
+  await expect(draftPanel.getByLabel('使用するテンプレート')).toHaveValue('new-template')
+  await expect(draftPanel.getByRole('button', { name: '対象件数を再読み込み' })).toBeVisible()
 })
 
 test('form review shows stale aggregation after a newer form draft', async ({ page }) => {

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import type { Company, CompanyPage, OperationJob, OutreachTemplate } from './types'
 import { SalesPreparationPanel } from './SalesPreparationPanel'
@@ -41,6 +41,9 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
   const [job, setJob] = useState<BulkJob | null>(null)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [templateLoadError, setTemplateLoadError] = useState('')
+  const [companyLoadError, setCompanyLoadError] = useState('')
+  const [formTargetsError, setFormTargetsError] = useState('')
   const [notice, setNotice] = useState('')
   const filteredTemplates = templates.filter(template => template.channel === channel)
   const activeJob = Boolean(job && ['queued', 'running'].includes(job.status))
@@ -48,23 +51,43 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
   const jobId = job?.id
   const jobStatus = job?.status
 
+  const loadFormTargets = useCallback(async () => {
+    if (channel !== 'form') return
+    setFormTargetsError('')
+    try {
+      setFormTargets(await api<FormDraftTargets>(`/projects/${projectId}/outreach-drafts/bulk-from-template/form-targets`))
+    } catch (loadError) {
+      setFormTargetsError(errorMessage(loadError))
+    }
+  }, [channel, projectId])
+
   useEffect(() => {
     let live = true
-    Promise.all([
-      api<OutreachTemplate[]>(`/projects/${projectId}/outreach-templates`),
-      api<CompanyPage>(`/projects/${projectId}/company-list?offset=${offset}&limit=20&sort=company_name`),
-      channel === 'form'
-        ? api<FormDraftTargets>(`/projects/${projectId}/outreach-drafts/bulk-from-template/form-targets`)
-        : Promise.resolve(null),
-    ]).then(([nextTemplates, page, nextFormTargets]) => {
+    setTemplateLoadError('')
+    api<OutreachTemplate[]>(`/projects/${projectId}/outreach-templates`).then(nextTemplates => {
       if (!live) return
-      setTemplates(nextTemplates); setCompanies(page.items); setTotal(page.total)
-      setFormTargets(nextFormTargets)
+      setTemplates(nextTemplates)
       setTemplateId(current => current && nextTemplates.some(item => item.id === current && item.channel === channel)
         ? current : nextTemplates.find(item => item.channel === channel)?.id ?? '')
-    }).catch(e => { if (live) setError(errorMessage(e)) })
+    }).catch(loadError => { if (live) setTemplateLoadError(errorMessage(loadError)) })
     return () => { live = false }
-  }, [channel, offset, projectId])
+  }, [channel, projectId])
+
+  useEffect(() => {
+    let live = true
+    setCompanyLoadError('')
+    api<CompanyPage>(`/projects/${projectId}/company-list?offset=${offset}&limit=20&sort=company_name`).then(page => {
+      if (!live) return
+      setCompanies(page.items); setTotal(page.total)
+    }).catch(loadError => { if (live) setCompanyLoadError(errorMessage(loadError)) })
+    return () => { live = false }
+  }, [offset, projectId])
+
+  useEffect(() => {
+    setFormTargets(null)
+    setFormTargetsError('')
+    if (channel === 'form') void loadFormTargets()
+  }, [channel, loadFormTargets, projectId])
 
   useEffect(() => {
     if (!jobId || !['queued', 'running'].includes(jobStatus ?? '')) return
@@ -122,10 +145,12 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
     {!showAi && <>
       <p className="muted text-sm">テンプレートから下書きだけを作成します。AI・承認・予約・送信は行いません。既存Draftは上書きせずスキップします。</p>
       <label className="field">使用するテンプレート<select disabled={activeJob} value={templateId} onChange={event => setTemplateId(event.target.value)}><option value="">選択してください</option>{filteredTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+      {templateLoadError && <p role="alert" className="error">テンプレートを読み込めませんでした。{templateLoadError}</p>}
       {!filteredTemplates.length && <p className="panel">{channel === 'email' ? 'メール用' : 'フォーム用'}テンプレートがありません。<button type="button" className="secondary ml-2" onClick={() => onNeedTemplate()}>テンプレートを作る</button></p>}
       {!!filteredTemplates.length && <button type="button" className="secondary" disabled={activeJob} onClick={() => onNeedTemplate(templateId)}>選択中のテンプレートを編集</button>}
       {channel === 'email' ? <>
         <p>連絡先メールがあり、連絡禁止ではなく、メール下書きがない会社を対象にします（最大500社）。表示 {companies.length} / {total}社 · 手動選択 {selectedIds.length} / 500社</p>
+        {companyLoadError && <p role="alert" className="error">企業一覧を読み込めませんでした。{companyLoadError}</p>}
         <div className="actions"><button type="button" className="secondary" aria-pressed={selectEligibleEmailCompanies} disabled={!canWrite || activeJob} onClick={() => { setSelectEligibleEmailCompanies(true); setSelectedIds([]) }}>条件に合う会社をすべて選択（最大500社）</button></div>
         {selectEligibleEmailCompanies && <p role="status" className="muted text-sm">下書き作成時にサーバーが条件に合う会社を最大500社選択します。</p>}
         <div className="border rounded-lg divide-y">
@@ -140,7 +165,9 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
         </div>
         <div className="actions mt-2"><button type="button" className="secondary" disabled={offset === 0 || activeJob} onClick={() => setOffset(value => Math.max(0, value - 20))}>前の20社</button><span>{total ? `${Math.floor(offset / 20) + 1} / ${Math.ceil(total / 20)}` : '0社'}</span><button type="button" className="secondary" disabled={offset + companies.length >= total || activeJob} onClick={() => setOffset(value => value + 20)}>次の20社</button></div>
       </> : <div className="rounded-lg border p-4"><strong>送信可否：フォーム文面なし</strong>
-        {formTargets && !formTargets.readiness_aggregated_at
+        {formTargetsError
+          ? <div className="mt-2"><p role="alert" className="error">送信可否の対象件数を読み込めませんでした。テンプレートの作成・編集は利用できます。</p><button type="button" className="secondary mt-2" onClick={() => void loadFormTargets()}>対象件数を再読み込み</button></div>
+          : formTargets && !formTargets.readiness_aggregated_at
           ? <p className="error mt-2">先に送信可否を再集計してください。</p>
           : <>
             <p className="mt-2">文面を作成できる企業：{formTargetCount ?? '…'}社（1回に最大{formTargets?.per_run_limit ?? 500}社。あと{formTargetCount === null ? '…' : Math.ceil(formTargetCount / (formTargets?.per_run_limit ?? 500))}回）</p>
