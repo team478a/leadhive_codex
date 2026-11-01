@@ -31,6 +31,7 @@ from app.schemas import (
     OutreachExperimentResultOut,
 )
 from app.security import current_user
+from app.services.outreach_templates import template_available_for_project
 
 router = APIRouter(prefix="/api")
 
@@ -218,13 +219,15 @@ def create_experiment(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    project_access(project_id, db, user)
+    project = project_access(project_id, db, user)
     templates = db.scalars(
         select(OutreachTemplate).where(
             OutreachTemplate.id.in_((body.template_a_id, body.template_b_id))
         )
     ).all()
-    if len(templates) != 2 or any(template.project_id != project_id for template in templates):
+    if len(templates) != 2 or any(
+        not template_available_for_project(template, project) for template in templates
+    ):
         raise HTTPException(422, "同じプロジェクトの異なる文面テンプレートを2つ選択してください。")
     if templates[0].channel != templates[1].channel:
         raise HTTPException(422, "A/Bテストの文面種別をそろえてください。")

@@ -198,7 +198,7 @@ export function CompanyOutreachDraftPanel({
                 {matchingTemplates.map(template => (
                   <article className="job-row" key={template.id}>
                     <div>
-                      <strong>{template.name}</strong>
+                      <strong>{template.name}{template.scope === 'organization' ? '（共通）' : ''}</strong>
                       <p className="muted text-xs">
                         {template.subject || '件名なし'} / {template.body.slice(0, 80)}
                       </p>
@@ -211,13 +211,13 @@ export function CompanyOutreachDraftPanel({
                       >
                         適用
                       </button>
-                      <button
+                      {template.scope === 'project' && <button
                         className="danger"
                         disabled={busy}
                         onClick={() => onDeleteTemplate(template)}
                       >
                         削除
-                      </button>
+                      </button>}
                     </div>
                   </article>
                 ))}

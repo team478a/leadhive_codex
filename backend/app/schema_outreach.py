@@ -50,7 +50,9 @@ class OutreachTemplateInput(Input):
 class OutreachTemplateOut(OutreachTemplateInput):
     model_config = ConfigDict(from_attributes=True)
     id: UUID
-    project_id: UUID
+    project_id: UUID | None
+    organization_id: UUID
+    scope: Literal["project", "organization"]
     created_by_user_id: UUID | None
     created_at: datetime
     updated_at: datetime

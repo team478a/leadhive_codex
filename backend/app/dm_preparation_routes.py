@@ -13,6 +13,7 @@ from app.models import OutreachTemplate, Project, ProjectMember, User
 from app.project_access import company_access
 from app.security import current_user
 from app.services import dm_preparation
+from app.services.outreach_templates import template_project_condition
 from app.services.sendability import evaluate
 
 router = APIRouter(prefix="/api/companies")
@@ -42,7 +43,7 @@ def get_preparation(
     result = evaluate(db, company)
     templates = db.scalars(
         select(OutreachTemplate)
-        .where(OutreachTemplate.project_id == project.id)
+        .where(template_project_condition(project))
         .order_by(OutreachTemplate.name, OutreachTemplate.id)
         .limit(100)
     ).all()

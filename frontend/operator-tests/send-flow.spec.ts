@@ -24,7 +24,7 @@ const formProposal: Proposal = {
   delivery_method: 'form_direct', recipient: null, form_url: 'https://example.test/contact',
 }
 
-async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; failFirstReservation?: boolean; staleFormReadiness?: boolean; failFormTargets?: boolean } = {}) {
+async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; sharedTemplate?: boolean; failFirstReservation?: boolean; staleFormReadiness?: boolean; failFormTargets?: boolean } = {}) {
   const email = 'send-flow@example.test'
   const projectIds = ['project-1', 'project-2']
   const calls: { path: string; method: string; body: Record<string, unknown> | null }[] = []
@@ -36,9 +36,10 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
   const approvedFormProposal = options.approvedForm ? formProposal : null
   let reservationAttempts = 0
   const templates = options.templates ? [
-    { id: 'email-template', project_id: 'project-1', name: 'メール用', channel: 'email', subject: '件名', body: '本文' },
-    { id: 'form-template', project_id: 'project-1', name: 'フォーム用', channel: 'form', subject: '', body: 'フォーム本文' },
+    { id: 'email-template', project_id: 'project-1', organization_id: 'organization-1', scope: 'project', name: 'メール用', channel: 'email', subject: '件名', body: '本文' },
+    { id: 'form-template', project_id: 'project-1', organization_id: 'organization-1', scope: 'project', name: 'フォーム用', channel: 'form', subject: '', body: 'フォーム本文' },
   ] : []
+  if (options.sharedTemplate) templates.push({ id: 'shared-form-template', project_id: null, organization_id: 'organization-1', scope: 'organization', name: '全案件共通フォーム', channel: 'form', subject: '', body: '共通本文' })
   const pageErrors: string[] = []
   page.on('pageerror', error => pageErrors.push(error.message))
   await page.addInitScript(({ userEmail, channel }) => {
@@ -69,7 +70,7 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     else if (projectIds.some(id => path === `/api/projects/${id}/send-flow-summary`)) data = summary(path.split('/')[3])
     else if (projectIds.some(id => path === `/api/projects/${id}/outreach-templates`) && method === 'GET') data = savedTemplate ? [...templates, savedTemplate] : templates
     else if (projectIds.some(id => path === `/api/projects/${id}/outreach-templates`) && method === 'POST') {
-      savedTemplate = { ...body, id: 'new-template', project_id: path.split('/')[3], created_by_user_id: 'send-flow-user', created_at: '2026-10-17T00:00:00Z', updated_at: '2026-10-17T00:00:00Z' }
+      savedTemplate = { ...body, id: 'new-template', project_id: path.split('/')[3], organization_id: 'organization-1', scope: 'project', created_by_user_id: 'send-flow-user', created_at: '2026-10-17T00:00:00Z', updated_at: '2026-10-17T00:00:00Z' }
       data = savedTemplate
     } else if (path.endsWith('/outreach-drafts/bulk-from-template/form-targets')) {
       if (options.failFormTargets) { status = 500; data = { detail: '処理に失敗しました。' } }
@@ -178,6 +179,17 @@ test('channel is isolated and remembered separately for each project', async ({ 
   }))
   expect(bounds[bounds.length - 1].bottom - bounds[0].top, JSON.stringify(bounds)).toBeLessThanOrEqual(page.viewportSize()!.height)
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width)
+})
+
+test('organization template is selectable and points editing to organization settings', async ({ page }) => {
+  await setup(page, { channel: 'form', sharedTemplate: true })
+  const sales = page.getByRole('region', { name: '営業作業', exact: true })
+  const draftPanel = sales.getByRole('region', { name: '送信先と文面の準備' })
+  const select = draftPanel.getByLabel('使用するテンプレート')
+  await expect(select.locator('optgroup[label="共通テンプレート"] option')).toHaveText(['全案件共通フォーム'])
+  await select.selectOption('shared-form-template')
+  await expect(draftPanel.getByText('共通テンプレートの編集は「利用企業設定」で行います。')).toBeVisible()
+  await expect(draftPanel.getByRole('button', { name: '選択中のテンプレートを編集' })).toHaveCount(0)
 })
 
 test('email template and bulk draft creation use the server-selected eligible set', async ({ page }) => {

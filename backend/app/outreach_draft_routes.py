@@ -14,6 +14,8 @@ from app.models import (
     EmailDelivery,
     FormDelivery,
     FormProfileField,
+    Organization,
+    OrganizationMember,
     OutreachDraft,
     OutreachDraftApproval,
     OutreachTemplate,
@@ -61,9 +63,29 @@ from app.services.form_profile_delivery import (
 from app.services.form_submission_guard import UNKNOWN_MESSAGE, reserve_form_submission
 from app.services.outbound_guard import require_legacy_form_enabled, require_outbound_enabled
 from app.services.outreach_template_validation import has_stop_method
+from app.services.outreach_templates import (
+    template_available_for_project,
+    template_project_condition,
+)
 
 logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
+
+
+def organization_template_admin(
+    organization_id: UUID, db: Session, user: User
+) -> Organization:
+    organization = db.get(Organization, organization_id)
+    membership = db.scalar(
+        select(OrganizationMember).where(
+            OrganizationMember.organization_id == organization_id,
+            OrganizationMember.user_id == user.id,
+            OrganizationMember.role.in_(("owner", "admin")),
+        )
+    )
+    if organization is None or organization.status != "active" or membership is None:
+        raise HTTPException(404, "利用企業が見つかりません。")
+    return organization
 
 
 def owned_draft(draft_id: UUID, db: Session, user: User, write: bool = True) -> OutreachDraft:
@@ -117,12 +139,59 @@ def list_outreach_templates(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    project_access(project_id, db, user, write=False)
+    project = project_access(project_id, db, user, write=False)
     return db.scalars(
         select(OutreachTemplate)
-        .where(OutreachTemplate.project_id == project_id)
+        .where(template_project_condition(project))
+        .order_by(OutreachTemplate.scope.desc(), OutreachTemplate.name, OutreachTemplate.id)
+    ).all()
+
+
+@router.get(
+    "/organizations/{organization_id}/outreach-templates",
+    response_model=list[OutreachTemplateOut],
+)
+def list_organization_outreach_templates(
+    organization_id: UUID,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    organization_template_admin(organization_id, db, user)
+    return db.scalars(
+        select(OutreachTemplate)
+        .where(
+            OutreachTemplate.organization_id == organization_id,
+            OutreachTemplate.scope == "organization",
+        )
         .order_by(OutreachTemplate.name, OutreachTemplate.id)
     ).all()
+
+
+@router.post(
+    "/organizations/{organization_id}/outreach-templates",
+    response_model=OutreachTemplateOut,
+    status_code=201,
+)
+def create_organization_outreach_template(
+    organization_id: UUID,
+    body: OutreachTemplateInput,
+    db: Session = Depends(get_db),
+    user: User = Depends(current_user),
+):
+    organization_template_admin(organization_id, db, user)
+    if not has_stop_method(body.channel, body.body):
+        raise HTTPException(422, "本文に配信停止・連絡辞退の方法を示す一文を追加してください。")
+    template = OutreachTemplate(
+        project_id=None,
+        organization_id=organization_id,
+        scope="organization",
+        created_by_user_id=user.id,
+        **body.model_dump(),
+    )
+    db.add(template)
+    db.commit()
+    db.refresh(template)
+    return template
 
 
 @router.post(
@@ -136,11 +205,15 @@ def create_outreach_template(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    project_access(project_id, db, user)
+    project = project_access(project_id, db, user)
     if not has_stop_method(body.channel, body.body):
         raise HTTPException(422, "本文に配信停止・連絡辞退の方法を示す一文を追加してください。")
     template = OutreachTemplate(
-        project_id=project_id, created_by_user_id=user.id, **body.model_dump()
+        project_id=project_id,
+        organization_id=project.organization_id,
+        scope="project",
+        created_by_user_id=user.id,
+        **body.model_dump(),
     )
     db.add(template)
     db.commit()
@@ -158,7 +231,12 @@ def update_outreach_template(
     template = db.get(OutreachTemplate, template_id)
     if template is None:
         raise HTTPException(404, "営業文面テンプレートが見つかりません。")
-    project_access(template.project_id, db, user)
+    if template.scope == "organization":
+        organization_template_admin(template.organization_id, db, user)
+    elif template.project_id is not None:
+        project_access(template.project_id, db, user)
+    else:
+        raise HTTPException(404, "営業文面テンプレートが見つかりません。")
     if not has_stop_method(body.channel, body.body):
         raise HTTPException(422, "本文に配信停止・連絡辞退の方法を示す一文を追加してください。")
     for key, value in body.model_dump().items():
@@ -177,7 +255,12 @@ def delete_outreach_template(
     template = db.get(OutreachTemplate, template_id)
     if template is None:
         raise HTTPException(404, "営業文面テンプレートが見つかりません。")
-    project_access(template.project_id, db, user)
+    if template.scope == "organization":
+        organization_template_admin(template.organization_id, db, user)
+    elif template.project_id is not None:
+        project_access(template.project_id, db, user)
+    else:
+        raise HTTPException(404, "営業文面テンプレートが見つかりません。")
     db.delete(template)
     db.commit()
 
@@ -332,7 +415,13 @@ def apply_outreach_template(
     draft = owned_draft(draft_id, db, user)
     company = db.get(Company, draft.company_id)
     template = db.get(OutreachTemplate, body.template_id)
-    if company is None or template is None or template.project_id != company.project_id:
+    project = db.get(Project, company.project_id) if company is not None else None
+    if (
+        company is None
+        or project is None
+        or template is None
+        or not template_available_for_project(template, project)
+    ):
         raise HTTPException(404, "営業文面テンプレートが見つかりません。")
     if template.channel != draft.channel:
         raise HTTPException(409, "同じ連絡経路のテンプレートだけを適用できます。")

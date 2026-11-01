@@ -33,6 +33,7 @@ from app.services.bulk_template_drafts import (
 )
 from app.services.operations import add_operation_job
 from app.services.outreach_template_validation import has_stop_method
+from app.services.outreach_templates import template_available_for_project
 
 router = APIRouter(prefix="/api", tags=["Send flow"])
 SEND_FLOW_JOB = "bulk_template_drafts"
@@ -62,7 +63,7 @@ def enqueue_bulk_template_drafts(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    project_access(project_id, db, user)
+    project = project_access(project_id, db, user)
     if body.channel == "form" and db.scalar(
         select(OperationJob.id)
         .where(
@@ -73,13 +74,8 @@ def enqueue_bulk_template_drafts(
         .limit(1)
     ):
         raise HTTPException(409, "送信可否の再集計中です。完了後に下書きを作成してください。")
-    template = db.scalar(
-        select(OutreachTemplate).where(
-            OutreachTemplate.id == body.template_id,
-            OutreachTemplate.project_id == project_id,
-        )
-    )
-    if template is None:
+    template = db.get(OutreachTemplate, body.template_id)
+    if template is None or not template_available_for_project(template, project):
         raise HTTPException(404, "営業文面テンプレートが見つかりません。")
     if template.channel != body.channel:
         raise HTTPException(409, "テンプレートの連絡経路が一致しません。")

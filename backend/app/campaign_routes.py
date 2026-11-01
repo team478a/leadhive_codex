@@ -23,6 +23,7 @@ from app.schemas import EmailCampaignCreateInput, EmailCampaignOut
 from app.security import current_user
 from app.services.contact_permission import evaluate_contact_permission
 from app.services.outbound_guard import require_outbound_enabled
+from app.services.outreach_templates import template_available_for_project
 from app.services.suppression import add_suppression
 
 router = APIRouter(prefix="/api")
@@ -102,9 +103,13 @@ def create_campaign(
     require_outbound_enabled()
     if not body.confirmed:
         raise HTTPException(422, "対象企業と文面を確認して一括メール送信を承認してください。")
-    project_access(project_id, db, user)
+    project = project_access(project_id, db, user)
     template = db.get(OutreachTemplate, body.template_id)
-    if template is None or template.project_id != project_id or template.channel != "email":
+    if (
+        template is None
+        or not template_available_for_project(template, project)
+        or template.channel != "email"
+    ):
         raise HTTPException(422, "このプロジェクトのメール文面テンプレートを選択してください。")
     companies = db.scalars(
         select(Company).where(Company.project_id == project_id, Company.id.in_(body.company_ids))

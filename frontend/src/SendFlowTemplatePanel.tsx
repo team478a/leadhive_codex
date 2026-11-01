@@ -23,7 +23,7 @@ export function SendFlowTemplatePanel({ projectId, channel, canWrite, initialTem
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const selectedTemplate = templates.find(template => template.id === templateId)
   const selectedSample = samples.find(company => company.id === sampleId)
-  const matchingTemplates = templates.filter(template => template.channel === channel)
+  const matchingTemplates = templates.filter(template => template.channel === channel && template.scope === 'project')
 
   useEffect(() => {
     let live = true
@@ -35,7 +35,7 @@ export function SendFlowTemplatePanel({ projectId, channel, canWrite, initialTem
       setTemplates(nextTemplates)
       setSamples(page.items)
       setSampleId(page.items[0]?.id ?? '')
-      const initialTemplate = nextTemplates.find(template => template.id === initialTemplateId && template.channel === channel)
+      const initialTemplate = nextTemplates.find(template => template.id === initialTemplateId && template.channel === channel && template.scope === 'project')
       setTemplateId(initialTemplate?.id ?? '')
       setName(initialTemplate?.name ?? '')
       setSubject(initialTemplate?.subject ?? '')
@@ -94,7 +94,7 @@ export function SendFlowTemplatePanel({ projectId, channel, canWrite, initialTem
     key === '会社名' ? companyName : `【${key}の設定値】`)
 
   return <section aria-label="文面テンプレート" className="space-y-4">
-    <p className="muted text-sm">テンプレートは企業別の下書き作成に使います。メールの配信停止リンクは送信時に既存処理が付与します。</p>
+    <p className="muted text-sm">この画面ではプロジェクト専用テンプレートを編集します。全プロジェクト共通の文面は「利用企業設定」で登録できます。</p>
     <p className="badge">{channel === 'email' ? 'メール' : 'フォーム'}用テンプレート</p>
     {error && <p role="alert" className="error">{error}</p>}{notice && <p role="status">{notice}</p>}
     <label className="field">既存テンプレート<select disabled={busy} value={templateId} onChange={event => selectTemplate(event.target.value)}>
