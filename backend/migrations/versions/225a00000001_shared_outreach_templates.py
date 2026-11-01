@@ -54,9 +54,7 @@ def upgrade():
 
 def downgrade():
     op.execute("DELETE FROM outreach_templates WHERE scope = 'organization'")
-    op.drop_constraint(
-        "ck_outreach_template_scope_owner", "outreach_templates", type_="check"
-    )
+    op.drop_constraint("ck_outreach_template_scope_owner", "outreach_templates", type_="check")
     op.drop_constraint("ck_outreach_template_scope", "outreach_templates", type_="check")
     op.drop_index("ix_outreach_templates_organization_id", table_name="outreach_templates")
     op.drop_constraint(

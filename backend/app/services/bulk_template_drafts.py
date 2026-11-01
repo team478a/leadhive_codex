@@ -278,11 +278,7 @@ def run_bulk_template_drafts(
     payload = job.payload or {}
     template = db.get(OutreachTemplate, UUID(payload["template_id"]))
     project = db.get(Project, job.project_id)
-    if (
-        template is None
-        or project is None
-        or not template_available_for_project(template, project)
-    ):
+    if template is None or project is None or not template_available_for_project(template, project):
         raise ValueError("テンプレートが見つかりません。")
     template_channel = template.channel
     template_subject = template.subject

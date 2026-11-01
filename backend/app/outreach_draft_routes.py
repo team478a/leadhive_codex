@@ -72,9 +72,7 @@ logger = logging.getLogger("leadhive")
 router = APIRouter(prefix="/api")
 
 
-def organization_template_admin(
-    organization_id: UUID, db: Session, user: User
-) -> Organization:
+def organization_template_admin(organization_id: UUID, db: Session, user: User) -> Organization:
     organization = db.get(Organization, organization_id)
     membership = db.scalar(
         select(OrganizationMember).where(
