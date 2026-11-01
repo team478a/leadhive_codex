@@ -43,6 +43,7 @@ from app.services.form_profile_delivery import (
 )
 from app.services.operations import add_operation_job
 from app.services.outbound_guard import require_legacy_form_enabled
+from app.services.outreach_templates import template_available_for_project
 
 router = APIRouter(prefix="/api")
 
@@ -112,10 +113,14 @@ def create_form_batch(
     db: Session = Depends(get_db),
     user: User = Depends(current_user),
 ):
-    project_access(project_id, db, user)
+    project = project_access(project_id, db, user)
     reject_legacy_form_entry()
     template = db.get(OutreachTemplate, body.template_id)
-    if template is None or template.project_id != project_id or template.channel != "form":
+    if (
+        template is None
+        or not template_available_for_project(template, project)
+        or template.channel != "form"
+    ):
         raise HTTPException(422, "このプロジェクトのフォーム文面テンプレートを選択してください。")
     companies = db.scalars(
         select(Company).where(Company.project_id == project_id, Company.id.in_(body.company_ids))

@@ -1,5 +1,7 @@
+from uuid import UUID
+
 from app import outreach_draft_routes
-from app.models import Company
+from app.models import Company, Project
 from app.services.ai import AiAnalysisError, OutreachDraftContent
 
 
@@ -134,6 +136,54 @@ def test_generate_edit_list_delete_and_viewer_access(auth, users, db, monkeypatc
     assert auth.delete(f"/api/outreach-templates/{template.json()['id']}").status_code == 204
     assert auth.delete(f"/api/outreach-drafts/{draft['id']}").status_code == 204
     assert auth.get(f"/api/companies/{company.id}/outreach-drafts").json() == []
+
+
+def test_organization_template_is_shared_only_within_organization(auth, users, db):
+    first_project, _ = make_company(auth, db)
+    second_project, _ = make_company(auth, db)
+    organization_id = db.get(Project, UUID(first_project["id"])).organization_id
+
+    created = auth.post(
+        f"/api/organizations/{organization_id}/outreach-templates",
+        json={
+            "name": "全案件共通フォーム",
+            "channel": "form",
+            "subject": "",
+            "body": "お問い合わせです。今後のご案内が不要な場合はご連絡ください。",
+        },
+    )
+    assert created.status_code == 201, created.text
+    template = created.json()
+    assert template["scope"] == "organization"
+    assert template["project_id"] is None
+    assert template["organization_id"] == str(organization_id)
+
+    for project in (first_project, second_project):
+        templates = auth.get(f"/api/projects/{project['id']}/outreach-templates").json()
+        assert [item["id"] for item in templates] == [template["id"]]
+
+    auth.post(
+        "/api/auth/login",
+        json={"email": users[1].email, "password": "test-only-long-password"},
+    )
+    assert auth.get(f"/api/organizations/{organization_id}/outreach-templates").status_code == 404
+    other_project, _ = make_company(auth, db)
+    assert auth.get(f"/api/projects/{other_project['id']}/outreach-templates").json() == []
+
+    auth.post(
+        "/api/auth/login",
+        json={"email": users[0].email, "password": "test-only-long-password"},
+    )
+    updated = auth.put(
+        f"/api/outreach-templates/{template['id']}",
+        json={
+            "name": "全案件共通フォーム更新",
+            "channel": "form",
+            "subject": "",
+            "body": "更新したお問い合わせです。今後のご案内が不要な場合はご連絡ください。",
+        },
+    )
+    assert updated.status_code == 200
 
 
 def test_generation_guards_contact_suppression_and_provider_errors(auth, db, monkeypatch):

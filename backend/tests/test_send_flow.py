@@ -18,6 +18,7 @@ from app.models import (
     FormProfile,
     OperationJob,
     OutreachDraft,
+    Project,
     SuppressionEntry,
 )
 from app.services import bulk_template_drafts
@@ -78,6 +79,21 @@ def make_template(auth, project_id, channel="email", body=None):
     return response.json()
 
 
+def make_shared_template(auth, db, project_id, channel="email"):
+    organization_id = db.get(Project, UUID(project_id)).organization_id
+    response = auth.post(
+        f"/api/organizations/{organization_id}/outreach-templates",
+        json={
+            "name": "共通一括作成用",
+            "channel": channel,
+            "subject": "{{会社名}}へのご案内",
+            "body": "{{会社名}}へのご案内です。今後のご案内が不要な場合はご返信ください。",
+        },
+    )
+    assert response.status_code == 201, response.text
+    return response.json()
+
+
 def run_queued_job(db, job_id):
     job = db.get(OperationJob, UUID(job_id))
     job.status = "running"
@@ -85,6 +101,32 @@ def run_queued_job(db, job_id):
     db.commit()
     bulk_template_drafts.run_bulk_template_drafts(db, job, job.worker_id, lambda *_: False)
     return db.get(OperationJob, UUID(job_id))
+
+
+def test_bulk_template_drafts_accepts_organization_template(auth, db, monkeypatch):
+    project = make_project(auth)
+    company = add_companies(db, UUID(project["id"]), 1)[0]
+    template = make_shared_template(auth, db, project["id"])
+    monkeypatch.setattr(
+        bulk_template_drafts,
+        "evaluate_contact_permission",
+        lambda *_args: SimpleNamespace(
+            status="ALLOWED", reason_code="allowed", message="送信できます。"
+        ),
+    )
+
+    response = auth.post(
+        f"/api/projects/{project['id']}/outreach-drafts/bulk-from-template",
+        json={
+            "template_id": template["id"],
+            "channel": "email",
+            "company_ids": [str(company.id)],
+        },
+    )
+    assert response.status_code == 202, response.text
+    job = run_queued_job(db, response.json()["id"])
+    assert job.success_count == 1
+    assert db.scalar(select(func.count()).select_from(OutreachDraft)) == 1
 
 
 def test_bulk_template_drafts_caps_at_500_and_commits_in_chunks(auth, db, monkeypatch):

@@ -23,6 +23,7 @@ from app.services.contact_permission import evaluate_contact_permission
 from app.services.form_profile_delivery import primary_form_profile, sender_values
 from app.services.non_company_suspected import current_suspected_evidence
 from app.services.outreach_template_validation import has_stop_method
+from app.services.outreach_templates import template_available_for_project
 from app.services.suppression import active_suppression_scope_condition
 
 CHUNK_SIZE = 100
@@ -276,7 +277,8 @@ def run_bulk_template_drafts(
 ) -> None:
     payload = job.payload or {}
     template = db.get(OutreachTemplate, UUID(payload["template_id"]))
-    if template is None or template.project_id != job.project_id:
+    project = db.get(Project, job.project_id)
+    if template is None or project is None or not template_available_for_project(template, project):
         raise ValueError("テンプレートが見つかりません。")
     template_channel = template.channel
     template_subject = template.subject

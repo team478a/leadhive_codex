@@ -46,6 +46,9 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
   const [formTargetsError, setFormTargetsError] = useState('')
   const [notice, setNotice] = useState('')
   const filteredTemplates = templates.filter(template => template.channel === channel)
+  const sharedTemplates = filteredTemplates.filter(template => template.scope === 'organization')
+  const projectTemplates = filteredTemplates.filter(template => template.scope === 'project')
+  const selectedTemplate = filteredTemplates.find(template => template.id === templateId)
   const activeJob = Boolean(job && ['queued', 'running'].includes(job.status))
   const formReadinessBusy = channel === 'form' && readinessBusy
   const jobId = job?.id
@@ -144,10 +147,14 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
   return <section className="space-y-4" aria-label="送信先と文面の準備">
     {!showAi && <>
       <p className="muted text-sm">テンプレートから下書きだけを作成します。AI・承認・予約・送信は行いません。既存Draftは上書きせずスキップします。</p>
-      <label className="field">使用するテンプレート<select disabled={activeJob} value={templateId} onChange={event => setTemplateId(event.target.value)}><option value="">選択してください</option>{filteredTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></label>
+      <label className="field">使用するテンプレート<select disabled={activeJob} value={templateId} onChange={event => setTemplateId(event.target.value)}><option value="">選択してください</option>
+        {!!sharedTemplates.length && <optgroup label="共通テンプレート">{sharedTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</optgroup>}
+        {!!projectTemplates.length && <optgroup label="このプロジェクト専用">{projectTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</optgroup>}
+      </select></label>
       {templateLoadError && <p role="alert" className="error">テンプレートを読み込めませんでした。{templateLoadError}</p>}
       {!filteredTemplates.length && <p className="panel">{channel === 'email' ? 'メール用' : 'フォーム用'}テンプレートがありません。<button type="button" className="secondary ml-2" onClick={() => onNeedTemplate()}>テンプレートを作る</button></p>}
-      {!!filteredTemplates.length && <button type="button" className="secondary" disabled={activeJob} onClick={() => onNeedTemplate(templateId)}>選択中のテンプレートを編集</button>}
+      {!!filteredTemplates.length && selectedTemplate?.scope === 'project' && <button type="button" className="secondary" disabled={activeJob} onClick={() => onNeedTemplate(templateId)}>選択中のテンプレートを編集</button>}
+      {selectedTemplate?.scope === 'organization' && <p className="muted text-sm">共通テンプレートの編集は「利用企業設定」で行います。</p>}
       {channel === 'email' ? <>
         <p>連絡先メールがあり、連絡禁止ではなく、メール下書きがない会社を対象にします（最大500社）。表示 {companies.length} / {total}社 · 手動選択 {selectedIds.length} / 500社</p>
         {companyLoadError && <p role="alert" className="error">企業一覧を読み込めませんでした。{companyLoadError}</p>}

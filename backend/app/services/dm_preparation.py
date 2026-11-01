@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from app.models import LeadDmPreparation, OutreachTemplate, TargetProfile
 from app.services.destination_choice import latest
+from app.services.outreach_templates import template_available_for_project
 from app.services.sales_preparation import context_hash
 from app.services.sendability import evaluate
 from app.services.site_identity_review import official_evidence_url
@@ -80,7 +81,7 @@ def prepare(db, company, project, user, body):
         raise HTTPException(409, "有効な窓口選択を再確認してください。")
     selected = choice["active_destination"]
     template = db.get(OutreachTemplate, body.template_id)
-    if template is None or template.project_id != project.id:
+    if template is None or not template_available_for_project(template, project):
         raise HTTPException(404, "テンプレートが見つかりません。")
     if (
         template.channel != selected["type"]

@@ -19,6 +19,7 @@ from app.models import (
     Organization,
     OrganizationAuditEvent,
     OrganizationMember,
+    OutreachTemplate,
     Project,
     SuppressionEntry,
     User,
@@ -628,6 +629,9 @@ def merge_organizations(
     db.execute(select(Project.id).where(Project.organization_id == source.id).with_for_update())
     db.query(Project).filter(Project.organization_id == source.id).update(
         {Project.organization_id: target.id}, synchronize_session=False
+    )
+    db.query(OutreachTemplate).filter(OutreachTemplate.organization_id == source.id).update(
+        {OutreachTemplate.organization_id: target.id}, synchronize_session=False
     )
     db.query(SuppressionEntry).filter(
         SuppressionEntry.organization_id == source.id,

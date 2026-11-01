@@ -70,11 +70,24 @@ class OutreachTemplate(Timestamps, Base):
     __tablename__ = "outreach_templates"
     __table_args__ = (
         CheckConstraint("channel IN ('email', 'form', 'sns')", name="ck_outreach_template_channel"),
+        CheckConstraint(
+            "scope IN ('project', 'organization')",
+            name="ck_outreach_template_scope",
+        ),
+        CheckConstraint(
+            "(scope = 'project' AND project_id IS NOT NULL) OR "
+            "(scope = 'organization' AND project_id IS NULL)",
+            name="ck_outreach_template_scope_owner",
+        ),
     )
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(
+    project_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("projects.id", ondelete="CASCADE"), index=True
     )
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("organizations.id", ondelete="CASCADE"), index=True
+    )
+    scope: Mapped[str] = mapped_column(String(20), default="project", server_default="project")
     created_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )

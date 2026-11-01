@@ -463,6 +463,7 @@ export function CompaniesPage({ projects, projectRoles, initialProjectId, initia
     } catch (e) { setError(errorMessage(e)) } finally { setBusy(false) }
   }
   async function deleteTemplate(template: OutreachTemplate) {
+    if (template.scope === 'organization') { setError('共通テンプレートは利用企業設定で管理してください。'); return }
     if (!window.confirm(`テンプレート「${template.name}」を削除しますか？`)) return
     setBusy(true); setError(''); setNotice('')
     try { await api(`/outreach-templates/${template.id}`, 'DELETE'); setOutreachTemplates(outreachTemplates.filter(item => item.id !== template.id)); setNotice('テンプレートを削除しました。') }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
+import { OrganizationOutreachTemplatesPanel } from './OrganizationOutreachTemplatesPanel'
 
 type Organization = { id: string; name: string; role?: 'owner' | 'admin'; status: string }
 type Member = { id: string; user_id: string; email: string; role: 'owner' | 'admin' }
@@ -171,6 +172,7 @@ export function OrganizationSettingsPanel({ isAdmin }: { isAdmin: boolean }) {
         {!suppressions.length && <p className="muted mt-3">利用企業の送信停止はありません。</p>}
       </>}
     </section>
+    {selectedId && <OrganizationOutreachTemplatesPanel organizationId={selectedId} />}
     {isAdmin && <>
       <section className="panel">
         <h2>共通送信停止（運営）</h2>
