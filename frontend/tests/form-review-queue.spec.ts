@@ -146,7 +146,7 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   await expect(panel.getByRole('heading', { name: '先頭のスキップ候補' })).toBeVisible()
   await expect(panel.getByRole('heading', { name: '修正が必要な項目（1件）' })).toBeVisible()
   await expect(panel.getByText('独自の必須項目（必須）')).toBeVisible()
-  await expect(panel.getByText('お問い合わせ内容（必須）')).toHaveCount(0)
+  await expect(panel.getByText('お問い合わせ内容（必須）')).toBeHidden()
   await panel.getByText('解析済み項目を表示（1件）').click()
   await expect(panel.getByText('お問い合わせ内容（必須）')).toBeVisible()
   await expect(panel.getByText('_wpcf7')).toHaveCount(0)
