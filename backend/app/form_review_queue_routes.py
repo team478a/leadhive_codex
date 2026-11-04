@@ -368,8 +368,10 @@ def _field_requires_review(field: FormProfileField, fields: list[FormProfileFiel
         or field.confidence < 0.8
     ):
         return True
-    if not message_fields and field.field_type in {"text", "textarea"} and (
-        field.mapped_key == "unknown" or field.confidence < 0.8
+    if (
+        not message_fields
+        and field.field_type in {"text", "textarea"}
+        and (field.mapped_key == "unknown" or field.confidence < 0.8)
     ):
         return True
     if field.required and (field.mapped_key == "unknown" or field.confidence < 0.8):

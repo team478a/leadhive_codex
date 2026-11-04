@@ -46,4 +46,3 @@ def test_unresolved_required_field_is_a_correction_field():
 
     assert _field_requires_review(message, [message, unresolved]) is False
     assert _field_requires_review(unresolved, [message, unresolved]) is True
-
