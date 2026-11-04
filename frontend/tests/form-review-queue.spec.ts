@@ -118,7 +118,7 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   const queueStage = page.getByRole('region', { name: '2. フォームを確認', exact: true })
   const queueStageHeader = queueStage.getByRole('button').first()
   await expect(queueStageHeader).toHaveAttribute('aria-expanded', 'true')
-  await expect(queueStageHeader).toContainText('確認待ち 3社 · 確認不要：0社')
+  await expect(queueStageHeader).toContainText('要修正だけ確認3社 · 問題のある項目だけ表示')
 
   const panel = page.getByRole('region', { name: 'フォーム確認キュー' })
   await expect(panel.getByRole('heading', { name: 'フォーム確認キュー' })).toBeVisible()

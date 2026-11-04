@@ -35,7 +35,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
   const [selectedIds, setSelectedIds] = useState<string[]>([])
-  const [selectEligibleEmailCompanies, setSelectEligibleEmailCompanies] = useState(false)
+  const [selectEligibleEmailCompanies, setSelectEligibleEmailCompanies] = useState(channel === 'email')
   const [formTargets, setFormTargets] = useState<FormDraftTargets | null>(null)
   const [readinessDetailsOpen, setReadinessDetailsOpen] = useState(false)
   const [job, setJob] = useState<BulkJob | null>(null)
@@ -106,7 +106,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
         if (!current) return
         setJob(current)
         if (['completed', 'failed', 'cancelled'].includes(current.status)) {
-          setNotice(current.status === 'completed' ? '一括下書き作成が完了しました。送信可否を再集計します。' : '一括下書き作成が完了しませんでした。進捗を確認してください。')
+          setNotice(current.status === 'completed' ? '一括下書き作成が完了しました。送信可否を自動で再集計します。' : '一括下書き作成が完了しませんでした。進捗を確認してください。')
           if (channel === 'form' && current.status === 'completed') {
             void api<FormDraftTargets>(`/projects/${projectId}/outreach-drafts/bulk-from-template/form-targets`).then(setFormTargets).catch(e => setError(errorMessage(e)))
           }
@@ -128,7 +128,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
       })
       setJob(createdJob)
       if (createdJob.status === 'completed') {
-        setNotice('一括下書き作成が完了しました。送信可否を再集計します。')
+        setNotice('一括下書き作成が完了しました。送信可否を自動で再集計します。')
         if (channel === 'form') {
           void api<FormDraftTargets>(`/projects/${projectId}/outreach-drafts/bulk-from-template/form-targets`).then(setFormTargets).catch(e => setError(errorMessage(e)))
         }
@@ -204,7 +204,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
       </div>}
       <div className="actions flex-wrap">
         <button disabled={!canWrite || busy || activeJob || formReadinessBusy || !templateId || (channel === 'email' && !selectedIds.length && !selectEligibleEmailCompanies) || (channel === 'form' && (!formTargets?.readiness_aggregated_at || !formTargetCount))} onClick={() => void createDrafts()}>{busy ? '登録中…' : activeJob ? 'バックグラウンド処理中…' : formReadinessBusy ? '再集計の完了待ち…' : channel === 'form' ? `フォーム下書きを一括作成（最大${Math.min(formTargetCount ?? 0, formTargets?.per_run_limit ?? 500)}社）` : selectEligibleEmailCompanies ? '条件一致企業に下書きを作成（最大500社）' : `選択した${selectedIds.length}社に下書きを作成`}</button>
-        {job?.status === 'completed' && <button type="button" className="secondary" onClick={onNext}>{channel === 'form' ? '次へ：フォームを確認' : '次へ：承認して送る'}</button>}
+        {job?.status === 'completed' && channel === 'email' && <button type="button" className="secondary" onClick={onNext}>次へ：承認して送る</button>}
       </div>
       <details className="mt-4" onToggle={event => setReadinessDetailsOpen(event.currentTarget.open)}><summary>フォームの送信可否集計・詳細</summary>{readinessDetailsOpen && <div className="mt-4"><p className="muted text-sm mb-3">フォーム文面なしの一括作成対象と、送信可否の理由を確認できます。</p><FormDmReadinessPanel projectId={projectId} canWrite={canWrite} /></div>}</details>
     </>}

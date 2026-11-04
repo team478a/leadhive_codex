@@ -116,6 +116,12 @@ type SendFlowSummary = {
 }
 
 type SendChannel = 'email' | 'form'
+type FormReadinessSummary = {
+  counts: Record<string, number>
+  review_queue_eligible: number
+  ready_confirmation_pending?: number
+  total: number
+}
 function storedSendChannel(projectId: string): SendChannel {
   try { return localStorage.getItem(`leadhive:send-channel:${projectId}`) === 'form' ? 'form' : 'email' }
   catch { return 'email' }
@@ -143,13 +149,27 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
   const [reviewRevision, setReviewRevision] = useState(0)
   const [formReviewPendingCount, setFormReviewPendingCount] = useState<number | null>(null)
   const [formReadyCount, setFormReadyCount] = useState<number | null>(null)
+  const [formBlockedCount, setFormBlockedCount] = useState<number | null>(null)
   const readinessJobId = readinessJob?.id
   const readinessJobStatus = readinessJob?.status
   const initializedProject = useRef('')
+  const advanceAfterReadiness = useRef(false)
   const project = projects.find(p => p.id === selected) || projects[0]
   const projectId = project?.id
   const canWrite = Boolean(projectId && ['owner', 'editor'].includes(roles[projectId] ?? ''))
   useEffect(() => { setSelected(initialProjectId || projects[0]?.id || '') }, [initialProjectId, projects])
+  const goToStep = useCallback((step: number) => {
+    setActiveStep(step)
+    requestAnimationFrame(() => document.getElementById(`send-flow-step-${step}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+  }, [])
+  const applyFormReadiness = useCallback((readiness: FormReadinessSummary) => {
+    const review = readiness.review_queue_eligible ?? 0
+    const ready = Math.max(0, (readiness.counts.READY ?? 0) + (readiness.counts.BROWSER_READY ?? 0) - (readiness.ready_confirmation_pending ?? 0))
+    setFormReadyCount(ready)
+    setFormReviewPendingCount(review)
+    setFormBlockedCount(Math.max(0, (readiness.total ?? 0) - ready - review))
+    return { ready, review }
+  }, [])
   const refreshSummary = useCallback(async () => {
     if (!projectId) { setSummary(null); return }
     setSummaryError('')
@@ -186,31 +206,55 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
         setReadinessJob(current)
         if (current.status === 'completed') {
           setReadinessStale(false); setReviewRevision(value => value + 1); void refreshSummary()
+          void api<FormReadinessSummary>(`/projects/${projectId}/form-dm-readiness`).then(readiness => {
+            const counts = applyFormReadiness(readiness)
+            if (advanceAfterReadiness.current) {
+              advanceAfterReadiness.current = false
+              goToStep(counts.review > 0 ? 2 : 3)
+            }
+          }).catch(error => setSummaryError(errorMessage(error)))
         }
-        if (current.status === 'failed' || current.status === 'cancelled') setSummaryError(current.error_message || 'フォーム送信可否の再集計に失敗しました。')
+        if (current.status === 'failed' || current.status === 'cancelled') {
+          advanceAfterReadiness.current = false
+          setSummaryError(current.error_message || 'フォーム送信可否の再集計に失敗しました。')
+        }
       }).catch(error => setSummaryError(errorMessage(error)))
     }, 2000)
     return () => window.clearInterval(timer)
-  }, [projectId, readinessJobId, readinessJobStatus, refreshSummary])
+  }, [applyFormReadiness, goToStep, projectId, readinessJobId, readinessJobStatus, refreshSummary])
   useEffect(() => {
     let live = true
-    setFormReviewPendingCount(null); setFormReadyCount(null)
+    setFormReviewPendingCount(null); setFormReadyCount(null); setFormBlockedCount(null)
     if (!projectId || channel !== 'form') return () => { live = false }
-    api<{ counts: Record<string, number>; review_queue_eligible: number; ready_confirmation_pending?: number }>(`/projects/${projectId}/form-dm-readiness`).then(readiness => {
+    api<FormReadinessSummary>(`/projects/${projectId}/form-dm-readiness`).then(readiness => {
       if (!live) return
-      setFormReadyCount(Math.max(0, (readiness.counts.READY ?? 0) - (readiness.ready_confirmation_pending ?? 0)))
-      setFormReviewPendingCount(readiness.review_queue_eligible ?? 0)
+      applyFormReadiness(readiness)
     }).catch(error => { if (live) setSummaryError(errorMessage(error)) })
     return () => { live = false }
-  }, [channel, projectId, reviewRevision])
-  const goToStep = useCallback((step: number) => {
-    setActiveStep(step)
-    requestAnimationFrame(() => document.getElementById(`send-flow-step-${step}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
-  }, [])
+  }, [applyFormReadiness, channel, projectId, reviewRevision])
+  useEffect(() => {
+    if (channel === 'form' && activeStep === 2 && formReviewPendingCount === 0) setActiveStep(3)
+  }, [activeStep, channel, formReviewPendingCount])
+  const startReadinessRecalculation = useCallback((autoAdvance = false) => {
+    if (!projectId) return
+    advanceAfterReadiness.current = autoAdvance
+    setSummaryError(''); setReadinessStale(true)
+    void api<OperationJob>(`/projects/${projectId}/form-dm-readiness/recalculate`, 'POST').then(job => {
+      setReadinessJob(job)
+      if (job.status === 'completed') {
+        setReadinessStale(false); setReviewRevision(value => value + 1); void refreshSummary()
+        void api<FormReadinessSummary>(`/projects/${projectId}/form-dm-readiness`).then(readiness => {
+          const counts = applyFormReadiness(readiness)
+          advanceAfterReadiness.current = false
+          if (autoAdvance) goToStep(counts.review > 0 ? 2 : 3)
+        }).catch(error => setSummaryError(errorMessage(error)))
+      }
+    }).catch(error => { advanceAfterReadiness.current = false; setSummaryError(errorMessage(error)) })
+  }, [applyFormReadiness, goToStep, projectId, refreshSummary])
   const afterDrafts = useCallback((createdChannel: 'email' | 'form') => {
     void refreshSummary()
-    if (createdChannel === 'form') setReadinessStale(true)
-  }, [refreshSummary])
+    if (createdChannel === 'form') startReadinessRecalculation(true)
+  }, [refreshSummary, startReadinessRecalculation])
   const pendingApprovals = summary?.approval_counts.pending[channel] ?? 0
   const approvedUnsent = summary?.approval_counts.approved_unsent[channel] ?? 0
   const draftCount = summary?.draft_counts[channel] ?? 0
@@ -224,42 +268,40 @@ export function SalesWorkspace({ projects, roles, initialProjectId, isAdmin, onN
   const resultStep = channel === 'form' ? 4 : 3
   const steps = [
     { id: 1, title: '文面をつくる', metric: `${draftCount}社に文面あり`, state: templateCount === null ? '確認中' : templateCount ? `${templateCount}テンプレート` : 'テンプレートを選択' },
-    ...(channel === 'form' ? [{ id: 2, title: 'フォームを確認', metric: `確認待ち ${formReviewPendingCount ?? '…'}社 · 確認不要：${formReadyCount ?? '…'}社`, state: '人の確認が必要' }] : []),
+    ...(channel === 'form' && formReviewPendingCount !== 0 ? [{ id: 2, title: '要修正だけ確認', ariaLabel: '2. フォームを確認', metric: `${formReviewPendingCount ?? '…'}社`, state: '問題のある項目だけ表示' }] : []),
     { id: approvalStep, title: '承認して送る', metric: `承認待ち ${pendingApprovals}件 · 承認済み未予約 ${approvedUnsent}件`, state: pendingApprovals ? '確認してください' : '予約状況を確認' },
     { id: resultStep, title: '結果', metric: '送信済み・失敗・不明を確認', state: '履歴を確認' },
   ]
   return <section aria-label="営業作業">
-    <div className="panel mb-5"><h2>送信の準備・実行</h2><p className="mt-2">連絡方法を選ぶと、その経路の文面・確認・承認・結果だけを表示します。</p>
+    <div className="panel mb-5"><h2>送信の準備・実行</h2><p className="mt-2">送信できる企業はそのまま進め、判断が必要な企業だけ「要修正」に表示します。</p>
       {project ? <><label className="field mt-4">対象プロジェクト<select value={project.id} onChange={event => { setSelected(event.target.value); onProjectSelected(event.target.value); setSummary(null); setTemplateCount(null); initializedProject.current = ''; setChannel(storedSendChannel(event.target.value)); setActiveStep(1); setReadinessJob(null); setReadinessStale(false); setTemplateEditorOpen(false); setTemplateEditorTemplateId('') }}>{projects.map(item => <option value={item.id} key={item.id}>{item.project_name}</option>)}</select></label>
         <div className="actions justify-start border-0 p-0 mt-4" role="group" aria-label="連絡方法"><button type="button" aria-pressed={channel === 'form'} className={channel === 'form' ? '' : 'secondary'} onClick={() => { setChannel('form'); setActiveStep(1); persistSendChannel(project.id, 'form') }}>フォーム</button><button type="button" aria-pressed={channel === 'email'} className={channel === 'email' ? '' : 'secondary'} onClick={() => { setChannel('email'); setActiveStep(1); persistSendChannel(project.id, 'email') }}>メール</button></div>
         {summaryError && <p role="alert" className="error mt-3">{summaryError}<button type="button" className="secondary ml-2" onClick={() => void refreshSummary()}>再読み込み</button></p>}
         <p className="muted mt-3 text-sm">{channel === 'form' ? 'フォーム' : 'メール'}だけを表示中</p>
+        {channel === 'form' && <div className="mt-4 grid gap-3 sm:grid-cols-3" role="region" aria-label="送信準備の状況">
+          <div className="rounded border p-3"><strong className="block">送信可能</strong><span className="text-2xl">{formReadyCount ?? '…'}社</span><p className="muted text-xs mt-1">確認不要で送信準備へ進めます</p></div>
+          <div className="rounded border p-3"><strong className="block">要修正</strong><span className="text-2xl">{formReviewPendingCount ?? '…'}社</span><p className="muted text-xs mt-1">問題のある項目だけ確認します</p></div>
+          <div className="rounded border p-3"><strong className="block">送信対象外・未準備</strong><span className="text-2xl">{formBlockedCount ?? '…'}社</span><p className="muted text-xs mt-1">禁止・フォームなし・解析待ちなど</p></div>
+        </div>}
       </> : <p className="mt-3">収集ターゲットを設定し、リストを収集してから営業作業を始めてください。</p>}
     </div>
-    {project && steps.map(step => <section id={`send-flow-step-${step.id}`} key={`${project.id}-${step.id}`} className="panel mb-4 scroll-mt-4" aria-label={`${step.id}. ${step.title}`}>
+    {project && steps.map(step => <section id={`send-flow-step-${step.id}`} key={`${project.id}-${step.id}`} className="panel mb-4 scroll-mt-4" aria-label={'ariaLabel' in step ? step.ariaLabel : `${step.id}. ${step.title}`}>
       <div className="flex items-center gap-2"><button type="button" className="flex min-w-0 flex-1 flex-nowrap items-center justify-between gap-2 bg-transparent p-0 text-left text-inherit hover:bg-transparent" aria-expanded={activeStep === step.id} onClick={() => setActiveStep(current => current === step.id ? 0 : step.id)}>
         <span className="flex min-w-0 items-center gap-2"><span className="badge shrink-0">{step.id}</span><strong className="truncate" role="heading" aria-level={2}>{step.id}. {step.title}</strong></span><span className="muted max-w-[55%] shrink text-right text-xs">{step.metric} · {step.state} {activeStep === step.id ? '−' : '+'}</span>
       </button>{channel === 'form' && step.id === 1 && <button type="button" className="secondary shrink-0 text-xs" disabled={!canWrite || Boolean(readinessJob && ['queued', 'running'].includes(readinessJob.status))} onClick={() => {
-        if (!projectId) return
-        setSummaryError(''); setReadinessStale(true)
-        void api<OperationJob>(`/projects/${projectId}/form-dm-readiness/recalculate`, 'POST').then(job => {
-          setReadinessJob(job)
-          if (job.status === 'completed') { setReadinessStale(false); setReviewRevision(value => value + 1); void refreshSummary() }
-        }).catch(error => setSummaryError(errorMessage(error)))
+        startReadinessRecalculation(false)
       }}>再集計</button>}</div>
       {activeStep === step.id && <div className="mt-5">
         {step.id === 1 && <>
-          <SendFlowDraftPanel key={`drafts-${project.id}-${channel}-${templateRevision}`} projectId={project.id} channel={channel} canWrite={canWrite} readinessBusy={Boolean(readinessJob && ['queued', 'running'].includes(readinessJob.status))} onNeedTemplate={templateId => { setTemplateEditorTemplateId(templateId ?? ''); setTemplateEditorOpen(true) }} onCreated={afterDrafts} onNext={() => goToStep(channel === 'form' ? 2 : approvalStep)} />
+          <SendFlowDraftPanel key={`drafts-${project.id}-${channel}-${templateRevision}`} projectId={project.id} channel={channel} canWrite={canWrite} readinessBusy={Boolean(readinessJob && ['queued', 'running'].includes(readinessJob.status))} onNeedTemplate={templateId => { setTemplateEditorTemplateId(templateId ?? ''); setTemplateEditorOpen(true) }} onCreated={afterDrafts} onNext={() => goToStep(channel === 'form' && (formReviewPendingCount ?? 0) > 0 ? 2 : approvalStep)} />
           <details className="mt-4" open={templateEditorOpen} onToggle={event => setTemplateEditorOpen(event.currentTarget.open)}><summary>テンプレートを新しく作る・編集する</summary>{templateEditorOpen && <div className="mt-4"><SendFlowTemplatePanel key={`templates-${project.id}-${channel}-${templateEditorTemplateId}`} projectId={project.id} channel={channel} canWrite={canWrite} initialTemplateId={templateEditorTemplateId} onTemplateCountChange={count => { setTemplateCount(count); setTemplateRevision(value => value + 1) }} /></div>}</details>
         </>}
         {channel === 'form' && step.id === 2 && <>
           {formReadinessStale && <p role="alert" className="error">集計が古いため再集計してください</p>}
           <FormReviewQueue key={`form-review-${project.id}-${reviewRevision}`} projectId={project.id} canWrite={canWrite} canManagePolicy={roles[project.id] === 'owner'} />
           <div className="actions"><button type="button" className="secondary" disabled={!canWrite || Boolean(readinessJob && ['queued', 'running'].includes(readinessJob.status))} onClick={() => {
-            if (!projectId) return
-            setSummaryError(''); setReadinessStale(true)
-            void api<OperationJob>(`/projects/${projectId}/form-dm-readiness/recalculate`, 'POST').then(job => setReadinessJob(job)).catch(error => setSummaryError(errorMessage(error)))
-          }}>{readinessJob && ['queued', 'running'].includes(readinessJob.status) ? '再集計中…' : 'フォーム送信可否を再集計'}</button><button type="button" onClick={() => goToStep(approvalStep)}>次へ：承認して送る</button></div>
+            startReadinessRecalculation(true)
+          }}>{readinessJob && ['queued', 'running'].includes(readinessJob.status) ? '再集計中…' : '修正内容を反映して再集計'}</button><button type="button" onClick={() => goToStep(approvalStep)}>送信可能な企業へ進む</button></div>
           {readinessJob && <p className="muted" role="status">再集計 {readinessJob.status} · {readinessJob.processed_count}/{readinessJob.total_count}社</p>}
         </>}
         {step.id === approvalStep && <><SendFlowApprovalPanel key={`approve-${project.id}-${channel}`} projectId={project.id} channel={channel} canWrite={canWrite} canManageSettings={isAdmin} readinessCompletedAt={summary?.readiness_completed_at ?? null} readinessStale={readinessStale} onRefresh={refreshSummary} onSettings={() => onNavigate('settings', project.id)} /><div className="actions"><button type="button" className="secondary" onClick={() => onNavigate('approvals', project.id)}>高度な承認・検証を開く</button><button type="button" onClick={() => { goToStep(resultStep); void refreshSummary() }}>次へ：結果</button></div></>}
