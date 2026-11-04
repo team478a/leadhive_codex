@@ -13,11 +13,15 @@ import { Field } from './forms'
 import { prefectures } from './prefectures'
 import { RegionSelector } from './RegionSelector'
 import { SourceExclusions } from './SourceExclusions'
-import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CompanyPage, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
+import type { AiReviewAnalytics, CollectionJob, CollectionPerformance, CollectionSource, Company, CompanyPage, CompanySource, CsvPreview, OperationJob, Profile, Project, SearchAnalytics, SearchSchedule } from './types'
 
 const sourceNames: Record<CollectionSource, string> = {
   serper: 'Google検索（Serper）', google_places: 'Google Maps / Places', gbizinfo: 'gBizINFO（法人情報）',
   url: 'URL直接入力', csv: 'CSVインポート',
+}
+const companySourceNames: Record<CompanySource, string> = {
+  ...sourceNames,
+  form_first: 'フォーム起点',
 }
 const availableSources = Object.entries(sourceNames).filter(([value]) => value !== 'google_places')
 const statusNames = { running: '実行中', completed: '完了', failed: '失敗' }
@@ -540,7 +544,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
               {company.x_url && <a href={company.x_url} target="_blank" rel="noreferrer">X</a>}
               {company.line_url && <a href={company.line_url} target="_blank" rel="noreferrer">LINE</a>}</div>
           </div>
-          <div className="flex shrink-0 flex-col items-end gap-2"><span className="badge">{sourceNames[company.source]}</span>
+          <div className="flex shrink-0 flex-col items-end gap-2"><span className="badge">{companySourceNames[company.source]}</span>
             {company.website_url && !['duplicate', 'excluded'].includes(company.analysis_status) &&
               <button type="button" className={webBusy ? 'secondary analysis-active' : 'secondary'} aria-busy={webBusy} disabled={webBusy}
                 onClick={() => void analyze([company.id])}>{webBusy ? 'サイト解析 処理中…' : 'サイト解析'}</button>}

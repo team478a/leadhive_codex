@@ -145,7 +145,7 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
 }
 
 test('channel is isolated and remembered separately for each project', async ({ page }) => {
-  await setup(page, { channel: 'form', templates: true })
+  const { calls } = await setup(page, { channel: 'form', templates: true })
   const sales = page.getByRole('region', { name: '営業作業', exact: true })
   await expect(sales.getByRole('heading', { name: '送信の準備・実行' })).toBeVisible()
   await expect(sales.getByRole('button', { name: 'フォーム', exact: true })).toHaveAttribute('aria-pressed', 'true')
@@ -156,8 +156,10 @@ test('channel is isolated and remembered separately for each project', async ({ 
   await expect(sales.getByText('フォームの送信可否集計・詳細')).toHaveCount(1)
   const templateSelect = sales.getByLabel('使用するテンプレート')
   await expect(templateSelect.locator('option')).toHaveText(['選択してください', 'フォーム用'])
+  expect(calls.filter(call => call.path.endsWith('/company-list'))).toHaveLength(0)
 
   await sales.getByRole('button', { name: 'メール', exact: true }).click()
+  await expect.poll(() => calls.filter(call => call.path.endsWith('/company-list')).length).toBeGreaterThan(0)
   await expect(sales.locator('[aria-label="2. フォームを確認"]')).toHaveCount(0)
   await expect(sales.locator('[aria-label="1. 文面をつくる"]')).toHaveCount(1)
   await expect(sales.locator('[aria-label="2. 承認して送る"]')).toHaveCount(1)
