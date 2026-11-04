@@ -52,7 +52,11 @@ def test_queue_is_read_only_and_returns_review_fingerprint(auth, form_source, db
     assert result["read_only"] is True
     assert result["external_requests"] == 0
     assert result["total"] == 1
-    assert len(result["items"][0]["fingerprint"]) == 64
+    item = result["items"][0]
+    assert len(item["fingerprint"]) == 64
+    fields = {field["name"]: field for field in item["fields"]}
+    assert fields["email"]["review_required"] is False
+    assert fields["message"]["review_required"] is True
     db.expire_all()
     assert db.get(type(profile), profile_id).updated_at == before
 
@@ -254,6 +258,15 @@ def test_review_confirmation_is_profile_bound_and_non_executable(auth, form_sour
 
     response = auth.post(endpoint, json=payload)
     assert response.status_code == 200, response.text
+    db.expire_all()
+    reviewed_fields = {
+        field.name: field
+        for field in db.scalars(
+            select(FormProfileField).where(FormProfileField.form_profile_id == profile_id)
+        ).all()
+    }
+    assert reviewed_fields["email"].decision_source == "RULE"
+    assert reviewed_fields["message"].decision_source == "MANUAL"
     log = db.scalar(
         select(FormAnalysisLog).where(
             FormAnalysisLog.form_profile_id == profile_id,

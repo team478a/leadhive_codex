@@ -9,12 +9,13 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
     company_id: `company-${index}`, company_name, profile_id: `profile-${index}`,
     form_url: `https://example.com/contact-${index}`, fingerprint: 'a'.repeat(64), fields_hash: 'b'.repeat(64),
     reason_codes: ['REVIEW_REQUIRED'], ready_confirmation_only: false,
-    fields: [] as { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[] }[],
+    fields: [] as { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; confidence: number; decision_source: string; review_required: boolean; recommended_value: string; display_value: string; options: { value: string; label: string }[] }[],
     groups: [], saved_groups: [],
   }))
   items[0].fields = [
-    { id: 'visible-field', label: 'お問い合わせ内容', name: 'message', field_type: 'textarea', required: true, mapped_key: 'message', recommended_value: '', display_value: '本文', options: [] },
-    { id: 'hidden-field', label: '', name: '_wpcf7', field_type: 'hidden', required: false, mapped_key: 'other', recommended_value: '123', display_value: '123', options: [] },
+    { id: 'visible-field', label: 'お問い合わせ内容', name: 'message', field_type: 'textarea', required: true, mapped_key: 'message', confidence: 0.95, decision_source: 'RULE', review_required: false, recommended_value: '', display_value: '本文', options: [] },
+    { id: 'unresolved-field', label: '独自の必須項目', name: 'custom', field_type: 'text', required: true, mapped_key: 'unknown', confidence: 0.1, decision_source: 'OPENAI', review_required: true, recommended_value: '', display_value: '', options: [] },
+    { id: 'hidden-field', label: '', name: '_wpcf7', field_type: 'hidden', required: false, mapped_key: 'other', confidence: 1, decision_source: 'DOM', review_required: false, recommended_value: '123', display_value: '123', options: [] },
   ]
   items.push({
     company_id: 'company-ready', company_name: '準備可能・未確認候補', profile_id: 'profile-ready',
@@ -143,6 +144,11 @@ test('form review queue supports safe review, keyboard navigation, skip ordering
   expect(labelRuleActions).toEqual(['ai:よみがな', 'create:よみがな:furigana:suggestion-1', 'retire:rule-1'])
   await panel.getByRole('tab', { name: 'フォームごとに確認' }).click()
   await expect(panel.getByRole('heading', { name: '先頭のスキップ候補' })).toBeVisible()
+  await expect(panel.getByRole('heading', { name: '修正が必要な項目（1件）' })).toBeVisible()
+  await expect(panel.getByText('独自の必須項目（必須）')).toBeVisible()
+  await expect(panel.getByText('お問い合わせ内容（必須）')).toHaveCount(0)
+  await panel.getByText('解析済み項目を表示（1件）').click()
+  await expect(panel.getByText('お問い合わせ内容（必須）')).toBeVisible()
   await expect(panel.getByText('_wpcf7')).toHaveCount(0)
   await panel.getByRole('button', { name: '仕組み用の項目を表示（1件）' }).click()
   await expect(panel.getByText('_wpcf7')).toBeVisible()
