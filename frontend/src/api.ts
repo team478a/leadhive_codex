@@ -1,8 +1,8 @@
 export class ApiError extends Error {
-  constructor(public status: number, message: string, public fields: string[] = []) { super(message) }
+  constructor(public status: number, message: string, public fields: string[] = [], public requestId = '') { super(message) }
 }
 
-function responseError(status: number, data: { detail?: unknown; issues?: unknown }, fallback: string) {
+function responseError(status: number, data: { detail?: unknown; issues?: unknown }, fallback: string, requestId = '') {
   const message = typeof data.detail === 'string' ? data.detail : fallback
   const issues = Array.isArray(data.issues)
     ? data.issues.filter((issue): issue is { field: string; message: string } =>
@@ -11,7 +11,9 @@ function responseError(status: number, data: { detail?: unknown; issues?: unknow
     : []
   const fields = [...new Set(issues.map(issue => issue.field))]
   const reasons = issues.map(issue => `${issue.field}: ${issue.message}`)
-  return new ApiError(status, reasons.length ? `${message} ${reasons.join(' ')}` : message, fields)
+  const detail = reasons.length ? `${message} ${reasons.join(' ')}` : message
+  const supportCode = requestId && status >= 500 ? `（エラーID: ${requestId.slice(0, 12)}）` : ''
+  return new ApiError(status, `${detail}${supportCode}`, fields, requestId)
 }
 
 function networkError(method: string, path: string) {
@@ -23,10 +25,11 @@ function networkError(method: string, path: string) {
 }
 
 export async function api<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const retryDelays = method === 'GET' ? [0, 1000, 2000, 4000, 8000] : [0]
+  const attempts = method === 'GET' ? 5 : 1
   let response: Response | undefined
   let lastNetworkError = false
-  for (const delay of retryDelays) {
+  let delay = 0
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
     if (delay) await new Promise(resolve => window.setTimeout(resolve, delay))
     try {
       response = await fetch(`/api${path}`, {
@@ -37,12 +40,22 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
       lastNetworkError = false
     } catch {
       lastNetworkError = true
-      if (method === 'GET') continue
+      if (method === 'GET' && attempt + 1 < attempts) {
+        delay = Math.min(1000 * (2 ** attempt), 8000) + Math.floor(Math.random() * 251)
+        continue
+      }
       break
     }
     if (response.status !== 503) break
     const unavailable = await response.clone().json().catch(() => ({}))
     if (unavailable.detail !== 'データベースを利用できません。') break
+    if (attempt + 1 >= attempts) break
+    const retryAfterHeader = response.headers.get('Retry-After')
+    const retryAfter = retryAfterHeader === null ? Number.NaN : Number(retryAfterHeader)
+    const baseDelay = Number.isFinite(retryAfter) && retryAfter >= 0
+      ? Math.min(retryAfter * 1000, 10_000)
+      : Math.min(1000 * (2 ** attempt), 8000)
+    delay = baseDelay + Math.floor(Math.random() * 251)
   }
   if (!response || lastNetworkError) throw networkError(method, path)
   if (!response.ok) {
@@ -50,7 +63,7 @@ export async function api<T>(path: string, method = 'GET', body?: unknown): Prom
     if (response.status === 401 && path !== '/auth/login') {
       window.dispatchEvent(new Event('session-expired'))
     }
-    throw responseError(response.status, data, '処理に失敗しました。時間をおいて再度お試しください。')
+    throw responseError(response.status, data, '処理に失敗しました。時間をおいて再度お試しください。', response.headers.get('X-Request-ID') ?? '')
   }
   return response.status === 204 ? undefined as T : response.json()
 }
@@ -65,7 +78,7 @@ export async function upload<T>(path: string, form: FormData): Promise<T> {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
     if (response.status === 401) window.dispatchEvent(new Event('session-expired'))
-    throw responseError(response.status, data, 'アップロードに失敗しました。')
+    throw responseError(response.status, data, 'アップロードに失敗しました。', response.headers.get('X-Request-ID') ?? '')
   }
   return response.json()
 }
@@ -75,7 +88,7 @@ export async function download(path: string, filename: string) {
   if (!response.ok) {
     const data = await response.json().catch(() => ({}))
     if (response.status === 401) window.dispatchEvent(new Event('session-expired'))
-    throw responseError(response.status, data, 'ダウンロードに失敗しました。')
+    throw responseError(response.status, data, 'ダウンロードに失敗しました。', response.headers.get('X-Request-ID') ?? '')
   }
   const url = URL.createObjectURL(await response.blob())
   const anchor = document.createElement('a')

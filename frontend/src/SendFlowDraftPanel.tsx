@@ -42,7 +42,9 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
   const [templateLoadError, setTemplateLoadError] = useState('')
+  const [templateReload, setTemplateReload] = useState(0)
   const [companyLoadError, setCompanyLoadError] = useState('')
+  const [companyReload, setCompanyReload] = useState(0)
   const [formTargetsError, setFormTargetsError] = useState('')
   const [notice, setNotice] = useState('')
   const filteredTemplates = templates.filter(template => template.channel === channel)
@@ -74,7 +76,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
         ? current : nextTemplates.find(item => item.channel === channel)?.id ?? '')
     }).catch(loadError => { if (live) setTemplateLoadError(errorMessage(loadError)) })
     return () => { live = false }
-  }, [channel, projectId])
+  }, [channel, projectId, templateReload])
 
   useEffect(() => {
     if (channel !== 'email') {
@@ -88,7 +90,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
       setCompanies(page.items); setTotal(page.total)
     }).catch(loadError => { if (live) setCompanyLoadError(errorMessage(loadError)) })
     return () => { live = false }
-  }, [channel, offset, projectId])
+  }, [channel, offset, projectId, companyReload])
 
   useEffect(() => {
     setFormTargets(null)
@@ -155,13 +157,13 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
         {!!sharedTemplates.length && <optgroup label="共通テンプレート">{sharedTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</optgroup>}
         {!!projectTemplates.length && <optgroup label="このプロジェクト専用">{projectTemplates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</optgroup>}
       </select></label>
-      {templateLoadError && <p role="alert" className="error">テンプレートを読み込めませんでした。{templateLoadError}</p>}
+      {templateLoadError && <div><p role="alert" className="error">テンプレートを読み込めませんでした。{templateLoadError}</p><button type="button" className="secondary mt-2" onClick={() => setTemplateReload(value => value + 1)}>テンプレートを再読み込み</button></div>}
       {!filteredTemplates.length && <p className="panel">{channel === 'email' ? 'メール用' : 'フォーム用'}テンプレートがありません。<button type="button" className="secondary ml-2" onClick={() => onNeedTemplate()}>テンプレートを作る</button></p>}
       {!!filteredTemplates.length && selectedTemplate?.scope === 'project' && <button type="button" className="secondary" disabled={activeJob} onClick={() => onNeedTemplate(templateId)}>選択中のテンプレートを編集</button>}
       {selectedTemplate?.scope === 'organization' && <p className="muted text-sm">共通テンプレートの編集は「利用企業設定」で行います。</p>}
       {channel === 'email' ? <>
         <p>連絡先メールがあり、連絡禁止ではなく、メール下書きがない会社を対象にします（最大500社）。表示 {companies.length} / {total}社 · 手動選択 {selectedIds.length} / 500社</p>
-        {companyLoadError && <p role="alert" className="error">企業一覧を読み込めませんでした。{companyLoadError}</p>}
+        {companyLoadError && <div><p role="alert" className="error">企業一覧を読み込めませんでした。{companyLoadError}</p><button type="button" className="secondary mt-2" onClick={() => setCompanyReload(value => value + 1)}>企業一覧を再読み込み</button></div>}
         <div className="actions"><button type="button" className="secondary" aria-pressed={selectEligibleEmailCompanies} disabled={!canWrite || activeJob} onClick={() => { setSelectEligibleEmailCompanies(true); setSelectedIds([]) }}>条件に合う会社をすべて選択（最大500社）</button></div>
         {selectEligibleEmailCompanies && <p role="status" className="muted text-sm">下書き作成時にサーバーが条件に合う会社を最大500社選択します。</p>}
         <div className="border rounded-lg divide-y">

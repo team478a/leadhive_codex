@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
 from app.models import AuthSession, Project, ProjectMember, TargetProfile, User, WorkerHeartbeat
+from app.observability import log_database_error
 from app.project_access import accessible_project_condition, project_access
 from app.runtime_version import RUNTIME_COMMIT
 from app.schemas import (
@@ -30,12 +31,16 @@ router = APIRouter(prefix="/api")
 
 
 @router.get("/health")
-def health(db: Session = Depends(get_db)):
+def health(request: Request, db: Session = Depends(get_db)):
     try:
         db.execute(text("SELECT 1"))
-    except SQLAlchemyError:
-        logger.error("database error: health check failed")
-        raise HTTPException(503, "データベースに接続できません。") from None
+    except SQLAlchemyError as exc:
+        log_database_error(logger, request, exc, phase="health")
+        raise HTTPException(
+            503,
+            "データベースに接続できません。",
+            headers={"Retry-After": "1"},
+        ) from None
     return {"status": "ok", "database": "ok", "api_commit": RUNTIME_COMMIT}
 
 

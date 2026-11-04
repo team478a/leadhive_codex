@@ -24,7 +24,7 @@ const formProposal: Proposal = {
   delivery_method: 'form_direct', recipient: null, form_url: 'https://example.test/contact',
 }
 
-async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; sharedTemplate?: boolean; failFirstReservation?: boolean; staleFormReadiness?: boolean; failFormTargets?: boolean } = {}) {
+async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?: boolean; approvedForm?: boolean; templates?: boolean; sharedTemplate?: boolean; failFirstReservation?: boolean; staleFormReadiness?: boolean; failFormTargets?: boolean; failFirstTemplates?: boolean; failFirstCompanies?: boolean; retryDatabaseTemplate?: boolean } = {}) {
   const email = 'send-flow@example.test'
   const projectIds = ['project-1', 'project-2']
   const calls: { path: string; method: string; body: Record<string, unknown> | null }[] = []
@@ -35,6 +35,9 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
   let approvedProposal: Proposal | null = null
   const approvedFormProposal = options.approvedForm ? formProposal : null
   let reservationAttempts = 0
+  let failTemplates = Boolean(options.failFirstTemplates)
+  let failCompanies = Boolean(options.failFirstCompanies)
+  let databaseTemplateFailures = options.retryDatabaseTemplate ? 1 : 0
   const templates = options.templates ? [
     { id: 'email-template', project_id: 'project-1', organization_id: 'organization-1', scope: 'project', name: 'メール用', channel: 'email', subject: '件名', body: '本文' },
     { id: 'form-template', project_id: 'project-1', organization_id: 'organization-1', scope: 'project', name: 'フォーム用', channel: 'form', subject: '', body: 'フォーム本文' },
@@ -55,6 +58,7 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     calls.push({ path, method, body })
     let data: unknown = []
     let status = 200
+    let headers: Record<string, string> = {}
     const summary = (projectId: string) => ({
       readiness_completed_at: '2026-10-16T00:00:00Z', latest_form_draft_updated_at: options.staleFormReadiness ? '2026-10-17T00:00:00Z' : null, target_company_count: 1,
       draft_counts: { email: bulkDraftBody ? 1 : options.pending ? 1 : 0, form: options.approvedForm ? 1 : 0 }, form_reviewed_count: options.approvedForm ? 1 : 0,
@@ -68,7 +72,16 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
     else if (path === '/api/projects') data = projectIds.map((id, index) => ({ id, project_name: `送信テスト${index + 1}`, target_profile_id: 'profile-1', region: '全国', sales_objective: '確認', status: 'active' }))
     else if (projectIds.some(id => path === `/api/projects/${id}/members`)) data = [{ id: 'membership', email, role: 'owner' }]
     else if (projectIds.some(id => path === `/api/projects/${id}/send-flow-summary`)) data = summary(path.split('/')[3])
-    else if (projectIds.some(id => path === `/api/projects/${id}/outreach-templates`) && method === 'GET') data = savedTemplate ? [...templates, savedTemplate] : templates
+    else if (projectIds.some(id => path === `/api/projects/${id}/outreach-templates`) && method === 'GET') {
+      if (databaseTemplateFailures) {
+        databaseTemplateFailures -= 1
+        status = 503
+        headers = { 'Retry-After': '0', 'X-Request-ID': 'database-retry-test' }
+        data = { detail: 'データベースを利用できません。' }
+      }
+      else if (failTemplates) { status = 500; data = { detail: 'テンプレート取得が一時失敗' } }
+      else data = savedTemplate ? [...templates, savedTemplate] : templates
+    }
     else if (projectIds.some(id => path === `/api/projects/${id}/outreach-templates`) && method === 'POST') {
       savedTemplate = { ...body, id: 'new-template', project_id: path.split('/')[3], organization_id: 'organization-1', scope: 'project', created_by_user_id: 'send-flow-user', created_at: '2026-10-17T00:00:00Z', updated_at: '2026-10-17T00:00:00Z' }
       data = savedTemplate
@@ -79,7 +92,10 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
         readiness_aggregated_at: '2026-10-16T00:00:00Z',
       }
     }
-    else if (path.endsWith('/company-list')) data = { items: [{ id: 'company-1', project_id: path.split('/')[3], company_name: '確認候補株式会社', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }], total: 1, offset: 0, limit: 20 }
+    else if (path.endsWith('/company-list')) {
+      if (failCompanies) { status = 500; data = { detail: '企業一覧取得が一時失敗' } }
+      else data = { items: [{ id: 'company-1', project_id: path.split('/')[3], company_name: '確認候補株式会社', domain: 'example.test', email: 'contact@example.test', do_not_contact: false }], total: 1, offset: 0, limit: 20 }
+    }
     else if (path.endsWith('/form-dm-readiness')) data = { counts: { NO_FORM_DRAFT: 1, READY: 1 }, review_queue_eligible: 7, ready_confirmation_pending: 0, total: 2, offset: 0, limit: 20, items: [], last_aggregated_at: '2026-10-16T00:00:00Z', active_job: null, read_only: true, external_requests: 0 }
     else if (path.endsWith('/form-review-queue/summary')) data = {
       total: 0,
@@ -137,11 +153,14 @@ async function setup(page: Page, options: { channel?: 'email' | 'form'; pending?
       paused: false, version: 1, can_manage: true, execution_enabled: false,
     }
     else if (method === 'POST' || method === 'PUT') data = { id: 'mock', status: 'completed' }
-    await route.fulfill({ status, json: data })
+    await route.fulfill({ status, headers, json: data })
   })
   await page.goto('/')
   await navigateWorkspace(page, '▶ 送信の準備・実行')
-  return { calls, reservations, pageErrors }
+  return {
+    calls, reservations, pageErrors,
+    recoverDraftReads: () => { failTemplates = false; failCompanies = false },
+  }
 }
 
 test('channel is isolated and remembered separately for each project', async ({ page }) => {
@@ -231,6 +250,32 @@ test('form template remains saved and selectable when target count loading fails
   await expect(draftPanel.getByLabel('使用するテンプレート').locator('option')).toHaveText(['選択してください', 'フォーム初回案内'])
   await expect(draftPanel.getByLabel('使用するテンプレート')).toHaveValue('new-template')
   await expect(draftPanel.getByRole('button', { name: '対象件数を再読み込み' })).toBeVisible()
+})
+
+test('draft inputs recover independently after temporary read failures', async ({ page }) => {
+  const { recoverDraftReads } = await setup(page, { channel: 'email', templates: true, failFirstTemplates: true, failFirstCompanies: true })
+  const draftPanel = page.getByRole('region', { name: '送信先と文面の準備' })
+
+  await expect(draftPanel.getByText('テンプレート取得が一時失敗')).toBeVisible()
+  await expect(draftPanel.getByText('企業一覧取得が一時失敗')).toBeVisible()
+  recoverDraftReads()
+
+  await draftPanel.getByRole('button', { name: 'テンプレートを再読み込み' }).click()
+  await expect(draftPanel.getByLabel('使用するテンプレート')).toHaveValue('email-template')
+  await expect(draftPanel.getByText('テンプレート取得が一時失敗')).toHaveCount(0)
+
+  await draftPanel.getByRole('button', { name: '企業一覧を再読み込み' }).click()
+  await expect(draftPanel.getByText('確認候補株式会社')).toBeVisible()
+  await expect(draftPanel.getByText('企業一覧取得が一時失敗')).toHaveCount(0)
+})
+
+test('database-unavailable template read is retried without blocking the draft panel', async ({ page }) => {
+  const { calls } = await setup(page, { channel: 'email', templates: true, retryDatabaseTemplate: true })
+  const draftPanel = page.getByRole('region', { name: '送信先と文面の準備' })
+
+  await expect(draftPanel.getByLabel('使用するテンプレート')).toHaveValue('email-template')
+  await expect(draftPanel.getByRole('button', { name: 'テンプレートを再読み込み' })).toHaveCount(0)
+  expect(calls.filter(call => call.path.endsWith('/outreach-templates')).length).toBeGreaterThanOrEqual(2)
 })
 
 test('form review shows stale aggregation after a newer form draft', async ({ page }) => {

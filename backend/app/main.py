@@ -1,5 +1,6 @@
 import logging
 from contextlib import asynccontextmanager
+from time import perf_counter
 
 from fastapi import Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -50,6 +51,7 @@ from app.improvement_routes import router as improvement_router
 from app.lead_completion_routes import router as lead_completion_router
 from app.live_input_routes import router as live_input_router
 from app.notification_routes import router as notification_router
+from app.observability import log_database_error, new_request_id, request_label
 from app.operation_routes import router as operation_router
 from app.organization_routes import router as organization_router
 from app.outreach_draft_routes import router as outreach_draft_router
@@ -199,6 +201,8 @@ app.add_middleware(
 
 @app.middleware("http")
 async def protect_browser_requests(request: Request, call_next):
+    request.state.request_id = new_request_id()
+    started_at = perf_counter()
     if request.method not in {"GET", "HEAD", "OPTIONS"}:
         origin = request.headers.get("origin")
         from urllib.parse import urlsplit
@@ -226,6 +230,17 @@ async def protect_browser_requests(request: Request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "no-store"
     response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Request-ID"] = request.state.request_id
+    if response.status_code >= 500:
+        request_id, method, path = request_label(request)
+        logger.warning(
+            "request unavailable request_id=%s method=%s path=%s status=%s duration_ms=%s",
+            request_id,
+            method,
+            path,
+            response.status_code,
+            round((perf_counter() - started_at) * 1000),
+        )
     return response
 
 
@@ -262,13 +277,24 @@ async def conflict_error(request: Request, exc: IntegrityError):
 
 @app.exception_handler(SQLAlchemyError)
 async def database_error(request: Request, exc: SQLAlchemyError):
-    logger.error("database error: request failed")
-    return JSONResponse(status_code=503, content={"detail": "データベースを利用できません。"})
+    log_database_error(logger, request, exc)
+    return JSONResponse(
+        status_code=503,
+        content={"detail": "データベースを利用できません。"},
+        headers={"Retry-After": "1"},
+    )
 
 
 @app.exception_handler(Exception)
 async def internal_error(request: Request, exc: Exception):
-    logger.error("internal error: %s", type(exc).__name__)
+    request_id, method, path = request_label(request)
+    logger.error(
+        "internal error request_id=%s method=%s path=%s exception_type=%s",
+        request_id,
+        method,
+        path,
+        type(exc).__name__,
+    )
     return JSONResponse(status_code=500, content={"detail": "処理に失敗しました。"})
 
 

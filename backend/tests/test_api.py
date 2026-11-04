@@ -212,15 +212,22 @@ def test_sql_injection_is_data(auth, db):
     assert db.scalar(select(func.count()).select_from(User)) == 2
 
 
-def test_database_failure_is_safe(client):
+def test_database_failure_is_safe(client, caplog):
     class BrokenDB:
         def execute(self, *args):
             raise OperationalError("private SQL", {}, Exception("private password"))
 
     app.dependency_overrides[get_db] = lambda: BrokenDB()
-    response = client.get("/api/health")
+    with caplog.at_level("ERROR", logger="leadhive"):
+        response = client.get("/api/health")
     assert response.status_code == 503
+    assert response.headers["retry-after"] == "1"
+    assert len(response.headers["x-request-id"]) == 32
     assert "private" not in response.text
+    assert "private" not in caplog.text
+    assert "phase=health" in caplog.text
+    assert "exception_type=OperationalError" in caplog.text
+    assert f"request_id={response.headers['x-request-id']}" in caplog.text
 
 
 def test_missing_and_malformed_ids(auth):
