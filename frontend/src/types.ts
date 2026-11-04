@@ -59,6 +59,7 @@ export interface ProjectMember {
   role: 'owner' | 'editor' | 'viewer'; created_at: string
 }
 export type CollectionSource = 'serper' | 'google_places' | 'gbizinfo' | 'url' | 'csv'
+export type CompanySource = CollectionSource | 'form_first'
 export interface CollectionJob {
   id: string; project_id: string; operation_job_id: string | null; source: CollectionSource; keyword: string; region: string
   status: 'running' | 'completed' | 'failed'; found_count: number; saved_count: number
@@ -80,7 +81,7 @@ export interface Company {
   id: string; project_id: string; company_name: string; website_url: string | null
   record_type: 'company' | 'location'; reference_url: string
   domain: string | null; address: string; phone: string; email: string
-  source: CollectionSource; source_keyword: string; status: SalesStatus; notes: string
+  source: CompanySource; source_keyword: string; status: SalesStatus; notes: string
   next_followup_at: string | null; assignee: string
   protected_fields: string[]
   do_not_contact: boolean; exclusion_reason: string
@@ -193,13 +194,20 @@ export interface OutreachQueueItem {
   recommended_channel: OutreachChannel
   due_state: 'overdue' | 'today' | 'upcoming' | 'unset'
 }
+export type OperationType =
+  | 'collect_search' | 'web_analysis' | 'site_analysis' | 'ai_analysis'
+  | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'cf7_observation'
+  | 'extract_articles' | 'form_dm_readiness' | 'form_approval_batch'
+  | 'bulk_template_drafts' | 'browser_form_analysis' | 'master_site_backfill'
+  | 'consent_policy' | 'form_label_rule'
+
 export interface OperationJob {
   queue_position?: number | null
   collection_progress?: { target_count: number; collected_count: number; discovered_count?: number; review_required_count?: number; no_match_count?: number; conditions_applied?: boolean; requests: number; total_requests?: number; request_budget: number; total_request_budget?: number; continuation_count?: number; stop_reason: string | null; scheduler_version?: string; coverage_status?: string; region_mode?: string; planned_regions?: number; unsearched_regions?: number; current_region?: string | null; planned_queries?: number; unsearched_queries?: number; pending_queries?: number; failed_queries?: number; capped_queries?: number; unknown_attempts?: number; next_operation_id?: string; continued_from?: string; queued_wait_ms?: number; run_ms?: number; timing?: { serper_ms?: number; candidate_fetch_ms?: number; corporate_lookup_ms?: number; save_ms?: number; inline_analysis_ms?: number; inventory_ms?: number; idle_ms?: number }; counts?: { search_results?: number; fetched_candidates?: number; already_known?: number; fetch_failures?: number; new_companies?: number; skipped_known_before_fetch?: number; inline_analyzed?: number } } | null
   condition_request_id?: string | null
   condition_version?: number | null
   id: string; project_id: string
-  operation_type: 'collect_search' | 'web_analysis' | 'site_analysis' | 'ai_analysis' | 'form_delivery' | 'form_intelligence' | 'prepare_outreach' | 'extract_articles' | 'form_dm_readiness' | 'form_approval_batch' | 'bulk_template_drafts'
+  operation_type: OperationType
   bulk_template_results?: { created: string[]; skipped_existing: string[]; excluded: { company_id: string; reason_code: string; reason?: string }[] }
   readiness_reanalysis_reason?: string | null
   readiness_reanalysis_matched_count?: number | null

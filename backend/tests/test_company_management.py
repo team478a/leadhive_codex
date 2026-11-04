@@ -86,6 +86,25 @@ def test_company_list_filters_sorts_and_detail(auth, db):
     assert detail.status_code == 200 and detail.json()["business_type"] == "物流会社"
 
 
+def test_form_first_company_is_readable_and_filterable(auth, db):
+    project = make_project(auth)
+    alpha, _beta = add_companies(auth, db, project["id"])
+    alpha.source = "form_first"
+    db.flush()
+
+    company_list = auth.get(
+        f"/api/projects/{project['id']}/company-list",
+        params={"source": "form_first", "sort": "company_name"},
+    )
+    assert company_list.status_code == 200
+    assert company_list.json()["total"] == 1
+    assert company_list.json()["items"][0]["source"] == "form_first"
+
+    detail = auth.get(f"/api/companies/{alpha.id}")
+    assert detail.status_code == 200
+    assert detail.json()["source"] == "form_first"
+
+
 def test_pagination_edit_bulk_update_and_activity_history(auth, db):
     project = make_project(auth)
     alpha, beta = add_companies(auth, db, project["id"])

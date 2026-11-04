@@ -77,6 +77,10 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
   }, [channel, projectId])
 
   useEffect(() => {
+    if (channel !== 'email') {
+      setCompanies([]); setTotal(0); setCompanyLoadError('')
+      return
+    }
     let live = true
     setCompanyLoadError('')
     api<CompanyPage>(`/projects/${projectId}/company-list?offset=${offset}&limit=20&sort=company_name`).then(page => {
@@ -84,7 +88,7 @@ export function SendFlowDraftPanel({ projectId, channel, canWrite, readinessBusy
       setCompanies(page.items); setTotal(page.total)
     }).catch(loadError => { if (live) setCompanyLoadError(errorMessage(loadError)) })
     return () => { live = false }
-  }, [offset, projectId])
+  }, [channel, offset, projectId])
 
   useEffect(() => {
     setFormTargets(null)

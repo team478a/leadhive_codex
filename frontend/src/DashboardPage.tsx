@@ -2,15 +2,21 @@ import { useCallback, useEffect, useState } from 'react'
 import { api, errorMessage } from './api'
 import type { CompletionReturnContext } from './completionWorkQueueTypes'
 import { LeadCompletionDashboard } from './LeadCompletionDashboard'
-import type { Dashboard, Notification, OutreachEffectivenessAnalytics, SalesActivityAnalytics } from './types'
+import type { Dashboard, Notification, OperationType, OutreachEffectivenessAnalytics, SalesActivityAnalytics } from './types'
 
 const labels: Record<string, string> = {
   target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
   meeting: '商談', won: '成約', unreviewed: '未確認', lost: '失注', excluded: '対象外',
 }
 
-const operationLabels: Record<string, string> = {
-  collect_search: '検索収集', web_analysis: 'Web解析', site_analysis: 'サイト解析', ai_analysis: 'AI判定', form_delivery: '一括フォームDM', form_intelligence: 'フォーム解析',
+const operationLabels: Record<OperationType, string> = {
+  collect_search: '検索収集', web_analysis: 'Web解析', site_analysis: 'サイト解析',
+  ai_analysis: 'AI判定', form_delivery: '一括フォームDM', form_intelligence: 'フォーム解析',
+  prepare_outreach: '営業準備', cf7_observation: 'CF7観測',
+  extract_articles: '記事から企業を抽出', form_dm_readiness: 'フォーム送信可否再集計',
+  form_approval_batch: 'フォーム一括承認', bulk_template_drafts: 'テンプレート下書き一括作成',
+  browser_form_analysis: 'ブラウザーフォーム解析', master_site_backfill: 'マスターサイト補完',
+  consent_policy: '同意ポリシー判定', form_label_rule: 'フォームラベル判定',
 }
 const operationStatuses: Record<string, string> = {
   queued: '待機中', running: '実行中', completed: '完了', failed: '失敗', cancelled: 'キャンセル',

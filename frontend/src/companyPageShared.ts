@@ -1,11 +1,12 @@
-import type { CollectionSource, CompanyFilterValues, OutreachChannel, SalesStatus } from './types'
+import type { CompanyFilterValues, CompanySource, OutreachChannel, SalesStatus } from './types'
 
 export const statusNames: Record<SalesStatus, string> = {
   unreviewed: '未確認', target: '営業対象', approached: 'アプローチ済', replied: '返信あり',
   meeting: '商談', won: '成約', lost: '失注', excluded: '対象外',
 }
-export const sourceNames: Record<CollectionSource, string> = {
+export const sourceNames: Record<CompanySource, string> = {
   serper: 'Google検索', google_places: 'Google Maps', gbizinfo: 'gBizINFO', url: 'URL', csv: 'CSV',
+  form_first: 'フォーム起点',
 }
 export const channelNames: Record<OutreachChannel, string> = { email: 'メール', form: 'フォーム', call: '電話', sns: 'SNS' }
 export const dueNames = { overdue: '期限超過', today: '本日', upcoming: '今後', unset: '期限なし' }

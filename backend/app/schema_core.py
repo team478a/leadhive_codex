@@ -15,6 +15,7 @@ from pydantic import (
 Name = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 Keyword = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=300)]
 Keywords = Annotated[list[Keyword], Field(max_length=100)]
+CompanySource = Literal["serper", "google_places", "gbizinfo", "url", "csv", "form_first"]
 
 
 class Input(BaseModel):
@@ -115,7 +116,7 @@ class CompanyOut(BaseModel):
     address: str
     phone: str
     email: str
-    source: Literal["serper", "google_places", "gbizinfo", "url", "csv"]
+    source: CompanySource
     source_keyword: str
     status: str
     notes: str

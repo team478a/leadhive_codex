@@ -23,6 +23,7 @@ from app.models import (
 from app.project_access import accessible_project_condition
 from app.project_access import company_access as owned_company
 from app.project_access import project_access as owned_project
+from app.schema_core import CompanySource
 from app.schemas import (
     CompanyBulkAssigneeInput,
     CompanyContactControlInput,
@@ -149,7 +150,7 @@ def list_company_details(
         "unreviewed", "target", "approached", "replied", "meeting", "won", "lost", "excluded"
     ]
     | None = None,
-    source: Literal["serper", "google_places", "gbizinfo", "url", "csv"] | None = None,
+    source: CompanySource | None = None,
     keyword: str | None = Query(None, max_length=200),
     assignee: str | None = Query(None, max_length=200),
     followup: Literal["overdue", "today", "upcoming", "unset"] | None = None,
