@@ -43,7 +43,12 @@ from app.services.form_choice_groups import (
 from app.services.form_choice_groups import (
     supported as choice_group_supported,
 )
-from app.services.form_intelligence.consent import CONSENT_KEYS, consent_policy_category
+from app.services.form_intelligence.consent import (
+    CONSENT_KEYS,
+    consent_policy_category,
+    consent_review_reason,
+)
+from app.services.form_intelligence.contact_method import contact_method_review_reason
 from app.services.form_intelligence.fields import GROUP_REVIEW_MARKER, mapping_review_reason
 from app.services.form_intelligence.rules import normalize_required_label
 from app.services.form_profile_delivery import sender_values
@@ -350,6 +355,36 @@ def _display_value(mapped_key: str, choices: dict[str, str], draft: OutreachDraf
     return choices.get(mapped_key, "")
 
 
+def _field_requires_review(field: FormProfileField, fields: list[FormProfileField]) -> bool:
+    """Return whether a person must correct this field before preparation can continue."""
+    if field.field_type in TECHNICAL_FIELD_TYPES:
+        return False
+    material = _field_material(field)
+    relevant = [item for item in fields if item.field_type not in TECHNICAL_FIELD_TYPES]
+    message_fields = [item for item in relevant if item.mapped_key == "message"]
+    if field.mapped_key == "message" and (
+        len(message_fields) != 1
+        or field.field_type not in {"text", "textarea"}
+        or field.confidence < 0.8
+    ):
+        return True
+    if (
+        not message_fields
+        and field.field_type in {"text", "textarea"}
+        and (field.mapped_key == "unknown" or field.confidence < 0.8)
+    ):
+        return True
+    if field.required and (field.mapped_key == "unknown" or field.confidence < 0.8):
+        return True
+    if "必須性未確認" in (field.label or ""):
+        return True
+    if field.mapped_key in CONSENT_KEYS and bool(consent_review_reason(material)):
+        return True
+    if field.mapped_key == "contact_method" and bool(contact_method_review_reason(material)):
+        return True
+    return False
+
+
 def _queue_item(
     db: Session,
     company: Company,
@@ -379,6 +414,7 @@ def _queue_item(
     output_fields = []
     for field in [] if confirmation_only else fields:
         row = _field_material(field)
+        row["review_required"] = _field_requires_review(field, fields)
         field_identity = (field.name, field.selector, field.field_type)
         suggested_key = same_org_suggestions.get(field_identity)
         same_org_suggestion = suggested_key is not None
@@ -656,9 +692,10 @@ def save_form_review_decision(
         return {"status": "CONFIRMED", "company_id": str(company.id), "profile_id": str(profile.id)}
 
     by_id = {field.id: field for field in fields}
+    review_required = {field.id: _field_requires_review(field, fields) for field in fields}
     decisions = {item.field_id: item for item in body.field_decisions}
     if len(decisions) != len(body.field_decisions) or set(decisions) != set(by_id):
-        raise HTTPException(422, "全項目を確認する必要があります。")
+        raise HTTPException(422, "項目情報が不足しています。確認キューを再読み込みしてください。")
     original_groups = grouped_fields(fields)
     group_decisions = {item.group_id: item for item in body.group_decisions}
     if len(group_decisions) != len(body.group_decisions) or set(group_decisions) != set(
@@ -703,6 +740,8 @@ def save_form_review_decision(
             raise HTTPException(422, "選択条件が選択結果と一致しません。")
     for field in fields:
         decision = decisions[field.id]
+        original_mapping = field.mapped_key
+        original_value = field.recommended_value
         if decision.mapped_key == "newsletter_consent":
             if decision.consent_checked or decision.recommended_value:
                 raise HTTPException(422, "メルマガ登録は常に未選択にしてください。")
@@ -722,8 +761,13 @@ def save_form_review_decision(
             _validate_choice_value(field, decision.recommended_value)
             field.recommended_value = decision.recommended_value
         field.mapped_key = decision.mapped_key
-        field.confidence = 1.0
-        field.decision_source = "MANUAL"
+        if (
+            review_required[field.id]
+            or field.mapped_key != original_mapping
+            or field.recommended_value != original_value
+        ):
+            field.confidence = 1.0
+            field.decision_source = "MANUAL"
     existing_groups = grouped_fields(fields)
     before_status = profile.form_status
     for group_id, members in existing_groups.items():

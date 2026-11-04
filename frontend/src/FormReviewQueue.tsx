@@ -4,7 +4,7 @@ import { formMappedKeyLabels } from './formMappingLabels'
 import { FormLabelRulesTab } from './FormLabelRulesTab'
 import type { FormMappedKey, OperationJob } from './types'
 
-type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; recommended_value: string; display_value: string; options: { value: string; label: string }[]; suggested_mapped_key?: string; same_organization_suggestion?: boolean; other_organization_suggestion?: boolean }
+type Field = { id: string; label: string; name: string; field_type: string; required: boolean; mapped_key: string; confidence: number; decision_source: string; review_required: boolean; recommended_value: string; display_value: string; options: { value: string; label: string }[]; suggested_mapped_key?: string; same_organization_suggestion?: boolean; other_organization_suggestion?: boolean }
 type ChoiceGroup = { group_id: string; source_hash: string; label: string; supported: boolean; members: { field_id: string; label: string; required: boolean; options: { value: string; label: string }[] }[] }
 type SavedGroup = { group_id: string; source_hash: string; label: string; required_observed: boolean; reviewable: boolean; options: { option_id: string; label: string; value: string }[] }
 type Item = { company_id: string; company_name: string; profile_id: string; form_url: string; fingerprint: string; fields_hash: string; reason_codes: string[]; ready_confirmation_only: boolean; fields: Field[]; groups: ChoiceGroup[]; saved_groups: SavedGroup[] }
@@ -24,6 +24,7 @@ export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { proj
   const [mapping, setMapping] = useState<Record<string, string>>({}); const [values, setValues] = useState<Record<string, string>>({})
   const [checked, setChecked] = useState<Record<string, boolean>>({}); const [rule, setRule] = useState<Record<string, string>>({})
   const [noProhibition, setNoProhibition] = useState(false)
+  const [showResolvedFields, setShowResolvedFields] = useState(false)
   const [showTechnicalFields, setShowTechnicalFields] = useState(false)
   const [doNotSendReason, setDoNotSendReason] = useState('WRONG_PURPOSE')
   const item = items[index]
@@ -80,7 +81,7 @@ export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { proj
     setMapping(Object.fromEntries(item.fields.map(f => [f.id, f.suggested_mapped_key || f.mapped_key])))
     setValues(Object.fromEntries(item.fields.map(f => [f.id, f.recommended_value || ''])))
     setChecked({}); setRule(Object.fromEntries([...item.groups.map(g => [g.group_id, 'AT_LEAST_ONE']), ...item.saved_groups.map(g => [g.group_id, g.required_observed ? 'AT_LEAST_ONE' : 'OPTIONAL'])]))
-    setNoProhibition(false); setDoNotSendReason('WRONG_PURPOSE'); setShowTechnicalFields(false)
+    setNoProhibition(false); setDoNotSendReason('WRONG_PURPOSE'); setShowResolvedFields(false); setShowTechnicalFields(false)
   }, [item])
   const submit = useCallback(async (action: 'CONFIRM' | 'DO_NOT_SEND') => {
     if (!item || busy || !canWrite) return
@@ -111,6 +112,8 @@ export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { proj
     window.addEventListener('keydown', onKey); return () => window.removeEventListener('keydown', onKey)
   }, [canWrite, item, noProhibition, skip, submit])
   const visibleFields = item?.fields.filter(field => field.field_type !== 'hidden') ?? []
+  const correctionFields = visibleFields.filter(field => field.review_required !== false)
+  const resolvedFields = visibleFields.filter(field => field.review_required === false)
   const technicalFields = item?.fields.filter(field => field.field_type === 'hidden') ?? []
   const renderField = (field: Field) => <div className="border-t py-3" key={field.id}><strong>{field.label || field.name || '名称不明'}{field.required ? '（必須）' : ''}</strong>
     <label className="field mt-2">対応項目<select disabled={!canWrite || busy} value={mapping[field.id] || field.mapped_key} onChange={event => setMapping(value => ({ ...value, [field.id]: event.target.value }))}>{keys.map(key => <option value={key} key={key}>{formMappedKeyLabels[key]}</option>)}</select></label>
@@ -148,8 +151,9 @@ export function FormReviewQueue({ projectId, canWrite, canManagePolicy }: { proj
     {reviewTab === 'forms' && item && <div className="mt-4">
       <p className="muted">{index + 1}件目 / {total}件 · {item.reason_codes.join('、')}</p><h3 className="mt-2">{item.company_name}</h3>
       <a className="break-all text-sm" href={item.form_url} target="_blank" rel="noreferrer">フォームを開いて目視確認 ↗</a>
-      {!item.ready_confirmation_only && <><p className="mt-3">解析された入力項目・値</p>
-      {visibleFields.map(renderField)}
+      {!item.ready_confirmation_only && <><div className="mt-3"><h4>修正が必要な項目（{correctionFields.length}件）</h4><p className="muted mt-1 text-sm">自動解析で確定できなかった項目だけを確認してください。解析済みの会社名・連絡先・問い合わせ本文などは通常表示から除外しています。</p></div>
+      {correctionFields.length ? correctionFields.map(renderField) : <p className="notice mt-3">入力項目の修正はありません。営業禁止表記を確認すると、送信準備の次の段階へ進めます。</p>}
+      {resolvedFields.length > 0 && <details className="border-t py-3" open={showResolvedFields} onToggle={event => setShowResolvedFields(event.currentTarget.open)}><summary>解析済み項目を表示（{resolvedFields.length}件）</summary><p className="muted mt-2 text-sm">送信前の確認用です。修正が必要な場合だけ変更してください。</p><div className="mt-2">{resolvedFields.map(renderField)}</div></details>}
       {technicalFields.length > 0 && <div className="border-t py-3"><button type="button" className="secondary" onClick={() => setShowTechnicalFields(value => !value)}>{showTechnicalFields ? '仕組み用の項目を隠す' : `仕組み用の項目を表示（${technicalFields.length}件）`}</button>{showTechnicalFields && <div className="mt-3">{technicalFields.map(renderField)}</div>}</div>}
       {item.groups.map(g => <div className="border-t py-3" key={g.group_id}><strong>{g.label}（同名選択項目）</strong>{!g.supported ? <p>安全に扱えない構造のため、この項目は確定できません。</p> : <><label className="field mt-2">選択条件<select value={rule[g.group_id] || 'AT_LEAST_ONE'} onChange={e => setRule(v => ({ ...v, [g.group_id]: e.target.value }))}><option value="AT_LEAST_ONE">1つ以上</option><option value="EXACTLY_ONE">ちょうど1つ</option></select></label>{g.members.map(m => <label className="field mt-2" key={m.field_id}>{m.label}{m.required ? '（必須）' : ''}<select value={values[m.field_id] || ''} onChange={e => setValues(v => ({ ...v, [m.field_id]: e.target.value }))}><option value="">未選択</option>{m.options.map((o, i) => <option key={`${o.value}-${i}`} value={o.value}>{o.label || o.value}</option>)}</select></label>)}</>}</div>)}
       {item.saved_groups.map(g => <div className="border-t py-3" key={g.group_id}><strong>{g.label}（保存済みチェック選択肢）</strong>{!g.reviewable ? <p>保存データの不足・曖昧さがあるため、この項目は安全に確認できません。</p> : <><label className="field mt-2">確認した条件<select value={rule[g.group_id] || (g.required_observed ? 'AT_LEAST_ONE' : 'OPTIONAL')} onChange={e => setRule(v => ({ ...v, [g.group_id]: e.target.value }))}><option value="OPTIONAL">任意</option><option value="AT_LEAST_ONE">1つ以上</option><option value="EXACTLY_ONE">ちょうど1つ</option></select></label>{g.options.map(o => <label className="mt-2 block" key={o.option_id}><input type="checkbox" checked={checked[o.option_id] === true} onChange={e => setChecked(v => ({ ...v, [o.option_id]: e.target.checked }))} /> {o.label || o.value}</label>)}</>}</div>)}</>}
