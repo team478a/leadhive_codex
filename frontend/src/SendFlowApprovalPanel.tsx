@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, errorMessage } from './api'
 import { Field } from './forms'
 import type { ApprovalProposal } from './ApprovedEmailPanel'
@@ -45,6 +45,7 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [sendingWindow, setSendingWindow] = useState('運用設定に従います')
+  const autoSelectedCandidates = useRef('')
   const jobId = job?.id
   const jobStatus = job?.status
   const selectionLimit = channel === 'form' ? 100 : 500
@@ -112,17 +113,18 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
     && !preview?.browser_form_enabled
   const canReserve = channel !== 'form' || Boolean(quota && !quota.paused && quota.within_send_window && selectedItems.length <= quota.remaining_quota)
 
-  function choose(items: ApprovalProposal[]) {
+  const choose = useCallback((items: ApprovalProposal[]) => {
     setSelected(Object.fromEntries(items.map(item => [item.id, item])))
     setSampleIds(sample(items))
     setRetryPlan(null)
-  }
+  }, [])
 
   async function loadEmailDrafts() {
     setBusy(true); setError(''); setNotice('')
     try {
-      setEmailDrafts(await api<EmailDraft[]>(`/projects/${projectId}/approval-email-drafts?limit=100&offset=0`))
-      setDraftIds([]); setDraftsOpen(true)
+      const drafts = await api<EmailDraft[]>(`/projects/${projectId}/approval-email-drafts?limit=100&offset=0`)
+      setEmailDrafts(drafts)
+      setDraftIds(drafts.filter(draft => Boolean(draft.recipient)).map(draft => draft.id)); setDraftsOpen(true)
     } catch (reason) { setError(errorMessage(reason)) } finally { setBusy(false) }
   }
 
@@ -141,7 +143,7 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
     try {
       const created = await api<QueueJob>(`/projects/${projectId}/form-approval-requests/bulk`, 'POST', { all_ready: true })
       setJob(created)
-      setNotice('準備できたフォームから承認待ちを作成しています。送信・予約は行いません。')
+      setNotice('送信可能なフォームから承認待ちを作成しています。完了後、送信可能な件数を自動選択します。')
       if (created.status === 'completed') { await refreshQueue(); await onRefresh() }
     } catch (reason) { setError(errorMessage(reason)) } finally { setBusy(false) }
   }
@@ -201,23 +203,31 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
     } finally { setBusy(false) }
   }
 
-  const quotaSelectable = [...pending, ...approvedReady]
+  const quotaSelectable = useMemo(() => [...pending, ...approvedReady]
     .sort((left, right) => left.created_at.localeCompare(right.created_at))
-    .slice(0, Math.min(selectionLimit, dailyRemaining, channel === 'email' ? hourlyLimit : 100))
+    .slice(0, Math.min(selectionLimit, dailyRemaining, channel === 'email' ? hourlyLimit : 100)),
+  [approvedReady, channel, dailyRemaining, hourlyLimit, pending, selectionLimit])
   const currentPageItems = [...pending, ...approvedReady]
   const sampled = selectedItems.filter(item => sampleIds.includes(item.id))
+  useEffect(() => {
+    if (!canWrite || quotaSelectable.length === 0) return
+    const candidateKey = quotaSelectable.map(item => item.id).join(':')
+    if (autoSelectedCandidates.current === candidateKey) return
+    autoSelectedCandidates.current = candidateKey
+    if (selectedItems.length === 0) choose(quotaSelectable)
+  }, [canWrite, choose, quotaSelectable, selectedItems.length])
 
   return <section className="space-y-4" aria-label="承認して送る">
-    <p className="muted">承認前に宛先・内容を確認し、ログインパスワードで再認証します。承認後、同じ選択内容を既存の予約APIへ登録します。送信の安全判定はサーバー側で再確認されます。</p>
+    <p className="muted">送信可能な対象を自動選択します。必要な場合だけ内容を開いて確認し、最後にログインパスワードで再認証してください。送信の安全判定はサーバー側でも再確認されます。</p>
     {channel === 'email' ? <>
-      <div className="rounded border p-3"><strong>メール承認待ちの作成</strong><p className="muted mt-1">メール下書きを選び、承認待ちへ追加します。</p>
-        <button type="button" className="secondary mt-2" disabled={busy || !canWrite} onClick={() => void loadEmailDrafts()}>準備済みメール文面を選ぶ</button>
+      <div className="rounded border p-3"><strong>メール承認待ちの作成</strong><p className="muted mt-1">宛先のある準備済みメール文面をまとめて選択します。</p>
+        <button type="button" className="secondary mt-2" disabled={busy || !canWrite} onClick={() => void loadEmailDrafts()}>準備済みメール文面を追加</button>
         {draftsOpen && <div className="mt-3 space-y-2">{emailDrafts.map(draft => <details className="border-t py-2" key={draft.id}><summary>{draft.company_name} / {draft.recipient || '宛先なし'} / {draft.subject}</summary><p className="whitespace-pre-wrap">{draft.body}</p><label><input type="checkbox" disabled={!draft.recipient} checked={draftIds.includes(draft.id)} onChange={() => setDraftIds(ids => ids.includes(draft.id) ? ids.filter(id => id !== draft.id) : [...ids, draft.id])} /> 承認待ちに追加</label></details>)}
           {!emailDrafts.length && <p>追加できるメール文面はありません。</p>}
           <button type="button" disabled={busy || !draftIds.length} onClick={() => void createEmailApprovals()}>{draftIds.length}件を承認待ちに追加</button></div>}
       </div>
-    </> : <div className="rounded border p-3"><strong>フォーム承認待ちの作成</strong><p className="muted mt-1">最新の送信可否で「準備可能」と判定されたフォーム文面から候補を作成します。解析が古い場合は文面段階で再集計してください。</p>
-      <button type="button" disabled={busy || !canWrite || waitingForFormJob || !readinessCompletedAt || readinessStale} onClick={() => void createFormApprovals()}>{waitingForFormJob ? '承認待ちを作成中…' : '準備できたフォームの承認待ちを作成'}</button>
+    </> : <div className="rounded border p-3"><strong>送信可能な企業を準備</strong><p className="muted mt-1">問題のないフォーム文面だけを承認待ちへ追加し、送信可能件数を自動選択します。</p>
+      <button type="button" disabled={busy || !canWrite || waitingForFormJob || !readinessCompletedAt || readinessStale} onClick={() => void createFormApprovals()}>{waitingForFormJob ? '送信準備中…' : '送信可能な企業を準備'}</button>
     </div>}
     {job && <p role="status">提案作成 {job.status} · {job.processed_count}/{job.total_count}社</p>}
     <div className="rounded border p-3">
@@ -235,7 +245,7 @@ export function SendFlowApprovalPanel({ projectId, channel, canWrite, canManageS
       <div className="flex flex-wrap gap-2"><button type="button" className="secondary" disabled={!quotaSelectable.length || busy} onClick={() => choose(quotaSelectable)}>本日の枠の分だけ選択（最大{selectionLimit}社）</button>
         <button type="button" className="secondary" disabled={!currentPageItems.length || busy} onClick={() => choose(currentPageItems.slice(0, selectionLimit))}>表示中の対象を選択</button>
         <button type="button" className="secondary" disabled={!selectedItems.length || busy} onClick={() => choose([])}>選択解除</button></div>
-      <h3 className="mt-4">承認待ち {pending.length}件 · 予約可能な承認済み {approvedReady.length}件</h3>
+      <h3 className="mt-4">送信可能 {currentPageItems.length}件 · 選択中 {selectedItems.length}件</h3>
       {pending.map(item => <details className="border-t py-3" key={item.id}><summary>{item.company_name} / {channel === 'email' ? item.recipient : item.form_url}</summary>
         <p>送信者: {item.sender.name} / {item.sender.email}</p><p>件名: {item.subject}</p><p className="whitespace-pre-wrap break-words">{item.body}</p>
         {channel === 'form' && Object.entries(item.field_values).map(([name, value]) => <p className="break-words" key={name}>{name}: {value}</p>)}
@@ -280,9 +290,11 @@ export function SendFlowResultsPanel({ projectId, channel, onDeliveries }: { pro
   const totals = channel === 'email'
     ? [['送信待ち', email?.queued_count ?? 0], ['送信中', email?.running_count ?? 0], ['送信済み', email?.sent_count ?? 0], ['失敗', email?.failed_count ?? 0], ['結果不明', email?.unknown_count ?? 0]]
     : [['送信待ち', forms?.counts.queued ?? 0], ['送信中', forms?.counts.checking ?? 0], ['送信済み', forms?.counts.submitted ?? 0], ['失敗', forms?.counts.failed ?? 0], ['結果不明', forms?.counts.unknown ?? 0]]
+  const needsCorrection = channel === 'form' ? (forms?.counts.failed ?? 0) + (forms?.counts.unknown ?? 0) : 0
   return <section aria-label="送信結果">
     <h3>結果（{channel === 'email' ? 'メール' : 'フォーム'}）</h3>
     <div className="mt-3 flex flex-wrap gap-2">{totals.map(([label, count]) => <span className="badge" key={label}>{label} {count}件</span>)}</div>
+    {needsCorrection > 0 && <div className="notice mt-3"><strong>要修正 {needsCorrection}件</strong><p className="muted mt-1 text-sm">送れなかった企業だけを確認し、原因を修正してから再度送信できます。</p><button type="button" className="secondary mt-2" onClick={onDeliveries}>送れなかった企業を確認・修正</button></div>}
     {error && <p role="alert" className="error mt-3">{error}</p>}
     <div className="mt-3 space-y-2">{channel === 'email'
       ? (email?.items ?? []).slice(0, 20).map(item => <article className="border-t py-2" key={item.id}>
