@@ -92,4 +92,12 @@ def enqueue_continuation(
             "continued_from": str(source.id),
         },
     }
+    source.payload = {
+        **(source.payload or {}),
+        "collection_progress": {
+            **progress,
+            "stop_reason": "AUTO_CONTINUING",
+            "next_operation_id": str(job.id),
+        },
+    }
     return job

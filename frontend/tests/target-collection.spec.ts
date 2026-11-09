@@ -64,6 +64,33 @@ test('collection uses a count goal and displays why searching ended', async ({ p
     await continuePromise
     await expect(page.getByRole('button', { name: '続きから収集', exact: true })).toBeVisible()
     await expect(page.getByText(/発見候補 8 件・確認待ち 6 件・条件不一致 2 件/)).toBeVisible()
+
+    await page.unroute(`**/projects/${fixture.project_id}/operations**`)
+    await page.route(`**/projects/${fixture.project_id}/operations**`, async route => {
+      if (route.request().method() !== 'GET') return route.continue()
+      await route.fulfill({ json: [
+        {
+          ...operation,
+          id: `${operation.id}-continued`,
+          status: 'completed',
+          collection_progress: {
+            target_count: 150, collected_count: 8, requests: 4, request_budget: 50,
+            pending_queries: 0, stop_reason: 'QUERIES_EXHAUSTED', continued_from: operation.id,
+          },
+        },
+        {
+          ...operation,
+          status: 'completed',
+          collection_progress: {
+            target_count: 150, collected_count: 0, requests: 2, request_budget: 2,
+            pending_queries: 3, stop_reason: 'REQUEST_BUDGET_REACHED',
+          },
+        },
+      ] })
+    })
+    await page.getByRole('button', { name: '更新', exact: true }).last().click()
+    await expect(page.getByRole('region', { name: '収集の続き' })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: '続きから収集', exact: true })).toHaveCount(0)
   } finally {
     execFileSync(python, ['../backend/tests/e2e_user.py', 'cleanup'], { env })
   }

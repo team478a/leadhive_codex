@@ -100,9 +100,14 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
   const busyMessage = loading ? '収集を受け付けています…' : analyzing ? 'サイト解析を受け付けています…' : aiAnalyzing ? 'AI判定を受け付けています…' : ''
   const visibleOperations = operations.filter(job => mode === 'analysis' ? ['web_analysis', 'site_analysis', 'ai_analysis', 'form_intelligence'].includes(job.operation_type) : ['collect_search', 'extract_articles'].includes(job.operation_type))
   const collectionRunning = operations.some(job => job.operation_type === 'collect_search' && ['queued', 'running'].includes(job.status))
-  const resumableJob = !collectionRunning ? visibleOperations.find(job => job.operation_type === 'collect_search'
+  const continuedCollectionIds = new Set(visibleOperations
+    .filter(job => job.operation_type === 'collect_search' && !['failed', 'cancelled'].includes(job.status))
+    .map(job => job.collection_progress?.continued_from)
+    .filter((id): id is string => !!id))
+  const canContinueCollection = (job: OperationJob) => job.operation_type === 'collect_search'
     && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED'
-    && !!job.collection_progress.pending_queries) : undefined
+    && !!job.collection_progress.pending_queries && !continuedCollectionIds.has(job.id)
+  const resumableJob = !collectionRunning ? visibleOperations.find(canContinueCollection) : undefined
   const webJob = operations.find(job => job.project_id === projectId && ['web_analysis', 'site_analysis'].includes(job.operation_type) && ['queued', 'running'].includes(job.status))
   const aiJob = operations.find(job => job.project_id === projectId && job.operation_type === 'ai_analysis' && ['queued', 'running'].includes(job.status))
   const formJob = operations.find(job => job.project_id === projectId && ['site_analysis', 'form_intelligence'].includes(job.operation_type) && ['queued', 'running'].includes(job.status))
@@ -347,7 +352,7 @@ export function CollectionPage({ projects, profiles, initialProjectId, onConfigu
             {job.error_message && <p className="error mb-0">{job.error_message}</p>}
             {job.condition_request_id && <ConditionCollectionReport jobId={job.id} status={job.status} />}
             {['queued', 'running'].includes(job.status) && <button type="button" className="danger" onClick={() => void api(`/operations/${job.id}/cancel`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>キャンセル</button>}
-            {job.operation_type === 'collect_search' && job.status === 'completed' && job.collection_progress?.stop_reason === 'REQUEST_BUDGET_REACHED' && !!job.collection_progress.pending_queries && <button type="button" className="secondary" disabled={!!continuingJobId} onClick={() => void continueCollection(job.id)}>{continuingJobId === job.id ? '登録中…' : '続きから収集'}</button>}
+            {canContinueCollection(job) && <button type="button" className="secondary" disabled={!!continuingJobId} onClick={() => void continueCollection(job.id)}>{continuingJobId === job.id ? '登録中…' : '続きから収集'}</button>}
             {job.operation_type !== 'prepare_outreach' && ['failed', 'cancelled'].includes(job.status) && <button type="button" className="secondary" onClick={() => void api(`/operations/${job.id}/retry`, 'POST').then(() => reload()).catch(e => setError(errorMessage(e)))}>再実行</button>}
           </article>)}
       </div>
