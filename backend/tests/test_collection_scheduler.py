@@ -202,15 +202,22 @@ def test_manual_continue_resumes_saved_query_cursors(auth, db, monkeypatch):
     child_id = resumed.json()["id"]
     resumed_row = db.get(OperationJob, UUID(child_id))
     assert resumed_row.payload["collection_chain"]["auto_continue"] is True
-    assert resumed_row.payload["collection_chain"]["total_request_budget"] == 1050
+    assert resumed_row.payload["collection_chain"]["total_request_budget"] == 50_000
     worker.run_once()
     child = result(auth, child_id)
     assert child["collection_progress"]["requests"] == 50
     assert child["collection_progress"]["total_requests"] == 100
-    assert child["collection_progress"]["total_request_budget"] == 1050
+    assert child["collection_progress"]["total_request_budget"] == 50_000
     assert child["collection_progress"]["stop_reason"] == "AUTO_CONTINUING"
     assert child["collection_progress"]["collected_count"] == 100
     assert child["collection_progress"]["continued_from"] == job_id
+    grandchild_id = child["collection_progress"]["next_operation_id"]
+    worker.run_once()
+    grandchild = result(auth, grandchild_id)
+    assert grandchild["collection_progress"]["requests"] == 50
+    assert grandchild["collection_progress"]["total_requests"] == 150
+    assert grandchild["collection_progress"]["total_request_budget"] == 50_000
+    assert grandchild["collection_progress"]["stop_reason"] == "AUTO_CONTINUING"
     child_attempts = list(
         db.scalars(
             select(CollectionSearchAttempt).where(
@@ -269,11 +276,11 @@ def test_auto_continue_stops_at_explicit_total_budget(auth, db, monkeypatch):
     continuation = resumed.json()
     assert continuation["collection_progress"]["request_budget"] == 50
     assert continuation["collection_progress"]["total_requests"] == 51
-    assert continuation["collection_progress"]["total_request_budget"] == 1051
+    assert continuation["collection_progress"]["total_request_budget"] == 50_000
     assert continuation["collection_progress"]["stop_reason"] is None
     resumed_row = db.get(OperationJob, UUID(continuation["id"]))
     assert resumed_row.payload["collection_chain"]["auto_continue"] is True
-    assert resumed_row.payload["collection_chain"]["total_request_budget"] == 1051
+    assert resumed_row.payload["collection_chain"]["total_request_budget"] == 50_000
 
 
 def test_auto_continue_repeats_until_goal_across_prefecture_cursor(auth, db, monkeypatch):
