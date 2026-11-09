@@ -5,9 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.models import OperationJob
 from app.services.collection_query_plan import stamp_plan
+from app.services.collection_search_policy import MAX_TOTAL_REQUEST_BUDGET
 from app.services.operations import add_operation_job
-
-AUTO_CONTINUE_BUDGET_EXTENSION = 1000
 
 
 def enqueue_continuation(
@@ -39,8 +38,8 @@ def enqueue_continuation(
     else:
         remaining = total_limit - total_requests
         if remaining <= 0:
-            total_limit = total_requests + AUTO_CONTINUE_BUDGET_EXTENSION
-            remaining = AUTO_CONTINUE_BUDGET_EXTENSION
+            total_limit = MAX_TOTAL_REQUEST_BUDGET
+            remaining = total_limit - total_requests
         automatic = True
     if remaining <= 0:
         return None

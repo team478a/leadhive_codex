@@ -76,7 +76,7 @@ class ReplyQueueItemOut(BaseModel):
 class OperationJobInput(Input):
     region_mode: Literal["literal", "prefecture_order"] = "literal"
     target_count: int | None = Field(default=None, ge=1, le=10000)
-    search_request_limit: int | None = Field(default=None, ge=1, le=5000, strict=True)
+    search_request_limit: int | None = Field(default=None, ge=1, le=50_000, strict=True)
     auto_continue: bool = False
     condition_request_id: UUID | None = None
     condition_version: int | None = Field(default=None, ge=1)
